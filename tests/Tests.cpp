@@ -7,9 +7,9 @@
 int main() {
 
     test_lexer();
-
+    
     test_parser();
-
+    
     test_codegen();
     
     run_tests();

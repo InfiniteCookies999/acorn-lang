@@ -15,7 +15,7 @@
 #include <string>
 #include <string_view>
 
-void acorn::set_color(Color color) {
+void acorn::set_color(Stream stream, Color color) {
 #ifdef _WIN32
     HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
     static std::unordered_map<Color, WORD> color_map = {
@@ -38,6 +38,34 @@ void acorn::set_color(Color color) {
     };
     
     SetConsoleTextAttribute(handle, color_map[color]);
+#else
+    static std::unordered_map<Color, std::string> color_map ={
+        { Color::Black        , "\033[0;30m" },
+        { Color::DarkGray     , "\033[1;30m" },
+        { Color::Blue         , "\033[0;34m" },
+        { Color::BrightBlue   , "\033[1;34m" },
+        { Color::Green        , "\033[0;32m" },
+        { Color::BrightGreen  , "\033[1;32m" },
+        { Color::Cyan         , "\033[0;36m" },
+        { Color::BrightCyan   , "\033[1;36m" },
+        { Color::Magenta      , "\033[0;35m" },
+        { Color::BrightMagenta, "\033[1;35m" },
+        { Color::Red          , "\033[0;31m" },
+        { Color::BrightRed    , "\033[1;31m" },
+        { Color::Yellow       , "\033[0;33m" },
+        { Color::BrightYellow , "\033[1;33m" },
+        { Color::White        , "\033[0;37m" },
+        { Color::BrightWhite  , "\033[1;37m" },
+    };
+    int handle = stream == Stream::StdOut ? STDOUT_FILENO : STDERR_FILENO;
+    auto code = color_map[color];
+    // At the moment some of the code is using std::cout which means writing
+    // directly will not work since there is a buffer used for std::cout. Simply
+    // calling std::flush to force it to finish writing whatever it has in its
+    // buffer.
+    std::cout << std::flush;
+    write(handle, code.c_str(), code.length());
+    
 #endif
 }
 

@@ -1,11 +1,5 @@
 #include "Acorn.h"
 
-#ifdef _WIN32
-#include <Windows.h>
-#undef min
-#undef max
-#endif
-
 #include <llvm/IR/Verifier.h>
 #include <codecvt>
 
