@@ -1,0 +1,954 @@
+#include "Parser.h"
+
+#include <assert.h>
+#include <format>
+#include <stack>
+
+#include "Type.h"
+#include "Module.h"
+#include "Util.h"
+
+#define TypeTokens    \
+     Token::KwVoid:   \
+case Token::KwInt:    \
+case Token::KwInt8:   \
+case Token::KwInt16:  \
+case Token::KwInt32:  \
+case Token::KwInt64:  \
+case Token::KwUInt8:  \
+case Token::KwUInt16: \
+case Token::KwUInt32: \
+case Token::KwUInt64: \
+case Token::KwConst:  \
+case Token::KwChar:   \
+case Token::KwChar16: \
+case Token::KwChar32: \
+case Token::KwBool
+
+#define ModifierTokens  \
+     Token::KwNative:   \
+case Token::KwDllimport
+
+#define push_scope()      \
+Scope new_scope;          \
+new_scope.parent = scope; \
+scope = &new_scope;
+
+#define pop_scope() \
+scope = scope->parent;
+
+#define track_errors() \
+size_t prev_number_of_errors = logger.get_number_of_errors();
+
+#define when_errors(d)                                      \
+if (prev_number_of_errors != logger.get_number_of_errors()) \
+    d->has_errors = true;
+
+acorn::Parser::Parser(Context& context, Module& modl, SourceFile* file)
+    : context(context),
+      modl(modl),
+      context_allocator(context.get_allocator()),
+      file(file),
+      logger(file->logger),
+      lex(context, file->buffer, logger),
+      type_table(context.type_table) {
+}
+
+void acorn::Parser::parse() {
+    
+    // Prime the parser.
+    next_token();
+    // Have to set the previous token because the
+    // current token does not exist.
+    prev_token = cur_token;
+
+    while (cur_token.is_not(Token::EOB)) {
+        Node* node = parse_statement();
+        if (!node) continue;
+
+        if (node->is(NodeKind::Func)) {
+            
+            auto func = as<Func*>(node);
+            check_duplicate_function(func);
+            if (func->name != Identifier::Invalid) {
+                modl.add_global_function(func);
+            }
+
+            if (func->name == context.main_identifier && !func->has_errors) {
+                bool valid_params = false;
+                if (func->params.empty()) {
+                    valid_params = true;
+                }
+
+                if (valid_params) {
+                    if (Func* prev_main = context.set_or_get_main_function(func)) {
+                        logger.begin_error(func->loc, "Duplicate main (entry point) function")
+                              .add_line([prev_main] { prev_main->first_declared_msg(); })
+                              .end_error(ErrCode::ParseDuplicateMainFunc);
+                    }
+                    if (func->return_type->is_not(context.int_type) &&
+                        func->return_type->is_not(context.void_type)) {
+                        error("main function must have return type of 'int' or 'void'")
+                            .end_error(ErrCode::ParseMainBadReturnType);
+                    }
+                }
+            }
+        } else if (node->is(NodeKind::Var)) {
+
+            auto var = as<Var*>(node);
+            // TODO: check for duplicate global variable!
+            if (var->name != Identifier::Invalid) {
+                modl.add_global_variable(var);
+            }
+        } else {
+            modl.mark_bad_scope(BadScopeLocation::Global, node);
+        }
+    }
+
+}
+
+// Statement parsing
+//--------------------------------------
+
+acorn::Node* acorn::Parser::parse_statement() {
+    uint32_t modifiers = 0;
+    switch (cur_token.kind) {
+    case Token::KwReturn: return parse_return();
+    case ModifierTokens:
+        modifiers = parse_modifiers();
+        [[fallthrough]];
+    case TypeTokens: {
+        Type* type = parse_type();
+        if (cur_token.is(Token::Identifier)) {
+            if (peek_token(0).is('(')) {
+                return parse_function(modifiers, type);
+            } else {
+                return parse_variable(modifiers, type);
+            }
+        } else {
+            expect_identifier("for declaration");
+            if (cur_token.is('=')) {
+                return parse_variable(modifiers, type, Identifier());
+            } else if (cur_token.is('(')) {
+                return parse_function(modifiers, type, Identifier());
+            } else if (cur_token.is_keyword() && peek_token(0).is('=')) {
+                next_token(); // Consuming the extra keyword.
+                return parse_variable(modifiers, type, Identifier());
+            } else if (cur_token.is_keyword() && peek_token(0).is('(')) {
+                next_token(); // Consuming the extra keyword.
+                return parse_function(modifiers, type, Identifier());
+            } else {
+                skip_recovery();
+            }
+            return nullptr;
+        }
+    }
+    case ')': case '}': {
+        // Handling thses cases as if it is special because the skip recovery.
+        // will treat them as recovery points.
+        error("Expected an expression")
+            .end_error(ErrCode::ParseExpectedExpression);
+        next_token();
+        skip_recovery();
+        return nullptr;
+    }
+    default:
+        return parse_assignment_and_expr();
+    }
+}
+
+acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type) {
+    return parse_function(modifiers, type, expect_identifier());
+}
+
+acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Identifier name) {
+    
+    track_errors();
+
+    Func* func = new_node<Func>(prev_token);
+    func->file        = file;
+    func->modifiers   = modifiers;
+    func->return_type = type;
+    func->name        = name;
+
+    if (name == Identifier::Invalid || !func->return_type) {
+        func->has_errors = true;
+    }
+
+    Func* prev_func = func;
+    cur_func = func;
+
+    // Note: want to push scope before parameter parsing
+    // because the parameters are considered part of the
+    // scope of the function.
+    push_scope();
+
+    // Parsing parameters.
+    expect('(');
+    if (cur_token.is_not(')') && cur_token.is_not('{')) {
+        bool more_params = false, full_reported = false;
+        uint32_t param_idx = 0;
+        do {
+            Var* param = parse_variable();
+            param->param_idx++;
+            
+            if (func->params.size() != MAX_FUNC_PARAMS) {
+                func->params.push_back(param);
+            } else if (!full_reported) {
+                // TODO: The parameter might not refer to a location correctly.
+                error(param->loc,
+                      "Exceeded maximum number of function parameters. Max (%s)", MAX_FUNC_PARAMS)
+                    .end_error(ErrCode::ParseExceededMaxFuncParams);
+                full_reported = true;
+            }
+
+            more_params = cur_token.is(',');
+            if (more_params) {
+                next_token(); // Consuming ',' token.
+            }
+        } while (more_params);
+        
+    }
+    expect(')', "for function declaration");
+
+    // Parsing the scope of the function.
+    if (!func->has_modifier(Modifier::Native)) {
+        expect('{');
+        while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
+            Node* stmt = parse_statement();
+            if (!stmt) continue;
+
+            func->scope.push_back(stmt);
+            if (stmt->is(NodeKind::Var)) {
+                func->vars_to_alloc.push_back(as<Var*>(stmt));
+            }
+
+        }
+        expect('}', "for function body");
+    }
+
+    pop_scope();
+    cur_func = prev_func;
+
+    when_errors(func);
+
+    if (!func->has_errors) {
+        context.add_unchecked_decl(func);
+    }
+
+    return func;
+}
+
+acorn::Var* acorn::Parser::parse_variable() {
+    return parse_variable(0, parse_type());
+}
+
+acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type) {
+    return parse_variable(modifiers, type, expect_identifier());
+}
+
+acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identifier name) {
+    
+    track_errors();
+
+    Var* var = new_node<Var>(prev_token);
+    var->file      = file;
+    var->modifiers = modifiers;
+    var->type      = type;
+    var->name      = name;
+
+    if (var->name == Identifier::Invalid || !type) {
+        var->has_errors = true;
+    }
+
+    if (cur_token.is('=')) {
+        next_token(); // Consume '=' token.
+        var->assignment = parse_expr();
+    }
+
+    // This must go after asignment so that it does not use the variable before
+    // it is assigned.
+    if (scope && var->name != Identifier::Invalid) {
+        if (Var* prev_var = scope->find_variable(var->name)) {
+            logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
+                  .add_line([prev_var] { prev_var->first_declared_msg(); })
+                  .end_error(ErrCode::ParseDuplicateLocVariableDecl);
+        } else {
+            scope->var_decls.insert({ var->name, var });
+        }
+    }
+
+    when_errors(var);
+
+    return var;
+}
+
+uint32_t acorn::Parser::parse_modifiers() {
+    uint32_t modifiers = 0;
+
+    while (cur_token.is_modifier()) {
+        switch (cur_token.kind) {
+        case Token::KwNative: {
+            if (modifiers & Modifier::Native)
+                error(cur_token, "Duplicate modifier")
+                    .end_error(ErrCode::ParseDuplicateModifier);
+            modifiers |= Modifier::Native;
+
+            next_token();
+            break;
+        }
+        case Token::KwDllimport: {
+            if (modifiers & Modifier::DllImport)
+                error(cur_token, "Duplicate modifier")
+                    .end_error(ErrCode::ParseDuplicateModifier);
+            modifiers |= Modifier::DllImport;
+
+            next_token();
+            break;
+        }
+        }
+    }
+    return modifiers;
+}
+
+acorn::Return* acorn::Parser::parse_return() {
+    
+    Return* ret = new_node<Return>(cur_token);
+
+    bool has_value = lex.is_next_token_on_line() && peek_token(0).is_not('}');
+
+    // Must go after checking if on a new line.
+    next_token(); // Consuming 'return' keyword.
+    
+    if (has_value) {
+        ret->value = parse_expr();
+    }
+
+    // Must make sure the function actually exists in case
+    // the user added a return statement outside a function.
+    if (cur_func) ++cur_func->num_returns;
+
+    return ret;
+}
+
+// Expression parsing
+//--------------------------------------
+
+acorn::Type* acorn::Parser::parse_type() {
+    Token first_token = cur_token;
+    auto type = parse_base_type();
+
+    while (cur_token.is('*')) {
+        type = type_table.get_ptr_type(type);
+        next_token();
+    }
+
+    if (type->is(context.const_void_type)) {
+        SourceLoc error_loc = {
+            .ptr = first_token.loc.ptr,
+            .length = static_cast<uint16_t>(prev_token.loc.ptr + prev_token.loc.length - first_token.loc.ptr)
+        };
+        error(error_loc, "'const void' is not a valid type")
+            .end_error(ErrCode::ParseConstVoidNotType);
+        return nullptr;
+    }
+    return type;
+}
+
+acorn::Type* acorn::Parser::parse_base_type() {
+    bool is_const = cur_token.is(Token::KwConst);
+    if (is_const) {
+        next_token();
+    }
+    
+#define ty_const(t) \
+if (is_const) {     \
+return type_table.get_const_type(t); }
+
+#define ty(t) { \
+next_token();   \
+ty_const(t);    \
+return t; }
+
+    switch (cur_token.kind) {
+    case Token::KwVoid:   ty(context.void_type);
+    case Token::KwInt:    ty(context.int_type);
+    case Token::KwInt8:   ty(context.int8_type);
+    case Token::KwInt16:  ty(context.int16_type);
+    case Token::KwInt32:  ty(context.int32_type);
+    case Token::KwInt64:  ty(context.int64_type);
+    case Token::KwUInt8:  ty(context.uint8_type);
+    case Token::KwUInt16: ty(context.uint16_type);
+    case Token::KwUInt32: ty(context.uint32_type);
+    case Token::KwUInt64: ty(context.uint64_type);
+    case Token::KwBool:   ty(context.bool_type);
+    case Token::KwChar:   ty(context.char_type);
+    case Token::KwChar16: ty(context.char16_type);
+    case Token::KwChar32: ty(context.char32_type);
+    default: {
+        error("Expected type").end_error(ErrCode::ParseInvalidType);
+        return context.invalid_type;
+    }
+    }
+
+#undef ty_const
+#undef ty
+}
+
+acorn::Expr* acorn::Parser::parse_assignment_and_expr() {
+    Expr* lhs = parse_expr();
+    switch (cur_token.kind) {
+    case '=':
+    case Token::AddEq:
+    case Token::SubEq:
+    case Token::MulEq:
+    case Token::DivEq:
+    case Token::ModEq:
+    case Token::AndEq:
+    case Token::OrEq:
+    case Token::CaretEq:
+    case Token::TildeEq:
+    case Token::LtLtEq:
+    case Token::GtGtEq: {
+        BinOp* bin_op = new_node<BinOp>(cur_token);
+        bin_op->op = cur_token.kind;
+        next_token();
+        bin_op->lhs = lhs;
+        bin_op->rhs = parse_expr();
+        return bin_op;
+    }
+    }
+    return lhs;
+}
+
+acorn::Expr* acorn::Parser::parse_expr() {
+    return parse_binary_expr();
+}
+
+acorn::Expr* acorn::Parser::parse_binary_expr() {
+
+    struct StackUnit {
+        Token op;
+        Expr* expr;
+    };
+    std::stack<StackUnit> op_stack;
+
+    Expr* lhs = parse_postfix();
+
+    auto new_binary_op = [this](Token op_tok, Expr* lhs, Expr* rhs) {
+        BinOp* bin_op = new_node<BinOp>(op_tok);
+        bin_op->op = op_tok.kind;
+        bin_op->lhs = lhs;
+        bin_op->rhs = rhs;
+        return bin_op;
+    };
+
+    Token op = cur_token, next_op;
+    int prec;
+    while ((prec = context.get_op_precedence(op)) != -1) {
+        next_token(); // Consuming the operator.
+
+        Expr* rhs = parse_postfix();
+        next_op = cur_token;
+        int next_prec = context.get_op_precedence(next_op);
+
+        if (next_prec != -1 && next_prec > prec) {
+            // Delaying the operation until later since the next operator
+            // has a higher precedence.
+            op_stack.push(StackUnit{ op, lhs });
+            lhs = rhs;
+            op = next_op;
+        } else {
+            lhs = new_binary_op(op, lhs, rhs);
+
+            while (!op_stack.empty()) {
+                StackUnit unit = op_stack.top();
+                // Still possible to have the right side have higher precedence.
+                if (next_prec != -1 && next_prec > context.get_op_precedence(unit.op)) {
+                    break;
+                }
+                op_stack.pop();
+                lhs = new_binary_op(unit.op, unit.expr, lhs);
+            }
+
+            op = cur_token;
+        }
+    }
+
+    return lhs;
+}
+
+acorn::Expr* acorn::Parser::parse_postfix() {
+    Expr* term = parse_term();    
+    if (cur_token.is('(')) {
+        return parse_function_call(term);
+    } else if (cur_token.is(Token::AddAdd) || cur_token.is(Token::SubSub)) {
+        // Language spec. if there is a whitespace then it does not consider it a post
+        // inc/dec.
+        const char* prev_ch_ptr = cur_token.loc.ptr - 1;
+        if (std::isspace(*prev_ch_ptr)) {
+            return term;
+        }
+        UnaryOp* unary_op = new_node<UnaryOp>(cur_token);
+        unary_op->expr = term;
+        if (cur_token.is(Token::AddAdd)) {
+            unary_op->op = Token::PostAddAdd;
+        } else {
+            unary_op->op = Token::PostSubSub;
+        }
+        next_token();
+        return unary_op;
+    }
+    return term;
+}
+
+acorn::Expr* acorn::Parser::parse_function_call(Expr* site) {
+    
+    FuncCall* call = new_node<FuncCall>(cur_token);
+    call->site = site;
+
+    next_token(); // Consuming '(' token.
+
+    if (cur_token.is_not(')')) {
+        bool more_args = false, full_reported = false;
+        do {
+            Expr* arg = parse_expr();
+
+            if (call->args.size() != MAX_FUNC_PARAMS) {
+                call->args.push_back(arg);
+            } else if (!full_reported) {
+                // TODO: The arg might not refer to a location correctly.
+                error(arg->loc,
+                    "Exceeded maximum number of function arguments. Max (%s)", MAX_FUNC_PARAMS)
+                    .end_error(ErrCode::ParseExceededMaxFuncCallArgs);
+                full_reported = true;
+            }
+
+            more_args = cur_token.is(',');
+            if (more_args) {
+                next_token();
+            }
+        } while (more_args);
+    }
+
+    expect(')', "for function call");
+
+    return call;
+}
+
+
+acorn::Expr* acorn::Parser::parse_term() {
+    switch (cur_token.kind) {
+    case Token::IntLiteral:           return parse_int_literal();
+    case Token::HexLiteral:           return parse_hex_literal();
+    case Token::BinLiteral:           return parse_bin_literal();
+    case Token::OctLiteral:           return parse_oct_literal();
+    case Token::String8BitLiteral:    return parse_string8bit_literal();
+    case Token::String16BitLiteral:   return parse_string16bit_literal();
+    case Token::String32BitLiteral:   return parse_string32bit_literal();
+    case Token::InvalidLiteral: {
+        next_token();
+        return new_node<InvalidExpr>(cur_token);
+    }
+    case Token::Identifier: {
+        
+        IdentRef* ref = new_node<IdentRef>(cur_token);
+        ref->ident = Identifier::get(cur_token.text());
+
+        if (scope) {
+            if (Var* var = scope->find_variable(ref->ident)) {
+                ref->set_var_ref(var);
+            }
+        }
+
+        next_token(); // Consuming the identifier.
+        return ref;
+    }
+    case '+': case '-': case '~': case '!':
+    case '&': case Token::AddAdd: case Token::SubSub: {
+        UnaryOp* unary_op = new_node<UnaryOp>(cur_token);
+        unary_op->op = cur_token.kind;
+        next_token(); // Consuming the unary token.
+
+        Expr* expr = parse_term();
+        unary_op->expr = expr;
+        
+        return unary_op;
+    }
+    case '(': {
+        next_token();
+        Expr* expr = parse_expr();
+        expect(')');
+        return expr;
+    }
+    case Token::KwTrue: {
+        Bool* b = new_node<Bool>(cur_token);
+        next_token(); // Consuming 'true' token.
+        b->value = true;
+        b->type = context.bool_type;
+        return b;
+    }
+    case Token::KwFalse: {
+        Bool* b = new_node<Bool>(cur_token);
+        next_token(); // Consuming 'false' token.
+        b->value = false;
+        b->type = context.bool_type;
+        return b;
+    }
+    case Token::KwNull: {
+        Null* null = new_node<Null>(cur_token);
+        null->type = context.null_type;
+        next_token();
+        return null;
+    }
+    case Token::KwAs: {
+        Cast* cast = new_node<Cast>(cur_token);
+        next_token();
+        expect('(');
+        cast->explicit_cast_type = parse_type();
+        expect(')');
+        cast->value = parse_term();
+        return cast;
+    }
+    default:
+        error("Expected an expression")
+            .end_error(ErrCode::ParseExpectedExpression);
+        skip_recovery();
+        return new_node<InvalidExpr>(cur_token);
+    }
+}
+
+acorn::Expr* acorn::Parser::parse_int_literal() {
+    static uint64_t void_table[256];
+    const auto text = cur_token.text();
+    return parse_number_literal<10, void_table, false>(text.data(), text.end());
+}
+
+static constinit uint64_t hex_table[256] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-15
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16-31
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 32-47
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, // 48-63 ('0' to '9')
+    0, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 64-79 ('A' to 'F')
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 80-95
+    0, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 96-111 ('a' to 'f')
+    // The rest are zeroed out
+};
+
+acorn::Expr* acorn::Parser::parse_hex_literal() {
+    const auto text = cur_token.text();
+    return parse_number_literal<16, hex_table>(text.data() + 2, text.end());
+}
+
+acorn::Expr* acorn::Parser::parse_bin_literal() {
+    static uint64_t void_table[256];
+    const auto text = cur_token.text();
+    return parse_number_literal<2, void_table, false>(text.data() + 2, text.end());
+}
+
+acorn::Expr* acorn::Parser::parse_oct_literal() {
+    static uint64_t void_table[256];
+    const auto text = cur_token.text();
+    return parse_number_literal<8, void_table, false>(text.data() + 1, text.end());
+}
+
+namespace acorn {
+    static char get_escape_char(char c) {
+        switch (c) {
+        case '\'': return '\'';
+        case '\"': return '\"';
+        case '\\': return '\\';
+        case 'a':  return '\a';
+        case 'b':  return '\b';
+        case 'f':  return '\f';
+        case 'n':  return '\n';
+        case 'r':  return '\r';
+        case 't':  return '\t';
+        case 'v':  return '\v';
+        default:   return c;
+        }
+    }
+
+    template<typename T>
+    static T parse_unicode_value(const char* start, const char* end) {
+        const char* ptr = start;
+
+        T value = 0;
+        while (ptr != end) {
+            char c = *ptr;
+            ++ptr;
+
+            value = value * 16;
+            value += hex_table[c];
+        }
+
+        return value;
+    }
+}
+
+acorn::Expr* acorn::Parser::parse_string8bit_literal() {
+
+    auto string = new_node<String>(cur_token);
+    string->bit_type = String::Str8Bit;
+    string->type = type_table.get_ptr_type(type_table.get_const_type(context.char_type));
+    
+    auto text = cur_token.text();
+    const char* ptr = text.data() + 1; // +1 skip the "
+    while (*ptr != '"') {
+        if (*ptr == '\\') {
+            ++ptr;
+            string->text8bit += get_escape_char(*ptr);
+            ++ptr;
+        } else {
+            string->text8bit += *ptr;
+            ++ptr;
+        }
+    }
+    next_token();
+    return string;
+}
+
+acorn::Expr* acorn::Parser::parse_string16bit_literal() {
+
+    auto string = new_node<String>(cur_token);
+    string->bit_type = String::Str16Bit;
+    string->type = type_table.get_ptr_type(type_table.get_const_type(context.char16_type));
+
+    auto text = cur_token.text();
+    const char* ptr = text.data() + 1; // +1 skip the "
+    while (*ptr != '"') {
+        if (*ptr == '\\') {
+            ++ptr;
+            if (*ptr == 'u') {
+                ++ptr;
+                string->text16bit += parse_unicode_value<char16_t>(ptr, ptr + 4);
+                ptr += 4;
+            } else {
+                string->text16bit += static_cast<char16_t>(get_escape_char(*ptr));
+                ++ptr;
+            }
+        } else {
+            string->text16bit += static_cast<char16_t>(*ptr);
+            ++ptr;
+        }
+    }
+    next_token();
+    return string;
+}
+
+acorn::Expr* acorn::Parser::parse_string32bit_literal() {
+    
+    auto string = new_node<String>(cur_token);
+    string->bit_type = String::Str32Bit;
+    string->type = type_table.get_ptr_type(type_table.get_const_type(context.char32_type));
+
+    auto text = cur_token.text();
+    const char* ptr = text.data() + 1; // +1 skip the "
+    while (*ptr != '"') {
+        if (*ptr == '\\') {
+            ++ptr;
+            if (*ptr == 'u') {
+                ++ptr;
+                string->text32bit += parse_unicode_value<char32_t>(ptr, ptr + 4);
+                ptr += 4;
+            } else if (*ptr == 'U') {
+                ++ptr;
+                string->text32bit += parse_unicode_value<char32_t>(ptr, ptr + 8);
+                ptr += 8;
+            } else {
+                string->text32bit += static_cast<char32_t>(get_escape_char(*ptr));
+                ++ptr;
+            }
+        } else {
+            string->text32bit += static_cast<char32_t>(*ptr);
+            ++ptr;
+        }
+    }
+    next_token();
+    return string;
+}
+
+void acorn::Parser::check_duplicate_function(Func* func) {
+    if (func->has_errors) return;
+    if (auto funcs = modl.find_global_funcs(func->name)) {
+        check_duplicate_function(func, *funcs);
+    }
+}
+
+void acorn::Parser::check_duplicate_function(Func* func, FuncList& funcs) {
+    for (Func* prev_func : funcs) {
+        if (prev_func->params.size() != func->params.size()) {
+            continue;
+        }
+        if (!std::ranges::equal(func->params, prev_func->params,
+            [](const Var* p1, const Var* p2) {
+                return p1->type->is(p2->type);
+            })) {
+            continue;
+        }
+        
+        logger.begin_error(func->loc, "Duplicate declaration of function '%s'", func->name)
+                  .add_line([prev_func] { prev_func->first_declared_msg(); })
+                  .end_error(ErrCode::ParseDuplicateGlobalFunc);
+        break;
+    }
+}
+
+template<uint32_t radix, uint64_t convert_table[256], bool use_table>
+acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* end) {
+
+    const char* ptr = start;
+    
+    uint64_t value = 0, prev_value;
+    while (ptr != end) {
+        char c = *ptr;
+
+        if (c == number_seperator) {
+            continue;
+        } else if (c == '\'') {
+            break;
+        }
+
+        ++ptr;
+
+        prev_value = value;
+        value = value * radix;
+        if constexpr (use_table) {
+            value += convert_table[c];
+        } else {
+            value += ((uint64_t)c - '0');
+        }
+        if (value / radix < prev_value) {
+            error(cur_token, "Integer value is too large")
+                .end_error(ErrCode::ParseIntegerValueCalcOverflow);
+            break;
+        }
+    }
+
+    Number* number = new_node<Number>(cur_token);
+    number->value_u64 = value;
+
+    // TODO: make sure it fits within the given ranges!
+    if (*ptr == '\'') {
+        ++ptr;
+        bool is_signed = *ptr == 'i';
+        ++ptr;
+
+        if (*ptr == '8') {
+            if (is_signed) {
+                number->type = context.int8_type;
+            } else {
+                number->type = context.uint8_type;
+            }
+        } else if (*ptr == '1') {
+            if (is_signed) number->type = context.int16_type;
+            else           number->type = context.uint16_type;
+        } else if (*ptr == '3') {
+            if (is_signed) number->type = context.int32_type;
+            else           number->type = context.uint32_type;
+        } else {
+            if (is_signed) number->type = context.int64_type;
+            else           number->type = context.uint64_type;
+        }
+    } else {
+        if (fits_in_range<int32_t>(number->value_u64)) {
+            number->type = context.int_type;
+        } else if (fits_in_range<int64_t>(number->value_u64)) {
+            number->type = context.int64_type;
+        } else {
+            number->type = context.uint64_type;
+        }
+    }
+
+    next_token();
+    return number;
+}
+
+void acorn::Parser::next_token() {
+    prev_token = cur_token;
+    if (peeked_size > 0) {
+        cur_token = peeked_tokens[--peeked_size];
+    } else {
+        cur_token = lex.next_token();
+    }
+}
+
+// Utility functions
+//--------------------------------------
+
+acorn::Token acorn::Parser::peek_token(size_t n) {
+    assert(n < MAX_PEEKED_TOKENS && "Peek index exceeds the maximum number of peeked tokens.");
+    
+    // Ensure the tokens up to n are stored.
+    while (peeked_size <= n) {
+        peeked_tokens[peeked_size++] = lex.next_token();
+    }
+
+    return peeked_tokens[n];
+}
+
+void acorn::Parser::expect(tokkind kind, const char* for_msg) {
+    if (cur_token.is(kind)) {
+        next_token();
+    } else {
+        const std::string str_kind = token_kind_to_string(context, kind);
+        const std::string arrow_msg = std::format("add '{}' here", str_kind);
+        const bool is_closing = kind == ')' || kind == '}';
+        const auto closing_msg = is_closing ? "closing" : "";
+        auto fixed_for_msg = for_msg ? std::string{ " " } + for_msg : "";
+
+        logger.begin_error(prev_token.loc, "Expected %s '%s' token%s", closing_msg, str_kind, fixed_for_msg)
+              .add_arrow_msg(Logger::ArrowLoc::After, arrow_msg)
+              .end_error(ErrCode::ParseExpect);
+    }
+}
+
+acorn::Identifier acorn::Parser::expect_identifier(const char* for_msg) {
+    if (cur_token.is(Token::Identifier)) {
+        Identifier identifier = Identifier::get(cur_token.text());
+        next_token();
+        return identifier;
+    } else {
+        auto fixed_for_msg = for_msg ? std::string{" "} + for_msg : "";
+        logger.begin_error(cur_token.loc, "Expected identifier%s", fixed_for_msg);
+        if (cur_token.is_keyword()) {
+            logger.add_line("Help: '%s' is a keyword", to_string(context, cur_token));
+        }
+        logger.end_error(ErrCode::ParseExpectIdent);
+        return Identifier();
+    }
+}
+
+void acorn::Parser::skip_recovery() {
+    while (true) {
+        switch (cur_token.kind) {
+        case Token::EOB:
+        case '}':
+        case ')':
+        case ',':
+            return;
+        case ModifierTokens:
+            return;
+        case TypeTokens:
+            if (peek_token(0).is(Token::Identifier))
+                return;
+            next_token();
+            break;
+        default:
+            next_token();
+            break;
+        }
+    }
+}
+
+acorn::Var* acorn::Parser::Scope::find_variable(Identifier name) const {
+    const Scope* cur = this;
+    while (cur) {
+        auto itr = cur->var_decls.find(name);
+        if (itr != cur->var_decls.end()) {
+            return itr->second;
+        }
+        cur = cur->parent;
+    }
+    return nullptr;
+}

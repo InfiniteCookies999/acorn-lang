@@ -1,0 +1,44 @@
+#ifndef SOURCE_H
+#define SOURCE_H
+
+#include <cstdint>
+#include <string_view>
+
+namespace acorn {
+
+    const char number_seperator = '_';
+
+    class Context;
+
+    struct Buffer {
+        char*  content;
+        size_t length;
+    };
+
+    struct PointSourceLoc;
+
+    struct SourceLoc {
+        // TODO: consider exchanging this for a 32 bit integer.
+        // This might improve performance since it would allow
+        // tokens to fit into 8 bytes.
+        const char* ptr;
+        uint16_t    length;
+    };
+
+    // SourceLoc but with a pointer to the most relevant location
+    // of the error. This is needed because if an error is too long
+    // and needs to be cutoff then it can use this point and branch
+    // forwards and backwards from this point.
+    //
+    // NOTE: Not extending the SourceLoc because we do not want any
+    //       possible implicit conversions.
+    // 
+    struct PointSourceLoc {
+        const char* ptr;
+        uint16_t    length;
+        const char* point;
+        uint16_t    point_length;
+    };
+}
+
+#endif // SOURCE_H
