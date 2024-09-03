@@ -47,7 +47,6 @@ if(llvm_config_result EQUAL 0)
     endif()
 
 else()
-    message(STATUS "NOT USING SHARED LIB")
     # Command failed just assuming it is installed normally.
     set(USE_SINGLE_SHARED_LIB OFF)
 endif()
@@ -77,20 +76,3 @@ else()
 
 endif()
 
-# Selecting which libraries to include.
-# set(USED_LLVM_LIBS
-#     Analysis
-#     Core
-#     ExecutionEngine
-#     InstCombine
-#     Object
-#     OrcJIT
-#     RuntimeDyld
-#     Support
-#     TransformUtils
-#     native
-# )
-
-# For whatever reason on arch linux they package all the libraries into
-# a single .so file so we use llvm_config(acorn USE_SHARED... to link instead
-# if USE_SINGLE_SHARED_LIB is set. This should probably be done differently.
