@@ -318,6 +318,9 @@ llvm::Value* acorn::IRGenerator::gen_string(String* string) {
         }
     } else if (string->bit_type == String::Str32Bit) {
         return text_to_global_array(string->text32bit, llvm::Type::getInt32Ty(ll_context), 4);
+    } else {
+        acorn_fatal("unreachable: not valid bit type for string");
+        return nullptr;
     }
 }
 

@@ -2,6 +2,7 @@
 #define TYPE_H
 
 #include <string>
+#include <cstdint>
 
 namespace acorn {
     

@@ -31,12 +31,14 @@ uint32_t acorn::Type::get_number_of_bits() const {
     case TypeKind::UInt32: return 32;
     case TypeKind::UInt64: return 64;
     case TypeKind::Bool:   return 8;
+    default:
+        acorn_fatal("unimplemented case");
+        return 0;
     }
-    return 0;
 }
 
 std::string acorn::Type::to_string() const {
-#define str(s) !is_const() ? s : "const " ## s;
+#define str(s) !is_const() ? s : "const " s;
     switch (kind) {
     case TypeKind::Void:     return str("void");
     case TypeKind::Int:      return str("int");

@@ -2,6 +2,8 @@
 # Find variables related to LLVM install.
 find_package(LLVM REQUIRED CONFIG)
 
+message(STATUS "INCLUDE DIRECTORIES FOR LLVM: ${LLVM_INCLUDE_DIRS}")
+
 # Add LLVM includes to acorn.
 include_directories(SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS})
 
@@ -17,7 +19,24 @@ target_include_directories (acorn PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories (acorn PUBLIC ${LLVM_INCLUDE_DIRS})
 
 # Selecting which libraries to include.
-llvm_map_components_to_libnames(LLVM_LIBS
+# llvm_map_components_to_libnames(LLVM_LIBS
+#     Analysis
+#     Core
+#     ExecutionEngine
+#     InstCombine
+#     Object
+#     OrcJIT
+#     RuntimeDyld
+#     Support
+#     TransformUtils
+#     native
+# )
+
+# Linking the selected LLVM Libraries
+# target_link_libraries(acorn ${LLVM_LIBS})
+
+# This works on arch not sure if works on windows tho.
+llvm_config(acorn USE_SHARED
     Analysis
     Core
     ExecutionEngine
@@ -29,6 +48,3 @@ llvm_map_components_to_libnames(LLVM_LIBS
     TransformUtils
     native
 )
-
-# Linking the selected LLVM Libraries
-target_link_libraries(acorn ${LLVM_LIBS})

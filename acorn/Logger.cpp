@@ -9,6 +9,9 @@
 #include <Windows.h>
 #undef min
 #undef max
+#else
+#include <unistd.h>
+#include <stdio.h>
 #endif
 
 #include "Context.h"
@@ -77,9 +80,16 @@ void acorn::Logger::info(const std::function<void()>& print_cb) {
 }
 
 
+#ifdef _WIN32
 void* acorn::Logger::get_handle(Stream stream) {
+#else
+int acorn::Logger::get_handle(Stream stream) {
+#endif
+
 #ifdef _WIN32
     return GetStdHandle((stream == StdOut) ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+#else
+    return stream == StdOut ? STDOUT_FILENO : STDERR_FILENO;
 #endif
 }
 
@@ -454,12 +464,16 @@ void acorn::Logger::print(Stream stream, const std::wstring& s) {
 
     bool is_wide = std::ranges::any_of(s, [](wchar_t c) {
         return c > 0x7F;
-        });
-    if (is_wide) {
+    });
+    // TODO: this makes very little sense it should write wide if wide.
+    if (!is_wide) {
 #ifdef _WIN32
         HANDLE handle = get_handle(stream);
         DWORD written;
         WriteConsoleA(handle, s.c_str(), static_cast<DWORD>(s.length()), &written, nullptr);
+#else
+        int handle = get_handle(stream);
+        write(handle, s.c_str(), s.length());
 #endif
     } else {
         // narrowing the wstring to string.

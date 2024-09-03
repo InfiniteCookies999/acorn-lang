@@ -4,6 +4,8 @@
 #include <Windows.h>
 #undef min
 #undef max
+#else
+#include <unistd.h>
 #endif
 
 #include <cctype>
@@ -62,6 +64,12 @@ size_t acorn::get_system_page_size() {
     SYSTEM_INFO sys_info;
     GetSystemInfo(&sys_info);
     auto page_size = static_cast<size_t>(sys_info.dwPageSize);
+    return page_size < 1024 ? 1024 : page_size;
+#else
+    long page_size = sysconf(_SC_PAGE_SIZE);
+    if (page_size == -1) {
+        return 1024;
+    }
     return page_size < 1024 ? 1024 : page_size;
 #endif
 }

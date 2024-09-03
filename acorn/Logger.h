@@ -332,8 +332,12 @@ namespace acorn {
 
         std::function<void(ErrCode)> error_code_interceptor;
 
+#ifdef _WIN32
         static void* get_handle(Stream stream);
-    
+#else
+        static int get_handle(Stream stream);
+#endif
+
 };
 }
 

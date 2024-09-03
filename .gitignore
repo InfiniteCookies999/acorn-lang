@@ -1,7 +1,8 @@
 # editor configurations
-.vs
-.vscode
 CMakePresets.json
 
 # Any possible output binary files
 **/out/
+
+# Any hidden files and folders
+.*

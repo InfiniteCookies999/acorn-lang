@@ -7,15 +7,11 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 
+#include <filesystem>
+
 #include "Context.h"
 #include "Module.h"
 #include "Timer.h"
-
-namespace std {
-    namespace filesystem {
-        class path;
-    }
-}
 
 namespace llvm {
     class TargetMachine;

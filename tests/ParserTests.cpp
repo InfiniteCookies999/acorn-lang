@@ -90,11 +90,11 @@ void test_parser() {
 
             expect(nodes[5]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(as<Number*>(nodes[5])->type, type_to_string).to_be(context->uint64_type);
-            expect(as<Number*>(nodes[5])->value_u64, to_string<uint64_t>).to_be(9223372036854775808);
+            expect(as<Number*>(nodes[5])->value_u64, to_string<uint64_t>).to_be(9223372036854775808ull);
 
             expect(nodes[6]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(as<Number*>(nodes[6])->type, type_to_string).to_be(context->uint64_type);
-            expect(as<Number*>(nodes[6])->value_u64, to_string<uint64_t>).to_be(18446744073709551615);
+            expect(as<Number*>(nodes[6])->value_u64, to_string<uint64_t>).to_be(18446744073709551615ull);
 
             // Testing explicit integer types.
             expect(nodes[7]->kind, node_kind_to_string).to_be(NodeKind::Number);

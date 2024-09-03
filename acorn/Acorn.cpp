@@ -9,7 +9,6 @@
 #include <llvm/IR/Verifier.h>
 #include <codecvt>
 
-#include <filesystem>
 #include <fstream>
 #include <new>
 #include <iostream>
@@ -236,7 +235,11 @@ void acorn::AcornLang::sema_and_irgen() {
     
     llvm::verifyModule(*ll_module, &llvm::errs());
     if (should_show_llvm_ir) {
+#ifdef _WIN32
+        // Yeh oki, for some reason there seems to be linker issuses with
+        // this on linux!
         ll_module->dump();
+#endif
         llvm::outs() << "\n";
     }
 }
@@ -255,6 +258,7 @@ void acorn::AcornLang::codegen() {
 void acorn::AcornLang::link() {
     link_timer.start();
 
+#ifdef _WIN32
     std::wstring msvc_bin_path, msvc_lib_path;
     if (!get_msvc_install_paths(context, allocator, true, msvc_bin_path, msvc_lib_path)) {
         if (!context.has_errors()) {
@@ -313,7 +317,8 @@ void acorn::AcornLang::link() {
     if (exit_code == 0) {
         // std::wcout << "Wrote program to: " << absolute_exe_path << "\n";
     }
-    
+#endif
+
     link_timer.stop();
 }
 

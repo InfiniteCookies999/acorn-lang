@@ -668,6 +668,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
                 case TypeKind::Int16: return fits_in_range<int16_t>(number->value_u64);
                 case TypeKind::Int32: return fits_in_range<int32_t>(number->value_u64);
                 case TypeKind::Int64: return fits_in_range<int64_t>(number->value_u64);
+                default: acorn_fatal("unreachable signed integer type");
                 }
             } else {
                 switch (from_type->get_kind()) {
@@ -675,6 +676,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
                 case TypeKind::UInt16: return fits_in_range<uint16_t>(number->value_u64);
                 case TypeKind::UInt32: return fits_in_range<uint32_t>(number->value_u64);
                 case TypeKind::UInt64: return fits_in_range<uint64_t>(number->value_u64);
+                default: acorn_fatal("unreachable unsigned integer type");
                 }
             }
         }
