@@ -26,7 +26,7 @@
 #define min(a, b) (a) > (b) ? (a) : (b)
 
 void acorn::exe_hidden_process(wchar_t* process, std::string& std_out, int& exit_code) {
-#ifdef _WIN32
+#if WIN_OS
     HANDLE write_handle_in, write_handle;
 
     SECURITY_ATTRIBUTES security_attributes = {
@@ -113,7 +113,7 @@ void acorn::exe_hidden_process(wchar_t* process, std::string& std_out, int& exit
 }
 
 void acorn::exe_process(wchar_t* process, wchar_t* process_dir, bool seperate_window, int& exit_code) {
-#ifdef _WIN32
+#if WIN_OS
     // No need to use inherited handles since this does not capture
     // the program's output.
 

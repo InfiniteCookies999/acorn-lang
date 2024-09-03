@@ -80,15 +80,15 @@ void acorn::Logger::info(const std::function<void()>& print_cb) {
 }
 
 
-#ifdef _WIN32
+#if _WIN32
 void* acorn::Logger::get_handle(Stream stream) {
 #else
 int acorn::Logger::get_handle(Stream stream) {
 #endif
 
-#ifdef _WIN32
+#if WIN_OS
     return GetStdHandle((stream == StdOut) ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-#else
+#elif UNIX_OS
     return stream == StdOut ? STDOUT_FILENO : STDERR_FILENO;
 #endif
 }
@@ -467,11 +467,11 @@ void acorn::Logger::print(Stream stream, const std::wstring& s) {
     });
     // TODO: this makes very little sense it should write wide if wide.
     if (!is_wide) {
-#ifdef _WIN32
+#if WIN_OS
         HANDLE handle = get_handle(stream);
         DWORD written;
         WriteConsoleA(handle, s.c_str(), static_cast<DWORD>(s.length()), &written, nullptr);
-#else
+#elif UNIX_OS
         int handle = get_handle(stream);
         write(handle, s.c_str(), s.length());
 #endif
@@ -487,7 +487,7 @@ void acorn::Logger::print(Stream stream, const std::wstring& s) {
 }
 
 void acorn::Logger::print(Stream stream, const char* s, size_t length) {
-#ifdef _WIN32
+#if WIN_OS
     HANDLE handle = get_handle(stream);
     DWORD written;
     WriteConsoleA(handle, s, static_cast<DWORD>(length), &written, nullptr);

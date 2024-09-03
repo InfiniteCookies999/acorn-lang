@@ -34,9 +34,9 @@ void* acorn::PageAllocator::allocate(size_t size) {
 
 void acorn::PageAllocator::dealloc_all() {
     for (void* page : pages) {
-#ifdef _WIN32
+#if WIN_OS
         VirtualFree(page, 0, MEM_RELEASE);
-#elif defined(__linux__) || defined(__unix__) || defined(__unix)
+#elif UNIX_OS
         munmap(page, page_size);
 #endif
     }
@@ -44,9 +44,9 @@ void acorn::PageAllocator::dealloc_all() {
 
 void acorn::PageAllocator::alloc_new_page(size_t new_page_size) {
 
-#ifdef _WIN32
+#if WIN_OS
     cur_page = VirtualAlloc(nullptr, new_page_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-#elif defined(__linux__) || defined(__unix__) || defined(__unix)
+#elif UNIX_OS
     void* addr = mmap(nullptr, new_page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     cur_page = (addr == MAP_FAILED) ? nullptr : addr;
 #endif
