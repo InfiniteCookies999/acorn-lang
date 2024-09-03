@@ -26,8 +26,9 @@ namespace acorn {
         
         Func,
         Var,
-        Return,
-        
+        ReturnStmt,
+        IfStmt,
+
         InvalidExpr,
         BinOp,
         UnaryOp,
@@ -126,12 +127,22 @@ namespace acorn {
 
     };
 
-    struct Return : Node {
-        Return() : Node(NodeKind::Return) {
+    struct ReturnStmt : Node {
+        ReturnStmt() : Node(NodeKind::ReturnStmt) {
         }
 
         Expr* value = nullptr;
     };
+
+    struct IfStmt : Node {
+        IfStmt() : Node(NodeKind::IfStmt) {
+        }
+
+        Expr* cond;
+        Node* elseif;
+        Scope scope;
+    };
+    
 
     // Expressions
     //--------------------------------------

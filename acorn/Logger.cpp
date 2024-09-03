@@ -5,11 +5,11 @@
 #include <ranges>
 #include <regex>
 
-#ifdef _WIN32
+#if WIN_OS
 #include <Windows.h>
 #undef min
 #undef max
-#else
+#elif UNIX_OS
 #include <unistd.h>
 #include <stdio.h>
 #endif

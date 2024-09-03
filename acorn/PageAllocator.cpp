@@ -1,12 +1,12 @@
 #include "PageAllocator.h"
 
-#ifdef _WIN32
+#include "Util.h"
+
+#if WIN_OS
 #include <Windows.h>
-#elif defined(__linux__) || defined(__unix__) || defined(__unix)
+#elif UNIX_OS
 #include <sys/mman.h>
 #include <unistd.h>
-#else
-#error "Unsupported platform"
 #endif
 
 #include <cstdlib>

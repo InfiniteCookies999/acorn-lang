@@ -34,8 +34,8 @@ llvm::Value* acorn::IRGenerator::gen_value(Node* node) {
         return gen_number(as<Number*>(node));
     case NodeKind::IdentRef:
         return gen_ident_reference(as<IdentRef*>(node));
-    case NodeKind::Return:
-        return gen_return(as<Return*>(node));
+    case NodeKind::ReturnStmt:
+        return gen_return(as<ReturnStmt*>(node));
     case NodeKind::FuncCall:
         return gen_function_call(as<FuncCall*>(node));
     case NodeKind::Bool:
@@ -194,7 +194,7 @@ void acorn::IRGenerator::gen_variable_address(Var* var) {
                                            llvm::Twine(var->name.reduce()) + ".addr");
 }
 
-llvm::Value* acorn::IRGenerator::gen_return(Return* ret) {
+llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
     bool not_void = cur_func->return_type->is_not(context.void_type);
     bool is_main = cur_func == context.get_main_function();
 

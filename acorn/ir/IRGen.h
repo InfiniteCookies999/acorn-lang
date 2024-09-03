@@ -49,7 +49,7 @@ namespace acorn {
         void gen_function_body(Func* func);
         void gen_variable_address(Var* var);
         
-        llvm::Value* gen_return(Return* ret);
+        llvm::Value* gen_return(ReturnStmt* ret);
 
         llvm::Value* gen_variable(Var* var);
         llvm::Value* gen_number(Number* number);

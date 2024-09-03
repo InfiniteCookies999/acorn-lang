@@ -1,14 +1,15 @@
 #include "Process.h"
 
-#ifdef _WIN32
+
+#include "Logger.h"
+
+#ifdef WIN_OS
 #include <Windows.h>
 #undef min
 #undef max
 #endif
 
 #include <codecvt>
-
-#include "Logger.h"
 
 #if defined(_UNICODE) || defined(UNICODE)
 #define wide_funcs 1

@@ -25,8 +25,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_variable(as<Var*>(node));
     case NodeKind::IdentRef:
         return check_ident_ref(as<IdentRef*>(node), false);
-    case NodeKind::Return:
-        return check_return(as<Return*>(node));
+    case NodeKind::ReturnStmt:
+        return check_return(as<ReturnStmt*>(node));
     case NodeKind::BinOp:
         return check_binary_op(as<BinOp*>(node));
     case NodeKind::UnaryOp:
@@ -87,7 +87,7 @@ void acorn::Sema::check_variable(Var* var) {
     }
 }
 
-void acorn::Sema::check_return(Return* ret) {
+void acorn::Sema::check_return(ReturnStmt* ret) {
     cur_scope->all_paths_return = true;
 
     bool is_assignable;
@@ -124,7 +124,7 @@ void acorn::Sema::check_scope(Scope& scope, SemScope& new_sem_scope) {
         }
 
         switch (stmt->kind) {
-        case NodeKind::Return:
+        case NodeKind::ReturnStmt:
         case NodeKind::Var:
         case NodeKind::Func:
         case NodeKind::FuncCall:

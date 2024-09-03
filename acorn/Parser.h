@@ -71,7 +71,7 @@ namespace acorn {
 
         uint32_t parse_modifiers();
 
-        Return* parse_return();
+        ReturnStmt* parse_return();
 
         // Expression parsing
         //--------------------------------------

@@ -12,6 +12,9 @@
 #define finline __attribute__((always_inline))
 #endif
 
+#define WIN_OS  (_WIN32 != 0)
+#define UNIX_OS (defined(__unix__) || defined(__unix) || defined(__linux__) || (defined(__APPLE__) && defined(__MACH__)))
+
 namespace acorn {
 
     template<typename T, typename V>

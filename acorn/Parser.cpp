@@ -311,9 +311,9 @@ uint32_t acorn::Parser::parse_modifiers() {
     return modifiers;
 }
 
-acorn::Return* acorn::Parser::parse_return() {
+acorn::ReturnStmt* acorn::Parser::parse_return() {
     
-    Return* ret = new_node<Return>(cur_token);
+    ReturnStmt* ret = new_node<ReturnStmt>(cur_token);
 
     bool has_value = lex.is_next_token_on_line() && peek_token(0).is_not('}');
 

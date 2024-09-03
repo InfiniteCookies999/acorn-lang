@@ -45,7 +45,7 @@ namespace acorn {
         //--------------------------------------
 
         void check_variable(Var* var);
-        void check_return(Return* ret);
+        void check_return(ReturnStmt* ret);
 
         void check_scope(Scope& scope, SemScope& new_sem_scope);
 
