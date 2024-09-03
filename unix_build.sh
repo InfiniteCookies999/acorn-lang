@@ -7,6 +7,8 @@
 
 BUILD_DIRECTORY="out"
 
+mkdir -p "$BUILD_DIRECTORY"
+
 # Shove the cmake build files such as the cache files and
 # so on into the output directory.
 cmake -B $BUILD_DIRECTORY -S .

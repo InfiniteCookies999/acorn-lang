@@ -68,13 +68,17 @@ namespace acorn {
 
     };
 
+    enum class Stream {
+        StdOut,
+        StdErr
+    };
+
     template<typename T, typename V>
     static bool fits_in_range(V value) {
-        bool b = value <= std::numeric_limits<T>::max();
         return value <= std::numeric_limits<T>::max();
     }
 
-    void set_color(Color color);
+    void set_color(Stream stream, Color color);
 
     std::string& trim_leading(std::string& s);
 

@@ -30,11 +30,6 @@ namespace acorn {
         // deadlock using a normal mutex.
         using mtx_type = std::recursive_mutex;
     public:
-        enum class Stream {
-            StdOut,
-            StdErr
-        };
-
         enum class ArrowLoc {
             At,
             After

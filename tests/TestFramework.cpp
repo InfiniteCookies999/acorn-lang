@@ -11,6 +11,10 @@ static TestSection*                    current_section = nullptr;
 static uint32_t                        current_depth   = 0;
 static llvm::SmallVector<TestSection*> sections;
 
+static void set_color(acorn::Color color) {
+    acorn::set_color(acorn::Stream::StdOut, color);
+}
+
 TestCase::TestCase(const char* name, uint32_t depth, const std::function<void()>& cb)
     : name(name), depth(depth), cb(cb) {
 }
@@ -23,18 +27,18 @@ void TestCase::run() {
         
     }
     if (!failed()) {
-        acorn::set_color(acorn::Color::BrightGreen);
+        set_color(acorn::Color::BrightGreen);
         std::cout << std::setw(40 - 4 * depth - strlen(name)) << "passed";
-        acorn::set_color(acorn::Color::White);
+        set_color(acorn::Color::White);
         std::cout << "!";
     } else {
-        acorn::set_color(acorn::Color::BrightRed);
+        set_color(acorn::Color::BrightRed);
         std::cout << std::setw(40 - 4 * depth - strlen(name)) << "failed";
-        acorn::set_color(acorn::Color::White);
+        set_color(acorn::Color::White);
         std::cout << "!\n" << std::string(4 * depth + 4, ' ');
-        acorn::set_color(acorn::Color::BrightRed);
+        set_color(acorn::Color::BrightRed);
         std::cout << "[!] ";
-        acorn::set_color(acorn::Color::BrightWhite);
+        set_color(acorn::Color::BrightWhite);
         
         std::string file = std::string(cpp_fail_file);
 #ifdef _WIN32
@@ -46,7 +50,7 @@ void TestCase::run() {
             file = file.substr(idx + 1);
         }
         std::cout << "(" << file << ", " << line_fail_number << ") ";
-        acorn::set_color(acorn::Color::White);
+        set_color(acorn::Color::White);
         failed_info_cb();
     }
     std::cout << "\n";

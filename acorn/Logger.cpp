@@ -19,12 +19,12 @@
 #include "SourceFile.h"
 
 using enum acorn::Color;
-using enum acorn::Logger::Stream;
+using enum acorn::Stream;
 
 acorn::Logger::mtx_type acorn::Logger::mtx;
 
 void acorn::Logger::set_color(Stream stream, Color color) {
-    acorn::set_color(color);
+    acorn::set_color(stream, color);
 }
 
 void acorn::Logger::print(Stream stream, Type* type) {
@@ -466,6 +466,8 @@ void acorn::Logger::print(Stream stream, const std::wstring& s) {
         return c > 0x7F;
     });
     // TODO: this makes very little sense it should write wide if wide.
+    // TODO: This should also use WriteFile instead of WriteConsole because
+    //       write console doesn't allow integration with pipes correctly.
     if (!is_wide) {
 #ifdef _WIN32
         HANDLE handle = get_handle(stream);
