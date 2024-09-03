@@ -38,7 +38,10 @@ namespace acorn {
             KwChar32,
             KwConst,
             KwAs,
-            
+            KwIf,
+            KwElIf,
+            KwElse,
+
             KwNull,
             KwTrue,
             KwFalse,

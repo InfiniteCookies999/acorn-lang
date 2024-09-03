@@ -48,7 +48,7 @@ namespace acorn {
             // given the name.
             Var* find_variable(Identifier name) const;
 
-        } *scope = nullptr;
+        } *lscope = nullptr;
 
         Lexer lex;
         Token cur_token;
@@ -72,6 +72,8 @@ namespace acorn {
         uint32_t parse_modifiers();
 
         ReturnStmt* parse_return();
+        IfStmt* parse_if();
+        ScopeStmt* parse_scope(const char* closing_for = nullptr);
 
         // Expression parsing
         //--------------------------------------

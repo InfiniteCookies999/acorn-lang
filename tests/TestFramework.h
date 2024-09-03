@@ -6,6 +6,7 @@
 #include <iostream>
 #include <llvm/ADT/SmallVector.h>
 #include <concepts>
+#include <sstream>
 
 #include "Acorn.h"
 
@@ -142,7 +143,13 @@ private:
 
 template<typename T>
 std::string to_string(const T& value) {
-    return std::to_string(value);
+    if constexpr (std::is_pointer_v<T>) {
+        std::stringstream ss;
+        ss << value;  // Insert the pointer into the stringstream
+        return ss.str();  // Convert to string
+    } else {
+        return std::to_string(value);
+    }
 }
 
 template<typename T>

@@ -27,6 +27,10 @@ void acorn::Sema::check_node(Node* node) {
         return check_ident_ref(as<IdentRef*>(node), false);
     case NodeKind::ReturnStmt:
         return check_return(as<ReturnStmt*>(node));
+    case NodeKind::IfStmt: {
+        bool _;
+        return check_if(as<IfStmt*>(node), _);
+    }
     case NodeKind::BinOp:
         return check_binary_op(as<BinOp*>(node));
     case NodeKind::UnaryOp:
@@ -112,11 +116,35 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
     }
 }
 
-void acorn::Sema::check_scope(Scope& scope, SemScope& new_sem_scope) {
+void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
+    check(ifs->cond);
+    if (!is_condition(ifs->cond)) {
+        error(expand(ifs->cond), "Expected condition")
+            .end_error(ErrCode::SemaExpectedCondition);
+    }
+
+    SemScope sem_scope;
+    check_scope(ifs->scope, sem_scope);
+    all_paths_return = sem_scope.all_paths_return;
+
+    if (ifs->elseif && ifs->elseif->is(NodeKind::IfStmt)) {
+        bool all_paths_return2;
+        check_if(as<IfStmt*>(ifs->elseif), all_paths_return2);
+        all_paths_return &= all_paths_return2;
+    } else if (ifs->elseif) {
+        SemScope sem_scope;
+        check_scope(as<ScopeStmt*>(ifs->elseif), sem_scope);
+        all_paths_return &= sem_scope.all_paths_return;
+    }
+
+    cur_scope->all_paths_return = all_paths_return;
+}
+
+void acorn::Sema::check_scope(ScopeStmt* scope, SemScope& new_sem_scope) {
     new_sem_scope.parent = cur_scope;
     cur_scope = &new_sem_scope;
 
-    for (Node* stmt : scope) {
+    for (Node* stmt : *scope) {
         if (new_sem_scope.all_paths_return) {
             error(stmt, "Unreachable code")
                 .end_error(ErrCode::SemaUnreachableStmt);
@@ -128,6 +156,7 @@ void acorn::Sema::check_scope(Scope& scope, SemScope& new_sem_scope) {
         case NodeKind::Var:
         case NodeKind::Func:
         case NodeKind::FuncCall:
+        case NodeKind::IfStmt:
             break;
         case NodeKind::BinOp: {
             BinOp* bin_op = as<BinOp*>(stmt);
@@ -803,6 +832,10 @@ void acorn::Sema::create_cast(Expr* expr, Type* to_type) {
     if (expr->type->is_not(to_type)) {
         expr->cast_type = to_type;
     }
+}
+
+bool acorn::Sema::is_condition(Expr* expr) {
+    return expr->type->is(context.bool_type);
 }
 
 llvm::Constant* acorn::Sema::gen_constant(PointSourceLoc error_loc, Expr* expr) {

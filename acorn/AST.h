@@ -17,6 +17,7 @@ namespace acorn {
     struct Var;
     struct Expr;
     struct Func;
+    struct ScopeStmt;
 
     const size_t MAX_FUNC_PARAMS = 64;
 
@@ -28,6 +29,7 @@ namespace acorn {
         Var,
         ReturnStmt,
         IfStmt,
+        ScopeStmt,
 
         InvalidExpr,
         BinOp,
@@ -66,11 +68,6 @@ namespace acorn {
     // Statements
     //--------------------------------------
 
-    struct Scope : public llvm::SmallVector<Node*, 16> {
-    public:
-
-    };
-
     struct Decl : Node {
         Decl(NodeKind kind) : Node(kind) {
         }
@@ -107,7 +104,7 @@ namespace acorn {
         uint32_t num_returns = 0;
         llvm::SmallVector<Var*, 16>  vars_to_alloc;
         
-        Scope scope;
+        ScopeStmt* scope = nullptr;
 
     };
 
@@ -138,9 +135,14 @@ namespace acorn {
         IfStmt() : Node(NodeKind::IfStmt) {
         }
 
-        Expr* cond;
-        Node* elseif;
-        Scope scope;
+        Expr*      cond;
+        Node*      elseif;
+        ScopeStmt* scope;
+    };
+
+    struct ScopeStmt : Node, llvm::SmallVector<Node*> {
+        ScopeStmt() : Node(NodeKind::ScopeStmt) {
+        }
     };
     
 

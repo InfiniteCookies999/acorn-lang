@@ -13,6 +13,7 @@ int main() {
 
     acorn::AcornLang::SourceVector sources;
     sources.push_back(L"main.ac");
+    acorn.set_should_show_llvm_ir();
     acorn.run(sources);
 
 }

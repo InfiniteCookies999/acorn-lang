@@ -45,6 +45,7 @@ namespace acorn {
         SemaReassignConstVariable             = 30019,
         SemaReassignConstAddress              = 30020,
         SemaDivisionByZero                    = 30021,
+        SemaExpectedCondition                 = 30022,
 
         SignedOverflow                         = 40000,
     };

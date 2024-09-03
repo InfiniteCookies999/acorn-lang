@@ -29,13 +29,13 @@ case Token::KwBool
      Token::KwNative:   \
 case Token::KwDllimport
 
-#define push_scope()      \
-Scope new_scope;          \
-new_scope.parent = scope; \
-scope = &new_scope;
+#define push_scope()        \
+Scope lnew_scope;           \
+lnew_scope.parent = lscope; \
+lscope = &lnew_scope;
 
 #define pop_scope() \
-scope = scope->parent;
+lscope = lscope->parent;
 
 #define track_errors() \
 size_t prev_number_of_errors = logger.get_number_of_errors();
@@ -114,6 +114,7 @@ acorn::Node* acorn::Parser::parse_statement() {
     uint32_t modifiers = 0;
     switch (cur_token.kind) {
     case Token::KwReturn: return parse_return();
+    case Token::KwIf:     return parse_if();
     case ModifierTokens:
         modifiers = parse_modifiers();
         [[fallthrough]];
@@ -213,16 +214,13 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
 
     // Parsing the scope of the function.
     if (!func->has_modifier(Modifier::Native)) {
+        func->scope = new_node<ScopeStmt>(cur_token);
         expect('{');
         while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
             Node* stmt = parse_statement();
             if (!stmt) continue;
 
-            func->scope.push_back(stmt);
-            if (stmt->is(NodeKind::Var)) {
-                func->vars_to_alloc.push_back(as<Var*>(stmt));
-            }
-
+            func->scope->push_back(stmt);
         }
         expect('}', "for function body");
     }
@@ -268,14 +266,20 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
 
     // This must go after asignment so that it does not use the variable before
     // it is assigned.
-    if (scope && var->name != Identifier::Invalid) {
-        if (Var* prev_var = scope->find_variable(var->name)) {
+    if (lscope && var->name != Identifier::Invalid) {
+        if (Var* prev_var = lscope->find_variable(var->name)) {
             logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
                   .add_line([prev_var] { prev_var->first_declared_msg(); })
                   .end_error(ErrCode::ParseDuplicateLocVariableDecl);
         } else {
-            scope->var_decls.insert({ var->name, var });
+            lscope->var_decls.insert({ var->name, var });
         }
+    }
+
+    // If not a global variable we need to tell the current function to
+    // provide us with stack memory.
+    if (cur_func) {
+        cur_func->vars_to_alloc.push_back(var);
     }
 
     when_errors(var);
@@ -329,6 +333,48 @@ acorn::ReturnStmt* acorn::Parser::parse_return() {
     if (cur_func) ++cur_func->num_returns;
 
     return ret;
+}
+
+acorn::IfStmt* acorn::Parser::parse_if() {
+    IfStmt* ifs = new_node<IfStmt>(cur_token);
+    next_token();
+    
+    // Note: If an error occures when trying to parse the expression
+    //       the parser can simply recover at the next statement that
+    //       represents the body of the if statement.
+    ifs->cond = parse_expr();
+
+    ifs->scope = parse_scope("for if");
+
+    if (cur_token.is(Token::KwElIf)) {
+        ifs->elseif = parse_if();
+    } else if (cur_token.is(Token::KwElse)) {
+        next_token(); // Consuming else token.
+        ifs->elseif = parse_scope();
+    }
+
+    return ifs;
+}
+
+acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
+    push_scope();
+    ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
+    if (cur_token.is('{')) {
+        next_token(); // Consuming '}' token.
+
+        while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
+            if (Node* stmt = parse_statement()) {
+                scope->push_back(stmt);
+            }
+        }
+
+        expect('}', closing_for);
+    } else {
+        // Single statement scope.
+        scope->push_back(parse_statement());
+    }
+    pop_scope();
+    return scope;
 }
 
 // Expression parsing
@@ -555,8 +601,8 @@ acorn::Expr* acorn::Parser::parse_term() {
         IdentRef* ref = new_node<IdentRef>(cur_token);
         ref->ident = Identifier::get(cur_token.text());
 
-        if (scope) {
-            if (Var* var = scope->find_variable(ref->ident)) {
+        if (lscope) {
+            if (Var* var = lscope->find_variable(ref->ident)) {
                 ref->set_var_ref(var);
             }
         }
@@ -934,6 +980,15 @@ void acorn::Parser::skip_recovery() {
                 return;
             next_token();
             break;
+        case Token::KwIf:
+        case Token::KwReturn:
+            return;
+        case Token::KwElIf: {
+            // Replace current token with if statement so that it thinks
+            // it is a valid statement.
+            cur_token = Token(Token::KwIf, cur_token.loc);
+            return;
+        }
         default:
             next_token();
             break;

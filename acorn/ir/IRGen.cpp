@@ -36,6 +36,10 @@ llvm::Value* acorn::IRGenerator::gen_value(Node* node) {
         return gen_ident_reference(as<IdentRef*>(node));
     case NodeKind::ReturnStmt:
         return gen_return(as<ReturnStmt*>(node));
+    case NodeKind::IfStmt:
+        return gen_if(as<IfStmt*>(node));
+    case NodeKind::ScopeStmt:
+        return gen_scope(as<ScopeStmt*>(node));
     case NodeKind::FuncCall:
         return gen_function_call(as<FuncCall*>(node));
     case NodeKind::Bool:
@@ -136,10 +140,10 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
 void acorn::IRGenerator::gen_function_body(Func* func) {
     if (func->has_modifier(Modifier::Native)) return;
 
-    cur_func = func;
-    auto ll_func = func->ll_func;
+    cur_func    = func;
+    ll_cur_func = func->ll_func;
 
-    auto ll_entry = gen_bblock("entry.block", ll_func);
+    auto ll_entry = gen_bblock("entry.block", ll_cur_func);
     builder.SetInsertPoint(ll_entry);
 
     // Creating the return block and address if they are needed.
@@ -157,7 +161,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     for (size_t idx = 0; idx < func->params.size(); ++idx) {
         Var* param = func->params[idx];
         gen_variable_address(param);
-        builder.CreateStore(ll_func->getArg(idx), param->ll_address);
+        builder.CreateStore(ll_cur_func->getArg(idx), param->ll_address);
     }
 
     // Allocating memory for variables declared in the function.
@@ -165,7 +169,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
         gen_variable_address(var);
     }
 
-    for (Node* node : func->scope) {
+    for (Node* node : *func->scope) {
         gen_value(node);
     }
 
@@ -212,6 +216,45 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
         ll_ret_value = builder.getInt32(0);
     }
 
+    return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs) {
+
+    llvm::Value* ll_cond = gen_rvalue(ifs->cond);
+
+    auto ll_then_bb = gen_bblock("if.then", ll_cur_func);
+    auto ll_end_bb  = gen_bblock("if.end" , ll_cur_func);
+    auto ll_else_bb = ifs->elseif ? gen_bblock("if.else", ll_cur_func) : ll_end_bb;
+
+    // Jump to either the then or else block depending on the condition.
+    builder.CreateCondBr(ll_cond, ll_then_bb, ll_else_bb);
+
+    builder.SetInsertPoint(ll_then_bb);
+    gen_scope(ifs->scope);
+
+    // Jump to end after the else conidtion block.
+    // 
+    // Need to use gen_branch_if_not_term because our scope may
+    // have ended in a return statement or some other form of jump.
+    gen_branch_if_not_term(ll_end_bb);
+
+    if (Node* elif = ifs->elseif) {
+        builder.SetInsertPoint(ll_else_bb);
+        gen_value(elif);
+        gen_branch_if_not_term(ll_end_bb);
+    }
+
+    // Continue withe the end block after our if statement.
+    builder.SetInsertPoint(ll_end_bb);
+
+    return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
+    for (Node* stmt : *scope) {
+        gen_value(stmt);
+    }
     return nullptr;
 }
 
@@ -265,7 +308,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call) {
     // debug_info += "]\n";
     // Logger::debug(debug_info.c_str());
 
-    auto ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
+    auto ll_ret = builder.CreateCall(ll_cur_func, ll_args);
     if (!ll_ret->getType()->isVoidTy()) {
         ll_ret->setName("call.ret");
     }
@@ -422,6 +465,13 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
 
 llvm::BasicBlock* acorn::IRGenerator::gen_bblock(const char* name, llvm::Function* ll_func) {
     return llvm::BasicBlock::Create(ll_context, name, ll_func);
+}
+
+void acorn::IRGenerator::gen_branch_if_not_term(llvm::BasicBlock* ll_bb) {
+    auto ll_cur_bb = builder.GetInsertBlock();
+    if (!ll_cur_bb->getTerminator()) {
+        builder.CreateBr(ll_bb);
+    }
 }
 
 llvm::Twine acorn::IRGenerator::get_global_name(const char* name) {

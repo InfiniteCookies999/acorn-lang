@@ -280,25 +280,25 @@ void test_parser() {
             expect(funcs[0]->return_type, type_to_string).to_be(context->void_type);
             expect(funcs[0]->params.empty(), to_string<bool>).to_be(true);
             expect(funcs[0]->name, identifier_to_string).to_be(Identifier::get("foo"));
-            expect(funcs[0]->scope.empty(), to_string<bool>).to_be(true);
+            expect(funcs[0]->scope->empty(), to_string<bool>).to_be(true);
             expect(funcs[0]->modifiers, to_string<uint32_t>).to_be(0);
 
             expect(funcs[1]->return_type, type_to_string).to_be(context->void_type);
             expect(funcs[1]->params.size(), to_string<size_t>).to_be(1);
             expect(funcs[1]->name, identifier_to_string).to_be(Identifier::get("foo"));
-            expect(funcs[1]->scope.empty(), to_string<bool>).to_be(true);
+            expect(funcs[1]->scope->empty(), to_string<bool>).to_be(true);
             expect(funcs[1]->modifiers, to_string<uint32_t>).to_be(0);
 
             expect(funcs[2]->return_type, type_to_string).to_be(context->void_type);
             expect(funcs[2]->params.empty(), to_string<bool>).to_be(true);
             expect(funcs[2]->name, identifier_to_string).to_be(Identifier::get("foo2"));
-            expect(funcs[2]->scope.empty(), to_string<bool>).to_be(true);
+            expect(funcs[2]->scope, to_string<ScopeStmt*>).to_be(nullptr);
             expect(funcs[2]->modifiers, to_string<uint32_t>).to_be(Modifier::Native | Modifier::DllImport);
 
             expect(funcs[3]->return_type, type_to_string).to_be(context->void_type);
             expect(funcs[3]->params.size(), to_string<size_t>).to_be(3);
             expect(funcs[3]->name, identifier_to_string).to_be(Identifier::get("foo3"));
-            expect(funcs[3]->scope.empty(), to_string<bool>).to_be(true);
+            expect(funcs[3]->scope->empty(), to_string<bool>).to_be(true);
             expect(funcs[3]->modifiers, to_string<uint32_t>).to_be(0);
 
         });

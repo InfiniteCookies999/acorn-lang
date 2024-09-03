@@ -33,7 +33,8 @@ namespace acorn {
         llvm::Module&      ll_module;
         llvm::IRBuilder<>  builder;
 
-        Func* cur_func;
+        Func*           cur_func;
+        llvm::Function* ll_cur_func;
         // If there are multiple returns this is a block that
         // multiple return statements will jump to.
         llvm::BasicBlock* ll_ret_block;
@@ -50,6 +51,8 @@ namespace acorn {
         void gen_variable_address(Var* var);
         
         llvm::Value* gen_return(ReturnStmt* ret);
+        llvm::Value* gen_if(IfStmt* ifs);
+        llvm::Value* gen_scope(ScopeStmt* scope);
 
         llvm::Value* gen_variable(Var* var);
         llvm::Value* gen_number(Number* number);
@@ -71,6 +74,25 @@ namespace acorn {
         llvm::Value* gen_cast(Type* to_type, Type* from_type, llvm::Value* ll_value);
 
         llvm::BasicBlock* gen_bblock(const char* name, llvm::Function* ll_func = nullptr);
+
+        // This will only unconditionally branch to the given block as long as
+        // the current block does not already end in a branch (terminal).
+        // 
+        // This may occur because certain scopes end in a branch such as
+        // a return statement and so instead of continuing with the code after
+        // the scope it has to jump to the end of the function.
+        //
+        // Example of such as case:
+        //
+        // if a > 47 {
+        //     ...
+        //     return
+        // }
+        // // Code that may be not be reached because of the return jump.
+        // int a = 5
+        // ...
+        // 
+        void gen_branch_if_not_term(llvm::BasicBlock* ll_bb);
         llvm::Twine get_global_name(const char* name);
         llvm::GlobalVariable* gen_const_global_variable(const llvm::Twine& name,
                                                         llvm::Type* ll_type,

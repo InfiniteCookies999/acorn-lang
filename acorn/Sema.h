@@ -46,8 +46,9 @@ namespace acorn {
 
         void check_variable(Var* var);
         void check_return(ReturnStmt* ret);
+        void check_if(IfStmt* ifs, bool& all_paths_return);
 
-        void check_scope(Scope& scope, SemScope& new_sem_scope);
+        void check_scope(ScopeStmt* scope, SemScope& new_sem_scope);
 
         // Expression checking
         //--------------------------------------        
@@ -85,6 +86,7 @@ namespace acorn {
         bool is_lvalue(Expr* expr);
         void check_division_by_zero(PointSourceLoc error_loc, Expr* expr);
         void create_cast(Expr* expr, Type* to_type);
+        bool is_condition(Expr* expr);
 
         llvm::Constant* gen_constant(PointSourceLoc error_loc, Expr* expr);
         
