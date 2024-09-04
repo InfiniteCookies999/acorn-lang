@@ -59,6 +59,7 @@ if (e1 > e) { e = e1; }           \
         case NodeKind::IdentRef:
         case NodeKind::String:
         case NodeKind::Null:
+        case NodeKind::Bool:
             break;
         default:
             acorn_fatal("get_expansion(): missing case");

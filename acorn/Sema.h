@@ -19,6 +19,12 @@ namespace acorn {
 
         Sema(Context& context, Module& modl, Logger& logger);
 
+        static bool is_potential_main_function(const Func* canidate);
+        static bool find_main_function(Context& context);
+
+        static void check_for_duplicate_functions(Module& modl);
+        static bool check_for_duplicate_match(const Func* func, const Func* prev_func);
+
         void check_function(Func* func);
 
     private:
@@ -37,7 +43,14 @@ namespace acorn {
             // If true then on every possible branch
             // path there exists a return statement.
             bool all_paths_return = false;
-        } * cur_scope;
+
+            llvm::SmallVector<Var*> variables;
+
+            // Recursively ascends the current function stack to
+            // find the variable or returns nullptr.
+            Var* find_variable(Identifier name) const;
+
+        } * cur_scope = nullptr;
 
         void check_node(Node* node);
 
@@ -47,6 +60,7 @@ namespace acorn {
         void check_variable(Var* var);
         void check_return(ReturnStmt* ret);
         void check_if(IfStmt* ifs, bool& all_paths_return);
+        void check_comptime_if(ComptimeIfStmt* ifs);
 
         void check_scope(ScopeStmt* scope, SemScope& new_sem_scope);
 
@@ -86,7 +100,8 @@ namespace acorn {
         bool is_lvalue(Expr* expr);
         void check_division_by_zero(PointSourceLoc error_loc, Expr* expr);
         void create_cast(Expr* expr, Type* to_type);
-        bool is_condition(Expr* expr);
+        bool check_condition(Expr* cond);
+        bool is_condition(Expr* cond);
 
         llvm::Constant* gen_constant(PointSourceLoc error_loc, Expr* expr);
         

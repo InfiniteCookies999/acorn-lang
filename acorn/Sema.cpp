@@ -16,8 +16,77 @@ acorn::Sema::Sema(Context& context, Module & modl, Logger& logger)
     : context(context), modl(modl), logger(logger), type_table(context.type_table) {
 }
 
+bool acorn::Sema::is_potential_main_function(const Func* canidate) {
+    if (!canidate->params.empty()) {
+        return false;
+    }
+    return true;
+}
+
+bool acorn::Sema::find_main_function(Context& context) {
+    auto& canidates = context.get_canidate_main_funcs();
+    for (Func* canidate : canidates) {
+        if (!is_potential_main_function(canidate)) {
+            continue;
+        }
+
+        auto& logger = canidate->get_logger();
+
+        if (Func* prev_main = context.get_main_function()) {
+            logger.begin_error(canidate->loc, "Duplicate main (entry point) function")
+                              .add_line([prev_main] { prev_main->first_declared_msg(); })
+                              .end_error(ErrCode::ParseDuplicateMainFunc);
+        } else {
+            context.set_main_function(canidate);
+        }
+
+        if (canidate->return_type->is_not(context.int_type) &&
+            canidate->return_type->is_not(context.void_type)) {
+            logger.begin_error(canidate->loc, "main function must have return type of 'int' or 'void'")
+                  .end_error(ErrCode::SemaMainBadReturnType);
+        }
+        if (canidate->modifiers & Modifier::Native) {
+            logger.begin_error(canidate->loc, "main function cannot have native modifier")
+                .end_error(ErrCode::SemaMainCannotHaveModifier);
+        }
+        if (canidate->modifiers & Modifier::DllImport) {
+            logger.begin_error(canidate->loc, "main function cannot have dllimport modifier")
+                .end_error(ErrCode::SemaMainCannotHaveModifier);
+        }
+    }
+    return false;
+}
+
 // Statement checking
 //--------------------------------------
+
+void acorn::Sema::check_for_duplicate_functions(Module& modl) {
+    for (const auto& [_, funcs] : modl.get_global_functions()) {
+        for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
+            for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
+                if (check_for_duplicate_match(*itr2, *itr)) {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+bool acorn::Sema::check_for_duplicate_match(const Func* func, const Func* prev_func) {
+    if (prev_func->params.size() != func->params.size()) {
+        return false;
+    }
+    if (!std::ranges::equal(func->params, prev_func->params,
+                            [](const Var* p1, const Var* p2) {
+                                return p1->type->is(p2->type);
+                            })) {
+        return false;
+    }
+    func->get_logger().begin_error(func->loc, "Duplicate declaration of function '%s'", func->name)
+                      .add_line([prev_func] { prev_func->first_declared_msg(); })
+                      .end_error(ErrCode::SemaDuplicateGlobalFunc);
+    return true;
+}
 
 void acorn::Sema::check_node(Node* node) {
     switch (node->kind) {
@@ -31,6 +100,8 @@ void acorn::Sema::check_node(Node* node) {
         bool _;
         return check_if(as<IfStmt*>(node), _);
     }
+    case NodeKind::ComptimeIfStmt:
+        return check_comptime_if(as<ComptimeIfStmt*>(node));
     case NodeKind::BinOp:
         return check_binary_op(as<BinOp*>(node));
     case NodeKind::UnaryOp:
@@ -50,7 +121,6 @@ void acorn::Sema::check_node(Node* node) {
 }
 
 void acorn::Sema::check_function(Func* func) {
-    if (func->has_errors) return;
     if (func->has_modifier(Modifier::Native)) return;
 
     // Logger::debug("checking function: %s", func->name);
@@ -67,6 +137,22 @@ void acorn::Sema::check_function(Func* func) {
 
 void acorn::Sema::check_variable(Var* var) {
     
+    // If not a global variable we need to tell the current function to
+    // provide us with stack memory.
+    if (cur_func) {
+        cur_func->vars_to_alloc.push_back(var);
+    }
+
+    if (cur_scope) {
+        if (Var* prev_var = cur_scope->find_variable(var->name)) {
+            logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
+                  .add_line([prev_var] { prev_var->first_declared_msg(); })
+                  .end_error(ErrCode::SemaDuplicateLocVariableDecl);
+        } else {
+            cur_scope->variables.push_back(var);
+        }
+    }
+
     if (var->assignment) {
         check(var->assignment);
     }
@@ -118,15 +204,12 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
 
 void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
     check(ifs->cond);
-    if (!is_condition(ifs->cond)) {
-        error(expand(ifs->cond), "Expected condition")
-            .end_error(ErrCode::SemaExpectedCondition);
-    }
-
+    check_condition(ifs->cond);
+    
     SemScope sem_scope;
     check_scope(ifs->scope, sem_scope);
     all_paths_return = sem_scope.all_paths_return;
-
+    
     if (ifs->elseif && ifs->elseif->is(NodeKind::IfStmt)) {
         bool all_paths_return2;
         check_if(as<IfStmt*>(ifs->elseif), all_paths_return2);
@@ -134,10 +217,46 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
     } else if (ifs->elseif) {
         SemScope sem_scope;
         check_scope(as<ScopeStmt*>(ifs->elseif), sem_scope);
-        all_paths_return &= sem_scope.all_paths_return;
     }
 
     cur_scope->all_paths_return = all_paths_return;
+}
+
+void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
+    check(ifs->cond);
+    if (!check_condition(ifs->cond)) {
+        return;
+    }
+    if (!ifs->cond->is_foldable) {
+        error(expand(ifs->cond), "Comptime if expects the condition to be determined at compile time")
+            .end_error(ErrCode::SemaNotComptimeCompute);
+        return;
+    }
+
+    // Note: We will only check the scope if the path is taken. If it is not
+    //       then we could possibly run into errors that do not actually represent
+    //       the state of the problem. For example a variable being declared on one
+    //       operating system and trying to access it but not on another.
+
+    auto ll_cond = llvm::cast<llvm::ConstantInt>(gen_constant(expand(ifs->cond), ifs->cond));
+    if (!ll_cond->isZero()) {
+        // Path taken!
+        ifs->takes_path = true;
+        SemScope sem_scope;
+        check_scope(ifs->scope, sem_scope);
+        cur_scope->all_paths_return = sem_scope.all_paths_return;
+    } else if (ifs->elseif) {
+        ifs->takes_path = false;
+        if (ifs->elseif->is(NodeKind::ComptimeIfStmt)) {
+            // Onto the next possible comptime condition.
+            check_comptime_if(as<ComptimeIfStmt*>(ifs->elseif));
+        } else {
+            // Must have failed all other branches.
+            SemScope sem_scope;
+            check_scope(as<ScopeStmt*>(ifs->elseif), sem_scope);
+            cur_scope->all_paths_return = sem_scope.all_paths_return;
+        }
+    }
 }
 
 void acorn::Sema::check_scope(ScopeStmt* scope, SemScope& new_sem_scope) {
@@ -157,6 +276,7 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope& new_sem_scope) {
         case NodeKind::Func:
         case NodeKind::FuncCall:
         case NodeKind::IfStmt:
+        case NodeKind::ComptimeIfStmt:
             break;
         case NodeKind::BinOp: {
             BinOp* bin_op = as<BinOp*>(stmt);
@@ -461,9 +581,33 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
 
 void acorn::Sema::check_ident_ref(IdentRef* ref, bool is_for_call) {
     
-    if (!ref->found_ref()) {
+    auto find_function = [this, ref]() finline{
         if (auto* funcs = modl.find_global_funcs(ref->ident)) {
             ref->set_funcs_ref(funcs);
+        }
+    };
+
+    auto find_variable = [this, ref]() finline {
+        if (cur_scope) {
+            if (auto* var = cur_scope->find_variable(ref->ident)) {
+                ref->set_var_ref(var);
+                return;
+            }
+        }
+        if (auto* universal = context.get_universal_constant(ref->ident)) {
+            ref->set_universal(universal);
+        }
+    };
+
+    if (is_for_call) {
+        find_function();
+        if (!ref->found_kind) {
+            find_variable();
+        }
+    } else {
+        find_variable();
+        if (!ref->found_kind) {
+            find_function();
         }
     }
     
@@ -476,6 +620,10 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, bool is_for_call) {
     }
     case IdentRef::FuncsKind: {
         ref->type = context.funcs_ref_type;
+        break;
+    }
+    case IdentRef::UniversalKind: {
+        ref->type = ref->universal_ref->type;
         break;
     }
     case IdentRef::NoneKind: {
@@ -613,11 +761,6 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
 
     } else {
-        
-        if (!std::ranges::any_of(canidates, [](const Func* canidate) {
-                return !canidate->has_errors; })) {
-            return;
-        }
 
         logger.begin_error(error_loc, "Could not find a valid overloaded function");
         for (const Func* canidate : canidates) {
@@ -633,7 +776,6 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
 void acorn::Sema::display_call_mismatch_info(const Func* canidate,
                                              const llvm::SmallVector<Expr*, 8>& args,
                                              bool indent) const {
-    if (canidate->has_errors) return;
     
     auto& params = canidate->params;
     
@@ -834,8 +976,17 @@ void acorn::Sema::create_cast(Expr* expr, Type* to_type) {
     }
 }
 
-bool acorn::Sema::is_condition(Expr* expr) {
-    return expr->type->is(context.bool_type);
+bool acorn::Sema::check_condition(Expr* cond) {
+    if (!is_condition(cond)) {
+        error(expand(cond), "Expected condition")
+            .end_error(ErrCode::SemaExpectedCondition);
+        return false;
+    }
+    return true;
+}
+
+bool acorn::Sema::is_condition(Expr* cond) {
+    return cond->type->is(context.bool_type);
 }
 
 llvm::Constant* acorn::Sema::gen_constant(PointSourceLoc error_loc, Expr* expr) {
@@ -871,4 +1022,19 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Type* from_type)
         return std::format("Mismatched types. Expected '{}' but found '{}'",
             to_type->to_string(), from_type->to_string());
     }
+}
+
+acorn::Var* acorn::Sema::SemScope::find_variable(Identifier name) const {
+    const SemScope* scope_ptr = this;
+    while (scope_ptr) {
+        auto itr =std::ranges::find_if(scope_ptr->variables, [name](Var* var) {
+            return var->name == name; });
+        if (itr != scope_ptr->variables.end()) {
+            return *itr;
+        }
+
+        scope_ptr = scope_ptr->parent;
+    }
+
+    return nullptr;
 }

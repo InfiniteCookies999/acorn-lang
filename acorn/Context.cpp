@@ -4,6 +4,17 @@
 #include "Logger.h"
 #include "ir/IRGen.h"
 
+namespace acorn {
+    template<typename E>
+        requires std::is_base_of_v<Expr, E>
+    static std::pair<Identifier, Expr*> new_universal(PageAllocator& allocator, const char* name, auto&& initializer) {
+        E* expr = allocator.alloc_type<E>();
+        new (expr) E();
+        initializer(expr);
+        return { Identifier::get(name), expr };
+    }
+}
+
 acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, PageAllocator& allocator)
     : allocator(allocator),
       ll_context(ll_context),
@@ -62,38 +73,61 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "native"   , Token::KwNative    },
           { "dllimport", Token::KwDllimport },
           { "return"   , Token::KwReturn    },
+
+          { "#if"      , Token::KwCTIf      },
+          { "#elif"    , Token::KwCTElIf    },
+          { "#else"    , Token::KwCTElse    },
+          { "#endif"   , Token::KwCTEndIf   },
       }),
 
-    precedence({
+      precedence({
 
-        { '*', 9 },
-        { '/', 9 },
-        { '%', 9 },
+          { '*', 9 },
+          { '/', 9 },
+          { '%', 9 },
+          
+          { '+', 8 },
+          { '-', 8 },
+          
+          { Token::LtLt, 7 }, // <<
+          { Token::GtGt, 7 }, // >>
+          
+          { '<', 6 },
+          { '>', 6 },
+          { Token::LtEq, 6 }, // <=
+          { Token::GtEq, 6 }, // >=
+          
+          { Token::EqEq, 5 }, // ==
+          { Token::ExEq, 5 }, // !=
+          
+          { '&', 4 },
+          { '^', 3 },
+          { '|', 2 },
 
-        { '+', 8 },
-        { '-', 8 },
-
-        { Token::LtLt, 7 }, // <<
-        { Token::GtGt, 7 }, // >>
-
-        { '<', 6 },
-        { '>', 6 },
-        { Token::LtEq, 6 }, // <=
-        { Token::GtEq, 6 }, // >=
-
-        { Token::EqEq, 5 }, // ==
-        { Token::ExEq, 5 }, // !=
-
-        { '&', 4 },
-        { '^', 3 },
-        { '|', 2 },
-
-    })
+      })
 {
     for (auto ptr = keyword_mapping.begin(), end = keyword_mapping.end();
          ptr != end; ++ptr) {
         inv_keyword_mapping[ptr->second] = ptr->first();
     }
+
+    universal_constants.insert(new_universal<Bool>(allocator, "OS_GROUP_WINDOWS", [this](Bool* v) {
+        v->type = bool_type;
+#if WIN_OS
+        v->value = true;
+#else
+        v->value = false;
+#endif
+    }));
+
+    universal_constants.insert(new_universal<Bool>(allocator, "OS_GROUP_UNIX", [this](Bool* v) {
+        v->type = bool_type;
+#if UNIX_OS
+        v->value = true;
+#else
+        v->value = false;
+#endif
+    }));
 }
 
 void acorn::Context::queue_gen(Decl* decl) {
@@ -105,13 +139,9 @@ void acorn::Context::queue_gen(Decl* decl) {
     decls_gen_queue.push_back(decl);
 }
 
-acorn::Func* acorn::Context::set_or_get_main_function(Func* main_func) {
+void acorn::Context::add_canidate_main_function(Func* main_func) {
     std::lock_guard<std::mutex> lock(main_function_mtx);
-    if (this->main_func) {
-        return this->main_func;
-    }
-    this->main_func = main_func;
-    return nullptr;
+    canidate_main_funcs.push_back(main_func);
 }
 
 acorn::tokkind acorn::Context::get_keyword_kind(llvm::StringRef word) const {
@@ -124,4 +154,12 @@ acorn::tokkind acorn::Context::get_keyword_kind(llvm::StringRef word) const {
 
 bool acorn::Context::inc_error_count() {
     return ++error_count >= max_error_count;
+}
+
+acorn::Expr* acorn::Context::get_universal_constant(Identifier identifier) const {
+    auto itr = universal_constants.find(identifier);
+    if (itr != universal_constants.end()) {
+        return itr->second;
+    }
+    return nullptr;
 }

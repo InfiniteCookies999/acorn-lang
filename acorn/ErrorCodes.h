@@ -8,12 +8,10 @@ namespace acorn {
         LexNumberBadTypeSpec                  = 10002,
         LexInvalidUnicodeSeq                  = 10003,
         LexStringMissingEndQuote              = 10004,
+        LexUnknownComptimeDirective           = 10005,
 
-        ParseDuplicateGlobalFunc              = 20000,
-        ParseMainBadReturnType                = 20001,
         ParseExpectedExpression               = 20002,
         ParseExceededMaxFuncParams            = 20003,
-        ParseDuplicateLocVariableDecl         = 20004,
         ParseDuplicateModifier                = 20005,
         ParseConstVoidNotType                 = 20006,
         ParseInvalidType                      = 20007,
@@ -22,6 +20,7 @@ namespace acorn {
         ParseIntegerValueCalcOverflow         = 20010,
         ParseExpect                           = 20011,
         ParseExpectIdent                      = 20012,
+        ParseMissingComptimeEndIf             = 20013,
 
         SemaNotAllFuncPathReturn              = 30000,
         SemaVariableCannotHaveVoidType        = 30001,
@@ -46,8 +45,13 @@ namespace acorn {
         SemaReassignConstAddress              = 30020,
         SemaDivisionByZero                    = 30021,
         SemaExpectedCondition                 = 30022,
+        SemaNotComptimeCompute                = 30023,
+        SemaMainBadReturnType                 = 30024,
+        SemaDuplicateGlobalFunc               = 30025,
+        SemaDuplicateLocVariableDecl          = 20026,
+        SemaMainCannotHaveModifier            = 20027,
 
-        SignedOverflow                         = 40000,
+        SignedOverflow                        = 40000,
     };
 }
 

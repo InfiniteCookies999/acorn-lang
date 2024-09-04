@@ -35,6 +35,8 @@ namespace acorn {
 
         Token next_string();
 
+        Token next_comptime();
+
         inline Token new_token(const char* start, uint16_t length, tokkind c) noexcept {
             return Token(c, SourceLoc{ start, length });
         }

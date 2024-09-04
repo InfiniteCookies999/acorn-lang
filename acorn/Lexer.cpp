@@ -152,6 +152,8 @@ case c1:                                        \
         }
         return new_token(ptr - 1, 1, '<');
     }
+    case '#':
+        return next_comptime();
     case '(':
         return new_token_and_eat('(');
     case ')':
@@ -374,4 +376,26 @@ FinishedStringLexLab:
     }
     
     return new_token(start, ptr - start, !invalid ? kind : Token::InvalidLiteral);
+}
+
+acorn::Token acorn::Lexer::next_comptime() {
+    
+    const char* start = ptr;
+
+    ++ptr; // Eating the '#' character.
+
+    while (is_alpha(*ptr) || is_digit(*ptr) || *ptr == '_') {
+        ++ptr;
+    }
+
+    auto word = llvm::StringRef(start, ptr - start);
+    auto kind = context.get_keyword_kind(word);
+
+    Token token = new_token(kind, start);
+    if (kind == Token::Invalid) {
+        logger.begin_error(token.loc, "Unknown comptime directive")
+            .end_error(ErrCode::LexUnknownComptimeDirective);
+    }
+    return token;
+
 }

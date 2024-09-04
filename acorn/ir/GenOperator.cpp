@@ -7,7 +7,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     Expr* lhs = bin_op->lhs, *rhs = bin_op->rhs;
     
     auto apply_op_eq = [this, bin_op, lhs, rhs](tokkind op) finline {
-        auto ll_address = gen_value(lhs);
+        auto ll_address = gen_node(lhs);
         auto ll_value = gen_binary_numeric_op(op, bin_op, builder.CreateLoad(gen_type(lhs->type), ll_address), gen_rvalue(rhs));
         builder.CreateStore(ll_value, ll_address);
         return nullptr;
@@ -15,7 +15,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 
     switch (bin_op->op) {
     case '=': {
-        auto ll_address = gen_value(lhs);
+        auto ll_address = gen_node(lhs);
         gen_assignment(ll_address, rhs);
         return ll_address;
     }
@@ -115,7 +115,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
 
     auto gen_inc_or_dec = [this, unary_op](bool add, bool is_post) finline {
         auto type = unary_op->expr->type;
-        llvm::Value* ll_addr  = gen_value(unary_op->expr);
+        llvm::Value* ll_addr  = gen_node(unary_op->expr);
         llvm::Value* ll_value = builder.CreateLoad(gen_type(unary_op->expr->type), ll_addr);
         llvm::Value* ll_org   = ll_value;
         if (add) {
@@ -152,7 +152,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         // To get the address of the lvalue all we have to do is
         // get the value from gen_value since if we do not call
         // gen_rvalue it generates the address.
-        return gen_value(expr);
+        return gen_node(expr);
     case Token::AddAdd:
         return gen_inc_or_dec(true, false);
     case Token::SubSub:

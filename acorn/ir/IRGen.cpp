@@ -22,7 +22,7 @@ void acorn::IRGenerator::gen_function(Func* func) {
 
 }
 
-llvm::Value* acorn::IRGenerator::gen_value(Node* node) {
+llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
     switch (node->kind) {
     case NodeKind::BinOp:
         return gen_binary_op(as<BinOp*>(node));
@@ -38,6 +38,8 @@ llvm::Value* acorn::IRGenerator::gen_value(Node* node) {
         return gen_return(as<ReturnStmt*>(node));
     case NodeKind::IfStmt:
         return gen_if(as<IfStmt*>(node));
+    case NodeKind::ComptimeIfStmt:
+        return gen_comptime_if(as<ComptimeIfStmt*>(node));
     case NodeKind::ScopeStmt:
         return gen_scope(as<ScopeStmt*>(node));
     case NodeKind::FuncCall:
@@ -57,14 +59,13 @@ llvm::Value* acorn::IRGenerator::gen_value(Node* node) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
-    auto ll_value = gen_value(node);
+    auto ll_value = gen_node(node);
 
-    switch (node->kind) {
-    case NodeKind::IdentRef:
-        ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
-        break;
-    default:
-        break;
+    if (node->kind == NodeKind::IdentRef) {
+        IdentRef* ref = as<IdentRef*>(node);
+        if (ref->is_var_ref()) {
+            ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
+        }
     }
 
     return ll_value;
@@ -170,7 +171,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     }
 
     for (Node* node : *func->scope) {
-        gen_value(node);
+        gen_node(node);
     }
 
     if (func->num_returns > 1) {
@@ -241,7 +242,7 @@ llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs) {
 
     if (Node* elif = ifs->elseif) {
         builder.SetInsertPoint(ll_else_bb);
-        gen_value(elif);
+        gen_node(elif);
         gen_branch_if_not_term(ll_end_bb);
     }
 
@@ -251,9 +252,25 @@ llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs) {
     return nullptr;
 }
 
+llvm::Value* acorn::IRGenerator::gen_comptime_if(ComptimeIfStmt* ifs) {
+    if (ifs->takes_path) {
+        for (Node* stmt : *ifs->scope) {
+            gen_node(stmt);
+        }
+    } else if (ifs->elseif && ifs->elseif->is(NodeKind::ComptimeIfStmt)) {
+        gen_comptime_if(as<ComptimeIfStmt*>(ifs->elseif));
+    } else if (ifs->elseif && ifs->elseif->is(NodeKind::ScopeStmt)) {
+        auto else_scope = as<ScopeStmt*>(ifs->elseif);
+        for (Node* stmt : *else_scope) {
+            gen_node(stmt);
+        }
+    }
+    return nullptr;
+}
+
 llvm::Value* acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
     for (Node* stmt : *scope) {
-        gen_value(stmt);
+        gen_node(stmt);
     }
     return nullptr;
 }
@@ -274,7 +291,13 @@ llvm::Value* acorn::IRGenerator::gen_number(Number* number) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
-    return ref->var_ref->ll_address;
+    if (ref->is_var_ref()) {
+        return ref->var_ref->ll_address;
+    } else if (ref->is_universal_ref()) {
+        return gen_rvalue(ref->universal_ref);
+    }
+
+    acorn_fatal("unreachable: gen_ident_reference()");
 }
 
 llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call) {
@@ -308,7 +331,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call) {
     // debug_info += "]\n";
     // Logger::debug(debug_info.c_str());
 
-    auto ll_ret = builder.CreateCall(ll_cur_func, ll_args);
+    auto ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
     if (!ll_ret->getType()->isVoidTy()) {
         ll_ret->setName("call.ret");
     }

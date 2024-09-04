@@ -2,7 +2,7 @@
 
 #include "Logger.h"
 
-void acorn::Decl::first_declared_msg() {
+void acorn::Decl::first_declared_msg() const {
     auto [line_number, column_number] =
         file->line_table.get_line_and_column_number(loc.ptr);
 

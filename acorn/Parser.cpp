@@ -29,21 +29,6 @@ case Token::KwBool
      Token::KwNative:   \
 case Token::KwDllimport
 
-#define push_scope()        \
-Scope lnew_scope;           \
-lnew_scope.parent = lscope; \
-lscope = &lnew_scope;
-
-#define pop_scope() \
-lscope = lscope->parent;
-
-#define track_errors() \
-size_t prev_number_of_errors = logger.get_number_of_errors();
-
-#define when_errors(d)                                      \
-if (prev_number_of_errors != logger.get_number_of_errors()) \
-    d->has_errors = true;
-
 acorn::Parser::Parser(Context& context, Module& modl, SourceFile* file)
     : context(context),
       modl(modl),
@@ -69,35 +54,17 @@ void acorn::Parser::parse() {
         if (node->is(NodeKind::Func)) {
             
             auto func = as<Func*>(node);
-            check_duplicate_function(func);
-            if (func->name != Identifier::Invalid) {
+            if (func->name != Identifier::Invalid && !within_comptime_block) {
                 modl.add_global_function(func);
             }
 
-            if (func->name == context.main_identifier && !func->has_errors) {
-                bool valid_params = false;
-                if (func->params.empty()) {
-                    valid_params = true;
-                }
-
-                if (valid_params) {
-                    if (Func* prev_main = context.set_or_get_main_function(func)) {
-                        logger.begin_error(func->loc, "Duplicate main (entry point) function")
-                              .add_line([prev_main] { prev_main->first_declared_msg(); })
-                              .end_error(ErrCode::ParseDuplicateMainFunc);
-                    }
-                    if (func->return_type->is_not(context.int_type) &&
-                        func->return_type->is_not(context.void_type)) {
-                        error("main function must have return type of 'int' or 'void'")
-                            .end_error(ErrCode::ParseMainBadReturnType);
-                    }
-                }
+            if (func->name == context.main_identifier) {
+                context.add_canidate_main_function(func);
             }
         } else if (node->is(NodeKind::Var)) {
 
             auto var = as<Var*>(node);
-            // TODO: check for duplicate global variable!
-            if (var->name != Identifier::Invalid) {
+            if (var->name != Identifier::Invalid && !within_comptime_block) {
                 modl.add_global_variable(var);
             }
         } else {
@@ -115,6 +82,7 @@ acorn::Node* acorn::Parser::parse_statement() {
     switch (cur_token.kind) {
     case Token::KwReturn: return parse_return();
     case Token::KwIf:     return parse_if();
+    case Token::KwCTIf:   return parse_comptime_if();
     case ModifierTokens:
         modifiers = parse_modifiers();
         [[fallthrough]];
@@ -164,25 +132,14 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type) {
 
 acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Identifier name) {
     
-    track_errors();
-
     Func* func = new_node<Func>(prev_token);
     func->file        = file;
     func->modifiers   = modifiers;
     func->return_type = type;
     func->name        = name;
 
-    if (name == Identifier::Invalid || !func->return_type) {
-        func->has_errors = true;
-    }
-
     Func* prev_func = func;
     cur_func = func;
-
-    // Note: want to push scope before parameter parsing
-    // because the parameters are considered part of the
-    // scope of the function.
-    push_scope();
 
     // Parsing parameters.
     expect('(');
@@ -225,15 +182,10 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
         expect('}', "for function body");
     }
 
-    pop_scope();
     cur_func = prev_func;
 
-    when_errors(func);
-
-    if (!func->has_errors) {
-        context.add_unchecked_decl(func);
-    }
-
+    context.add_unchecked_decl(func);
+    
     return func;
 }
 
@@ -247,42 +199,16 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type) {
 
 acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identifier name) {
     
-    track_errors();
-
     Var* var = new_node<Var>(prev_token);
     var->file      = file;
     var->modifiers = modifiers;
     var->type      = type;
     var->name      = name;
 
-    if (var->name == Identifier::Invalid || !type) {
-        var->has_errors = true;
-    }
-
     if (cur_token.is('=')) {
         next_token(); // Consume '=' token.
         var->assignment = parse_expr();
     }
-
-    // This must go after asignment so that it does not use the variable before
-    // it is assigned.
-    if (lscope && var->name != Identifier::Invalid) {
-        if (Var* prev_var = lscope->find_variable(var->name)) {
-            logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
-                  .add_line([prev_var] { prev_var->first_declared_msg(); })
-                  .end_error(ErrCode::ParseDuplicateLocVariableDecl);
-        } else {
-            lscope->var_decls.insert({ var->name, var });
-        }
-    }
-
-    // If not a global variable we need to tell the current function to
-    // provide us with stack memory.
-    if (cur_func) {
-        cur_func->vars_to_alloc.push_back(var);
-    }
-
-    when_errors(var);
 
     return var;
 }
@@ -336,6 +262,7 @@ acorn::ReturnStmt* acorn::Parser::parse_return() {
 }
 
 acorn::IfStmt* acorn::Parser::parse_if() {
+
     IfStmt* ifs = new_node<IfStmt>(cur_token);
     next_token();
     
@@ -356,8 +283,56 @@ acorn::IfStmt* acorn::Parser::parse_if() {
     return ifs;
 }
 
+acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
+
+    ComptimeIfStmt* ifs = new_node<ComptimeIfStmt>(cur_token);
+    next_token();
+
+    bool was_within_comptime_block = within_comptime_block;
+    within_comptime_block = true;
+
+    ifs->cond = parse_expr();
+    ifs->scope = new_node<ScopeStmt>(cur_token);
+
+    while (cur_token.is_not(Token::KwCTEndIf) &&
+           cur_token.is_not(Token::KwCTIf) &&
+           cur_token.is_not(Token::EOB)) {
+        if (cur_token.is(Token::KwCTElIf)) {
+            ifs->elseif = parse_comptime_if(false);
+            break;
+        } else if (cur_token.is(Token::KwCTElse)) {
+            
+            ScopeStmt* else_stmts = new_node<ScopeStmt>(cur_token);
+            
+            next_token();
+            while (cur_token.is_not(Token::KwCTEndIf) &&
+                   cur_token.is_not(Token::KwCTIf) &&
+                   cur_token.is_not(Token::EOB) &&
+                   cur_token.is_not(Token::KwCTElIf) &&
+                   cur_token.is_not(Token::KwCTElse)) {
+                else_stmts->push_back(parse_statement());
+            }
+            ifs->elseif = else_stmts;
+            break;
+        } else {
+            ifs->scope->push_back(parse_statement());
+        }
+    }
+
+    if (chain_start) {
+        if (cur_token.is_not(Token::KwCTEndIf)) {
+            error(cur_token.loc, "Expected #endif for comptime if statement")
+                .end_error(ErrCode::ParseMissingComptimeEndIf);
+        } else {
+            next_token();
+        }
+    }
+
+    within_comptime_block = was_within_comptime_block;
+    return ifs;
+}
+
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
-    push_scope();
     ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
     if (cur_token.is('{')) {
         next_token(); // Consuming '}' token.
@@ -373,7 +348,6 @@ acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
         // Single statement scope.
         scope->push_back(parse_statement());
     }
-    pop_scope();
     return scope;
 }
 
@@ -601,12 +575,6 @@ acorn::Expr* acorn::Parser::parse_term() {
         IdentRef* ref = new_node<IdentRef>(cur_token);
         ref->ident = Identifier::get(cur_token.text());
 
-        if (lscope) {
-            if (Var* var = lscope->find_variable(ref->ident)) {
-                ref->set_var_ref(var);
-            }
-        }
-
         next_token(); // Consuming the identifier.
         return ref;
     }
@@ -814,32 +782,6 @@ acorn::Expr* acorn::Parser::parse_string32bit_literal() {
     return string;
 }
 
-void acorn::Parser::check_duplicate_function(Func* func) {
-    if (func->has_errors) return;
-    if (auto funcs = modl.find_global_funcs(func->name)) {
-        check_duplicate_function(func, *funcs);
-    }
-}
-
-void acorn::Parser::check_duplicate_function(Func* func, FuncList& funcs) {
-    for (Func* prev_func : funcs) {
-        if (prev_func->params.size() != func->params.size()) {
-            continue;
-        }
-        if (!std::ranges::equal(func->params, prev_func->params,
-            [](const Var* p1, const Var* p2) {
-                return p1->type->is(p2->type);
-            })) {
-            continue;
-        }
-        
-        logger.begin_error(func->loc, "Duplicate declaration of function '%s'", func->name)
-                  .add_line([prev_func] { prev_func->first_declared_msg(); })
-                  .end_error(ErrCode::ParseDuplicateGlobalFunc);
-        break;
-    }
-}
-
 template<uint32_t radix, uint64_t convert_table[256], bool use_table>
 acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* end) {
 
@@ -996,14 +938,3 @@ void acorn::Parser::skip_recovery() {
     }
 }
 
-acorn::Var* acorn::Parser::Scope::find_variable(Identifier name) const {
-    const Scope* cur = this;
-    while (cur) {
-        auto itr = cur->var_decls.find(name);
-        if (itr != cur->var_decls.end()) {
-            return itr->second;
-        }
-        cur = cur->parent;
-    }
-    return nullptr;
-}

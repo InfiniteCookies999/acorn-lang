@@ -79,7 +79,11 @@ namespace acorn {
             return decl;
         }
 
-        Func* set_or_get_main_function(Func* main_func);
+        void add_canidate_main_function(Func* main_func);
+
+        llvm::SmallVector<Func*>& get_canidate_main_funcs() {
+            return canidate_main_funcs;
+        }
 
         // Returns Token::Invalid if not a keyword.
         tokkind get_keyword_kind(llvm::StringRef word) const;
@@ -89,6 +93,7 @@ namespace acorn {
             return inv_keyword_mapping.find(kind)->second;
         }
 
+        void set_main_function(Func* func) { main_func = func; }
         Func* get_main_function() const { return main_func; }
 
         // Returns -1 if invalid.
@@ -124,11 +129,14 @@ namespace acorn {
         // of errors.
         bool inc_error_count();
 
+        Expr* get_universal_constant(Identifier identifier) const;
+
     private:
         PageAllocator& allocator;
         
         std::mutex main_function_mtx;
-        Func*      main_func = nullptr;
+        llvm::SmallVector<Func*> canidate_main_funcs;
+        Func* main_func = nullptr;
 
         std::atomic<size_t> error_count      = 0;
         size_t              max_error_count  = 30;
@@ -143,6 +151,7 @@ namespace acorn {
         llvm::StringMap<tokkind>                 keyword_mapping;
         llvm::DenseMap<tokkind, llvm::StringRef> inv_keyword_mapping; // Inverse of keyword_mapping.
         llvm::DenseMap<tokkind, int>             precedence;
+        llvm::DenseMap<Identifier, Expr*>        universal_constants;
 
     };
 }

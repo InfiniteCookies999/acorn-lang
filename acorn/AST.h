@@ -29,6 +29,7 @@ namespace acorn {
         Var,
         ReturnStmt,
         IfStmt,
+        ComptimeIfStmt,
         ScopeStmt,
 
         InvalidExpr,
@@ -74,8 +75,6 @@ namespace acorn {
 
         bool generated = false;
 
-        bool has_errors = false;
-
         SourceFile* file;
         Identifier  name;
         uint32_t    modifiers;
@@ -88,7 +87,7 @@ namespace acorn {
 
         Module& get_module() const { return file->modl; }
 
-        void first_declared_msg();
+        void first_declared_msg() const;
 
     };
 
@@ -134,10 +133,19 @@ namespace acorn {
     struct IfStmt : Node {
         IfStmt() : Node(NodeKind::IfStmt) {
         }
+        IfStmt(NodeKind kind) : Node(kind) {
+        }
 
         Expr*      cond;
         Node*      elseif;
         ScopeStmt* scope;
+    };
+
+    struct ComptimeIfStmt : IfStmt {
+        ComptimeIfStmt() : IfStmt(NodeKind::ComptimeIfStmt) {
+        }
+
+        bool takes_path;
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {
@@ -230,12 +238,18 @@ namespace acorn {
             NoneKind,
             VarKind,
             FuncsKind,
+            UniversalKind,
         } found_kind = NoneKind;
 
         union {
             Var*      var_ref = nullptr;
             FuncList* funcs_ref;
+            Expr*     universal_ref;
         };
+
+        bool is_var_ref() const       { return found_kind == VarKind;       }
+        bool is_funcs_ref() const     { return found_kind == FuncsKind;     }
+        bool is_universal_ref() const { return found_kind == UniversalKind; }
 
         void set_var_ref(Var* var) {
             var_ref    = var;
@@ -245,6 +259,11 @@ namespace acorn {
         void set_funcs_ref(FuncList* funcs) {
             funcs_ref  = funcs;
             found_kind = FuncsKind;
+        }
+
+        void set_universal(Expr* universal) {
+            universal_ref = universal;
+            found_kind = UniversalKind;
         }
     };
 

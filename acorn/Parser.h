@@ -32,30 +32,14 @@ namespace acorn {
         
         Func* cur_func = nullptr;
 
-        // Used to keep track of variables declared within
-        // a local scope to avoid lookup costs later on.
-        // 
-        struct Scope {
-            // When nullptr we are in the global scope.
-            Scope* parent = nullptr;
-
-            // TODO: Given the small size it may be more effcicient to use a vector.
-            // TODO: Given the fact that this requires constant memory allocations
-            //       a memory allocation strategy may be worth it.
-            llvm::DenseMap<Identifier, Var*> var_decls;
-
-            // Recursively searches the scope stack for the variable
-            // given the name.
-            Var* find_variable(Identifier name) const;
-
-        } *lscope = nullptr;
-
         Lexer lex;
         Token cur_token;
         Token prev_token;
 
         Token  peeked_tokens[MAX_PEEKED_TOKENS];
         size_t peeked_size = 0;
+
+        bool within_comptime_block = false;
 
         // Statement parsing
         //--------------------------------------
@@ -71,8 +55,10 @@ namespace acorn {
 
         uint32_t parse_modifiers();
 
-        ReturnStmt* parse_return();
-        IfStmt* parse_if();
+        ReturnStmt*     parse_return();
+        IfStmt*         parse_if();
+        ComptimeIfStmt* parse_comptime_if(bool chain_start = true);
+
         ScopeStmt* parse_scope(const char* closing_for = nullptr);
 
         // Expression parsing
@@ -99,9 +85,6 @@ namespace acorn {
 
         template<uint32_t radix, uint64_t convert_table[256], bool use_table = true>
         Expr* parse_number_literal(const char* start, const char* end);
-
-        void check_duplicate_function(Func* func);
-        void check_duplicate_function(Func* func, FuncList& funcs);
 
         // Utility functions
         //--------------------------------------

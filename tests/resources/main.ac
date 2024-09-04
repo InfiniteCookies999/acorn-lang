@@ -8,7 +8,13 @@ native dllimport int32 WriteFile(void*       hFile,
                                  void*       lpOverlapped)
 
 void main() {
+
+#if OS_GROUP_WINDOWS
     void* handle = GetStdHandle(-11)
     uint32 written
     WriteFile(handle, "hello yuki ^-^", 15, &written, null)
+#elif OS_GROUP_UNIX
+    // TODO: here we would support unix!
+#endif
+
 }

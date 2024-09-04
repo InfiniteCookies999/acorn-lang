@@ -50,7 +50,14 @@ namespace acorn {
             KwDllimport,
             KwReturn,
 
-            KeywordEnd = KwReturn,
+            ComptimeKeywordStart,
+            KwCTIf = ComptimeKeywordStart,
+            KwCTElIf,
+            KwCTElse,
+            KwCTEndIf,
+            ComptimeKeywordEnd = KwCTEndIf,
+
+            KeywordEnd = ComptimeKeywordEnd,
 
             LtLt,
             GtGt,
@@ -108,7 +115,8 @@ namespace acorn {
 
         // Checks if the token is a keyword.
         [[nodiscard]] constexpr bool is_keyword() const noexcept {
-            return kind >= Token::KeywordStart && kind <= Token::KeywordEnd;
+            return kind >= Token::KeywordStart && kind <= Token::KeywordEnd &&
+                   kind <  Token::ComptimeKeywordStart;
         }
 
         [[nodiscard]] constexpr bool is_modifier() const noexcept {

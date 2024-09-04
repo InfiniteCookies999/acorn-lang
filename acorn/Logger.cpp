@@ -466,25 +466,28 @@ void acorn::Logger::print(Stream stream, const std::wstring& s) {
         return c > 0x7F;
     });
     // TODO: this makes very little sense it should write wide if wide.
-    // TODO: This should also use WriteFile instead of WriteConsole because
-    //       write console doesn't allow integration with pipes correctly.
     if (!is_wide) {
 #if WIN_OS
-        HANDLE handle = get_handle(stream);
-        DWORD written;
-        WriteConsoleA(handle, s.c_str(), static_cast<DWORD>(s.length()), &written, nullptr);
-#elif UNIX_OS
-        int handle = get_handle(stream);
-        write(handle, s.c_str(), s.length());
-#endif
-    } else {
-        // narrowing the wstring to string.
         std::string narrow_string;
         narrow_string.reserve(s.size());
         for (wchar_t wc : s) {
             narrow_string += static_cast<char>(wc);
         }
-        print(stream, narrow_string);
+
+        HANDLE handle = get_handle(stream);
+        DWORD written;
+        WriteFile(handle, narrow_string.c_str(), static_cast<DWORD>(narrow_string.length()), &written, nullptr);
+#elif UNIX_OS
+        int handle = get_handle(stream);
+        write(handle, s.c_str(), s.length());
+#endif
+    } else {
+        // Printing wide string.
+#if WIN_OS
+        HANDLE handle = get_handle(stream);
+        DWORD written;
+        WriteFile(handle, s.c_str(), static_cast<DWORD>(s.length()) * sizeof(wchar_t), &written, nullptr);
+#endif
     }
 }
 

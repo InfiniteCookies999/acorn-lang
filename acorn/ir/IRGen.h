@@ -19,7 +19,7 @@ namespace acorn {
 
         void gen_function(Func* func);
 
-        llvm::Value* gen_value(Node* node);
+        llvm::Value* gen_node(Node* node);
 
         llvm::Value* gen_rvalue(Expr* node);
 
@@ -52,6 +52,7 @@ namespace acorn {
         
         llvm::Value* gen_return(ReturnStmt* ret);
         llvm::Value* gen_if(IfStmt* ifs);
+        llvm::Value* gen_comptime_if(ComptimeIfStmt* ifs);
         llvm::Value* gen_scope(ScopeStmt* scope);
 
         llvm::Value* gen_variable(Var* var);
