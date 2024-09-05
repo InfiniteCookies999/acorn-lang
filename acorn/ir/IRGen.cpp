@@ -68,6 +68,12 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
         }
     }
 
+    if (node->cast_type) {
+        ll_value = gen_cast(node->cast_type, node->type, ll_value);
+
+        node->cast_type = nullptr;
+    }
+
     return ll_value;
 }
 
@@ -298,6 +304,7 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
     }
 
     acorn_fatal("unreachable: gen_ident_reference()");
+    return nullptr;
 }
 
 llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call) {

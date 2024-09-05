@@ -14,6 +14,7 @@
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <sstream>
 
 void acorn::set_color(Stream stream, Color color) {
 #ifdef _WIN32
@@ -85,6 +86,18 @@ std::string& acorn::trim_trailing(std::string& s) {
 
 std::string& acorn::trim(std::string& s) {
     return trim_leading(trim_trailing(s));
+}
+
+llvm::SmallVector<std::string> acorn::split_by_whitespace(const std::string& s) {
+    std::istringstream stream(s);
+    llvm::SmallVector<std::string> tokens;
+
+    std::string word;
+    while (stream >> word) {
+        tokens.push_back(word);
+    }
+
+    return tokens;
 }
 
 size_t acorn::get_system_page_size() {

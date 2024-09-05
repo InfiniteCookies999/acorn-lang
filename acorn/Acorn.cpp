@@ -63,7 +63,11 @@ void acorn::AcornLang::run(const SourceVector& sources) {
 }
 
 void acorn::AcornLang::set_output_name(std::wstring output_name) {
+#if WIN_OS
     exe_name = output_name.ends_with(L".exe") ? output_name : output_name + L".exe";
+#elif UNIX_OS
+    exe_name = output_name;
+#endif
     obj_name = output_name.ends_with(L".exe") ? output_name.substr(0, output_name.length() - 4) : output_name;
     obj_name += L".o";
     this->output_name = std::move(output_name);
@@ -232,12 +236,11 @@ void acorn::AcornLang::sema_and_irgen() {
     }
     
     llvm::verifyModule(*ll_module, &llvm::errs());
+    
     if (should_show_llvm_ir) {
-#ifdef _WIN32
-        // Yeh oki, for some reason there seems to be linker issuses with
-        // this on linux!
-        ll_module->dump();
-#endif
+        // Do not use ll_module->dump() because if DLLVM_ENABLE_DUMP flag is turned
+        // off then it will cause a linker issue.
+        ll_module->print(llvm::outs(), nullptr);
         llvm::outs() << "\n";
     }
 }
@@ -299,11 +302,19 @@ void acorn::AcornLang::link() {
                                    get_lib_paths(),
                                    L"libcmt.lib msvcrt.lib kernel32.lib");
 
-    // Logger::info("Executing linker command:\n%s\n", cmd);
     
+#elif UNIX_OS
+    
+    // TODO: Fix this so it doesn't change assume we are using clang.
+    std::wstring cmd = std::format(L"clang {} -o {}",
+                                   absolute_obj_path,
+                                   absolute_exe_path);
+
+#endif
+
     int exit_code;
     exe_process(cmd.data(), nullptr, false, exit_code);
-    
+
     std::error_code ec;
     fs::remove(absolute_obj_path, ec);
     if (ec) {
@@ -311,11 +322,10 @@ void acorn::AcornLang::link() {
                              absolute_obj_path, ec.message());
         return;
     }
-
+    
     if (exit_code == 0) {
         // std::wcout << "Wrote program to: " << absolute_exe_path << "\n";
     }
-#endif
 
     link_timer.stop();
 }

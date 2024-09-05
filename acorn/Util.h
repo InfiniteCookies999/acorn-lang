@@ -2,6 +2,7 @@
 #define UTIL_H
 
 #include <fstream>
+#include <llvm/ADT/SmallVector.h>
 
 #include "PageAllocator.h"
 
@@ -13,7 +14,8 @@
 #endif
 
 #define WIN_OS  (_WIN32 != 0)
-#define UNIX_OS (defined(__unix__) || defined(__unix) || defined(__linux__) || (defined(__APPLE__) && defined(__MACH__)))
+#define MAC_OS  (defined(__APPLE__) && defined(__MACH__))
+#define UNIX_OS (defined(__unix__) || defined(__unix) || defined(__linux__) || MAC_OS)
 
 namespace acorn {
 
@@ -88,6 +90,8 @@ namespace acorn {
     std::string& trim_trailing(std::string& s);
 
     std::string& trim(std::string& s);
+
+    llvm::SmallVector<std::string> split_by_whitespace(const std::string& s);
 
     size_t get_system_page_size();
 

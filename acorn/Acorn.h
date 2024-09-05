@@ -58,9 +58,9 @@ namespace acorn {
         std::wstring absolute_exe_path;
         std::wstring absolute_obj_path;
 
-        bool release_build           = false;
-        bool should_show_times       = false;
-        bool should_show_llvm_ir     = false;
+        bool release_build       = false;
+        bool should_show_times   = false;
+        bool should_show_llvm_ir = false;
         std::function<void(ErrCode)> error_code_interceptor;
 
         // Timers to keep track of how different

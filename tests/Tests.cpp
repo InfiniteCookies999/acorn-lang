@@ -1,8 +1,12 @@
 #include "TestFramework.h"
 
+#include <filesystem>
+
 #include "LexerTests.h"
 #include "ParserTests.h"
 #include "CodegenTests.h"
+
+#include "Process.h"
 
 int main() {
 

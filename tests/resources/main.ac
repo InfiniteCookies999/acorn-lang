@@ -7,6 +7,9 @@ native dllimport int32 WriteFile(void*       hFile,
                                  uint32*     lpNumberOfBytesWritten,
                                  void*       lpOverlapped)
 
+// TODO: using int64 but this should be the pointer size of the machine. 
+native int64 write(int32 fd, const void* buf, uint64 count)
+
 void main() {
 
 #if OS_GROUP_WINDOWS
@@ -15,6 +18,7 @@ void main() {
     WriteFile(handle, "hello yuki ^-^", 15, &written, null)
 #elif OS_GROUP_UNIX
     // TODO: here we would support unix!
+    write(1, "hello yuki ^-^", 15)
 #endif
 
 }

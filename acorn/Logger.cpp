@@ -462,12 +462,13 @@ void acorn::Logger::print_exceeded_errors_msg(Context& context) {
 
 void acorn::Logger::print(Stream stream, const std::wstring& s) {
 
+#if WIN_OS
+
     bool is_wide = std::ranges::any_of(s, [](wchar_t c) {
         return c > 0x7F;
     });
-    // TODO: this makes very little sense it should write wide if wide.
+        
     if (!is_wide) {
-#if WIN_OS
         std::string narrow_string;
         narrow_string.reserve(s.size());
         for (wchar_t wc : s) {
@@ -477,18 +478,25 @@ void acorn::Logger::print(Stream stream, const std::wstring& s) {
         HANDLE handle = get_handle(stream);
         DWORD written;
         WriteFile(handle, narrow_string.c_str(), static_cast<DWORD>(narrow_string.length()), &written, nullptr);
-#elif UNIX_OS
-        int handle = get_handle(stream);
-        write(handle, s.c_str(), s.length());
-#endif
     } else {
-        // Printing wide string.
-#if WIN_OS
         HANDLE handle = get_handle(stream);
         DWORD written;
         WriteFile(handle, s.c_str(), static_cast<DWORD>(s.length()) * sizeof(wchar_t), &written, nullptr);
-#endif
     }
+#elif UNIX_OS
+    
+    // Unix cannot have wide directory paths so we just convert to narrow.
+    std::string narrow_string;
+    narrow_string.reserve(s.size());
+    for (wchar_t wc : s) {
+        narrow_string += static_cast<char>(wc);
+    }
+
+    int handle = get_handle(stream);
+    write(handle, narrow_string.c_str(), narrow_string.length());
+
+#endif
+
 }
 
 void acorn::Logger::print(Stream stream, const char* s, size_t length) {
@@ -496,5 +504,8 @@ void acorn::Logger::print(Stream stream, const char* s, size_t length) {
     HANDLE handle = get_handle(stream);
     DWORD written;
     WriteConsoleA(handle, s, static_cast<DWORD>(length), &written, nullptr);
+#elif UNIX_OS
+    int handle = get_handle(stream);
+    write(handle, s, length);
 #endif
 }
