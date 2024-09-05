@@ -182,7 +182,7 @@ void test_parser() {
             expect(as<Number*>(nodes[2])->value_u64, to_string<int32_t>).to_be(511);
 
         });
-        test("octol parsing", [&] {
+        test("octal parsing", [&] {
             const char* program = "00 0123 01234567 0523471";
             Module& modl = *mock_parser(program);
 

@@ -4,14 +4,15 @@
 
 #if WIN_OS
 #include <Windows.h>
+#undef min
+#undef max
 #elif MAC_OS
-
-#elif UNIX_OS
-
+#include <mach-o/dyld.h>
 #endif
 
 #include <iostream>
 #include <filesystem>
+#include <codecvt>
 #include <llvm/IR/Module.h>
 
 #include "LexerTests.h"
@@ -30,7 +31,27 @@ static std::wstring executable_path;
 
 std::wstring get_executable_path() {
 #if WIN_OS
+
+// TODO: Not deteching when unicode is enabled fix this
+// and use W version if unicode.
+#if defined(_UNICODE) || defined(UNICODE)
+    wchar_t buffer[MAX_PATH];
+    DWORD length = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+    if (length != 0) {
+        buffer[length] = '\0';
+        return std::wstring{ buffer };
+    }
     return L"";
+#else
+    char buffer[MAX_PATH];
+    DWORD length = GetModuleFileNameA(nullptr, buffer, MAX_PATH);
+    if (length != 0) {
+        buffer[length] = '\0';
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+        return converter.from_bytes(buffer);
+    }
+    return L"";
+#endif
 #elif MAC_OS
     char buffer[PATH_MAX + 1];
     uint32_t length = PATH_MAX;
