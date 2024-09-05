@@ -457,7 +457,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
     case TypeKind::Pointer: {
         if (from_type->is_integer() || from_type->is(context.bool_type)) {
             return builder.CreatePtrToInt(ll_value, llvm::PointerType::get(ll_context, 0), "cast");
-        } else if (from_type->is_pointer()) {
+        } else if (from_type->is_pointer() || from_type->is(context.null_type)) {
             // Pointer to pointer doesn't need casting because of opaque pointers.
             return ll_value;
         }

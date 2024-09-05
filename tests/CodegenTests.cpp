@@ -30,7 +30,7 @@ static std::wstring executable_path;
 
 std::wstring get_executable_path() {
 #if WIN_OS
-    return "";
+    return L"";
 #elif MAC_OS
     char buffer[PATH_MAX + 1];
     uint32_t length = PATH_MAX;
