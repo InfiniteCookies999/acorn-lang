@@ -22,7 +22,7 @@ namespace acorn {
     
     class AcornLang {
     public:
-        using SourceVector = llvm::SmallVector<std::wstring_view>;
+        using SourceVector = llvm::SmallVector<std::wstring>;
 
         ~AcornLang();
 
@@ -34,6 +34,7 @@ namespace acorn {
         void set_should_show_times()   { should_show_times = true;   }
         void set_should_show_llvm_ir() { should_show_llvm_ir = true; }
         void set_should_show_error_codes() { context.set_should_show_error_codes(); }
+        void set_dont_show_wrote_to_msg() { dont_show_wrote_to_msg = true; }
 
         void set_output_name(std::wstring output_name);
         void set_output_directory(std::wstring output_directory);
@@ -58,9 +59,10 @@ namespace acorn {
         std::wstring absolute_exe_path;
         std::wstring absolute_obj_path;
 
-        bool release_build       = false;
-        bool should_show_times   = false;
-        bool should_show_llvm_ir = false;
+        bool release_build          = false;
+        bool should_show_times      = false;
+        bool should_show_llvm_ir    = false;
+        bool dont_show_wrote_to_msg = false;
         std::function<void(ErrCode)> error_code_interceptor;
 
         // Timers to keep track of how different

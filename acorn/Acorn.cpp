@@ -324,8 +324,8 @@ void acorn::AcornLang::link() {
         return;
     }
     
-    if (exit_code == 0) {
-        // std::wcout << "Wrote program to: " << absolute_exe_path << "\n";
+    if (exit_code == 0 && !dont_show_wrote_to_msg) {
+        std::wcout << "Wrote program to: " << absolute_exe_path << "\n";
     }
 
     link_timer.stop();
@@ -354,6 +354,11 @@ bool acorn::AcornLang::validate_sources(const SourceVector& sources) {
 
 void acorn::AcornLang::parse_files(const SourceVector& sources) {
     parse_timer.start();
+
+    if (sources.empty()) {
+        Logger::global_error(context, "No sources provided");
+        return;
+    }
 
     if (!validate_sources(sources)) {
         return; // Validation failed, so exit early.

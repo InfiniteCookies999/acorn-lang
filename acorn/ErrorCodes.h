@@ -21,6 +21,7 @@ namespace acorn {
         ParseExpect                           = 20011,
         ParseExpectIdent                      = 20012,
         ParseMissingComptimeEndIf             = 20013,
+        ParseNativeFuncNoHaveBodies           = 20014,
 
         SemaNotAllFuncPathReturn              = 30000,
         SemaVariableCannotHaveVoidType        = 30001,

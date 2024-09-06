@@ -1,5 +1,5 @@
 
-add_executable (driver "Driver.cpp" )
+add_executable (driver "Driver.cpp"  "CommandProcessor.h" "CommandProcessor.cpp")
 set_target_properties (
     driver
     PROPERTIES

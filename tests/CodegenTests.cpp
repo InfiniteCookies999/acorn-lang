@@ -90,6 +90,8 @@ static auto run_codegen_test(const wchar_t* file) {
         // still ends up in the tests directory.
         acorn->set_output_directory(executable_path);
     }
+    acorn->set_dont_show_wrote_to_msg();
+
     acorn->run(sources);
     context = acorn->get_context();
     has_errors = acorn->has_errors();

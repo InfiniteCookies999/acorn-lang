@@ -174,7 +174,11 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
     expect(')', "for function declaration");
 
     // Parsing the scope of the function.
-    if (!func->has_modifier(Modifier::Native)) {
+    if (!func->has_modifier(Modifier::Native) || cur_token.is('{')) {
+        if (func->has_modifier(Modifier::Native)) {
+            error(cur_token, "Native functions do not have bodies")
+                .end_error(ErrCode::ParseNativeFuncNoHaveBodies);
+        }
         func->scope = new_node<ScopeStmt>(cur_token);
         expect('{');
         while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
