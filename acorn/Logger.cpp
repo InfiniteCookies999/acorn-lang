@@ -388,7 +388,7 @@ void acorn::Logger::end_error(ErrCode error_code) {
         // Displaying the line number and bar.
         auto line_number_pad_width = count_digits(info.last_line_number) - count_digits(line_number);
         auto line_number_pad = std::string(line_number_pad_width, ' ');
-        fmt_print(StdErr, " %s%s%s %s| ", BrightYellow, line_number++, line_number_pad, White);
+        fmt_print(StdErr, " %s%s%s %s|%s ", BrightYellow, line_number++, line_number_pad, BrightWhite, White);
 
         // Printing the line.
         if (is_first && info.exceeded_start)
