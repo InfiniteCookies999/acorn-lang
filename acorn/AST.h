@@ -87,7 +87,7 @@ namespace acorn {
 
         Module& get_module() const { return file->modl; }
 
-        void first_declared_msg() const;
+        void get_declared_msg() const;
 
     };
 
@@ -145,6 +145,7 @@ namespace acorn {
         ComptimeIfStmt() : IfStmt(NodeKind::ComptimeIfStmt) {
         }
 
+        SourceFile* file;
         bool takes_path;
     };
 

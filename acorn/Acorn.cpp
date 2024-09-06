@@ -189,6 +189,7 @@ void acorn::AcornLang::initialize_codegen() {
 
 void acorn::AcornLang::sema_and_irgen() {
 
+    Sema::resolve_global_comptime(context, modl);
     Sema::find_main_function(context);
 
     if (!context.get_main_function()) {

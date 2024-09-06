@@ -39,8 +39,6 @@ namespace acorn {
         Token  peeked_tokens[MAX_PEEKED_TOKENS];
         size_t peeked_size = 0;
 
-        bool within_comptime_block = false;
-
         // Statement parsing
         //--------------------------------------
 

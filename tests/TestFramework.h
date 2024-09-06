@@ -73,8 +73,8 @@ struct Expector {
     int         line;
 
     void to_be(T expected) {
+        check_for_error_code();
         if (given == expected) {
-            check_for_error_code();
             return;
         }
         Expector<T> copy = *this;
@@ -85,8 +85,8 @@ struct Expector {
     }
 
     void not_to_be(T expected) {
+        check_for_error_code();
         if (given != expected) {
-            check_for_error_code();
             return;
         }
         Expector<T> copy = *this;

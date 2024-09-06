@@ -54,7 +54,7 @@ void acorn::Parser::parse() {
         if (node->is(NodeKind::Func)) {
             
             auto func = as<Func*>(node);
-            if (func->name != Identifier::Invalid && !within_comptime_block) {
+            if (func->name != Identifier::Invalid) {
                 modl.add_global_function(func);
             }
 
@@ -64,9 +64,11 @@ void acorn::Parser::parse() {
         } else if (node->is(NodeKind::Var)) {
 
             auto var = as<Var*>(node);
-            if (var->name != Identifier::Invalid && !within_comptime_block) {
+            if (var->name != Identifier::Invalid) {
                 modl.add_global_variable(var);
             }
+        } else if (node->is(NodeKind::ComptimeIfStmt)) {
+            modl.add_global_comptime_control_flow(node);
         } else {
             modl.mark_bad_scope(BadScopeLocation::Global, node);
         }
@@ -286,10 +288,8 @@ acorn::IfStmt* acorn::Parser::parse_if() {
 acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
 
     ComptimeIfStmt* ifs = new_node<ComptimeIfStmt>(cur_token);
+    ifs->file = file;
     next_token();
-
-    bool was_within_comptime_block = within_comptime_block;
-    within_comptime_block = true;
 
     ifs->cond = parse_expr();
     ifs->scope = new_node<ScopeStmt>(cur_token);
@@ -328,7 +328,6 @@ acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
         }
     }
 
-    within_comptime_block = was_within_comptime_block;
     return ifs;
 }
 

@@ -16,6 +16,17 @@ acorn::Sema::Sema(Context& context, Module & modl, Logger& logger)
     : context(context), modl(modl), logger(logger), type_table(context.type_table) {
 }
 
+void acorn::Sema::resolve_global_comptime(Context& context, Module& modl) {
+    for (Node* node : modl.get_comptime_control_flows()) {
+        if (node->is(NodeKind::ComptimeIfStmt)) {
+            auto ifs = as<ComptimeIfStmt*>(node);
+            Sema sema(context, modl, ifs->file->logger);
+            sema.is_global_comptime = true;
+            sema.check_comptime_if(ifs);
+        }
+    }
+}
+
 bool acorn::Sema::is_potential_main_function(const Func* canidate) {
     if (!canidate->params.empty()) {
         return false;
@@ -34,7 +45,7 @@ bool acorn::Sema::find_main_function(Context& context) {
 
         if (Func* prev_main = context.get_main_function()) {
             logger.begin_error(canidate->loc, "Duplicate main (entry point) function")
-                              .add_line([prev_main] { prev_main->first_declared_msg(); })
+                              .add_line([prev_main] { prev_main->get_declared_msg(); })
                               .end_error(ErrCode::ParseDuplicateMainFunc);
         } else {
             context.set_main_function(canidate);
@@ -64,7 +75,7 @@ void acorn::Sema::check_for_duplicate_functions(Module& modl) {
     for (const auto& [_, funcs] : modl.get_global_functions()) {
         for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
             for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
-                if (check_for_duplicate_match(*itr2, *itr)) {
+                if (check_for_duplicate_match(*itr, *itr2)) {
                     break;
                 }
             }
@@ -72,19 +83,22 @@ void acorn::Sema::check_for_duplicate_functions(Module& modl) {
     }
 }
 
-bool acorn::Sema::check_for_duplicate_match(const Func* func, const Func* prev_func) {
-    if (prev_func->params.size() != func->params.size()) {
+bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2) {
+    if (func1->params.size() != func2->params.size()) {
         return false;
     }
-    if (!std::ranges::equal(func->params, prev_func->params,
+    if (!std::ranges::equal(func1->params, func2->params,
                             [](const Var* p1, const Var* p2) {
                                 return p1->type->is(p2->type);
                             })) {
         return false;
     }
-    func->get_logger().begin_error(func->loc, "Duplicate declaration of function '%s'", func->name)
-                      .add_line([prev_func] { prev_func->first_declared_msg(); })
-                      .end_error(ErrCode::SemaDuplicateGlobalFunc);
+    if (func1->loc.ptr > func2->loc.ptr) {
+        std::swap(func1, func2);
+    }
+    func1->get_logger().begin_error(func1->loc, "Duplicate declaration of function '%s'", func1->name)
+                       .add_line([func2] { func2->get_declared_msg(); })
+                       .end_error(ErrCode::SemaDuplicateGlobalFunc);
     return true;
 }
 
@@ -146,7 +160,7 @@ void acorn::Sema::check_variable(Var* var) {
     if (cur_scope) {
         if (Var* prev_var = cur_scope->find_variable(var->name)) {
             logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
-                  .add_line([prev_var] { prev_var->first_declared_msg(); })
+                  .add_line([prev_var] { prev_var->get_declared_msg(); })
                   .end_error(ErrCode::SemaDuplicateLocVariableDecl);
         } else {
             cur_scope->variables.push_back(var);
@@ -244,7 +258,9 @@ void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
         ifs->takes_path = true;
         SemScope sem_scope;
         check_scope(ifs->scope, sem_scope);
-        cur_scope->all_paths_return = sem_scope.all_paths_return;
+        if (cur_scope) { // Have to check because possible it is a global context.
+            cur_scope->all_paths_return = sem_scope.all_paths_return;
+        }
     } else if (ifs->elseif) {
         ifs->takes_path = false;
         if (ifs->elseif->is(NodeKind::ComptimeIfStmt)) {
@@ -254,7 +270,9 @@ void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
             // Must have failed all other branches.
             SemScope sem_scope;
             check_scope(as<ScopeStmt*>(ifs->elseif), sem_scope);
-            cur_scope->all_paths_return = sem_scope.all_paths_return;
+            if (cur_scope) { // Have to check because possible it is a global context.
+                cur_scope->all_paths_return = sem_scope.all_paths_return;
+            }
         }
     }
 }
@@ -319,7 +337,15 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope& new_sem_scope) {
         }
 
     ContinueToCheckNodeLab:
-        check_node(stmt);
+        
+        if (is_global_comptime && (stmt->is(NodeKind::Func))) {
+            auto func = as<Func*>(stmt);
+            modl.add_global_function(func);
+            Sema sema(context, modl, func->get_logger());
+            sema.check_function(func);
+        } else {
+            check_node(stmt);
+        }
     }
 
     cur_scope = cur_scope->parent;

@@ -4,6 +4,10 @@ void acorn::Module::add_global_function(Func* func) {
     functions[func->name].push_back(func);
 }
 
+void acorn::Module::add_global_comptime_control_flow(Node* control_flow) {
+    comptime_control_flows.push_back(control_flow);
+}
+
 void acorn::Module::add_global_variable(Var* var) {
     variables[var->name] = var;
 }

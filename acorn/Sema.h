@@ -19,11 +19,13 @@ namespace acorn {
 
         Sema(Context& context, Module& modl, Logger& logger);
 
+        static void resolve_global_comptime(Context& context, Module& modl);
+
         static bool is_potential_main_function(const Func* canidate);
         static bool find_main_function(Context& context);
 
         static void check_for_duplicate_functions(Module& modl);
-        static bool check_for_duplicate_match(const Func* func, const Func* prev_func);
+        static bool check_for_duplicate_match(const Func* func1, const Func* func2);
 
         void check_function(Func* func);
 
@@ -34,6 +36,8 @@ namespace acorn {
         TypeTable& type_table;
 
         Func* cur_func;
+
+        bool is_global_comptime = false;
 
         // A structure to keep track of current scope information
         // to help report errors.

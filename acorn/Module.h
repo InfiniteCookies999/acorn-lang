@@ -17,6 +17,7 @@ namespace acorn {
 
         void add_global_function(Func* func);
         void add_global_variable(Var* var);
+        void add_global_comptime_control_flow(Node* control_flow);
 
         void mark_bad_scope(BadScopeLocation location, Node* node);
 
@@ -38,11 +39,17 @@ namespace acorn {
             return functions;
         }
 
+        const llvm::SmallVector<Node*>& get_comptime_control_flows() const {
+            return comptime_control_flows;
+        }
+
     private:
         llvm::SmallVector<SourceFile*> source_files;
 
         // Global functions
         llvm::DenseMap<Identifier, FuncList> functions;
+        // Global comptime control flow such as #if
+        llvm::SmallVector<Node*>             comptime_control_flows;
         // Global variables
         llvm::DenseMap<Identifier, Var*>     variables;
         // Nodes that belong in the wrong scope.
