@@ -18,12 +18,14 @@ namespace acorn {
         Int16,
         Int32,
         Int64,
+        ISize,
 
         UInt8,
         UInt16,
         UInt32,
         UInt64,
-
+        USize,
+        
         Char,
         Char16,
         Char32,
@@ -62,7 +64,7 @@ namespace acorn {
         }
 
         bool is_signed() const {
-            return kind >= TypeKind::Int && kind <= TypeKind::Int64;
+            return kind >= TypeKind::Int && kind <= TypeKind::ISize;
         }
 
         bool is_unsigned() const {

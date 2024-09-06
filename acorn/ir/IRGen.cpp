@@ -426,6 +426,10 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
         return builder.getInt64(0);
     case TypeKind::Bool:
         return builder.getInt1(0);
+    case TypeKind::ISize:
+        return llvm::ConstantInt::get(gen_ptrsize_int_type(), 0, true);
+    case TypeKind::USize:
+        return llvm::ConstantInt::get(gen_ptrsize_int_type(), 0, false);
     case TypeKind::Pointer:
         return llvm::Constant::getNullValue(llvm::PointerType::get(ll_context, 0));
     default:
@@ -444,6 +448,10 @@ llvm::Constant* acorn::IRGenerator::gen_one(Type* type) {
         return builder.getInt32(1);
     case TypeKind::Int64: case TypeKind::UInt64:
         return builder.getInt64(1);
+    case TypeKind::ISize:
+        return llvm::ConstantInt::get(gen_ptrsize_int_type(), 1, true);
+    case TypeKind::USize:
+        return llvm::ConstantInt::get(gen_ptrsize_int_type(), 1, false);
     case TypeKind::Bool:
         return builder.getInt1(1);
     default:
@@ -472,6 +480,8 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
     case TypeKind::UInt16:
     case TypeKind::UInt32:
     case TypeKind::UInt64:
+    case TypeKind::USize:
+    case TypeKind::ISize:
     case TypeKind::Char:
     case TypeKind::Char16: 
     case TypeKind::Char32:

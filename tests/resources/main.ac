@@ -11,8 +11,7 @@ native dllimport int32 WriteFile(void*       hFile,
 
 #elif OS_GROUP_UNIX
 
-// TODO: using int64 but this should be the pointer size of the machine. 
-native int64 write(int32 fd, const void* buf, uint64 count)
+native isize write(int32 fd, const void* buf, usize count)
 
 #endif
 

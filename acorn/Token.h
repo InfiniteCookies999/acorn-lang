@@ -31,6 +31,8 @@ namespace acorn {
             KwUInt16,
             KwUInt32,
             KwUInt64,
+            KwISize,
+            KwUSize,
             KwBool,
             KwVoid,
             KwChar,

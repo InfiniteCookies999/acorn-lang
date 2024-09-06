@@ -24,7 +24,11 @@ namespace acorn {
         llvm::Value* gen_rvalue(Expr* node);
 
         llvm::Type* gen_type(Type* type) const {
-            return acorn::gen_type(type, ll_context);
+            return acorn::gen_type(type, ll_context, ll_module);
+        }
+
+        llvm::Type* gen_ptrsize_int_type() {
+            return acorn::gen_ptrsize_int_type(ll_context, ll_module);
         }
 
     private:

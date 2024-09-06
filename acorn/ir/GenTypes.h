@@ -10,7 +10,10 @@
 namespace acorn {
     std::string  to_string(llvm::Type* type);
 
-    llvm::Type* gen_type(Type* type, llvm::LLVMContext& ll_context);
+    llvm::Type* gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Module& ll_module);
+
+    llvm::Type* gen_ptrsize_int_type(llvm::LLVMContext& ll_context, llvm::Module& ll_module);
+
 }
 
 #endif // GEN_TYPES_H

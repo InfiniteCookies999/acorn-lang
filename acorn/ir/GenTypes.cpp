@@ -1,6 +1,7 @@
 #include "GenTypes.h"
 
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/IR/Module.h>
 
 #include "../Logger.h"
 
@@ -11,7 +12,7 @@ std::string acorn::to_string(llvm::Type* type) {
     return rso.str();
 }
 
-llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context) {
+llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Module& ll_module) {
     switch (type->get_kind()) {
     case TypeKind::Pointer: return llvm::PointerType::get(ll_context, 0);
 
@@ -25,10 +26,15 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context) {
         return llvm::Type::getInt32Ty(ll_context);
     case TypeKind::Int64: case TypeKind::UInt64:
         return llvm::Type::getInt64Ty(ll_context);
-
+    case TypeKind::USize: case TypeKind::ISize:
+        return gen_ptrsize_int_type(ll_context, ll_module);
     case TypeKind::Bool: return llvm::Type::getInt1Ty(ll_context);
     default:
         acorn_fatal("gen_type: Unknown type");
         return nullptr;
     }
+}
+
+llvm::Type* acorn::gen_ptrsize_int_type(llvm::LLVMContext& ll_context, llvm::Module& ll_module) {
+    return llvm::Type::getIntNTy(ll_context, ll_module.getDataLayout().getPointerSizeInBits());
 }

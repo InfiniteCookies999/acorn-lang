@@ -23,6 +23,8 @@ case Token::KwConst:  \
 case Token::KwChar:   \
 case Token::KwChar16: \
 case Token::KwChar32: \
+case Token::KwUSize:  \
+case Token::KwISize:  \
 case Token::KwBool
 
 #define ModifierTokens  \
@@ -404,6 +406,8 @@ return t; }
     case Token::KwChar:   ty(context.char_type);
     case Token::KwChar16: ty(context.char16_type);
     case Token::KwChar32: ty(context.char32_type);
+    case Token::KwISize:  ty(context.isize_type);
+    case Token::KwUSize:  ty(context.usize_type);
     default: {
         error("Expected type").end_error(ErrCode::ParseInvalidType);
         return context.invalid_type;
