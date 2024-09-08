@@ -81,7 +81,7 @@ static auto run_codegen_test(const wchar_t* file) {
     PageAllocator allocator(get_system_page_size());
     bool has_errors = false;
     Context* context;
-
+    
     AcornLang* acorn = mock_acorn_instance(allocator);
     if (!executable_path.empty()) {
         // We will use the executable directory for the program executable

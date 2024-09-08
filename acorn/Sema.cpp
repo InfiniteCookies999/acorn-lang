@@ -891,7 +891,9 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
                     return fits_in_range<uint32_t>(value);
                 case TypeKind::UInt64: return fits_in_range<uint64_t>(value);
 
-                default: acorn_fatal("unreachable signed integer type");
+                default:
+                    acorn_fatal("unreachable signed integer type");
+                    return false;
                 }
             };
 

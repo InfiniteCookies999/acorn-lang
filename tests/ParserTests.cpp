@@ -48,6 +48,7 @@ void test_parser() {
             .content = const_cast<char*>(program),
             .length  = strlen(program)
         };
+        acorn::Identifier::clear_cache();
         Module* mock_modl = new Module();
         SourceFile* mock_file = new SourceFile(*context, L"", buffer, *mock_modl);
         mock_logger(mock_file->logger);

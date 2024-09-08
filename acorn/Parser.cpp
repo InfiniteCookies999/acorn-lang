@@ -659,7 +659,7 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
 
 acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
 
-    auto fold_by_side = [op, this, lhs, rhs](Expr* side) finline {
+    auto fold_by_side = [op, this, lhs, rhs](Expr* side) -> Expr* finline {
         Number* lnum = as<Number*>(lhs);
         Number* rnum = as<Number*>(rhs);
         Type* to_type = side->type;
@@ -676,6 +676,9 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
         case TypeKind::Int32: case TypeKind::Int:
             return fold_int<int32_t>(op, lnum, rnum, to_type);
         case TypeKind::Int64:  return fold_int<int64_t>(op, lnum, rnum, to_type);
+        default:
+            acorn_fatal("Missing numeric fold cast");
+            return nullptr;
         }
     };
 
@@ -1076,7 +1079,7 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
     Number* number = new_node<Number>(cur_token);
     number->value_u64 = value;
     if (neg_sign) {
-        if (number->value_u64 > 9223372036854775808) {
+        if (number->value_u64 > 9223372036854775808ull) {
             error(cur_token, "Value too small to fit into 64 bit signed integer")
                 .end_error(ErrCode::ParseIntegerValueCalcUnderflow);
         } else {

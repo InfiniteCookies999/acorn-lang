@@ -98,7 +98,7 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         false
     );
 
-    auto get_name = [func, &contx = context, is_main] {
+    auto get_name = [this, func, &contx = context, is_main] {
         bool dont_fix_name = is_main || func->has_modifier(Modifier::Native);
         llvm::Twine ll_name = func->name.reduce();
         return dont_fix_name ? ll_name : ll_name.concat(".acorn");

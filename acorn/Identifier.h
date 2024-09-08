@@ -31,9 +31,12 @@ namespace acorn {
 
         llvm::StringRef reduce() const { return name_mapping[id]; }
 
+        static void clear_cache();
+
     private:
         static llvm::StringMap<uint32_t>                 mapped_identifiers;
         static llvm::DenseMap<uint32_t, llvm::StringRef> name_mapping;
+        static uint32_t                                  id_counter;
 
         Identifier(uint32_t id)
             : id(id) {

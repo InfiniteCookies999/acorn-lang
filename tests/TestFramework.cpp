@@ -104,6 +104,7 @@ void error_interceptor(acorn::ErrCode error_code, std::string file, int line_num
 }
 
 acorn::AcornLang* mock_acorn_instance(acorn::PageAllocator& allocator) {
+    acorn::Identifier::clear_cache();
     auto acorn_instance = new acorn::AcornLang(allocator);
     acorn_instance->set_error_code_interceptor(error_interceptor);
     return acorn_instance;
