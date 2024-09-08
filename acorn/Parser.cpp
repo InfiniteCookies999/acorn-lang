@@ -1075,7 +1075,7 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
             break;
         }
     }
-
+    
     Number* number = new_node<Number>(cur_token);
     number->value_u64 = value;
     if (neg_sign) {

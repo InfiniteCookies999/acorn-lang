@@ -18,11 +18,13 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd\"26495\"")
 endif()
 
-# Treating [[nodiscard]] as an error
+# Treating [[nodiscard]] and other stuff as errors
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    add_compile_options(-Werror=unused-result)
+    add_compile_options(-Werror=unused-result)  # [[nodiscard]]
+    add_compile_options(-Werror=return-type)    # Cannot ignore return.
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    add_compile_options(/we4834)
+    add_compile_options(/we4834)                # [[nodiscard]]
+    add_compile_options(/we4715)                # Cannot ignore return.
 endif()
 
 # Setting output directories for when using GNU or Clang compilers.

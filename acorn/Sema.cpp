@@ -62,7 +62,7 @@ bool acorn::Sema::find_main_function(Context& context) {
         }
         if (canidate->modifiers & Modifier::DllImport) {
             logger.begin_error(canidate->loc, "main function cannot have dllimport modifier")
-                .end_error(ErrCode::SemaMainCannotHaveModifier);
+                  .end_error(ErrCode::SemaMainCannotHaveModifier);
         }
     }
     return false;
