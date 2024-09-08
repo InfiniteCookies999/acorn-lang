@@ -427,5 +427,21 @@ void test_parser() {
             Module& modl = *mock_parser("-9223372036854775809");
             expect_none().to_produce_error(ErrCode::ParseIntegerValueCalcUnderflow);
         });
+        test("int8 lit does not fit", [&] {
+            Module& modl = *mock_parser("128'i8");
+            expect_none().to_produce_error(ErrCode::ParseIntegerValueNotFitType);
+        });
+        test("signed int8 lit does not fit", [&] {
+            Module& modl = *mock_parser("-129'i8");
+            expect_none().to_produce_error(ErrCode::ParseIntegerValueNotFitType);
+        });
+        test("uint8 lit does not fit", [&] {
+            Module& modl = *mock_parser("256'u8");
+            expect_none().to_produce_error(ErrCode::ParseIntegerValueNotFitType);
+        });
+        test("int16 lit does not fit", [&] {
+            Module& modl = *mock_parser("32768'i16");
+            expect_none().to_produce_error(ErrCode::ParseIntegerValueNotFitType);
+        });
     });
 }

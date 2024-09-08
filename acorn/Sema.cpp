@@ -1057,10 +1057,7 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
     if (to_type->is_integer() && to_type->is_not(context.char_type) &&
         expr->is(NodeKind::Number) && expr->is_foldable && expr->type->is_integer()) {
         
-        Number* number = as<Number*>(expr);
-        return std::format("The value {} could not fit into {} bits",
-                           expr->type->is_signed() ? number->value_s64 : number->value_u64,
-                           expr->type->get_number_of_bits());
+        return get_error_msg_for_value_not_fit_type(as<Number*>(expr));
     } else {
         return get_type_mismatch_error(to_type, expr->type);
     }

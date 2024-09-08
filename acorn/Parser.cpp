@@ -1050,6 +1050,7 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
         ++ptr;
     }
 
+    bool already_errored = false;
     uint64_t value = 0, prev_value;
     while (ptr != end) {
         char c = *ptr;
@@ -1070,6 +1071,7 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
             value += ((uint64_t)c - '0');
         }
         if (value / radix < prev_value) {
+            already_errored = true;
             error(cur_token, "Integer value is too large")
                 .end_error(ErrCode::ParseIntegerValueCalcOverflow);
             break;
@@ -1079,7 +1081,7 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
     Number* number = new_node<Number>(cur_token);
     number->value_u64 = value;
     if (neg_sign) {
-        if (number->value_u64 > 9223372036854775808ull) {
+        if (!already_errored && number->value_u64 > 9223372036854775808ull) {
             error(cur_token, "Value too small to fit into 64 bit signed integer")
                 .end_error(ErrCode::ParseIntegerValueCalcUnderflow);
         } else {
@@ -1087,30 +1089,39 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
         }
     }
 
-    // TODO: make sure it fits within the given ranges!
     if (*ptr == '\'') {
         ++ptr;
         bool is_signed = *ptr == 'i';
         ++ptr;
 
+        auto check_range_fit = [this, number, neg_sign, already_errored]<typename T>(T) finline {
+            if (!already_errored && !fits_in_range<T>(neg_sign ? number->value_s64 : number->value_s64)) {
+                auto err_msg = get_error_msg_for_value_not_fit_type(number);
+                logger.begin_error(number->loc, "%s", err_msg)
+                    .end_error(ErrCode::ParseIntegerValueNotFitType);
+            }
+        };
+
         if (*ptr == '8') {
             if (is_signed) {
                 number->type = context.int8_type;
+                check_range_fit((int8_t)0);
             } else {
                 number->type = context.uint8_type;
+                check_range_fit((uint8_t)0);
             }
         } else if (*ptr == '1') {
-            if (is_signed) number->type = context.int16_type;
-            else           number->type = context.uint16_type;
+            if (is_signed) number->type = context.int16_type , check_range_fit((int16_t)0);
+            else           number->type = context.uint16_type, check_range_fit((uint16_t)0);
         } else if (*ptr == '3') {
-            if (is_signed) number->type = context.int32_type;
-            else           number->type = context.uint32_type;
+            if (is_signed) number->type = context.int32_type , check_range_fit((int32_t)0);
+            else           number->type = context.uint32_type, check_range_fit((uint32_t)0);
         } else {
-            if (is_signed) number->type = context.int64_type;
+            if (is_signed) number->type = context.int64_type, check_range_fit((int64_t)0);
             else           number->type = context.uint64_type;
         }
     } else {
-        auto fit_range = [this, number]<typename T>(T value) finline {
+        auto fit_range = [this, number]<typename V>(V value) finline {
             if (fits_in_range<int32_t>(value)) {
                 number->type = context.int_type;
             } else if (fits_in_range<int64_t>(value)) {

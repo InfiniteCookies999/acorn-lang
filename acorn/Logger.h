@@ -12,7 +12,7 @@
 #include "Source.h"
 #include "Identifier.h"
 #include "Util.h"
-#include "ErrorCodes.h"
+#include "Errors.h"
 
 namespace acorn {
 
