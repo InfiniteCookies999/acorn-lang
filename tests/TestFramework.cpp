@@ -5,7 +5,7 @@
 
 // Forward declaring.
 TestCase* current_test = nullptr;
-llvm::SmallVector<acorn::ErrCode> intercepted_error_codes;
+llvm::SmallVector<IError> intercepted_error_codes;
 
 static TestSection*                    current_section = nullptr;
 static uint32_t                        current_depth   = 0;
@@ -99,8 +99,8 @@ void test(const char* name, const std::function<void()>& cb) {
     current_section->add_test_case(name, cb);
 }
 
-void error_interceptor(acorn::ErrCode error_code) {
-    intercepted_error_codes.push_back(error_code);
+void error_interceptor(acorn::ErrCode error_code, std::string file, int line_number) {
+    intercepted_error_codes.push_back({ error_code, std::move(file), line_number });
 }
 
 acorn::AcornLang* mock_acorn_instance(acorn::PageAllocator& allocator) {

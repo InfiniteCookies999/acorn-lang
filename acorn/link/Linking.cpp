@@ -153,6 +153,7 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
     if (CoInitialize(nullptr) != S_OK) {
         return false;
     }
+    defer(CoUninitialize());
 
     // The clsid that refers to visual studio's setup configuration dll.
     GUID clsid_vs_setup_config = {0x177F0C4A, 0x1CD3, 0x4DE7, {0xA3, 0x2C, 0x71, 0xDB, 0xBB, 0x9F, 0xA3, 0x6D}};

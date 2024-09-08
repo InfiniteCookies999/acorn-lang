@@ -361,7 +361,13 @@ void acorn::Logger::end_error(ErrCode error_code) {
             mtx.unlock();
             exit(1);
         }
-        error_code_interceptor(error_code);
+        auto [start_line_number, _] = file.line_table.get_line_and_column_number(main_location.point);
+        std::string narrow_path;
+        narrow_path.reserve(file.path.size());
+        for (wchar_t wc : file.path) {
+            narrow_path += static_cast<char>(wc);
+        }
+        error_code_interceptor(error_code, narrow_path, start_line_number);
         mtx.unlock();
         return;
     }

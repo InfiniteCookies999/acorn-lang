@@ -128,7 +128,11 @@ void acorn::Sema::check_node(Node* node) {
     case NodeKind::Bool:
     case NodeKind::String:
     case NodeKind::Null:
-        break;    
+        break;
+    case NodeKind::ScopeStmt: {
+        SemScope sem_scope;
+        return check_scope(as<ScopeStmt*>(node), sem_scope);
+    }
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -141,7 +145,15 @@ void acorn::Sema::check_function(Func* func) {
 
     cur_func = func;
 
+    // If we ever decide to allow nesting functions for some reason then this
+    // will possibly be a problem because it will have overriden the current scope.
     SemScope sem_scope;
+    cur_scope = &sem_scope;
+    for (Var* param : func->params) {
+        check_variable(param);
+    }
+    cur_scope = nullptr;
+
     check_scope(func->scope, sem_scope);
     if (!sem_scope.all_paths_return && func->return_type->is_not(context.void_type)) {
         error(func, "Not all function paths return")
@@ -153,7 +165,7 @@ void acorn::Sema::check_variable(Var* var) {
     
     // If not a global variable we need to tell the current function to
     // provide us with stack memory.
-    if (cur_func) {
+    if (cur_func && !var->is_param()) {
         cur_func->vars_to_alloc.push_back(var);
     }
 
@@ -295,6 +307,7 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope& new_sem_scope) {
         case NodeKind::FuncCall:
         case NodeKind::IfStmt:
         case NodeKind::ComptimeIfStmt:
+        case NodeKind::ScopeStmt:
             break;
         case NodeKind::BinOp: {
             BinOp* bin_op = as<BinOp*>(stmt);

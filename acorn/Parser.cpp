@@ -116,6 +116,8 @@ acorn::Node* acorn::Parser::parse_statement() {
             return nullptr;
         }
     }
+    case '{':
+        return parse_scope();
     case ')': case '}': {
         // Handling thses cases as if it is special because the skip recovery.
         // will treat them as recovery points.
@@ -340,7 +342,7 @@ acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
     ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
     if (cur_token.is('{')) {
-        next_token(); // Consuming '}' token.
+        next_token(); // Consuming '{' token.
 
         while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
             if (Node* stmt = parse_statement()) {

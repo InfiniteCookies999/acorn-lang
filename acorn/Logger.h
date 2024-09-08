@@ -296,7 +296,7 @@ namespace acorn {
             return num_errors;
         }
 
-        void set_error_code_interceptor(const std::function<void(ErrCode)>& interceptor) {
+        void set_error_code_interceptor(const std::function<void(ErrCode, std::string, int)>& interceptor) {
             error_code_interceptor = interceptor;
         }
 
@@ -325,7 +325,7 @@ namespace acorn {
         // given file.
         size_t num_errors = 0;
 
-        std::function<void(ErrCode)> error_code_interceptor;
+        std::function<void(ErrCode, std::string, int)> error_code_interceptor;
 
 #ifdef _WIN32
         static void* get_handle(Stream stream);

@@ -13,7 +13,12 @@
 class TestCase;
 
 extern TestCase* current_test;
-extern llvm::SmallVector<acorn::ErrCode> intercepted_error_codes;
+struct IError {
+    acorn::ErrCode code;
+    std::string    file;
+    int            line_number;
+};
+extern llvm::SmallVector<IError> intercepted_error_codes;
 
 class TestCaseFailedException : std::exception {
 public:
@@ -103,12 +108,12 @@ struct Expector {
             return;
         }
         if (intercepted_error_codes.size() > 1) {
-            fail([error_code]() {
+            fail([this, error_code]() {
                 std::cout << "Expected an error to occure but multiple occured";
                 bool is_duplicate = true;
-                for (acorn::ErrCode intercepted : intercepted_error_codes) {
-                    if (intercepted != error_code) {
-                        std::cout << ".  Encountered Error: " << static_cast<unsigned>(intercepted);
+                for (auto intercepted : intercepted_error_codes) {
+                    if (intercepted.code != error_code) {
+                        print_encountered_error_msg(intercepted);
                         is_duplicate = false;
                         break;
                     }
@@ -125,10 +130,16 @@ struct Expector {
 
 private:
 
+    void print_encountered_error_msg(IError err) {
+        std::cout << ".  Encountered Error: " << static_cast<unsigned>(err.code)
+                  << " (" << acorn::error_code_to_string(err.code) << ") at "
+                  << err.file << ":" << err.line_number;
+    }
+
     void check_for_error_code() {
         if (!intercepted_error_codes.empty()) {
-            fail([first = intercepted_error_codes[0]] {
-                std::cout << "Encountered error: " << static_cast<unsigned>(first);
+            fail([this, first = intercepted_error_codes[0]] {
+                print_encountered_error_msg(first);
             });
         }
     }

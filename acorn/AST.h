@@ -101,7 +101,7 @@ namespace acorn {
         llvm::SmallVector<Var*, 8> params;
 
         uint32_t num_returns = 0;
-        llvm::SmallVector<Var*, 16>  vars_to_alloc;
+        llvm::SmallVector<Var*, 16> vars_to_alloc;
         
         ScopeStmt* scope = nullptr;
 
@@ -120,6 +120,8 @@ namespace acorn {
         Expr* assignment = nullptr;
 
         llvm::Value* ll_address;
+
+        bool is_param() const { return param_idx != NotParam; }
 
     };
 

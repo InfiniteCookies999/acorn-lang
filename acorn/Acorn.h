@@ -43,7 +43,7 @@ namespace acorn {
 
         bool has_errors() const { return context.has_errors(); }
 
-        void set_error_code_interceptor(const std::function<void(ErrCode)>& interceptor) {
+        void set_error_code_interceptor(const std::function<void(ErrCode, std::string, int)>& interceptor) {
             error_code_interceptor = interceptor;
         }
 
@@ -63,7 +63,7 @@ namespace acorn {
         bool should_show_times      = false;
         bool should_show_llvm_ir    = false;
         bool dont_show_wrote_to_msg = false;
-        std::function<void(ErrCode)> error_code_interceptor;
+        std::function<void(ErrCode, std::string, int)> error_code_interceptor;
 
         // Timers to keep track of how different
         // stages take.

@@ -91,6 +91,7 @@ static auto run_codegen_test(const wchar_t* file) {
         acorn->set_output_directory(executable_path);
     }
     acorn->set_dont_show_wrote_to_msg();
+    // acorn->set_should_show_llvm_ir();
 
     acorn->run(sources);
     context = acorn->get_context();
@@ -141,8 +142,12 @@ void test_codegen() {
 
     section("codegen", [&] {
         test("print test", [&] {
-            auto [success, result] = run_codegen_test(src(L"main.ac"));
+            auto [success, result] = run_codegen_test(src(L"print_test.ac"));
             expect(result, std::identity()).to_be("hello yuki ^-^");
+        });
+        test("arithmetic test", [&] {
+            auto [success, result] = run_codegen_test(src(L"arithmetic_test.ac"));
+            expect(result, std::identity()).to_be("EjZQ;-C7 H$");
         });
     });
 }
