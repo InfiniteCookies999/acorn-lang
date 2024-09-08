@@ -1037,7 +1037,7 @@ bool acorn::Sema::check_condition(Expr* cond) {
     return true;
 }
 
-bool acorn::Sema::is_condition(Expr* cond) {
+bool acorn::Sema::is_condition(Expr* cond) const {
     return cond->type->is(context.bool_type);
 }
 
@@ -1053,7 +1053,7 @@ llvm::Constant* acorn::Sema::gen_constant(PointSourceLoc error_loc, Expr* expr) 
     return llvm::cast<llvm::Constant>(ll_value);
 }
 
-std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) {
+std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) const {
     if (to_type->is_integer() && to_type->is_not(context.char_type) &&
         expr->is(NodeKind::Number) && expr->is_foldable && expr->type->is_integer()) {
         
@@ -1066,7 +1066,7 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) {
     }
 }
 
-std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Type* from_type) {
+std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Type* from_type) const {
     if (from_type->is(context.funcs_ref_type)) {
         return std::format("Mismatched types. Expected '{}' but found a reference to a function",
             to_type->to_string());

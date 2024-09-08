@@ -377,7 +377,7 @@ FinishedStringLexLab:
             .end_error(ErrCode::LexStringMissingEndQuote);
     }
     
-    return new_token(start, ptr - start, !invalid ? kind : Token::InvalidLiteral);
+    return new_token(start, static_cast<uint16_t>(ptr - start), !invalid ? kind : Token::InvalidLiteral);
 }
 
 acorn::Token acorn::Lexer::next_comptime() {

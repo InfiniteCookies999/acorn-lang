@@ -952,7 +952,7 @@ namespace acorn {
             ++ptr;
 
             value = value * 16;
-            value += hex_table[c];
+            value += static_cast<T>(hex_table[c]);
         }
 
         return value;

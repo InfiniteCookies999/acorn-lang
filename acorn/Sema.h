@@ -105,12 +105,12 @@ namespace acorn {
         void check_division_by_zero(PointSourceLoc error_loc, Expr* expr);
         void create_cast(Expr* expr, Type* to_type);
         bool check_condition(Expr* cond);
-        bool is_condition(Expr* cond);
+        bool is_condition(Expr* cond) const;
 
         llvm::Constant* gen_constant(PointSourceLoc error_loc, Expr* expr);
         
-        std::string get_type_mismatch_error(Type* to_type, Expr* expr);
-        std::string get_type_mismatch_error(Type* to_type, Type* from_type);
+        std::string get_type_mismatch_error(Type* to_type, Expr* expr) const;
+        std::string get_type_mismatch_error(Type* to_type, Type* from_type) const;
 
         template<typename... TArgs>
         [[nodiscard]] Logger& error(PointSourceLoc loc, const char* fmt, TArgs... args) {
