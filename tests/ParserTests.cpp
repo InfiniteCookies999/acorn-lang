@@ -418,8 +418,13 @@ void test_parser() {
             Module& modl = *mock_parser("5'u32 - 10'u32");
             expect_none().to_produce_error(ErrCode::NumericUnderflow);
         });
-
-
-
+        test("integer calc overflow", [&] {
+            Module& modl = *mock_parser("18446744073709551616");
+            expect_none().to_produce_error(ErrCode::ParseIntegerValueCalcOverflow);
+        });
+        test("integer calc underflow", [&] {
+            Module& modl = *mock_parser("-9223372036854775809");
+            expect_none().to_produce_error(ErrCode::ParseIntegerValueCalcUnderflow);
+        });
     });
 }

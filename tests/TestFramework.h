@@ -108,10 +108,10 @@ struct Expector {
             return;
         }
         if (intercepted_error_codes.size() > 1) {
-            fail([this, error_code]() {
-                std::cout << "Expected an error to occure but multiple occured";
+            fail([this, error_code, error_codes = intercepted_error_codes]() {
+                std::cout << "Expected a single error to occure but multiple occured";
                 bool is_duplicate = true;
-                for (auto intercepted : intercepted_error_codes) {
+                for (auto intercepted : error_codes) {
                     if (intercepted.code != error_code) {
                         print_encountered_error_msg(intercepted);
                         is_duplicate = false;
@@ -122,6 +122,13 @@ struct Expector {
                     std::cout << ". Duplicate of: " << static_cast<unsigned>(error_code);
                 }
             });
+        } else if (intercepted_error_codes[0].code != error_code) {
+            fail([this, error_code, error_codes = intercepted_error_codes] {
+                std::cout << "Expected error: " << static_cast<unsigned>(error_code)
+                          << " (" << acorn::error_code_to_string(error_code) << ") ";
+                std::cout << "but found: ";
+                print_encountered_error_info(error_codes[0]);
+            });
         } else {
             // Still need to clear for other tests.
             intercepted_error_codes.clear();
@@ -131,7 +138,12 @@ struct Expector {
 private:
 
     void print_encountered_error_msg(IError err) {
-        std::cout << ".  Encountered Error: " << static_cast<unsigned>(err.code)
+        std::cout << ".  Encountered Error: ";
+        print_encountered_error_info(err);
+    }
+
+    void print_encountered_error_info(IError err) {
+        std::cout << static_cast<unsigned>(err.code)
                   << " (" << acorn::error_code_to_string(err.code) << ") at "
                   << err.file << ":" << err.line_number;
     }

@@ -1076,7 +1076,12 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
     Number* number = new_node<Number>(cur_token);
     number->value_u64 = value;
     if (neg_sign) {
-        number->value_s64 = -number->value_s64;
+        if (number->value_u64 > 9223372036854775808) {
+            error(cur_token, "Value too small to fit into 64 bit signed integer")
+                .end_error(ErrCode::ParseIntegerValueCalcUnderflow);
+        } else {
+            number->value_s64 = -number->value_s64;
+        }
     }
 
     // TODO: make sure it fits within the given ranges!

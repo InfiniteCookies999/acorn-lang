@@ -17,6 +17,7 @@ X(ParseExpect                           , 20011)
 X(ParseExpectIdent                      , 20012)
 X(ParseMissingComptimeEndIf             , 20013)
 X(ParseNativeFuncNoHaveBodies           , 20014)
+X(ParseIntegerValueCalcUnderflow        , 20015)
 
 X(SemaNotAllFuncPathReturn              , 30000)
 X(SemaVariableCannotHaveVoidType        , 30001)
