@@ -11,8 +11,11 @@ if (e1 > e) { e = e1; }           \
 }
 
     static std::pair<const char*, const char*> get_expansion(Node* node) {
-        auto s = node->loc.ptr;
-        auto e = s + node->loc.length;
+        
+        auto s = node->uses_expanded_loc ? node->expanded_loc.ptr : node->loc.ptr;;
+        auto e = node->uses_expanded_loc ? (node->expanded_loc.ptr + node->expanded_loc.length)
+                                         : (node->loc.ptr + node->loc.length);
+
         switch (node->kind) {
         case NodeKind::BinOp: {
             BinOp* bin_op = as<BinOp*>(node);
@@ -75,7 +78,7 @@ acorn::PointSourceLoc acorn::expand(Node* node) {
     return PointSourceLoc{
         s,
         as<uint16_t>(e - s),
-        node->loc.ptr,
-        node->loc.length
+        node->uses_expanded_loc ? node->expanded_loc.ptr    : node->loc.ptr,
+        node->uses_expanded_loc ? node->expanded_loc.length : node->loc.length
     };
 }

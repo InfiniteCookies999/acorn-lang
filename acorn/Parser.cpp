@@ -7,6 +7,7 @@
 #include "Type.h"
 #include "Module.h"
 #include "Util.h"
+#include "SourceExpansion.h"
 
 #define TypeTokens    \
      Token::KwVoid:   \
@@ -540,25 +541,44 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
     T lval = is_signed ? lhs->value_s64 : lhs->value_u64;
     T rval = is_signed ? rhs->value_s64 : rhs->value_u64;
 
-    auto calc = [lhs, rhs, to_type](T result) finline {
+    auto calc = [op, lhs, rhs, to_type](T result) finline {
         if constexpr (is_signed) {
             lhs->value_s64 = result;
         } else {
             rhs->value_u64 = result;
         }
+
+        // Going to treat the lhs as the result of the evaluation since
+        // it is already a number and can just be reused.
         lhs->type = to_type;
+
+        // Need to expand the source location because if an error occures
+        // later and it needs to display the full error location.
+        auto s = lhs->uses_expanded_loc ? lhs->expanded_loc.ptr : lhs->loc.ptr;;
+        auto e = rhs->uses_expanded_loc ? (rhs->expanded_loc.ptr + rhs->expanded_loc.length)
+                                        : (rhs->loc.ptr + rhs->loc.length);
+        
+        lhs->uses_expanded_loc = true;
+        lhs->expanded_loc = PointSourceLoc{
+            s,
+            as<uint16_t>(e - s),
+            op.loc.ptr,
+            op.loc.length
+        };
         return lhs;
     };
 
-    auto report_overflow = [this, op, to_type]() finline {
-        error(op.loc, "Operator '%s' numeric overflow. Cannot fit for type '%s'",
+    auto report_overflow = [this, op, to_type, lhs, rhs]() finline {
+        auto loc_op = new_binary_op(op, lhs, rhs);
+        logger.begin_error(expand(loc_op), "Operator '%s' numeric overflow. Cannot fit for type '%s'",
               token_kind_to_string(context, op.kind), to_type)
             .end_error(ErrCode::NumericOverflow);
         return new_node<InvalidExpr>(op.loc);
     };
 
-    auto report_underflow = [this, op, to_type]() finline {
-        error(op.loc, "Operator '%s' numeric underflow. Cannot fit into type '%s'",
+    auto report_underflow = [this, op, to_type, lhs, rhs]() finline {
+        auto loc_op = new_binary_op(op, lhs, rhs);
+        logger.begin_error(expand(loc_op), "Operator '%s' numeric underflow. Cannot fit into type '%s'",
               token_kind_to_string(context, op.kind), to_type)
             .end_error(ErrCode::NumericUnderflow);
         return new_node<InvalidExpr>(op.loc);
@@ -1098,7 +1118,7 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
             if (!already_errored && !fits_in_range<T>(neg_sign ? number->value_s64 : number->value_s64)) {
                 auto err_msg = get_error_msg_for_value_not_fit_type(number);
                 logger.begin_error(number->loc, "%s", err_msg)
-                    .end_error(ErrCode::ParseIntegerValueNotFitType);
+                      .end_error(ErrCode::ParseIntegerValueNotFitType);
             }
         };
 
