@@ -4,6 +4,7 @@
 #include "Logger.h"
 #include "Util.h"
 #include "TypeTable.h"
+#include "Context.h"
 
 acorn::Type* acorn::Type::create(PageAllocator& allocator, TypeKind kind, bool is_const) {
     Type* type = allocator.alloc_type<Type>();
@@ -31,6 +32,9 @@ uint32_t acorn::Type::get_number_of_bits() const {
     case TypeKind::UInt32: return 32;
     case TypeKind::UInt64: return 64;
     case TypeKind::Bool:   return 8;
+    case TypeKind::Char:   return 8;
+    case TypeKind::Char16: return 16;
+    case TypeKind::Char32: return 32;
     default:
         acorn_fatal("unimplemented case");
         return 0;

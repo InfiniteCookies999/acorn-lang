@@ -52,7 +52,8 @@ namespace acorn {
         SemaDuplicateLocVariableDecl          = 20026,
         SemaMainCannotHaveModifier            = 20027,
 
-        SignedOverflow                        = 40000,
+        NumericOverflow                       = 40000,
+        NumericUnderflow                      = 40001,
     };
 }
 

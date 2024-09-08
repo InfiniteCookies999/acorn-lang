@@ -4,6 +4,8 @@
 
 #if WIN_OS
 #include <Windows.h>
+#undef min
+#undef max
 #elif UNIX_OS
 #include <sys/mman.h>
 #include <unistd.h>
@@ -12,6 +14,8 @@
 #include <cstdlib>
 #include <assert.h>
 #include <new>
+
+#include "Logger.h"
 
 void* acorn::PageAllocator::allocate(size_t size) {
 
@@ -52,7 +56,7 @@ void acorn::PageAllocator::alloc_new_page(size_t new_page_size) {
 #endif
 
     if (!cur_page) {
-        // TODO: Hanlde case where we ran out of memory better!
+        acorn_fatal("Failed to allocate memory. Likely ran out");
         throw std::bad_alloc();
     }
 

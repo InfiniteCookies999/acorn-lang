@@ -859,27 +859,33 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             
             Number* number = as<Number*>(expr);
 
-            if (from_type->is_signed()) {
-                switch (from_type->get_kind()) {
-                case TypeKind::Int:   return fits_in_range<int32_t>(number->value_u64);
-                case TypeKind::Int8:  return fits_in_range<int8_t> (number->value_u64);
-                case TypeKind::Int16: return fits_in_range<int16_t>(number->value_u64);
+            auto does_fit_range = [to_type]<typename T>(T value) finline {
+                switch (to_type->get_kind()) {
+                // Signed cases
+                case TypeKind::Int8:  return fits_in_range<int8_t>(value);
+                case TypeKind::Int16: return fits_in_range<int16_t>(value);
+                case TypeKind::Int:
                 case TypeKind::Int32:
                 case TypeKind::ISize:
-                    return fits_in_range<int32_t>(number->value_u64);
-                case TypeKind::Int64: return fits_in_range<int64_t>(number->value_u64);
+                    return fits_in_range<int32_t>(value);
+                case TypeKind::Int64: return fits_in_range<int64_t>(value);
+                // Unsigned cases
+                case TypeKind::UInt8: case TypeKind::Char:                   
+                    return fits_in_range<uint8_t>(value);
+                case TypeKind::UInt16: case TypeKind::Char16:
+                    return fits_in_range<uint16_t>(value);
+                case TypeKind::UInt32: case TypeKind::USize: case TypeKind::Char32:
+                    return fits_in_range<uint32_t>(value);
+                case TypeKind::UInt64: return fits_in_range<uint64_t>(value);
+
                 default: acorn_fatal("unreachable signed integer type");
                 }
+            };
+
+            if (from_type->is_signed()) {
+                return does_fit_range(number->value_s64);
             } else {
-                switch (from_type->get_kind()) {
-                case TypeKind::UInt8:  return fits_in_range<uint8_t> (number->value_u64);
-                case TypeKind::UInt16: return fits_in_range<uint16_t>(number->value_u64);
-                case TypeKind::UInt32:
-                case TypeKind::USize:
-                    return fits_in_range<uint32_t>(number->value_u64);
-                case TypeKind::UInt64: return fits_in_range<uint64_t>(number->value_u64);
-                default: acorn_fatal("unreachable unsigned integer type");
-                }
+                return does_fit_range(number->value_u64);
             }
         }
 
@@ -1025,7 +1031,7 @@ llvm::Constant* acorn::Sema::gen_constant(PointSourceLoc error_loc, Expr* expr) 
     auto ll_value = generator.gen_rvalue(expr);
     if (ll_value->getValueID() == llvm::Value::ValueTy::PoisonValueVal) {
         error(error_loc, "Signed overflow")
-            .end_error(ErrCode::SignedOverflow);
+            .end_error(ErrCode::NumericOverflow);
         return nullptr;
     }
 

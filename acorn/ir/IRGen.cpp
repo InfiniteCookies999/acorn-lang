@@ -308,7 +308,7 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call) {
-
+    
     Func* called_func = call->called_func;
     gen_function_decl(called_func);
 

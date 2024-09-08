@@ -30,7 +30,7 @@ namespace acorn {
 
         Token next_word();
 
-        Token next_number();
+        Token next_number(const char* start);
         Token finish_mumber(tokkind kind, const char* start);
 
         Token next_string();

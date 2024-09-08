@@ -121,6 +121,10 @@ namespace acorn {
                    kind <  Token::ComptimeKeywordStart;
         }
 
+        [[nodiscard]] constexpr bool is_number_literal() const noexcept {
+            return kind >= Token::IntLiteral && kind <= Token::OctLiteral;
+        }
+
         [[nodiscard]] constexpr bool is_modifier() const noexcept {
             return kind == Token::KwNative || kind == Token::KwDllimport;
         }

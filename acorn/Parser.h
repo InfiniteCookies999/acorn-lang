@@ -69,6 +69,10 @@ namespace acorn {
         Expr* parse_assignment_and_expr();
         Expr* parse_expr();
         Expr* parse_binary_expr();
+        std::pair<Token, Token> split_number_from_sign(Token token);
+        Expr* fold_number(Token op, Expr* lhs, Expr* rhs);
+        template<typename T>
+        Expr* fold_int(Token op, Number* lhs, Number* rhs, Type* to_type);
         Expr* parse_postfix();
         Expr* parse_function_call(Expr* site);
         Expr* parse_term();
@@ -117,6 +121,8 @@ namespace acorn {
         [[nodiscard]] Logger& error(const char* fmt, TArgs&&... args) {
             return error(cur_token, fmt, std::forward<TArgs>(args)...);
         }
+
+        Expr* new_binary_op(Token op_tok, Expr* lhs, Expr* rhs);
 
         template<typename T>
         T* new_node(Token token) {

@@ -56,6 +56,7 @@ void test_parser() {
         return mock_modl;
     };
 
+
     section("parsing", [&] {
         test("integer parse", [&] {
             const char* program = "123456789 74532 2147483647 2147483648 9223372036854775807 9223372036854775808 18446744073709551615 "
@@ -302,5 +303,123 @@ void test_parser() {
             expect(funcs[3]->modifiers, to_string<uint32_t>).to_be(0);
 
         });
+        test("numeric operations", [&] {
+            const char* program = R"(
+                4624 + 67423
+                256 - 6
+                34 - 743
+                13 * 52
+                3452 / 56
+                417 % 5
+                324 + 33 * 22
+                22 * 324 + 33
+                436 -346
+                53 +74
+                436 + -346
+                53 + +74
+                22 * (324 + 33)
+                52 + 23 / 88 * 32 - 5 + 12 / 6
+                32 & 63 >> 2 ^ 12 * 94 - 32 / 3 >> 13 | ~11
+            )";
+            Module& modl = *mock_parser(program);
+
+            auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
+                                               get_second<BadScopeLocation, Node*>);
+
+            expect(nodes.size(), to_string<size_t>).to_be(15);
+            
+            expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[0])->value_u64, to_string<uint64_t>).to_be(72047ull);
+
+            expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[1])->value_u64, to_string<uint64_t>).to_be(250ull);
+            
+            expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[2])->value_u64, to_string<uint64_t>).to_be(-709ull);
+            
+            expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[3])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[3])->value_u64, to_string<uint64_t>).to_be(676ull);
+            
+            expect(nodes[4]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[4])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[4])->value_u64, to_string<uint64_t>).to_be(61ull);
+
+            expect(nodes[5]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[5])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[5])->value_u64, to_string<uint64_t>).to_be(2ull);
+
+            expect(nodes[6]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[6])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[6])->value_u64, to_string<uint64_t>).to_be(1050ull);
+
+            expect(nodes[7]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[7])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[7])->value_u64, to_string<uint64_t>).to_be(7161ull);
+
+            expect(nodes[7]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[7])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[7])->value_u64, to_string<uint64_t>).to_be(7161ull);
+
+            expect(nodes[8]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[8])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[8])->value_u64, to_string<uint64_t>).to_be(90ull);
+
+            expect(nodes[9]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[9])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[9])->value_u64, to_string<uint64_t>).to_be(127ull);
+
+            expect(nodes[10]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[10])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[10])->value_u64, to_string<uint64_t>).to_be(90ull);
+
+            expect(nodes[11]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[11])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[11])->value_u64, to_string<uint64_t>).to_be(127ull);
+
+            expect(nodes[12]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[12])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[12])->value_u64, to_string<uint64_t>).to_be(7854ull);
+
+            expect(nodes[13]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[13])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[13])->value_u64, to_string<uint64_t>).to_be(49ull);
+
+            expect(nodes[14]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[14])->type, type_to_string).to_be(context->int_type);
+            expect(as<Number*>(nodes[14])->value_u64, to_string<uint64_t>).to_be(-12ull);
+
+        });
+
+        test("add signed overflow", [&] {
+            Module& modl = *mock_parser("2147483647 + 1");
+            expect_none().to_produce_error(ErrCode::NumericOverflow);
+        });
+        test("add signed underflow", [&] {
+            Module& modl = *mock_parser("-2147483648 + -1");
+            expect_none().to_produce_error(ErrCode::NumericUnderflow);
+        });
+        test("add unsigned overflow", [&] {
+            Module& modl = *mock_parser("4294967295'u32 + 1'u32");
+            expect_none().to_produce_error(ErrCode::NumericOverflow);
+        });
+        test("sub signed overflow", [&] {
+            Module& modl = *mock_parser("2147483647 - -1");
+            expect_none().to_produce_error(ErrCode::NumericOverflow);
+        });
+        test("sub signed underflow", [&] {
+            Module& modl = *mock_parser("-2147483648 - 1");
+            expect_none().to_produce_error(ErrCode::NumericUnderflow);
+        });
+        test("sub unsigned overflow", [&] {
+            Module& modl = *mock_parser("5'u32 - 10'u32");
+            expect_none().to_produce_error(ErrCode::NumericUnderflow);
+        });
+
+
+
     });
 }

@@ -80,6 +80,10 @@ namespace acorn {
 
     template<typename T, typename V>
     static bool fits_in_range(V value) {
+        if constexpr (std::is_signed_v<T> && std::is_signed_v<V>) {
+            return value <= std::numeric_limits<T>::max() &&
+                   value >= std::numeric_limits<T>::min();
+        }
         return value <= std::numeric_limits<T>::max();
     }
 

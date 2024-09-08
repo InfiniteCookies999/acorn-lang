@@ -214,6 +214,12 @@ namespace acorn {
         union {
             uint64_t value_u64;
             int64_t  value_s64;
+            uint32_t value_u32;
+            int32_t  value_s32;
+            uint16_t value_u16;
+            int16_t  value_s16;
+            uint8_t  value_u8;
+            int8_t   value_s8;
         };
     };
 

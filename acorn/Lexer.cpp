@@ -73,7 +73,7 @@ case c1:                                        \
         return next_word();
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
-        return next_number();
+        return next_number(ptr);
     case '\"':
         return next_string();
 
@@ -108,6 +108,8 @@ case c1:                                        \
         } else if (*ptr == '+') {
             ++ptr;
             return new_token(ptr - 2, 2, Token::AddAdd);
+        } else if (is_digit(*ptr)) {
+            return next_number(ptr - 1);
         }
         return new_token(ptr - 1, 1, '+');
     }
@@ -119,6 +121,8 @@ case c1:                                        \
         } else if (*ptr == '-') {
             ++ptr;
             return new_token(ptr - 2, 2, Token::SubSub);
+        } else if (is_digit(*ptr)) {
+            return next_number(ptr - 1);
         }
         return new_token(ptr - 1, 1, '-');
     }
@@ -238,9 +242,7 @@ acorn::Token acorn::Lexer::next_word() {
     return new_token(kind != Token::Invalid ? kind : Token::Identifier, start);
 }
 
-acorn::Token acorn::Lexer::next_number() {
-    
-    const char* start = ptr;
+acorn::Token acorn::Lexer::next_number(const char* start) {
 
     if (*ptr == '0') {
         ++ptr;

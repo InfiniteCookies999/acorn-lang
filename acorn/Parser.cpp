@@ -452,6 +452,17 @@ acorn::Expr* acorn::Parser::parse_expr() {
     return parse_binary_expr();
 }
 
+std::pair<acorn::Token, acorn::Token> acorn::Parser::split_number_from_sign(Token token) {
+    
+    tokkind op_sign = *token.loc.ptr;
+    Token op = Token(op_sign, SourceLoc{ token.loc.ptr, 1 });
+    
+    token.loc.ptr += 1;
+    token.loc.length -= 1;
+
+    return { op, token };
+}
+
 acorn::Expr* acorn::Parser::parse_binary_expr() {
 
     struct StackUnit {
@@ -462,21 +473,27 @@ acorn::Expr* acorn::Parser::parse_binary_expr() {
 
     Expr* lhs = parse_postfix();
 
-    auto new_binary_op = [this](Token op_tok, Expr* lhs, Expr* rhs) {
-        BinOp* bin_op = new_node<BinOp>(op_tok);
-        bin_op->op = op_tok.kind;
-        bin_op->lhs = lhs;
-        bin_op->rhs = rhs;
-        return bin_op;
+    auto get_op = [this]() finline {
+        if (cur_token.is_number_literal()) {
+            auto text = cur_token.text();
+            if (text[0] == '-' || text[0] == '+') {
+                auto [new_op, number_token] = split_number_from_sign(cur_token);
+                cur_token = new_op;
+                peeked_tokens[peeked_size++] = number_token;
+                return new_op;
+            }
+        }
+        return cur_token;
     };
 
-    Token op = cur_token, next_op;
+    Token op = get_op(), next_op;
+
     int prec;
     while ((prec = context.get_op_precedence(op)) != -1) {
         next_token(); // Consuming the operator.
 
         Expr* rhs = parse_postfix();
-        next_op = cur_token;
+        next_op = get_op();
         int next_prec = context.get_op_precedence(next_op);
 
         if (next_prec != -1 && next_prec > prec) {
@@ -486,7 +503,12 @@ acorn::Expr* acorn::Parser::parse_binary_expr() {
             lhs = rhs;
             op = next_op;
         } else {
-            lhs = new_binary_op(op, lhs, rhs);
+            if (lhs->is(NodeKind::Number) && rhs->is(NodeKind::Number)) {
+                lhs = fold_number(op, lhs, rhs);
+            } else {
+                lhs = new_binary_op(op, lhs, rhs);
+            }
+            
 
             while (!op_stack.empty()) {
                 StackUnit unit = op_stack.top();
@@ -495,18 +517,196 @@ acorn::Expr* acorn::Parser::parse_binary_expr() {
                     break;
                 }
                 op_stack.pop();
-                lhs = new_binary_op(unit.op, unit.expr, lhs);
+                if (lhs->is(NodeKind::Number) && rhs->is(NodeKind::Number)) {
+                    lhs = fold_number(unit.op, unit.expr, lhs);
+                } else {
+                    lhs = new_binary_op(unit.op, unit.expr, lhs);
+                }
             }
 
-            op = cur_token;
+            op = get_op();
         }
     }
 
     return lhs;
 }
 
+template<typename T>
+acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* to_type) {
+
+    constexpr bool is_signed = std::is_signed_v<T>;
+    T lval = is_signed ? lhs->value_s64 : lhs->value_u64;
+    T rval = is_signed ? rhs->value_s64 : rhs->value_u64;
+
+    auto calc = [lhs, rhs, to_type](T result) finline {
+        if constexpr (is_signed) {
+            lhs->value_s64 = result;
+        } else {
+            rhs->value_u64 = result;
+        }
+        lhs->type = to_type;
+        return lhs;
+    };
+
+    auto report_overflow = [this, op, to_type]() finline {
+        error(op.loc, "Operator '%s' numeric overflow. Cannot fit for type '%s'",
+              token_kind_to_string(context, op.kind), to_type)
+            .end_error(ErrCode::NumericOverflow);
+        return new_node<InvalidExpr>(op.loc);
+    };
+
+    auto report_underflow = [this, op, to_type]() finline {
+        error(op.loc, "Operator '%s' numeric underflow. Cannot fit into type '%s'",
+              token_kind_to_string(context, op.kind), to_type)
+            .end_error(ErrCode::NumericUnderflow);
+        return new_node<InvalidExpr>(op.loc);
+    };
+
+    switch (op.kind) {
+    case '+': {
+        // Note: Even if one of the values is a signed negative value for the unsigned
+        //       result case there cannot be negative underflow since the values are
+        //       first cast to unsigned integers and what would be negative overflow is
+        //       actually then caught as overflow.
+
+        if (rval > 0 && lval > std::numeric_limits<T>::max() - rval) {
+            return report_overflow();
+        }
+        
+        if constexpr (is_signed) {
+            if (rval < 0 && lval < std::numeric_limits<T>::min() - rval) {
+                return report_underflow();
+            }
+        }
+        return calc(lval + rval);
+    }
+    case '-': {
+        if constexpr (!is_signed) { // unsigned
+            if (lval < rval) {
+                return report_underflow();
+            }
+        } else {
+            if (rval < 0 && lval > std::numeric_limits<T>::max() + rval) {
+                return report_overflow();
+            }
+            if (rval > 0 && lval < std::numeric_limits<T>::min() + rval) {
+                return report_underflow();
+            }
+        }
+        return calc(lval - rval);
+    }
+    case '*': {
+        if constexpr (!is_signed) { // unsigned
+            if (lval != 0 && rval > std::numeric_limits<T>::max() / lval) {
+                return report_overflow();
+            }
+        } else {
+            if (lhs != 0 && rhs != 0) {
+                if (lval > std::numeric_limits<T>::max() / rval) {
+                    return report_overflow();
+                }
+                if (lval < std::numeric_limits<T>::min() / rval) {
+                    return report_underflow();
+                }
+            }
+        }
+        return calc(lval * rval);
+    }
+    case '/': {
+        if (rval == 0) {
+            // Let sema complain about division by zero.
+            return new_binary_op(op, lhs, rhs);
+        }
+        return calc(lval / rval);
+    }
+    case '%': {
+        if (rval == 0) {
+            // Let sema complain about division by zero.
+            return new_binary_op(op, lhs, rhs);
+        }
+        return calc(lval % rval);
+    }
+    case Token::LtLt: {
+        if (rval < 0 || rval == 0 || (rval - 1) > to_type->get_number_of_bits()) {
+            // These are shift error cases handled during sema.
+            return new_binary_op(op, lhs, rhs);
+        }
+        return calc(lval << rval);
+    }
+    case Token::GtGt: {
+        if (rval < 0 || rval == 0 || (rval - 1) > to_type->get_number_of_bits()) {
+            // These are shift error cases handled during sema.
+            return new_binary_op(op, lhs, rhs);
+        }
+        return calc(lval >> rval);
+    }
+    case '<':         return calc(lval <  rval);
+    case '>':         return calc(lval >  rval);
+    case Token::LtEq: return calc(lval <= rval);
+    case Token::GtEq: return calc(lval >= rval);
+    case Token::EqEq: return calc(lval == rval);
+    case Token::ExEq: return calc(lval != rval);
+    case '&':         return calc(lval &  rval);
+    case '^':         return calc(lval ^  rval);
+    case '|':         return calc(lval |  rval);
+    default:
+        // Handled during sema.
+        return new_binary_op(op, lhs, rhs);
+    }
+}
+
+acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
+
+    auto fold_by_side = [op, this, lhs, rhs](Expr* side) finline {
+        Number* lnum = as<Number*>(lhs);
+        Number* rnum = as<Number*>(rhs);
+        Type* to_type = side->type;
+        switch (to_type->get_kind()) {
+        case TypeKind::UInt8: case TypeKind::Char:
+            return fold_int<uint8_t> (op, lnum, rnum, to_type);
+        case TypeKind::UInt16: case TypeKind::Char16:
+            return fold_int<uint16_t>(op, lnum, rnum, to_type);
+        case TypeKind::UInt32: case TypeKind::Char32:
+            return fold_int<uint32_t>(op, lnum, rnum, to_type);
+        case TypeKind::UInt64: return fold_int<uint64_t>(op, lnum, rnum, to_type);
+        case TypeKind::Int8:   return fold_int<int8_t> (op, lnum, rnum, to_type);
+        case TypeKind::Int16:  return fold_int<int16_t>(op, lnum, rnum, to_type);
+        case TypeKind::Int32: case TypeKind::Int:
+            return fold_int<int32_t>(op, lnum, rnum, to_type);
+        case TypeKind::Int64:  return fold_int<int64_t>(op, lnum, rnum, to_type);
+        }
+    };
+
+    if (lhs->type->is_integer() && rhs->type->is_integer()) {
+        if (op.is(Token::LtLt) || op.is(Token::GtGt)) {
+            // Shift cases are special because we assume that the left hand side
+            // always has preference since it is the value worked on.
+            if (lhs->type->is(context.int_type) || lhs->type->is(rhs->type)) {
+                return fold_by_side(lhs);
+            } else {
+                // Just let it complain during sema that the types are incompatible.
+                return new_binary_op(op, lhs, rhs);
+            }
+        } else {
+            if (lhs->type->is(context.int_type)) { // rhs explicity type takes preference.
+                return fold_by_side(rhs);
+            } else if (rhs->type->is(context.int_type)) { // lhs explicity type takes preference.
+                return fold_by_side(lhs);
+            } else if (lhs->type->is(rhs->type)) {
+                return fold_by_side(lhs);
+            } else {
+                // Just let it complain during sema that the types are incompatible.
+                return new_binary_op(op, lhs, rhs);
+            }
+        }
+    } else {
+        acorn_fatal("unreachable");
+        return nullptr;
+    }
+}
+
 acorn::Expr* acorn::Parser::parse_postfix() {
-    Expr* term = parse_term();    
+    Expr* term = parse_term();
     if (cur_token.is('(')) {
         return parse_function_call(term);
     } else if (cur_token.is(Token::AddAdd) || cur_token.is(Token::SubSub)) {
@@ -587,11 +787,58 @@ acorn::Expr* acorn::Parser::parse_term() {
     }
     case '+': case '-': case '~': case '!':
     case '&': case Token::AddAdd: case Token::SubSub: {
-        UnaryOp* unary_op = new_node<UnaryOp>(cur_token);
-        unary_op->op = cur_token.kind;
+        Token unary_token = cur_token;
         next_token(); // Consuming the unary token.
 
+        bool unary_on_num_literal = cur_token.is(Token::IntLiteral);
+        Token after_op_token = cur_token;
         Expr* expr = parse_term();
+
+        if (unary_token.kind == '+' && expr->is(NodeKind::Number)) {
+            return expr; // + has no effect on value.
+        } else if (unary_token.kind == '-' && expr->is(NodeKind::Number)) {
+            Number* num = as<Number*>(expr);
+
+            switch (num->type->get_kind()) {
+            case TypeKind::UInt64: num->value_u64 = -num->value_u64; break;
+            case TypeKind::UInt32: case TypeKind::Char32:
+                num->value_u32 = -num->value_u32; break;
+            case TypeKind::UInt16: case TypeKind::Char16:
+                num->value_u16 = -num->value_u16; break;
+            case TypeKind::UInt8: case TypeKind::Char:
+                num->value_u8  = -num->value_u8;  break;
+            case TypeKind::Int64:  num->value_s64 = -num->value_s64; break;
+            case TypeKind::Int32: case TypeKind::Int:
+                num->value_s32 = -num->value_s32; break;
+            case TypeKind::Int16:  num->value_s16 = -num->value_s16; break;
+            case TypeKind::Int8:   num->value_s8  = -num->value_s8;  break;
+            }
+
+            return expr;
+        } else if (unary_token.kind == '~' && expr->is(NodeKind::Number) &&
+                   expr->type->is_integer()) {
+            Number* num = as<Number*>(expr);
+            
+            switch (num->type->get_kind()) {
+            case TypeKind::UInt64: num->value_u64 = ~num->value_u64; break;
+            case TypeKind::UInt32: case TypeKind::Char32:
+                num->value_u32 = ~num->value_u32; break;
+            case TypeKind::UInt16: case TypeKind::Char16:
+                num->value_u16 = ~num->value_u16; break;
+            case TypeKind::UInt8: case TypeKind::Char:
+                num->value_u8  = ~num->value_u8;  break;
+            case TypeKind::Int64:  num->value_s64 = ~num->value_s64; break;
+            case TypeKind::Int32: case TypeKind::Int:
+                num->value_s32 = ~num->value_s32; break;
+            case TypeKind::Int16:  num->value_s16 = ~num->value_s16; break;
+            case TypeKind::Int8:   num->value_s8  = ~num->value_s8;  break;
+            }
+
+            return expr;
+        }
+
+        UnaryOp* unary_op = new_node<UnaryOp>(unary_token);
+        unary_op->op = unary_token.kind;
         unary_op->expr = expr;
         
         return unary_op;
@@ -793,7 +1040,11 @@ template<uint32_t radix, uint64_t convert_table[256], bool use_table>
 acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* end) {
 
     const char* ptr = start;
-    
+    bool neg_sign = *ptr == '-';
+    if (*ptr == '-' || *ptr == '+') {
+        ++ptr;
+    }
+
     uint64_t value = 0, prev_value;
     while (ptr != end) {
         char c = *ptr;
@@ -822,6 +1073,9 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
 
     Number* number = new_node<Number>(cur_token);
     number->value_u64 = value;
+    if (neg_sign) {
+        number->value_s64 = -number->value_s64;
+    }
 
     // TODO: make sure it fits within the given ranges!
     if (*ptr == '\'') {
@@ -846,18 +1100,29 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
             else           number->type = context.uint64_type;
         }
     } else {
-        if (fits_in_range<int32_t>(number->value_u64)) {
-            number->type = context.int_type;
-        } else if (fits_in_range<int64_t>(number->value_u64)) {
-            number->type = context.int64_type;
+        auto fit_range = [this, number]<typename T>(T value) finline {
+            if (fits_in_range<int32_t>(value)) {
+                number->type = context.int_type;
+            } else if (fits_in_range<int64_t>(value)) {
+                number->type = context.int64_type;
+            } else {
+                number->type = context.uint64_type;
+            }
+        };
+
+        if (neg_sign) {
+            fit_range(number->value_s64);
         } else {
-            number->type = context.uint64_type;
+            fit_range(number->value_u64);
         }
     }
 
     next_token();
     return number;
 }
+
+// Utility functions
+//--------------------------------------
 
 void acorn::Parser::next_token() {
     prev_token = cur_token;
@@ -867,9 +1132,6 @@ void acorn::Parser::next_token() {
         cur_token = lex.next_token();
     }
 }
-
-// Utility functions
-//--------------------------------------
 
 acorn::Token acorn::Parser::peek_token(size_t n) {
     assert(n < MAX_PEEKED_TOKENS && "Peek index exceeds the maximum number of peeked tokens.");
@@ -914,6 +1176,14 @@ acorn::Identifier acorn::Parser::expect_identifier(const char* for_msg) {
     }
 }
 
+acorn::Expr* acorn::Parser::new_binary_op(Token op_tok, Expr* lhs, Expr* rhs) {
+    BinOp* bin_op = new_node<BinOp>(op_tok);
+    bin_op->op = op_tok.kind;
+    bin_op->lhs = lhs;
+    bin_op->rhs = rhs;
+    return bin_op;
+};
+
 void acorn::Parser::skip_recovery() {
     while (true) {
         switch (cur_token.kind) {
@@ -944,4 +1214,3 @@ void acorn::Parser::skip_recovery() {
         }
     }
 }
-
