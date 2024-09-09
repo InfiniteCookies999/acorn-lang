@@ -82,6 +82,9 @@ case c1:                                        \
         if (*ptr == '/') {
             eat_single_line_comment();
             goto RestartLexingLabel;
+        } else if (*ptr == '*') {
+            eat_multiline_comment();
+            goto RestartLexingLabel;
         } else if (*ptr == '=') {
             ++ptr;
             return new_token(ptr - 2, 2, Token::DivEq);
@@ -225,6 +228,31 @@ void acorn::Lexer::eat_single_line_comment() {
         ptr += 2; // skip \r\n
     } else if (*ptr != '\0') {
         ptr += 1; // skip \r or \n
+    }
+}
+
+void acorn::Lexer::eat_multiline_comment() {
+    ptr += 2; // Skip '/*'
+
+    int depth = 1;
+    while (*ptr != '\0' && depth > 0) {
+        if (*ptr == '/' && *(ptr + 1) == '*') {
+            // Found a nested '/*' comment so must increase depth.
+            ++depth;
+            ptr += 2;
+        } else if (*ptr == '*' && *(ptr + 1) == '/') {
+            // Found closing '*/', must decrease depth.
+            --depth;
+            ptr += 2;
+        } else {
+            ++ptr;
+        }
+    }
+
+    // Make sure the multiline comment was closed.
+    if (depth != 0) {
+        error("Missing closing '*/' for multi-line comment")
+            .end_error(ErrCode::LexMultilineCommentMissingClose);
     }
 }
 

@@ -27,6 +27,7 @@ namespace acorn {
         const char* end;
 
         void eat_single_line_comment();
+        void eat_multiline_comment();
 
         Token next_word();
 
