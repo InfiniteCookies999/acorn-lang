@@ -80,6 +80,8 @@ namespace acorn {
 
         llvm::BasicBlock* gen_bblock(const char* name, llvm::Function* ll_func = nullptr);
 
+        llvm::Value* gen_isize(uint64_t v);
+
         // This will only unconditionally branch to the given block as long as
         // the current block does not already end in a branch (terminal).
         // 

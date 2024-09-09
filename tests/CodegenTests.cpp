@@ -149,5 +149,9 @@ void test_codegen() {
             auto [success, result] = run_codegen_test(src(L"arithmetic_test.ac"));
             expect(result, std::identity()).to_be("EjZQ;-C7 H$");
         });
+        test("ptr arithmetic test", [&] {
+            auto [success, result] = run_codegen_test(src(L"ptr_arithmetic_test.ac"));
+            expect(result, std::identity()).to_be("he!he!heleh");
+        });
     });
 }

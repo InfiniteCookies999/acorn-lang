@@ -61,6 +61,8 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Char16:   return str("char16");
     case TypeKind::Char32:   return str("char32");
     case TypeKind::Null:     return str("null");
+    case TypeKind::ISize:    return str("isize");
+    case TypeKind::USize:    return str("usize");
     case TypeKind::Pointer:  return as<const PointerType*>(this)->to_string();
     default:
         acorn_fatal("Type::to_string() missing to_string case");

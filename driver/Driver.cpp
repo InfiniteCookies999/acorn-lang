@@ -39,7 +39,6 @@ int main(int argc, char* argv[]) {
             sources.push_back(wconverter.from_bytes(argv[i]));
         }
     }
-    sources.push_back(L"main.ac");
 
     if (acorn.has_errors()) {
         return 1;

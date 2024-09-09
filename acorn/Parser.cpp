@@ -811,7 +811,8 @@ acorn::Expr* acorn::Parser::parse_term() {
         return ref;
     }
     case '+': case '-': case '~': case '!':
-    case '&': case Token::AddAdd: case Token::SubSub: {
+    case '&': case Token::AddAdd: case Token::SubSub:
+    case '*': {
         Token unary_token = cur_token;
         next_token(); // Consuming the unary token.
 
@@ -1232,6 +1233,7 @@ void acorn::Parser::skip_recovery() {
         case '}':
         case ')':
         case ',':
+        case '{':
             return;
         case ModifierTokens:
             return;
@@ -1242,11 +1244,16 @@ void acorn::Parser::skip_recovery() {
             break;
         case Token::KwIf:
         case Token::KwReturn:
+        case Token::KwCTIf:
             return;
         case Token::KwElIf: {
             // Replace current token with if statement so that it thinks
             // it is a valid statement.
             cur_token = Token(Token::KwIf, cur_token.loc);
+            return;
+        }
+        case Token::KwCTElIf: {
+            cur_token = Token(Token::KwCTIf, cur_token.loc);
             return;
         }
         default:
