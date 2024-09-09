@@ -184,9 +184,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     if (func->num_returns > 1) {
         ll_ret_block = gen_bblock("ret.block");
         if (func->return_type->is_not(context.void_type)) {
-            ll_ret_value = builder.CreateAlloca(gen_type(func->return_type), nullptr, "ret.addr");
+            ll_ret_addr = builder.CreateAlloca(gen_type(func->return_type), nullptr, "ret.addr");
         } else if (is_main) {
-            ll_ret_value = builder.CreateAlloca(llvm::Type::getInt32Ty(ll_context), nullptr, "ret.addr");
+            ll_ret_addr = builder.CreateAlloca(llvm::Type::getInt32Ty(ll_context), nullptr, "ret.addr");
         }
     }
 
@@ -213,7 +213,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
         // The return value returns to an address so need to load
         // the value.
         auto load_type = is_main ? llvm::Type::getInt32Ty(ll_context) : gen_type(func->return_type);
-        ll_ret_value = builder.CreateLoad(load_type, ll_ret_value, "ret.val");
+        ll_ret_addr = builder.CreateLoad(load_type, ll_ret_addr, "ret.val");
     }
 
     if (func->return_type->is(context.void_type) && !is_main) {
@@ -237,9 +237,9 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
 
     if (cur_func->num_returns > 1) {
         if (not_void) {
-            builder.CreateStore(gen_rvalue(ret->value), ll_ret_value);
+            builder.CreateStore(gen_rvalue(ret->value), ll_ret_addr);
         } else if (is_main) {
-            builder.CreateStore(builder.getInt32(0), ll_ret_value);
+            builder.CreateStore(builder.getInt32(0), ll_ret_addr);
         }
         // Jumping to the end of the function.
         builder.CreateBr(ll_ret_block);
