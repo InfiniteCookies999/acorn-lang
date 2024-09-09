@@ -51,3 +51,7 @@ endif()
 add_subdirectory ("acorn")
 add_subdirectory ("tests")
 add_subdirectory ("driver")
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/debug-testing/CMakeLists.txt")
+    add_subdirectory("debug-testing")
+endif()

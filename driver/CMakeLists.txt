@@ -7,3 +7,7 @@ set_target_properties (
 )
 
 target_link_libraries(driver LINK_PUBLIC acorn)
+
+if(WIN32)
+    # target_link_options(driver PRIVATE "/ENTRY:wmain")
+endif()
