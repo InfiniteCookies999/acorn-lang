@@ -66,6 +66,32 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
         if (ref->is_var_ref()) {
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
+    } else if (node->kind == NodeKind::UnaryOp) {
+        // Although the code for the unary operator may already have loaded
+        // the value it must be loaded again when a rvalue is needed.
+        // For example if you have:
+        //   
+        //    char* a
+        //    char b = *a
+        // 
+        // We allocate `a` in LLVM as a char* which means the original type
+        // of the identifier reference to `a` is i8**. When it is loaded
+        // via the operator * this will load the value as i8*. But this
+        // is not what we need, we need just i8, so it must be loaded again.
+        // 
+        // Additionally this is suitable for situations like the following:
+        // 
+        //    char* a
+        //    *a = 5
+        //
+        // Again `a` is allocated and has the value i8** originally, when
+        // loaded it becomes the type i8* which is the address we need to
+        // store the value `5` to.
+        //
+        UnaryOp* unary_op = as<UnaryOp*>(node);
+        if (unary_op->op == '*') {
+            ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
+        }
     }
 
     if (node->cast_type) {
@@ -158,9 +184,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     if (func->num_returns > 1) {
         ll_ret_block = gen_bblock("ret.block");
         if (func->return_type->is_not(context.void_type)) {
-            ll_ret_value = builder.CreateAlloca(gen_type(func->return_type), nullptr, "ret.addr");
+            ll_ret_addr = builder.CreateAlloca(gen_type(func->return_type), nullptr, "ret.addr");
         } else if (is_main) {
-            ll_ret_value = builder.CreateAlloca(llvm::Type::getInt32Ty(ll_context), nullptr, "ret.addr");
+            ll_ret_addr = builder.CreateAlloca(llvm::Type::getInt32Ty(ll_context), nullptr, "ret.addr");
         }
     }
 
@@ -187,7 +213,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
         // The return value returns to an address so need to load
         // the value.
         auto load_type = is_main ? llvm::Type::getInt32Ty(ll_context) : gen_type(func->return_type);
-        ll_ret_value = builder.CreateLoad(load_type, ll_ret_value, "ret.val");
+        ll_ret_addr = builder.CreateLoad(load_type, ll_ret_addr, "ret.val");
     }
 
     if (func->return_type->is(context.void_type) && !is_main) {
@@ -202,7 +228,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 void acorn::IRGenerator::gen_variable_address(Var* var) {
     var->ll_address = builder.CreateAlloca(gen_type(var->type),
                                            nullptr,
-                                           llvm::Twine(var->name.reduce()) + ".addr");
+                                           llvm::Twine(var->name.reduce()));
 }
 
 llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
@@ -211,9 +237,9 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
 
     if (cur_func->num_returns > 1) {
         if (not_void) {
-            builder.CreateStore(gen_rvalue(ret->value), ll_ret_value);
+            builder.CreateStore(gen_rvalue(ret->value), ll_ret_addr);
         } else if (is_main) {
-            builder.CreateStore(builder.getInt32(0), ll_ret_value);
+            builder.CreateStore(builder.getInt32(0), ll_ret_addr);
         }
         // Jumping to the end of the function.
         builder.CreateBr(ll_ret_block);
@@ -505,6 +531,11 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
 
 llvm::BasicBlock* acorn::IRGenerator::gen_bblock(const char* name, llvm::Function* ll_func) {
     return llvm::BasicBlock::Create(ll_context, name, ll_func);
+}
+
+llvm::Value* acorn::IRGenerator::gen_isize(uint64_t v) {
+    auto ll_type = gen_ptrsize_int_type();
+    return llvm::ConstantInt::get(ll_type, v, true);
 }
 
 void acorn::IRGenerator::gen_branch_if_not_term(llvm::BasicBlock* ll_bb) {

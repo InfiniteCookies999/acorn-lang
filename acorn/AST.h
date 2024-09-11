@@ -54,6 +54,11 @@ namespace acorn {
 
         NodeKind  kind;
         SourceLoc loc;
+        // This is needed because expressions can be folded
+        // during parsing causing them to loose their original
+        // point of origin. This is set to retain that information.
+        PointSourceLoc expanded_loc;
+        bool           uses_expanded_loc = false;
 
         Node(NodeKind kind)
             : kind(kind) {

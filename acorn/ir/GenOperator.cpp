@@ -8,7 +8,10 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     
     auto apply_op_eq = [this, bin_op, lhs, rhs](tokkind op) finline {
         auto ll_address = gen_node(lhs);
-        auto ll_value = gen_binary_numeric_op(op, bin_op, builder.CreateLoad(gen_type(lhs->type), ll_address), gen_rvalue(rhs));
+        auto ll_value = gen_binary_numeric_op(op,
+                                              bin_op,
+                                              builder.CreateLoad(gen_type(lhs->type), ll_address),
+                                              gen_rvalue(rhs));
         builder.CreateStore(ll_value, ll_address);
         return nullptr;
     };
@@ -45,6 +48,10 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 //
 //       In C++ it is defined behavior for unsigned but not signed.
 
+// We use CreateInBoundsGEP because accessing memory beyond the bounds of
+// valid memory is considered undefined behavior and it allows LLVM to
+// perform better optimizations.
+
 llvm::Value* acorn::IRGenerator::gen_binary_numeric_op(tokkind op, BinOp* bin_op,
                                                        llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
     
@@ -52,14 +59,45 @@ llvm::Value* acorn::IRGenerator::gen_binary_numeric_op(tokkind op, BinOp* bin_op
     // Arithmetic Operators
     // -------------------------------------------
     case '+': {
-        if (bin_op->type->is_signed())
-            return builder.CreateNSWAdd(ll_lhs, ll_rhs, "add");
-        else return builder.CreateAdd(ll_lhs, ll_rhs, "add");
+        if (bin_op->type->is_pointer()) {
+            // Pointer arithmetic
+            auto ll_ptr = bin_op->lhs->type->is_pointer() ? ll_lhs : ll_rhs;
+            auto ll_off = bin_op->lhs->type->is_pointer() ? ll_rhs : ll_lhs;
+            auto ptr_type = bin_op->lhs->type->is_pointer() ? bin_op->lhs->type : bin_op->rhs->type;
+            auto elm_type = as<PointerType*>(ptr_type)->get_elm_type();
+
+            ll_off = builder.CreateIntCast(ll_off, gen_ptrsize_int_type(), true);
+            return builder.CreateInBoundsGEP(gen_type(elm_type), ll_ptr, ll_off, "ptr.add");
+        } else {
+            if (bin_op->type->is_signed())
+                return builder.CreateNSWAdd(ll_lhs, ll_rhs, "add");
+            else return builder.CreateAdd(ll_lhs, ll_rhs, "add");
+        }
     }
     case '-': {
-        if (bin_op->type->is_signed())
-            return builder.CreateNSWSub(ll_lhs, ll_rhs, "sub");
-        else return builder.CreateSub(ll_lhs, ll_rhs, "sub");
+        if (bin_op->rhs->type->is_pointer()) {
+            // Subtracting a pointer from a pointer
+            auto ptr_type = as<PointerType*>(bin_op->rhs->type);
+            auto ll_elm_type = gen_type(ptr_type->get_elm_type());
+            return builder.CreatePtrDiff(ll_elm_type, ll_lhs, ll_rhs, "ptrs.sub");
+        } else if (bin_op->type->is_pointer()) {
+            // Subtracting an integer from a pointer.
+
+            auto ll_ptr = bin_op->lhs->type->is_pointer() ? ll_lhs : ll_rhs;
+            auto ll_off = bin_op->lhs->type->is_pointer() ? ll_rhs : ll_lhs;
+            auto ptr_type = bin_op->lhs->type->is_pointer() ? bin_op->lhs->type : bin_op->rhs->type;
+            auto elm_type = as<PointerType*>(ptr_type)->get_elm_type();
+            auto val_type = bin_op->lhs->type->is_pointer() ? bin_op->rhs->type : bin_op->lhs->type;
+
+            auto ll_zero = gen_zero(val_type);
+            auto ll_neg  = builder.CreateSub(ll_zero, ll_off, "neg");
+            ll_neg = builder.CreateIntCast(ll_neg, gen_ptrsize_int_type(), true);
+            return builder.CreateInBoundsGEP(gen_type(elm_type), ll_ptr, ll_neg, "ptr.sub");
+        } else {
+            if (bin_op->type->is_signed())
+                return builder.CreateNSWSub(ll_lhs, ll_rhs, "sub");
+            else return builder.CreateSub(ll_lhs, ll_rhs, "sub");
+        }
     }
     case '*':
         return builder.CreateMul(ll_lhs, ll_rhs, "mul");
@@ -119,13 +157,25 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         llvm::Value* ll_value = builder.CreateLoad(gen_type(unary_op->expr->type), ll_addr);
         llvm::Value* ll_org   = ll_value;
         if (add) {
-            if (type->is_signed())
-                ll_value = builder.CreateNSWSub(ll_value, gen_one(type), "inc");
-            else ll_value = builder.CreateAdd(ll_value, gen_one(type), "inc");
+            if (type->is_pointer()) {
+                // Pointer arithmetic
+                auto elm_type = as<PointerType*>(type)->get_elm_type();
+                ll_value = builder.CreateInBoundsGEP(gen_type(elm_type), ll_value, gen_isize(1), "ptr.inc");
+            } else {
+                if (type->is_signed())
+                    ll_value = builder.CreateNSWSub(ll_value, gen_one(type), "inc");
+                else ll_value = builder.CreateAdd(ll_value, gen_one(type), "inc");
+            }
         } else {
-            if (type->is_signed())
-                ll_value = builder.CreateNSWSub(ll_value, gen_one(type), "inc");
-            else ll_value = builder.CreateSub(ll_value, gen_one(type), "inc");
+            if (type->is_pointer()) {
+                // Pointer arithmetic
+                auto elm_type = as<PointerType*>(type)->get_elm_type();
+                ll_value = builder.CreateInBoundsGEP(gen_type(elm_type), ll_value, gen_isize(-1), "ptr.dec");
+            } else {
+                if (type->is_signed())
+                    ll_value = builder.CreateNSWSub(ll_value, gen_one(type), "dec");
+                else ll_value = builder.CreateSub(ll_value, gen_one(type), "dec");
+            }
         }
         builder.CreateStore(ll_value, ll_addr);
         return is_post ? ll_org : ll_value;
@@ -153,6 +203,11 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         // get the value from gen_value since if we do not call
         // gen_rvalue it generates the address.
         return gen_node(expr);
+    case '*': {
+        auto ll_ptr = gen_node(expr);
+        return builder.CreateLoad(gen_type(expr->type), ll_ptr, "");
+    }
+
     case Token::AddAdd:
         return gen_inc_or_dec(true, false);
     case Token::SubSub:

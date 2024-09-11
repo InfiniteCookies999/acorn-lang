@@ -325,7 +325,15 @@ void acorn::AcornLang::link() {
     }
     
     if (exit_code == 0 && !dont_show_wrote_to_msg) {
-        std::wcout << "Wrote program to: " << absolute_exe_path << "\n";
+        bool is_wide = std::ranges::any_of(absolute_exe_path, [](wchar_t c) {
+            return c > 0x7F;
+        });
+        if (!is_wide) {
+            std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
+            std::cout << "Wrote program to: " << wconverter.to_bytes(absolute_exe_path) << "\n";
+        } else {
+            std::wcout << "Wrote program to: " << absolute_exe_path << "\n";
+        }
     }
 
     link_timer.stop();

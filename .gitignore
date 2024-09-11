@@ -6,3 +6,5 @@ CMakePresets.json
 
 # Any hidden files and folders
 .*
+
+debug-testing

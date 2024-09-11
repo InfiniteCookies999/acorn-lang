@@ -385,7 +385,40 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
               .end_error(ErrCode::SemaBinOpTypeMismatch);
     };
 
-    auto check_add_sub_mul = [this, lhs, rhs, error_cannot_apply, error_mismatched]() finline {
+    auto check_add_sub_mul = [bin_op, this, lhs, rhs, error_cannot_apply, error_mismatched]() finline {
+        // valid pointer arithmetic cases:
+        // 
+        // ptr + int
+        // int + ptr
+        // 
+        // ptr - int
+        // ptr - ptr
+        
+        if (lhs->type->is_pointer()) {
+            // Pointer arithmetic
+            if (bin_op->op == '+' && !rhs->type->is_integer()) {
+                error_mismatched();
+                return false;
+            } else if (!(rhs->type->is_integer() || rhs->type->is(lhs->type))) {
+                error_mismatched();
+                return false;
+            }
+
+            return true;
+        } else if (rhs->type->is_pointer()) {
+            // Pointer arithmetic
+            if (bin_op->op == '+' && !lhs->type->is_integer()) {
+                error_mismatched();
+                return false;
+            } else if (bin_op->op == '-') {
+                // ptr - ptr   case would have already been handled.
+                error_mismatched();
+                return false;
+            }
+
+            return true;
+        }
+
         if (!lhs->type->is_number()) {
             error_cannot_apply(lhs);
             return false;
@@ -514,7 +547,18 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     }
     case '+': case '-': case '*': {
         if (!check_add_sub_mul()) return;
-        bin_op->type = lhs->type;
+        // Pointer type takes preference.
+        if (lhs->type->is_pointer() && rhs->type->is_pointer()) {
+            // This is a unique case of subtracting pointers which
+            // results in an integer type.
+            bin_op->type = context.isize_type;
+        } else if (lhs->type->is_pointer()) {
+            bin_op->type = lhs->type;
+        } else if (rhs->type->is_pointer()) {
+            bin_op->type = rhs->type;
+        } else {
+            bin_op->type = lhs->type;
+        }
         break;
     }
     case '/': case '%': {
@@ -603,6 +647,16 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
         unary_op->is_foldable = false;
         break;
     }
+    case '*': {
+        if (!expr->type->is_pointer()) {
+            error_no_applies();
+            return;
+        }
+
+        unary_op->type = as<PointerType*>(expr->type)->get_elm_type();
+        unary_op->is_foldable = false;
+        break;
+    }
     case Token::AddAdd: case Token::SubSub:
     case Token::PostAddAdd: case Token::PostSubSub: {
         if (!is_lvalue(expr)) {
@@ -611,10 +665,17 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
                 .end_error(ErrCode::SemaUnaryOpIncDecNotLValue);
             return;
         }
+        if (!(expr->type->is_integer() || expr->type->is_pointer())) {
+            error_no_applies();
+            return;
+        }
         unary_op->type = expr->type;
         unary_op->is_foldable = false;
         break;
     }
+    default:
+        acorn_fatal("check_unary_op(): unimplemented case");
+        break;
     }
 }
 
@@ -821,7 +882,7 @@ void acorn::Sema::display_call_mismatch_info(const Func* canidate,
 #define err_line(fmt, ...) logger.add_line(("%s- " fmt), indent ? "  " : "", __VA_ARGS__)
 
     if (canidate->params.size() != args.size()) {
-        err_line("Incorrect number of arguments. Expected %s but found %s",
+        err_line("Incorrect number of args. Expected %s but found %s",
             params.size(), args.size());
         return;
     }
@@ -831,7 +892,7 @@ void acorn::Sema::display_call_mismatch_info(const Func* canidate,
         Var* param = params[i];
 
         if (!is_assignable_to(param->type, arg)) {
-            err_line("Wrong type for argument %s. Expected '%s' but found '%s'",
+            err_line("Wrong type for arg %s. Expected '%s' but found '%s'",
                 i + 1, param->type, arg->type);
         }
     }
@@ -866,9 +927,11 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
     case TypeKind::Int16: case TypeKind::UInt16:
     case TypeKind::Int32: case TypeKind::UInt32:
     case TypeKind::Int64: case TypeKind::UInt64:
-    case TypeKind::USize: case TypeKind::ISize: {
+    case TypeKind::USize: case TypeKind::ISize:
+    case TypeKind::Char: case TypeKind::Char16:
+    case TypeKind::Char32: {
         
-        if (expr->is_foldable && from_type->is_number()) {
+        if (expr->is_foldable && expr->is(NodeKind::Number)) {
             
             Number* number = as<Number*>(expr);
 
@@ -976,16 +1039,15 @@ bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type,
         if (to_contains_const) {
             to_type = to_type->remove_all_const();
         }
-    } else if (to_type->is_const()) {
-        to_type = to_type->remove_all_const();
-        if (!to_type->is_number() && !expr->type->is_const()) {
-            // Cannot assign const value to non-const.
-            return false;
-        }
-        if (from_type->is_const()) {
-            from_type = from_type->remove_all_const();
-        }
     }
+
+    if (to_type->does_contain_const()) {
+        to_type = to_type->remove_all_const();
+    }
+    if (from_type->does_contain_const()) {
+        from_type = from_type->remove_all_const();
+    }
+   
     return true;
 }
 

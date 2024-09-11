@@ -76,11 +76,16 @@ case c1:                                        \
         return next_number(ptr);
     case '\"':
         return next_string();
+    case '\'':
+        return next_char();
 
     case '/': {
         ++ptr;
         if (*ptr == '/') {
             eat_single_line_comment();
+            goto RestartLexingLabel;
+        } else if (*ptr == '*') {
+            eat_multiline_comment();
             goto RestartLexingLabel;
         } else if (*ptr == '=') {
             ++ptr;
@@ -228,6 +233,31 @@ void acorn::Lexer::eat_single_line_comment() {
     }
 }
 
+void acorn::Lexer::eat_multiline_comment() {
+    ptr += 2; // Skip '/*'
+
+    int depth = 1;
+    while (*ptr != '\0' && depth > 0) {
+        if (*ptr == '/' && *(ptr + 1) == '*') {
+            // Found a nested '/*' comment so must increase depth.
+            ++depth;
+            ptr += 2;
+        } else if (*ptr == '*' && *(ptr + 1) == '/') {
+            // Found closing '*/', must decrease depth.
+            --depth;
+            ptr += 2;
+        } else {
+            ++ptr;
+        }
+    }
+
+    // Make sure the multiline comment was closed.
+    if (depth != 0) {
+        error("Missing closing '*/' for multi-line comment")
+            .end_error(ErrCode::LexMultilineCommentMissingClose);
+    }
+}
+
 acorn::Token acorn::Lexer::next_word() {
 
     const char* start = ptr;
@@ -325,10 +355,23 @@ acorn::Token acorn::Lexer::finish_mumber(tokkind kind, const char* start) {
     return new_token(kind, start);
 }
 
+bool acorn::Lexer::skip_unicode_seq_digits(size_t n) {
+    ++ptr; // Skip u or U
+    for (size_t i = 0; i < n && *ptr != '\0'; ++i, ++ptr) {
+        if (!is_hexidecimal(*ptr)) {
+            error("Incomplete unicode sequence. Expected '%s' digits", n)
+                .end_error(ErrCode::LexInvalidUnicodeSeq);
+            return false;
+        }
+    }
+    return true;
+}
+
 acorn::Token acorn::Lexer::next_string() {
 
     const char* start = ptr;
     ++ptr; // Skip initial "
+
     tokkind kind = Token::String8BitLiteral;
     bool invalid = false;
     while (true) {
@@ -336,28 +379,16 @@ acorn::Token acorn::Lexer::next_string() {
         case '"': case '\0': case '\r': case '\n':
             goto FinishedStringLexLab;
         case '\\': { // Escape cases!
-            auto skip_unicode_digits = [this, &invalid](size_t n) {
-                ++ptr;
-                for (size_t i = 0; i < n && *ptr != '\0'; ++i, ++ptr) {
-                    if (!is_hexidecimal(*ptr)) {
-                        invalid = true;
-                        error("Incomplete unicode sequence. Expected 4 characters")
-                            .end_error(ErrCode::LexInvalidUnicodeSeq);
-                        break;
-                    }
-                }
-            };
-
             ++ptr;
             if (*ptr == 'u') {          // Unicode 16 bits
                 if (kind != Token::String32BitLiteral)
                     kind = Token::String16BitLiteral;
-                skip_unicode_digits(4);
+                invalid |= !skip_unicode_seq_digits(4);
             } else if (*ptr == 'U') {   // Unicode 32 bits
                 kind = Token::String32BitLiteral;
                 // TODO: This does not actually reach 32 bits of unicode characters!
-                skip_unicode_digits(8);
-            } else {
+                invalid |= !skip_unicode_seq_digits(8);
+            } else if (!(*ptr == '\n' || *ptr == '\r' || *ptr == '\0')) {
                 ++ptr;
             }
             break;
@@ -373,11 +404,51 @@ FinishedStringLexLab:
         ++ptr;
     } else {
         invalid = true;
-        error("Expected closing '\"' for string")
+        error("Expected closing \" for string")
             .end_error(ErrCode::LexStringMissingEndQuote);
     }
     
     return new_token(start, static_cast<uint16_t>(ptr - start), !invalid ? kind : Token::InvalidLiteral);
+}
+
+acorn::Token acorn::Lexer::next_char() {
+    
+    const char* start = ptr;
+    ++ptr; // Skip initial '
+
+    // TODO: What should we do if the user types a tab?
+    switch (*ptr) {
+    case '\0':
+    case '\r':
+    case '\n': {
+        error("Expected closing ' for character")
+            .end_error(ErrCode::LexCharMissingEndQuote);
+        return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidLiteral);
+    }
+    case '\\': {
+        ++ptr;
+        if (*ptr == 'u' || *ptr == 'U') {
+            if (!skip_unicode_seq_digits(*ptr == 'u' ? 4 : 8)) {
+                return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidLiteral);
+            }
+        } else if(!(*ptr == '\n' || *ptr == '\r' || *ptr == '\0')) {
+            ++ptr;
+        }
+        break;
+    }
+    default:
+        ++ptr;
+        break;
+    }
+
+    if (*ptr != '\'') {
+        error("Expected closing ' for character")
+            .end_error(ErrCode::LexCharMissingEndQuote);
+        return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidLiteral);
+    } else {
+        ++ptr; // Eating closing '
+        return new_token(start, static_cast<uint16_t>(ptr - start), Token::CharLiteral);
+    }
 }
 
 acorn::Token acorn::Lexer::next_comptime() {

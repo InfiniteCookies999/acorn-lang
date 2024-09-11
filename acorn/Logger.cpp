@@ -179,8 +179,7 @@ namespace acorn {
     };
 
     static PtrCalcInfo calc_start_ptr(const char* ptr, const char* buffer_start, const char* low_point) {
-        acorn_assert(*ptr != '\r' && *ptr != '\n', "Start pointer cannot contain new line");
-
+        
         long long count = 0;
         while (ptr > buffer_start) {
             long long whitespace_count = 0;
@@ -291,7 +290,7 @@ namespace acorn {
     };
 
     static ErrorInfo collect_error_information(PointSourceLoc location, SourceFile& file) {
-        
+       
         auto [start_info, end_info] = get_range_pointers(location, file.buffer);
         std::string error_display = std::string(start_info.ptr, end_info.ptr - start_info.ptr + 1);
         error_display = tabs_to_spaces(error_display);
@@ -426,6 +425,8 @@ void acorn::Logger::end_error(ErrCode error_code) {
             print(StdErr, std::string(underscore_offset, ' '));
 
             size_t underscore_width = line.length() - underscore_offset + dots_width;
+            // This can happen sometimes when at the end of the buffer of within a new line.
+            if (underscore_width == 0) underscore_width = 1;
             if (is_last) underscore_width -= info.end_width;
 
             std::string underscore = std::string(underscore_width, '~');

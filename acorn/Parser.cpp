@@ -7,6 +7,7 @@
 #include "Type.h"
 #include "Module.h"
 #include "Util.h"
+#include "SourceExpansion.h"
 
 #define TypeTokens    \
      Token::KwVoid:   \
@@ -540,25 +541,44 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
     T lval = is_signed ? lhs->value_s64 : lhs->value_u64;
     T rval = is_signed ? rhs->value_s64 : rhs->value_u64;
 
-    auto calc = [lhs, rhs, to_type](T result) finline {
+    auto calc = [op, lhs, rhs, to_type](T result) finline {
         if constexpr (is_signed) {
             lhs->value_s64 = result;
         } else {
             rhs->value_u64 = result;
         }
+
+        // Going to treat the lhs as the result of the evaluation since
+        // it is already a number and can just be reused.
         lhs->type = to_type;
+
+        // Need to expand the source location because if an error occures
+        // later and it needs to display the full error location.
+        auto s = lhs->uses_expanded_loc ? lhs->expanded_loc.ptr : lhs->loc.ptr;;
+        auto e = rhs->uses_expanded_loc ? (rhs->expanded_loc.ptr + rhs->expanded_loc.length)
+                                        : (rhs->loc.ptr + rhs->loc.length);
+        
+        lhs->uses_expanded_loc = true;
+        lhs->expanded_loc = PointSourceLoc{
+            s,
+            as<uint16_t>(e - s),
+            op.loc.ptr,
+            op.loc.length
+        };
         return lhs;
     };
 
-    auto report_overflow = [this, op, to_type]() finline {
-        error(op.loc, "Operator '%s' numeric overflow. Cannot fit for type '%s'",
+    auto report_overflow = [this, op, to_type, lhs, rhs]() finline {
+        auto loc_op = new_binary_op(op, lhs, rhs);
+        logger.begin_error(expand(loc_op), "Operator '%s' numeric overflow. Cannot fit for type '%s'",
               token_kind_to_string(context, op.kind), to_type)
             .end_error(ErrCode::NumericOverflow);
         return new_node<InvalidExpr>(op.loc);
     };
 
-    auto report_underflow = [this, op, to_type]() finline {
-        error(op.loc, "Operator '%s' numeric underflow. Cannot fit into type '%s'",
+    auto report_underflow = [this, op, to_type, lhs, rhs]() finline {
+        auto loc_op = new_binary_op(op, lhs, rhs);
+        logger.begin_error(expand(loc_op), "Operator '%s' numeric underflow. Cannot fit into type '%s'",
               token_kind_to_string(context, op.kind), to_type)
             .end_error(ErrCode::NumericUnderflow);
         return new_node<InvalidExpr>(op.loc);
@@ -778,6 +798,7 @@ acorn::Expr* acorn::Parser::parse_term() {
     case Token::String8BitLiteral:    return parse_string8bit_literal();
     case Token::String16BitLiteral:   return parse_string16bit_literal();
     case Token::String32BitLiteral:   return parse_string32bit_literal();
+    case Token::CharLiteral:          return parse_char_literal();
     case Token::InvalidLiteral: {
         next_token();
         return new_node<InvalidExpr>(cur_token);
@@ -791,7 +812,8 @@ acorn::Expr* acorn::Parser::parse_term() {
         return ref;
     }
     case '+': case '-': case '~': case '!':
-    case '&': case Token::AddAdd: case Token::SubSub: {
+    case '&': case Token::AddAdd: case Token::SubSub:
+    case '*': {
         Token unary_token = cur_token;
         next_token(); // Consuming the unary token.
 
@@ -1041,6 +1063,33 @@ acorn::Expr* acorn::Parser::parse_string32bit_literal() {
     return string;
 }
 
+acorn::Expr* acorn::Parser::parse_char_literal() {
+
+    auto character = new_node<Number>(cur_token);
+
+    auto text = cur_token.text();
+    const char* ptr = text.data() + 1; // Skip the '
+
+    if (*ptr == '\\' && *(ptr + 1) == 'u') {
+        ptr += 2;
+        character->value_u64 = parse_unicode_value<char16_t>(ptr, ptr + 4);
+        character->type = context.char16_type;
+    } else if (*ptr == '\\' && *(ptr + 1) == 'U') {
+        ptr += 2;
+        character->value_u64 = parse_unicode_value<char32_t>(ptr, ptr + 8);
+        character->type = context.char32_type;
+    } else if (*ptr == '\\') {
+        character->value_u64 = get_escape_char(*ptr);
+        character->type = context.char_type;
+    } else {
+        character->value_u64 = *ptr;
+        character->type = context.char_type;
+    }
+
+    next_token();
+    return character;
+}
+
 template<uint32_t radix, uint64_t convert_table[256], bool use_table>
 acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* end) {
 
@@ -1098,7 +1147,7 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
             if (!already_errored && !fits_in_range<T>(neg_sign ? number->value_s64 : number->value_s64)) {
                 auto err_msg = get_error_msg_for_value_not_fit_type(number);
                 logger.begin_error(number->loc, "%s", err_msg)
-                    .end_error(ErrCode::ParseIntegerValueNotFitType);
+                      .end_error(ErrCode::ParseIntegerValueNotFitType);
             }
         };
 
@@ -1212,6 +1261,7 @@ void acorn::Parser::skip_recovery() {
         case '}':
         case ')':
         case ',':
+        case '{':
             return;
         case ModifierTokens:
             return;
@@ -1222,11 +1272,16 @@ void acorn::Parser::skip_recovery() {
             break;
         case Token::KwIf:
         case Token::KwReturn:
+        case Token::KwCTIf:
             return;
         case Token::KwElIf: {
             // Replace current token with if statement so that it thinks
             // it is a valid statement.
             cur_token = Token(Token::KwIf, cur_token.loc);
+            return;
+        }
+        case Token::KwCTElIf: {
+            cur_token = Token(Token::KwCTIf, cur_token.loc);
             return;
         }
         default:
