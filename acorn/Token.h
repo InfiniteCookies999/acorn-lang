@@ -94,6 +94,7 @@ namespace acorn {
             String8BitLiteral,
             String16BitLiteral,
             String32BitLiteral,
+            CharLiteral,
             InvalidLiteral,
 
             // End of buffer

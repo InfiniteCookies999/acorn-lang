@@ -798,6 +798,7 @@ acorn::Expr* acorn::Parser::parse_term() {
     case Token::String8BitLiteral:    return parse_string8bit_literal();
     case Token::String16BitLiteral:   return parse_string16bit_literal();
     case Token::String32BitLiteral:   return parse_string32bit_literal();
+    case Token::CharLiteral:          return parse_char_literal();
     case Token::InvalidLiteral: {
         next_token();
         return new_node<InvalidExpr>(cur_token);
@@ -1060,6 +1061,33 @@ acorn::Expr* acorn::Parser::parse_string32bit_literal() {
     }
     next_token();
     return string;
+}
+
+acorn::Expr* acorn::Parser::parse_char_literal() {
+
+    auto character = new_node<Number>(cur_token);
+
+    auto text = cur_token.text();
+    const char* ptr = text.data() + 1; // Skip the '
+
+    if (*ptr == '\\' && *(ptr + 1) == 'u') {
+        ptr += 2;
+        character->value_u64 = parse_unicode_value<char16_t>(ptr, ptr + 4);
+        character->type = context.char16_type;
+    } else if (*ptr == '\\' && *(ptr + 1) == 'U') {
+        ptr += 2;
+        character->value_u64 = parse_unicode_value<char32_t>(ptr, ptr + 8);
+        character->type = context.char32_type;
+    } else if (*ptr == '\\') {
+        character->value_u64 = get_escape_char(*ptr);
+        character->type = context.char_type;
+    } else {
+        character->value_u64 = *ptr;
+        character->type = context.char_type;
+    }
+
+    next_token();
+    return character;
 }
 
 template<uint32_t radix, uint64_t convert_table[256], bool use_table>

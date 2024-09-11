@@ -5,6 +5,7 @@ X(LexInvalidUnicodeSeq                  , 10003)
 X(LexStringMissingEndQuote              , 10004)
 X(LexUnknownComptimeDirective           , 10005)
 X(LexMultilineCommentMissingClose       , 10006)
+X(LexCharMissingEndQuote                , 10007)
 
 X(ParseExpectedExpression               , 20002)
 X(ParseExceededMaxFuncParams            , 20003)

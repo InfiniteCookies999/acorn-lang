@@ -34,7 +34,9 @@ namespace acorn {
         Token next_number(const char* start);
         Token finish_mumber(tokkind kind, const char* start);
 
+        bool skip_unicode_seq_digits(size_t n);
         Token next_string();
+        Token next_char();
 
         Token next_comptime();
 
