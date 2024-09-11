@@ -1094,7 +1094,7 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
         bool is_signed = *ptr == 'i';
         ++ptr;
 
-        auto check_range_fit = [this, number, neg_sign, already_errored]<typename T>() finline {
+        auto check_range_fit = [this, number, neg_sign, already_errored]<typename T>(T) finline {
             if (!already_errored && !fits_in_range<T>(neg_sign ? number->value_s64 : number->value_s64)) {
                 auto err_msg = get_error_msg_for_value_not_fit_type(number);
                 logger.begin_error(number->loc, "%s", err_msg)
