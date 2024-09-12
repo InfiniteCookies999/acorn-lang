@@ -26,6 +26,8 @@ namespace acorn {
 
         static void check_for_duplicate_functions(Module& modl);
         static bool check_for_duplicate_match(const Func* func1, const Func* func2);
+        static void check_for_duplicate_variables(Module& modl);
+        static void report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code);
 
         void check_function(Func* func);
         void check_variable(Var* var);

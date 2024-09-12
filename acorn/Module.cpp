@@ -9,7 +9,18 @@ void acorn::Module::add_global_comptime_control_flow(Node* control_flow) {
 }
 
 void acorn::Module::add_global_variable(Var* var) {
-    variables[var->name] = var;
+    auto [prev_itr, success] = variables.try_emplace(var->name, var);
+    if (!success) {
+        Var* prev_var = prev_itr->second;
+        auto itr = std::ranges::find_if(redecl_global_variables, [var, prev_var](auto pair) {
+            const auto [var1, var2] = pair;
+            return (var == var1 && prev_var == var2) ||
+                   (var == var2 && prev_var == var1);
+        });
+        if (itr == redecl_global_variables.end()) {
+            redecl_global_variables.push_back({ var, prev_var });
+        }
+    }
 }
 
 void acorn::Module::mark_bad_scope(BadScopeLocation location, Node* node) {

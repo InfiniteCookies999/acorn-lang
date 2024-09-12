@@ -105,14 +105,24 @@ bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2
                             })) {
         return false;
     }
-    if (func1->loc.ptr < func2->loc.ptr) {
-        std::swap(func1, func2);
-    }
-    // we want func1 here to be the larger location!
-    func1->get_logger().begin_error(func1->loc, "Duplicate declaration of function '%s'", func1->name)
-                       .add_line([func2](Logger& l) { func2->get_declared_msg(l); })
-                       .end_error(ErrCode::SemaDuplicateGlobalFunc);
+    report_redeclaration(func1, func2, "function", ErrCode::SemaDuplicateGlobalFunc);
     return true;
+}
+
+void acorn::Sema::check_for_duplicate_variables(Module& modl) {
+    for (auto [var1, var2] : modl.get_redecl_global_variables()) {
+        report_redeclaration(var1, var2, "variable", ErrCode::SemaDuplicateGlobalVar);
+    }
+}
+
+void acorn::Sema::report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code) {
+    // Make sure that we report the declaration that comes second within a given file.
+    if (decl1->loc.ptr < decl2->loc.ptr) {
+        std::swap(decl1, decl2);
+    }
+    decl1->get_logger().begin_error(decl1->loc, "Duplicate declaration of %s '%s'", node_kind_str, decl1->name)
+                       .add_line([decl2](Logger& l) { decl2->get_declared_msg(l); })
+                       .end_error(error_code);
 }
 
 void acorn::Sema::check_node(Node* node) {

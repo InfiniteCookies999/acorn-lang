@@ -52,6 +52,7 @@ X(SemaDuplicateLocVariableDecl             , 20026)
 X(SemaMainCannotHaveModifier               , 20027)
 X(SemaNoLocalFuncs                         , 20028)
 X(SemaDllImportWithoutNativeModifier       , 20029)
+X(SemaDuplicateGlobalVar                   , 30026)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

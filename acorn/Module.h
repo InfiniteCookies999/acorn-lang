@@ -45,6 +45,10 @@ namespace acorn {
             return comptime_control_flows;
         }
 
+        const llvm::SmallVector<std::pair<Var*, Var*>>& get_redecl_global_variables() const {
+            return redecl_global_variables;
+        }
+
     private:
         llvm::SmallVector<SourceFile*> source_files;
 
@@ -56,6 +60,9 @@ namespace acorn {
         llvm::DenseMap<Identifier, Var*>     variables;
         // Nodes that belong in the wrong scope.
         BadScopeList bad_scope_nodes;
+        // Placed in this list if the variable was declared more than once
+        // along with the other declaration.
+        llvm::SmallVector<std::pair<Var*, Var*>> redecl_global_variables;
     };
 }
 

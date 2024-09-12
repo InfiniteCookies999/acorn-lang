@@ -203,6 +203,13 @@ void acorn::AcornLang::sema_and_irgen() {
     }
     context.queue_gen(context.get_main_function());
 
+    Sema::check_for_duplicate_functions(modl);
+    Sema::check_for_duplicate_variables(modl);
+
+    if (context.has_errors()) {
+        return;
+    }
+
     auto check_decl = [this](Decl* decl) finline {
         sema_timer.start();
         
@@ -244,8 +251,6 @@ void acorn::AcornLang::sema_and_irgen() {
     for (Decl* decl : context.get_unchecked()) {
         check_decl(decl);
     }
-
-    Sema::check_for_duplicate_functions(modl);
 
     if (context.has_errors()) {
         return;
