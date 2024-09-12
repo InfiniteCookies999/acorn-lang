@@ -13,13 +13,18 @@ namespace acorn {
 
     class Module {
     public:
-        using BadScopeList = llvm::SmallVector<std::pair<BadScopeLocation, Node*>>;
+        struct BadScopeNode {
+            BadScopeLocation location;
+            Node*            node;
+            SourceFile*      file;
+        };
+        using BadScopeList = llvm::SmallVector<BadScopeNode>;
 
         void add_global_function(Func* func);
         void add_global_variable(Var* var);
         void add_global_comptime_control_flow(Node* control_flow);
 
-        void mark_bad_scope(BadScopeLocation location, Node* node);
+        void mark_bad_scope(BadScopeLocation location, Node* node, SourceFile* file);
 
         FuncList* find_global_funcs(Identifier name);
 

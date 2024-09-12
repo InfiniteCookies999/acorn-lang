@@ -32,6 +32,7 @@ namespace acorn {
         ComptimeIfStmt,
         ScopeStmt,
 
+        ExprStart,
         InvalidExpr,
         BinOp,
         UnaryOp,
@@ -41,7 +42,8 @@ namespace acorn {
         FuncCall,
         String,
         Null,
-        Cast
+        Cast,
+        ExprEnd
 
     };
 
@@ -71,6 +73,10 @@ namespace acorn {
 
         // Checks if the node is not of the given kind.
         [[nodiscard]] constexpr bool is_not(NodeKind kind) const noexcept { return !is(kind); }
+
+        bool is_expression() const {
+            return kind > NodeKind::ExprStart && kind < NodeKind::ExprEnd;
+        }
     };
 
     // Statements

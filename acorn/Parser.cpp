@@ -73,7 +73,7 @@ void acorn::Parser::parse() {
         } else if (node->is(NodeKind::ComptimeIfStmt)) {
             modl.add_global_comptime_control_flow(node);
         } else {
-            modl.mark_bad_scope(BadScopeLocation::Global, node);
+            modl.mark_bad_scope(BadScopeLocation::Global, node, file);
         }
     }
 

@@ -205,6 +205,7 @@ void acorn::AcornLang::sema_and_irgen() {
 
     Sema::check_for_duplicate_functions(modl);
     Sema::check_for_duplicate_variables(modl);
+    Sema::check_nodes_wrong_scopes(modl);
 
     if (context.has_errors()) {
         return;

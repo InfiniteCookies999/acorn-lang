@@ -29,6 +29,8 @@ namespace acorn {
         static void check_for_duplicate_variables(Module& modl);
         static void report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code);
 
+        static void check_nodes_wrong_scopes(Module& modl);
+
         void check_function(Func* func);
         void check_variable(Var* var);
 

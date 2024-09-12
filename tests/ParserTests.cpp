@@ -37,6 +37,10 @@ auto get_second(const std::pair<K, V>& pair) -> V {
     return pair.second;
 }
 
+acorn::Node* get_bad_scope_node(const acorn::Module::BadScopeNode& bad_node) {
+    return bad_node.node;
+}
+
 void test_parser() {
 
     context = allocator.alloc_type<Context>();
@@ -66,7 +70,7 @@ void test_parser() {
             Module& modl = *mock_parser(program);
     
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
-                                               get_second<BadScopeLocation, Node*>);
+                                               get_bad_scope_node);
 
             expect(nodes.size(), to_string<size_t>).to_be(15);
 
@@ -137,7 +141,7 @@ void test_parser() {
             Module& modl = *mock_parser(program);
 
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
-                                               get_second<BadScopeLocation, Node*>);
+                                               get_bad_scope_node);
 
             expect(nodes.size(), to_string<size_t>).to_be(5);
 
@@ -167,7 +171,7 @@ void test_parser() {
             Module& modl = *mock_parser(program);
 
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
-                                               get_second<BadScopeLocation, Node*>);
+                                               get_bad_scope_node);
 
             expect(nodes.size(), to_string<size_t>).to_be(3);
 
@@ -189,7 +193,7 @@ void test_parser() {
             Module& modl = *mock_parser(program);
 
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
-                                               get_second<BadScopeLocation, Node*>);
+                                               get_bad_scope_node);
 
             expect(nodes.size(), to_string<size_t>).to_be(4);
 
@@ -325,7 +329,7 @@ void test_parser() {
             Module& modl = *mock_parser(program);
 
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
-                                               get_second<BadScopeLocation, Node*>);
+                                               get_bad_scope_node);
 
             expect(nodes.size(), to_string<size_t>).to_be(15);
             
@@ -454,7 +458,7 @@ void test_parser() {
             Module& modl = *mock_parser(program);
 
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
-                                               get_second<BadScopeLocation, Node*>);
+                                               get_bad_scope_node);
 
             expect(nodes.size(), to_string<size_t>).to_be(5);
 
@@ -487,7 +491,7 @@ void test_parser() {
             Module& modl = *mock_parser(program);
 
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
-                                               get_second<BadScopeLocation, Node*>);
+                                               get_bad_scope_node);
 
             expect(nodes.size(), to_string<size_t>).to_be(4);
 
