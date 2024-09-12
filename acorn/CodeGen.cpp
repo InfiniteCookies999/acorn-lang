@@ -31,7 +31,8 @@ llvm::TargetMachine* acorn::create_llvm_target_machine(Context& context, bool us
     std::string target_error;
     auto target = llvm::TargetRegistry::lookupTarget(ll_target_triple, target_error);
     if (!target) {
-        Logger::global_error(context, "Failed to find LLVM Target. Error: %s", target_error);
+        Logger::global_error(context, "Failed to find LLVM Target. Error: %s", target_error)
+            .end_error(ErrCode::GlobalFailedToFindLLVMTarget);
         return nullptr;
     }
 
@@ -63,13 +64,15 @@ void acorn::write_obj_file(Context& context, const char* file_path,
     llvm::raw_fd_ostream stream(file_path, err_code, llvm::sys::fs::OF_None);
 
     if (err_code) {
-        Logger::global_error(context, "Could not open object file to write. Error %s", err_code.message());
+        Logger::global_error(context, "Could not open object file to write. Error %s", err_code.message())
+            .end_error(ErrCode::GlobalFailedToWriteObjFile);
         return;
     }
 
     llvm::legacy::PassManager pass;
     if (ll_target_machine->addPassesToEmitFile(pass, stream, nullptr, llvm::CodeGenFileType::ObjectFile)) {
-        Logger::global_error(context, "The llvm::TargetMachine can't emit a file of this type");
+        Logger::global_error(context, "The llvm::TargetMachine can't emit a file of this type")
+            .end_error(ErrCode::GlobalFailedToEmitObjFileType);
         return;
     }
 

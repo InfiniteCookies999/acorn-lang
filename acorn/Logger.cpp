@@ -21,14 +21,98 @@
 using enum acorn::Color;
 using enum acorn::Stream;
 
-acorn::Logger::mtx_type acorn::Logger::mtx;
+// We want to use a recursive mutext because it is possible that
+// on the same thread we are trying to print an error message we encounter
+// a fatal error which needs to print. This would result in a recursive
+// deadlock using a normal mutex.
+using mtx_type = std::recursive_mutex;
+static mtx_type mtx;
+
+
+// Explicit instantiation.
+template class acorn::AbstractLogger<acorn::Logger>;
+template class acorn::AbstractLogger<acorn::GlobalLogger>;
+
+template<typename L>
+void acorn::AbstractLogger<L>::print_exceeded_errors_msg(Context& context) {
+    fmt_print(StdErr, "%s>>%s Exceeded maximum number of allowed errors (%s).\n"
+                      "   Exiting early.\n", BrightRed, White, context.get_max_error_count());
+}
+
+template<typename L>
+void acorn::AbstractLogger<L>::print(Stream stream, Type* type) {
+    print(stream, type->to_string());
+}
+
+template<typename L>
+void acorn::AbstractLogger<L>::print(Stream stream, const std::wstring& s) {
+
+#if WIN_OS
+
+    bool is_wide = std::ranges::any_of(s, [](wchar_t c) {
+        return c > 0x7F;
+    });
+        
+    if (!is_wide) {
+        std::string narrow_string;
+        narrow_string.reserve(s.size());
+        for (wchar_t wc : s) {
+            narrow_string += static_cast<char>(wc);
+        }
+
+        HANDLE handle = get_handle(stream);
+        DWORD written;
+        WriteFile(handle, narrow_string.c_str(), static_cast<DWORD>(narrow_string.length()), &written, nullptr);
+    } else {
+        HANDLE handle = get_handle(stream);
+        DWORD written;
+        WriteFile(handle, s.c_str(), static_cast<DWORD>(s.length()) * sizeof(wchar_t), &written, nullptr);
+    }
+#elif UNIX_OS
+    
+    // Unix cannot have wide directory paths so we just convert to narrow.
+    std::string narrow_string;
+    narrow_string.reserve(s.size());
+    for (wchar_t wc : s) {
+        narrow_string += static_cast<char>(wc);
+    }
+
+    int handle = get_handle(stream);
+    write(handle, narrow_string.c_str(), narrow_string.length());
+
+#endif
+
+}
+
+template<typename L>
+void acorn::AbstractLogger<L>::print(Stream stream, const char* s, size_t length) {
+#if WIN_OS
+    HANDLE handle = get_handle(stream);
+    DWORD written;
+    WriteConsoleA(handle, s, static_cast<DWORD>(length), &written, nullptr);
+#elif UNIX_OS
+    int handle = get_handle(stream);
+    write(handle, s, length);
+#endif
+}
+
+#if _WIN32
+template<typename L>
+void* acorn::AbstractLogger<L>::get_handle(Stream stream) {
+#else
+int acorn::Logger::get_handle(Stream stream) {
+#endif
+
+#if WIN_OS
+    return GetStdHandle((stream == StdOut) ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+#elif UNIX_OS
+    return stream == StdOut ? STDOUT_FILENO : STDERR_FILENO;
+#endif
+}
+
 
 void acorn::Logger::set_color(Stream stream, Color color) {
     acorn::set_color(stream, color);
-}
-
-void acorn::Logger::print(Stream stream, Type* type) {
-    print(stream, type->to_string());
 }
 
 acorn::Logger& acorn::Logger::begin_error(PointSourceLoc location, const std::function<void()>& print_cb) {
@@ -39,16 +123,13 @@ acorn::Logger& acorn::Logger::begin_error(PointSourceLoc location, const std::fu
     return *this;
 }
 
-acorn::Logger& acorn::Logger::add_line(const std::function<void()>& print_cb) {
-    line_printers.push_back({ true, print_cb });
-    return *this;
-}
-
-void acorn::Logger::global_error(Context& context, const std::function<void()>& print_cb) {
+void acorn::GlobalLogger::end_error(ErrCode error_code) {
     mtx.lock();
 
-    fmt_print(StdErr, "[%serror%s]", BrightRed, White);
-    fmt_print(StdErr, "%s -> ", BrightWhite);
+    int facing_length = 0;
+
+    fmt_print(StdErr, "[%serror%s]", BrightRed, White), facing_length += 7;
+    fmt_print(StdErr, "%s -> ", BrightWhite), facing_length += 4;
     set_color(StdErr, White);
 
     print_cb();
@@ -60,6 +141,16 @@ void acorn::Logger::global_error(Context& context, const std::function<void()>& 
         mtx.unlock();
         exit(1);
     }
+
+    for (const auto& printer : line_printers) {
+        print(StdErr, std::string(facing_length, ' '));
+        printer.print_cb(*this);
+        if (printer.add_period) {
+            fmt_print(StdErr, "%s.", White);
+        }
+        print(StdErr, "\n");
+    }
+
     mtx.unlock();
 }
 
@@ -79,24 +170,6 @@ void acorn::Logger::info(const std::function<void()>& print_cb) {
     print(Stream::StdOut, ".\n");
 }
 
-
-#if _WIN32
-void* acorn::Logger::get_handle(Stream stream) {
-#else
-int acorn::Logger::get_handle(Stream stream) {
-#endif
-
-#if WIN_OS
-    return GetStdHandle((stream == StdOut) ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-#elif UNIX_OS
-    return stream == StdOut ? STDOUT_FILENO : STDERR_FILENO;
-#endif
-}
-
-acorn::Logger::Logger(Context& context, SourceFile& file)
-    : context(context), file(file)
-{
-}
 
 void acorn::Logger::fatal_internal(const char* cpp_file, int line, const char* msg) {
     std::string relative_file(cpp_file);
@@ -344,7 +417,7 @@ void acorn::Logger::print_header(ErrCode error_code) {
 
     for (const auto& printer : line_printers) {
         print(StdErr, std::string(facing_length, ' '));
-        printer.print_cb();
+        printer.print_cb(*this);
         if (printer.add_period) {
             fmt_print(StdErr, "%s.", White);
         }
@@ -460,59 +533,4 @@ void acorn::Logger::end_error(ErrCode error_code) {
     primary_print_cb = {};
     line_printers.clear();
 
-}
-
-void acorn::Logger::print_exceeded_errors_msg(Context& context) {
-    fmt_print(StdErr, "%s>>%s Exceeded maximum number of allowed errors (%s).\n"
-                      "   Exiting early.\n", BrightRed, White, context.get_max_error_count());
-}
-
-void acorn::Logger::print(Stream stream, const std::wstring& s) {
-
-#if WIN_OS
-
-    bool is_wide = std::ranges::any_of(s, [](wchar_t c) {
-        return c > 0x7F;
-    });
-        
-    if (!is_wide) {
-        std::string narrow_string;
-        narrow_string.reserve(s.size());
-        for (wchar_t wc : s) {
-            narrow_string += static_cast<char>(wc);
-        }
-
-        HANDLE handle = get_handle(stream);
-        DWORD written;
-        WriteFile(handle, narrow_string.c_str(), static_cast<DWORD>(narrow_string.length()), &written, nullptr);
-    } else {
-        HANDLE handle = get_handle(stream);
-        DWORD written;
-        WriteFile(handle, s.c_str(), static_cast<DWORD>(s.length()) * sizeof(wchar_t), &written, nullptr);
-    }
-#elif UNIX_OS
-    
-    // Unix cannot have wide directory paths so we just convert to narrow.
-    std::string narrow_string;
-    narrow_string.reserve(s.size());
-    for (wchar_t wc : s) {
-        narrow_string += static_cast<char>(wc);
-    }
-
-    int handle = get_handle(stream);
-    write(handle, narrow_string.c_str(), narrow_string.length());
-
-#endif
-
-}
-
-void acorn::Logger::print(Stream stream, const char* s, size_t length) {
-#if WIN_OS
-    HANDLE handle = get_handle(stream);
-    DWORD written;
-    WriteConsoleA(handle, s, static_cast<DWORD>(length), &written, nullptr);
-#elif UNIX_OS
-    int handle = get_handle(stream);
-    write(handle, s, length);
-#endif
 }

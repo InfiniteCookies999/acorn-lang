@@ -57,7 +57,7 @@ bool acorn::Sema::find_main_function(Context& context) {
 
         if (Func* prev_main = context.get_main_function()) {
             logger.begin_error(canidate->loc, "Duplicate main (entry point) function")
-                              .add_line([prev_main] { prev_main->get_declared_msg(); })
+                              .add_line([prev_main](Logger& l) { prev_main->get_declared_msg(l); })
                               .end_error(ErrCode::ParseDuplicateMainFunc);
         } else {
             context.set_main_function(canidate);
@@ -105,11 +105,12 @@ bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2
                             })) {
         return false;
     }
-    if (func1->loc.ptr > func2->loc.ptr) {
+    if (func1->loc.ptr < func2->loc.ptr) {
         std::swap(func1, func2);
     }
+    // we want func1 here to be the larger location!
     func1->get_logger().begin_error(func1->loc, "Duplicate declaration of function '%s'", func1->name)
-                       .add_line([func2] { func2->get_declared_msg(); })
+                       .add_line([func2](Logger& l) { func2->get_declared_msg(l); })
                        .end_error(ErrCode::SemaDuplicateGlobalFunc);
     return true;
 }
@@ -190,7 +191,7 @@ void acorn::Sema::check_variable(Var* var) {
     if (cur_scope) {
         if (Var* prev_var = cur_scope->find_variable(var->name)) {
             logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
-                  .add_line([prev_var] { prev_var->get_declared_msg(); })
+                  .add_line([prev_var](Logger& l) { prev_var->get_declared_msg(l); })
                   .end_error(ErrCode::SemaDuplicateLocVariableDecl);
         } else {
             cur_scope->variables.push_back(var);

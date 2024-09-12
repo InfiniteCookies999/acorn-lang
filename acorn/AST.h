@@ -100,7 +100,7 @@ namespace acorn {
 
         Module& get_module() const { return file->modl; }
 
-        void get_declared_msg() const;
+        void get_declared_msg(Logger& logger) const;
 
     };
 

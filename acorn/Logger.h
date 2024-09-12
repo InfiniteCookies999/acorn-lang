@@ -23,153 +23,74 @@ namespace acorn {
     class Type;
     struct SourceFile;
 
-    class Logger {
-        // We want to use a recursive deadlock because it is possible that
-        // on the same thread we are trying to print an error message we encounter
-        // a fatal error which needs to print. This would result in a recursive
-        // deadlock using a normal mutex.
-        using mtx_type = std::recursive_mutex;
+    class Logger;
+    class GlobalLogger;
+
+    // The abstract logger uses CRTP which has a compiler limitation
+    // that the compilers cannot determine that L derives from
+    // Abstract logger requiring explicit static_cast.
+    template<typename L>
+    class AbstractLogger {
     public:
-        enum class ArrowLoc {
-            At,
-            After
-        };
-
-        Logger(Context& context, SourceFile& file);
-
-        Logger(Logger&&) = default;
-
-        static void fatal_internal(const char* cpp_file, int line, const char* msg);
-
-        // Displays information related to the different steps of compilation
-        // to help identify what is happening.
-        static void info(const char* msg) {
-            info([msg] { print(Stream::StdErr, msg); });
+        
+        AbstractLogger(Context& context, Stream stream)
+            : context(context), stream(stream) {
         }
 
-        // Displays information related to the different steps of compilation
-        // to help identify what is happening.
-        template<typename... TArgs>
-        static void info(const char* fmt, TArgs&&... args) {
-            info([fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
-                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
-            });
-        }
-
-        // Displays debug information in case things go wrong to help identify
-        // errors in the compilation of acorn language files.
-        static void debug(const char* msg) {
-            debug([msg] { print(Stream::StdErr, msg); });
-        }
-
-        // Displays debug information in case things go wrong to help identify
-        // errors in the compilation of acorn language files.
-        template<typename... TArgs>
-        static void debug(const char* fmt, TArgs&&... args) {
-            debug([fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
-                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
-            });
-        }
-
-        // Displays a error that is not specific to an acorn language file.
-        static void global_error(Context& context, const char* msg) {
-            global_error(context, [msg] { print(Stream::StdErr, msg); });
-        }
-
-        // Displays a error that is not specific to an acorn language file.
-        template<typename... TArgs>
-        static void global_error(Context& context, const char* fmt, TArgs&&... args) {
-            global_error(context, [fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
-                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
-            });
-        }
-
-        // Used to tell the the logger that a new error has been encountered.
-        // Must be followed up by end_error() once all information related to
-        // the error has been added.
-        Logger& begin_error(SourceLoc location, const char* msg) {
-            return begin_error(fix_error_location(location), [msg]() { print(Stream::StdErr, msg); });
-        }
-
-        // Used to tell the the logger that a new error has been encountered.
-        // Must be followed up by end_error() once all information related to
-        // the error has been added.
-        template<typename... TArgs>
-        Logger& begin_error(SourceLoc location, const char* fmt, TArgs&&... args) {
-            return begin_error(fix_error_location(location), [fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
-                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
-            });
-        }
-
-        // Used to tell the the logger that a new error has been encountered.
-        // Must be followed up by end_error() once all information related to
-        // the error has been added.
-        Logger& begin_error(PointSourceLoc location, const char* msg) {
-            return begin_error(location, [msg]() { print(Stream::StdErr, msg); });
-        }
-
-        // Used to tell the the logger that a new error has been encountered.
-        // Must be followed up by end_error() once all information related to
-        // the error has been added.
-        template<typename... TArgs>
-        Logger& begin_error(PointSourceLoc location, const char* fmt, TArgs&&... args) {
-            return begin_error(location, [fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
-                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
-            });
-        }
-
-        // Adds a message to point to the error to help the user determine what they
-        // need to change in their code to fix things.
-        Logger& add_arrow_msg(ArrowLoc loc, std::string msg) {
-            arrow_msg = { .msg = msg, .loc = loc };
-            return *this;
-        }
-
-        // Adds an additional line to the error.
-        Logger& add_line(const char* msg) {
-            return add_line([msg] {
+        L& add_line(const char* msg) {
+            return add_line([msg](L&) {
                 print(Stream::StdErr, msg);
             });
         }
 
         // Adds an additional line to the error.
         template<typename... TArgs>
-        Logger& add_line(const char* fmt, TArgs&&... args) {
-            return add_line([fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
+        L& add_line(const char* fmt, TArgs&&... args) {
+            return add_line([fmt, ...fargs = std::forward<TArgs>(args)](L&) mutable {
                 fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
             });
         }
 
+        L& add_line(const std::function<void(L&)>& print_cb) {
+            line_printers.push_back({ true, print_cb });
+            return static_cast<L&>(*this);
+        }
+
         // Removes the period that is automatically added
         // to a line.
-        Logger& remove_period() {
+        L& remove_period() {
             if (!line_printers.empty()) {
                 line_printers.back().add_period = false;
             }
-            return *this;
+            return static_cast<L&>(*this);
         }
 
         // Adds an empty error line.
-        Logger& add_empty_line() {
+        L& add_empty_line() {
             add_line("");
             remove_period();
-            return *this;
+            return static_cast<L&>(*this);
         }
 
-        void print_header(ErrCode error_code);
-        void end_error(ErrCode error_code);
-        static void print_exceeded_errors_msg(Context& context);
-
-        static void set_color(Stream stream, Color color);
-
-        static PointSourceLoc fix_error_location(SourceLoc location) {
-            return PointSourceLoc{
-                location.ptr,
-                location.length,
-                location.ptr,
-                location.length
-            };
+        template<typename T, typename... TArgs>
+        void fmt_print(const char* fmt, T&& arg, TArgs&&... args) {
+            fmt_print(stream, fmt, std::forward<TArgs>(args)...);
         }
+
+        template<typename T>
+        void print(T&& value) {
+            print(stream, std::forward<T>(value));
+        }
+
+    protected:
+        Context& context;
+        Stream   stream;
+    
+        struct ErrorLine {
+            bool                    add_period;
+            std::function<void(L&)> print_cb;
+        };
+        llvm::SmallVector<ErrorLine> line_printers;
 
         // Print support functions
         // -----------------------------
@@ -282,11 +203,144 @@ namespace acorn {
 
         static void print(Stream stream, const char* s, size_t length);
 
+        void print_exceeded_errors_msg(Context& context);
+
+#ifdef _WIN32
+        static void* get_handle(Stream stream);
+#else
+        static int get_handle(Stream stream);
+#endif
+
+    };
+
+    class GlobalLogger : public AbstractLogger<GlobalLogger> {
+    public:
+
+        GlobalLogger(Context& context, const std::function<void()>& print_cb)
+            : AbstractLogger(context, Stream::StdErr), print_cb(print_cb) {
+        }
+
+        void end_error(ErrCode error_code);
+
+    private:
+        std::function<void()> print_cb;
+
+    };
+
+    class Logger : public AbstractLogger<Logger> {
+    public:
+        enum class ArrowLoc {
+            At,
+            After
+        };
+
+        Logger(Context& context, SourceFile& file)
+            : AbstractLogger(context, Stream::StdErr), file(file) {
+        }
+
+        Logger(Logger&&) = default;
+
+        static void fatal_internal(const char* cpp_file, int line, const char* msg);
+
+        // Displays information related to the different steps of compilation
+        // to help identify what is happening.
+        static void info(const char* msg) {
+            info([msg] { print(Stream::StdErr, msg); });
+        }
+
+        // Displays information related to the different steps of compilation
+        // to help identify what is happening.
+        template<typename... TArgs>
+        static void info(const char* fmt, TArgs&&... args) {
+            info([fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
+                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
+            });
+        }
+
+        // Displays debug information in case things go wrong to help identify
+        // errors in the compilation of acorn language files.
+        static void debug(const char* msg) {
+            debug([msg] { print(Stream::StdErr, msg); });
+        }
+
+        // Displays debug information in case things go wrong to help identify
+        // errors in the compilation of acorn language files.
+        template<typename... TArgs>
+        static void debug(const char* fmt, TArgs&&... args) {
+            debug([fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
+                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
+            });
+        }
+
+        // Displays a error that is not specific to an acorn language file.
+        [[nodiscard]] static GlobalLogger global_error(Context& context, const char* msg) {
+            return GlobalLogger(context, [msg] { print(Stream::StdErr, msg); });
+        }
+
+        // Displays a error that is not specific to an acorn language file.
+        template<typename... TArgs>
+        [[nodiscard]] static GlobalLogger global_error(Context& context, const char* fmt, TArgs&&... args) {
+            return GlobalLogger(context, [fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
+                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
+            });
+        }
+
+        // Used to tell the the logger that a new error has been encountered.
+        // Must be followed up by end_error() once all information related to
+        // the error has been added.
+        Logger& begin_error(SourceLoc location, const char* msg) {
+            return begin_error(fix_error_location(location), [msg]() { print(Stream::StdErr, msg); });
+        }
+
+        // Used to tell the the logger that a new error has been encountered.
+        // Must be followed up by end_error() once all information related to
+        // the error has been added.
+        template<typename... TArgs>
+        Logger& begin_error(SourceLoc location, const char* fmt, TArgs&&... args) {
+            return begin_error(fix_error_location(location), [fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
+                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
+            });
+        }
+
+        // Used to tell the the logger that a new error has been encountered.
+        // Must be followed up by end_error() once all information related to
+        // the error has been added.
+        Logger& begin_error(PointSourceLoc location, const char* msg) {
+            return begin_error(location, [msg]() { print(Stream::StdErr, msg); });
+        }
+
+        // Used to tell the the logger that a new error has been encountered.
+        // Must be followed up by end_error() once all information related to
+        // the error has been added.
+        template<typename... TArgs>
+        Logger& begin_error(PointSourceLoc location, const char* fmt, TArgs&&... args) {
+            return begin_error(location, [fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
+                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
+            });
+        }
+
+        // Adds a message to point to the error to help the user determine what they
+        // need to change in their code to fix things.
+        Logger& add_arrow_msg(ArrowLoc loc, std::string msg) {
+            arrow_msg = { .msg = msg, .loc = loc };
+            return *this;
+        }
+
+        void print_header(ErrCode error_code);
+        void end_error(ErrCode error_code);
+
+        static void set_color(Stream stream, Color color);
+
+        static PointSourceLoc fix_error_location(SourceLoc location) {
+            return PointSourceLoc{
+                location.ptr,
+                location.length,
+                location.ptr,
+                location.length
+            };
+        }
+
         Logger& begin_error(PointSourceLoc location, const std::function<void()>& print_cb);
-
-        Logger& add_line(const std::function<void()>& print_cb);
-
-        static void global_error(Context& context, const std::function<void()>& print_cb);
 
         static void debug(const std::function<void()>& print_cb);
 
@@ -301,20 +355,12 @@ namespace acorn {
         }
 
     private:
-        Context&    context;
         SourceFile& file;
-
-        static mtx_type mtx;
 
         PointSourceLoc main_location;
         size_t         facing_length = 0;
         std::function<void()> primary_print_cb;
-        struct ErrorLine {
-            bool                  add_period;
-            std::function<void()> print_cb;
-        };
-        llvm::SmallVector<ErrorLine> line_printers;
-
+        
         struct ArrowMsg {
             std::string msg;
             ArrowLoc    loc;
@@ -326,12 +372,6 @@ namespace acorn {
         size_t num_errors = 0;
 
         std::function<void(ErrCode, std::string, int)> error_code_interceptor;
-
-#ifdef _WIN32
-        static void* get_handle(Stream stream);
-#else
-        static int get_handle(Stream stream);
-#endif
 
 };
 }

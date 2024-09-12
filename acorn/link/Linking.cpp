@@ -97,7 +97,8 @@ bool acorn::get_windows_kits_install_paths(Context& context, PageAllocator& allo
     HKEY main_key;
     if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots",
                       0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &main_key) != ERROR_SUCCESS) {
-        Logger::global_error(context, "Failed to find registry key for Windows Kits");
+        Logger::global_error(context, "Failed to find registry key for Windows Kits")
+            .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
         return false;
     }
     defer(RegCloseKey(main_key));
@@ -105,7 +106,8 @@ bool acorn::get_windows_kits_install_paths(Context& context, PageAllocator& allo
     DWORD al_length;
     // First request the allocation size.
     if (RegQueryValueExA(main_key, "KitsRoot10", nullptr, nullptr, nullptr, &al_length) != ERROR_SUCCESS) {
-        Logger::global_error(context, "Failed to find registry value for KitsRoot10");
+        Logger::global_error(context, "Failed to find registry value for KitsRoot10")
+            .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
         return false;
     }
 
@@ -113,12 +115,14 @@ bool acorn::get_windows_kits_install_paths(Context& context, PageAllocator& allo
     DWORD req_length = al_length + 2;
     char* buffer = static_cast<char*>(allocator.allocate(req_length));
     if (RegQueryValueExA(main_key, "KitsRoot10", nullptr, nullptr, (LPBYTE)buffer, &req_length) != ERROR_SUCCESS) {
-        Logger::global_error(context, "Failed to find registry value for KitsRoot10");
+        Logger::global_error(context, "Failed to find registry value for KitsRoot10")
+            .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
         return false;
     }
 
     if (!buffer) {
-        Logger::global_error(context, "Failed to properly retrieve the KitsRoot10 buffer");
+        Logger::global_error(context, "Failed to properly retrieve the KitsRoot10 buffer")
+            .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
         return false;
     }
 
@@ -208,7 +212,8 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
         char*  buffer;
         size_t length;
         if (!read_entire_file(default_ver_file_path, buffer, length, allocator)) {
-            Logger::global_error(context, "Your system is missing file '%s'", default_ver_file_path);
+            Logger::global_error(context, "Your system is missing file '%s'", default_ver_file_path)
+                .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
             return false;
         }
 

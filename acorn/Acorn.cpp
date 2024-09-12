@@ -155,14 +155,16 @@ void acorn::AcornLang::initialize_codegen() {
                                                           : fs::path(output_directory);
     
     if (ec) {
-        Logger::global_error(context, "Failed to find the current path. Error %s", ec.message());
+        Logger::global_error(context, "Failed to find the current path. Error %s", ec.message())
+            .end_error(ErrCode::GlobalFailedToFindCurrentPath);
         return;
     }
 
     std::filesystem::create_directories(output_directory_path, ec);
     if (ec) {
         Logger::global_error(context, "Failed to create output directory: '%s'. Error: %s",
-                             output_directory, ec.message());
+                             output_directory, ec.message())
+            .end_error(ErrCode::GlobalFailedToCreateOutputDirectory);
         return;
     }
 
@@ -173,7 +175,8 @@ void acorn::AcornLang::initialize_codegen() {
     absolute_exe_path = absolute_output_directory + L"/" + exe_name;
 
     if (!init_llvm_native_target()) {
-        Logger::global_error(context, "Failed to initialize LLVM native target");
+        Logger::global_error(context, "Failed to initialize LLVM native target")
+            .end_error(ErrCode::GlobalFailedToInitializeLLVMNativeTarget);
         return;
     }
 
@@ -193,7 +196,9 @@ void acorn::AcornLang::sema_and_irgen() {
     Sema::find_main_function(context);
 
     if (!context.get_main_function()) {
-        Logger::global_error(context, "Could not find 'main' (entry point) function");
+        Logger::global_error(context, "Could not find 'main' (entry point) function")
+            .add_line("Expected declaration of: 'void main()'")
+            .end_error(ErrCode::GlobalCouldNotFindEntryPointFunc);
         return;
     }
     context.queue_gen(context.get_main_function());
@@ -262,7 +267,9 @@ void acorn::AcornLang::codegen() {
     std::error_code ec;
     fs::rename("__acorn_tmp_object.o", absolute_obj_path, ec);
     if (ec) {
-        Logger::global_error(context, "Failed to move temporary object file to output directory. Error: %s", ec.message());
+        Logger::global_error(context,
+                             "Failed to move temporary object file to output directory. Error: %s", ec.message())
+            .end_error(ErrCode::GlobalFailedToMoveTempObjFile);
     }
     codegen_timer.stop();
 }
@@ -274,7 +281,8 @@ void acorn::AcornLang::link() {
     std::wstring msvc_bin_path, msvc_lib_path;
     if (!get_msvc_install_paths(context, allocator, true, msvc_bin_path, msvc_lib_path)) {
         if (!context.has_errors()) {
-            Logger::global_error(context, "Failed to find msvc paths for linking");
+            Logger::global_error(context, "Failed to find msvc paths for linking")
+                .end_error(ErrCode::GlobalFailedToFindMSVCPathsForLinking);
         }
         return;
     }
@@ -330,7 +338,8 @@ void acorn::AcornLang::link() {
     fs::remove(absolute_obj_path, ec);
     if (ec) {
         Logger::global_error(context, "Failed to delete object file '%s'. Error %s",
-                             absolute_obj_path, ec.message());
+                             absolute_obj_path, ec.message())
+            .end_error(ErrCode::GlobalFailedToDeleteObjFile);
         return;
     }
     
@@ -352,16 +361,18 @@ void acorn::AcornLang::link() {
 bool acorn::AcornLang::validate_sources(const SourceVector& sources) {
     
     bool failed_to_find_source = false;
-    for (const auto source : sources) {
+    for (const auto& source : sources) {
         fs::path path = fs::path(source.data());
         std::error_code ec;
         if (!fs::exists(path, ec) || ec) {
             if (ec) {
                 Logger::global_error(context,
                     "Could not check if source \"%s\" exists. Please check permissions. Error: '%s'",
-                    source, ec.message());
+                    source, ec.message())
+                    .end_error(ErrCode::GlobalCouldNotCheckIfSourceExists);
             } else {
-                Logger::global_error(context, "Source \"%s\" does not exist", source);
+                Logger::global_error(context, "Source \"%s\" does not exist", source)
+                    .end_error(ErrCode::GlobalSourceDoesNotExists);
             }
             failed_to_find_source = true;
         }
@@ -374,7 +385,8 @@ void acorn::AcornLang::parse_files(const SourceVector& sources) {
     parse_timer.start();
 
     if (sources.empty()) {
-        Logger::global_error(context, "No sources provided");
+        Logger::global_error(context, "No sources provided")
+            .end_error(ErrCode::GlobalNoSourcesProvided);
         return;
     }
 
@@ -382,7 +394,7 @@ void acorn::AcornLang::parse_files(const SourceVector& sources) {
         return; // Validation failed, so exit early.
     }
 
-    for (const auto source : sources) {
+    for (const auto& source : sources) {
         fs::path path = fs::path(source.data());
 
         std::error_code ec;
@@ -394,11 +406,13 @@ void acorn::AcornLang::parse_files(const SourceVector& sources) {
             Logger::global_error(context,
                 "Failed to check if source \"%s\" is a directory. "
                 "Make sure not to modify files while compiling. Error: '%s'",
-                source, ec.message());
+                source, ec.message())
+                .end_error(ErrCode::GlobalFailedToCheckSourceIsDir);
         } else {
             if (path.extension() != ".ac") {
                 Logger::global_error(context, "Expected source file with extension type "
-                                              ".ac for file \"%s\"", source);
+                                              ".ac for file \"%s\"", source)
+                    .end_error(ErrCode::GlobalWrongExtensionTypeForFile);
                 continue; // Skip this file.
             }
             
@@ -425,7 +439,8 @@ acorn::Buffer acorn::AcornLang::read_file_to_buffer(const std::filesystem::path&
     Buffer buffer;
     if (!read_entire_file(path, buffer.content, buffer.length, allocator)) {
         Logger::global_error(context, "Failed to read file \"%s\". "
-                                      "Make sure not to modifty files while compiling", path);
+                                      "Make sure not to modifty files while compiling", path)
+            .end_error(ErrCode::GlobalFailedToReadSourceFile);
         return { .length = 0 };
     }
     
