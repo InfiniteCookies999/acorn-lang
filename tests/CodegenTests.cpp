@@ -157,5 +157,9 @@ void test_codegen() {
             auto [success, result] = run_codegen_test(src(L"globals/global_test1.ac"));
             expect(result, std::identity()).to_be("Hello from global!");
         });
+        test("ptr dereferencing", [&] {
+            auto [success, result] = run_codegen_test(src(L"ptr_dereferencing.ac"));
+            expect(result, std::identity()).to_be("hoh");
+        });
     });
 }

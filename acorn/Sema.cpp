@@ -611,7 +611,8 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
     check(expr);
 
     auto error_no_applies = [this, unary_op, expr]() finline -> void {
-        error(expand(unary_op), "Operator %s cannot apply to type '%s'", expr->type)
+        error(expand(unary_op), "Operator %s cannot apply to type '%s'",
+              token_kind_to_string(context, unary_op->op), expr->type)
             .end_error(ErrCode::SemaUnaryOpTypeCannotApply);
     };
 

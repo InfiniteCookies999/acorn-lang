@@ -205,7 +205,22 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         return gen_node(expr);
     case '*': {
         auto ll_ptr = gen_node(expr);
-        return builder.CreateLoad(gen_type(expr->type), ll_ptr, "");
+
+        if (expr->is(NodeKind::BinOp)) {
+            // If it is a binary operator then it is pointer arithmetic but
+            // pointer arithmetic does not return the address of the pointer
+            // but instead returns the pointer value itself (or in llvm terms
+            // it is the eqv. of returning i32* (the pointer) rather than i32**
+            // the address of the pointer).
+            return ll_ptr;
+        } else if (expr->is(NodeKind::FuncCall)) {
+            // If it is a function since functions dont return addresses what
+            // we recieve is just the pointer value itself so there is nothing
+            // to dereference.
+            return ll_ptr;
+        }
+
+        return builder.CreateLoad(gen_type(expr->type), ll_ptr);
     }
 
     case Token::AddAdd:

@@ -737,9 +737,7 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
 
 acorn::Expr* acorn::Parser::parse_postfix() {
     Expr* term = parse_term();
-    if (cur_token.is('(')) {
-        return parse_function_call(term);
-    } else if (cur_token.is(Token::AddAdd) || cur_token.is(Token::SubSub)) {
+    if (cur_token.is(Token::AddAdd) || cur_token.is(Token::SubSub)) {
         // Language spec. if there is a whitespace then it does not consider it a post
         // inc/dec.
         const char* prev_ch_ptr = cur_token.loc.ptr - 1;
@@ -814,6 +812,9 @@ acorn::Expr* acorn::Parser::parse_term() {
         ref->ident = Identifier::get(cur_token.text());
 
         next_token(); // Consuming the identifier.
+        if (cur_token.is('(')) {
+            return parse_function_call(ref);
+        }
         return ref;
     }
     case '+': case '-': case '~': case '!':
