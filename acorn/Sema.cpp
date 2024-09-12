@@ -195,7 +195,7 @@ void acorn::Sema::check_variable(Var* var) {
         return;
     }
 
-    if (!var->assignment && var->type->is_const()) {
+    if (!var->assignment && var->type->is_const() && !var->has_modifier(Modifier::Native)) {
         error(var, "Variables declared const must be assigned a value")
             .end_error(ErrCode::SemaVariableConstNoValue);
         return;
