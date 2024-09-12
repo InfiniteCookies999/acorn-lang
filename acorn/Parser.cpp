@@ -145,7 +145,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
     func->return_type = type;
     func->name        = name;
 
-    Func* prev_func = func;
+    Func* prev_func = cur_func;
     cur_func = func;
 
     // Parsing parameters.
@@ -219,6 +219,11 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
     if (cur_token.is('=')) {
         next_token(); // Consume '=' token.
         var->assignment = parse_expr();
+    }
+
+    if (!cur_func) {
+        var->is_global = true;
+        context.add_unchecked_decl(var);
     }
 
     return var;

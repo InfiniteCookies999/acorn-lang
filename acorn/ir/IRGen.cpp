@@ -22,6 +22,13 @@ void acorn::IRGenerator::gen_function(Func* func) {
 
 }
 
+void acorn::IRGenerator::gen_global_variable(Var* var) {
+    
+    gen_global_variable_decl(var);
+    gen_global_variable_body(var);
+
+}
+
 llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
     switch (node->kind) {
     case NodeKind::BinOp:
@@ -130,9 +137,12 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         return dont_fix_name ? ll_name : ll_name.concat(".acorn");
     };
 
+    bool needs_external_linkage = (is_main || func->has_modifier(Modifier::Native));
+    auto ll_linkage = needs_external_linkage ? llvm::GlobalValue::ExternalLinkage
+                                             : llvm::GlobalValue::InternalLinkage;
     auto ll_func = llvm::Function::Create(
         ll_func_type,
-        llvm::Function::ExternalLinkage,
+        ll_linkage,
         get_name(),
         ll_module
     );
@@ -143,8 +153,6 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         ll_func->setCallingConv(llvm::CallingConv::X86_StdCall);
 #endif
     } else if (!func->has_modifier(Modifier::DllImport)) {
-        // Will resolve the symbol within the same compilation unit.
-        ll_func->setDSOLocal(true);
         // Tell LLVM that the return value cannot be poisioned or undefined
         // allowing for better optimization.
         if (!func->return_type->is(context.void_type)) {
@@ -229,6 +237,46 @@ void acorn::IRGenerator::gen_variable_address(Var* var) {
     var->ll_address = builder.CreateAlloca(gen_type(var->type),
                                            nullptr,
                                            llvm::Twine(var->name.reduce()));
+}
+
+void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
+    
+    if (var->ll_address) {
+        return; // Return early because the declaration has already been generated.
+    }
+
+    // TODO: const: !>_<
+    auto ll_linkage = var->has_modifier(Modifier::Native) ? llvm::GlobalValue::ExternalLinkage
+                                                          : llvm::GlobalValue::InternalLinkage;
+    auto ll_name = var->name.reduce();
+    auto ll_final_name = var->has_modifier(Modifier::Native) ? ll_name
+                                                             : ll_name + "." + llvm::Twine(global_counter++);
+    auto ll_address = gen_global_variable(ll_final_name,
+                                          gen_type(var->type),
+                                          false,
+                                          nullptr,
+                                          ll_linkage);
+
+    if (var->has_modifier(Modifier::DllImport)) {
+        ll_address->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
+    }
+
+    var->ll_address = ll_address;
+
+}
+
+void acorn::IRGenerator::gen_global_variable_body(Var* var) {
+    if (var->has_modifier(Modifier::Native)) return;
+
+    auto ll_global = llvm::cast<llvm::GlobalVariable>(var->ll_address);
+    
+    if (var->assignment && var->assignment->is_foldable) {
+        auto ll_value = gen_rvalue(var->assignment);
+        ll_global->setInitializer(llvm::cast<llvm::Constant>(ll_value));
+    } else {
+        ll_global->setInitializer(gen_zero(var->type));
+    }
+
 }
 
 llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
@@ -324,6 +372,9 @@ llvm::Value* acorn::IRGenerator::gen_number(Number* number) {
 
 llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
     if (ref->is_var_ref()) {
+        if (ref->var_ref->is_global) {
+            gen_global_variable_decl(ref->var_ref);
+        }
         return ref->var_ref->ll_address;
     } else if (ref->is_universal_ref()) {
         return gen_rvalue(ref->universal_ref);
@@ -403,11 +454,11 @@ llvm::Value* acorn::IRGenerator::gen_string(String* string) {
 
     if (string->bit_type == String::Str8Bit) {
         if (string->cast_type->is(context.const_char16_ptr_type)) {
-            return text_to_global_array(string->text8bit, llvm::Type::getInt16Ty(ll_context), 2);
+            return text_to_global_array(string->text16bit, llvm::Type::getInt16Ty(ll_context), 2);
         } else if (string->cast_type->is(context.const_char32_ptr_type)) {
-            return text_to_global_array(string->text8bit, llvm::Type::getInt32Ty(ll_context), 4);
+            return text_to_global_array(string->text32bit, llvm::Type::getInt32Ty(ll_context), 4);
         } else {
-            return builder.CreateGlobalStringPtr(string->text8bit, get_global_name("global.string"));
+            return text_to_global_array(string->text8bit, llvm::Type::getInt8Ty(ll_context), 1);
         }
     } else if (string->bit_type == String::Str16Bit) {
         if (string->cast_type->is(context.const_char32_ptr_type)) {

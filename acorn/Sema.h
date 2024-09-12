@@ -28,6 +28,7 @@ namespace acorn {
         static bool check_for_duplicate_match(const Func* func1, const Func* func2);
 
         void check_function(Func* func);
+        void check_variable(Var* var);
 
     private:
         Context&   context;
@@ -61,7 +62,6 @@ namespace acorn {
         // Statement checking
         //--------------------------------------
 
-        void check_variable(Var* var);
         void check_return(ReturnStmt* ret);
         void check_if(IfStmt* ifs, bool& all_paths_return);
         void check_comptime_if(ComptimeIfStmt* ifs);

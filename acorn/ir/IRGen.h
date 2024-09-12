@@ -18,6 +18,7 @@ namespace acorn {
         IRGenerator(Context& context);
 
         void gen_function(Func* func);
+        void gen_global_variable(Var* var);
 
         llvm::Value* gen_node(Node* node);
 
@@ -58,6 +59,9 @@ namespace acorn {
         void gen_function_decl(Func* func);
         void gen_function_body(Func* func);
         void gen_variable_address(Var* var);
+
+        void gen_global_variable_decl(Var* var);
+        void gen_global_variable_body(Var* var);
         
         llvm::Value* gen_return(ReturnStmt* ret);
         llvm::Value* gen_if(IfStmt* ifs);
@@ -114,7 +118,7 @@ namespace acorn {
                                                   llvm::Type* ll_type,
                                                   bool is_const,
                                                   llvm::Constant* ll_initial_value,
-                                                  llvm::GlobalValue::LinkageTypes linkage);
+                                                  llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::PrivateLinkage);
 
     };
 }

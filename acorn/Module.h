@@ -23,6 +23,8 @@ namespace acorn {
 
         FuncList* find_global_funcs(Identifier name);
 
+        Var* find_global_variable(Identifier name);
+
         void add_source_file(SourceFile* file) {
             source_files.push_back(file);
         }

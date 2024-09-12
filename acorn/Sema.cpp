@@ -165,8 +165,10 @@ void acorn::Sema::check_variable(Var* var) {
     
     // If not a global variable we need to tell the current function to
     // provide us with stack memory.
-    if (cur_func && !var->is_param()) {
+    if (cur_func && !var->is_param() && !var->is_global) {
         cur_func->vars_to_alloc.push_back(var);
+    } else if (var->is_global) {
+        context.queue_gen(var);
     }
 
     if (cur_scope) {
@@ -351,11 +353,15 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope& new_sem_scope) {
 
     ContinueToCheckNodeLab:
         
-        if (is_global_comptime && (stmt->is(NodeKind::Func))) {
-            auto func = as<Func*>(stmt);
-            modl.add_global_function(func);
-            Sema sema(context, modl, func->get_logger());
-            sema.check_function(func);
+        if (stmt->is(NodeKind::Func)) {
+            if (is_global_comptime) {
+                modl.add_global_function(as<Func*>(stmt));
+            } else {
+                error(stmt, "Functions cannot be declared within another function")
+                    .end_error(ErrCode::SemaNoLocalFuncs);
+            }
+        } else if (stmt->is(NodeKind::Var) && is_global_comptime) {
+            modl.add_global_variable(as<Var*>(stmt));
         } else {
             check_node(stmt);
         }
@@ -694,6 +700,10 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, bool is_for_call) {
                 return;
             }
         }
+        if (auto* var = modl.find_global_variable(ref->ident)) {
+            ref->set_var_ref(var);
+            return;
+        }
         if (auto* universal = context.get_universal_constant(ref->ident)) {
             ref->set_universal(universal);
         }
@@ -714,8 +724,14 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, bool is_for_call) {
     switch (ref->found_kind) {
     case IdentRef::VarKind: {
         ref->is_foldable = false;
-        // TODO: Will want to check it if it is a global variable.
-        ref->type = ref->var_ref->type;
+        
+        Var* var_ref = ref->var_ref;
+        if (!var_ref->generated && var_ref->is_global) {
+            Sema sema(context, var_ref->get_module(), var_ref->get_logger());
+            sema.check_variable(var_ref);
+        }
+        
+        ref->type = var_ref->type;
         break;
     }
     case IdentRef::FuncsKind: {
@@ -783,6 +799,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
 
 acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
                                                   llvm::SmallVector<Expr*, 8>& args) {
+    // TODO: Need to check the arguments of the canidate functions.
     Func* selected = nullptr;
     uint32_t best_mimatched_types = 0;
     

@@ -23,3 +23,11 @@ acorn::FuncList* acorn::Module::find_global_funcs(Identifier name) {
     }
     return nullptr;
 }
+
+acorn::Var* acorn::Module::find_global_variable(Identifier name) {
+    auto itr = variables.find(name);
+    if (itr != variables.end()) {
+        return itr->second;
+    }
+    return nullptr;
+}

@@ -200,9 +200,14 @@ void acorn::AcornLang::sema_and_irgen() {
 
     auto check_decl = [this](Decl* decl) finline {
         sema_timer.start();
-        if (decl->is(NodeKind::Func)) {
-            Sema sema(context, decl->get_module(), decl->get_logger());
+        
+        Sema sema(context, decl->get_module(), decl->get_logger());
+        if (decl->is(NodeKind::Func)) {    
             sema.check_function(as<Func*>(decl));
+        } else if (decl->is(NodeKind::Var)) {
+            sema.check_variable(as<Var*>(decl));
+        } else {
+            acorn_fatal("Unreachable: Missing check case");
         }
         sema_timer.stop();
     };
@@ -217,9 +222,14 @@ void acorn::AcornLang::sema_and_irgen() {
         ir_timer.start();
         if (context.has_errors()) continue;
             
+        IRGenerator generator(context);
         if (decl->is(NodeKind::Func)) {
-            IRGenerator generator(context);
             generator.gen_function(as<Func*>(decl));
+        } else if (decl->is(NodeKind::Var)) {
+            IRGenerator generator(context);
+            generator.gen_global_variable(as<Var*>(decl));
+        } else {
+            acorn_fatal("Unreachable: Missing generation case");
         }
         ir_timer.stop();
 

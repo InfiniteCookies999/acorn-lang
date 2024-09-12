@@ -119,6 +119,7 @@ namespace acorn {
         }
         
         uint32_t param_idx = NotParam;
+        bool     is_global = false;
 
         Type* type;
 
