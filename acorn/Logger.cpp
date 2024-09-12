@@ -35,8 +35,8 @@ template class acorn::AbstractLogger<acorn::GlobalLogger>;
 
 template<typename L>
 void acorn::AbstractLogger<L>::print_exceeded_errors_msg(Context& context) {
-    fmt_print(StdErr, "%s>>%s Exceeded maximum number of allowed errors (%s).\n"
-                      "   Exiting early.\n", BrightRed, White, context.get_max_error_count());
+    fmt_print("%s>>%s Exceeded maximum number of allowed errors (%s).\n"
+              "   Exiting early.\n", BrightRed, White, context.get_max_error_count());
 }
 
 template<typename L>
@@ -128,13 +128,13 @@ void acorn::GlobalLogger::end_error(ErrCode error_code) {
 
     int facing_length = 0;
 
-    fmt_print(StdErr, "[%serror%s]", BrightRed, White), facing_length += 7;
-    fmt_print(StdErr, "%s -> ", BrightWhite), facing_length += 4;
-    set_color(StdErr, White);
+    fmt_print("[%serror%s]", BrightRed, White), facing_length += 7;
+    fmt_print("%s -> ", BrightWhite), facing_length += 4;
+    set_color(stream, White);
 
     print_cb();
 
-    fmt_print(StdErr, "%s.\n", White);
+    fmt_print("%s.\n", White);
 
     if (context.inc_error_count()) {
         print_exceeded_errors_msg(context);
@@ -143,12 +143,12 @@ void acorn::GlobalLogger::end_error(ErrCode error_code) {
     }
 
     for (const auto& printer : line_printers) {
-        print(StdErr, std::string(facing_length, ' '));
+        print(std::string(facing_length, ' '));
         printer.print_cb(*this);
         if (printer.add_period) {
-            fmt_print(StdErr, "%s.", White);
+            fmt_print("%s.", White);
         }
-        print(StdErr, "\n");
+        print("\n");
     }
 
     mtx.unlock();
@@ -393,35 +393,35 @@ namespace acorn {
 
 void acorn::Logger::print_header(ErrCode error_code) {
     
-    fmt_print(StdErr, "%serror", BrightRed), facing_length += 5;
+    fmt_print("%serror", BrightRed), facing_length += 5;
     if (context.should_show_error_codes()) {
-        fmt_print(StdErr, "%s[%s%s%s]", White, BrightBlue, static_cast<unsigned>(error_code), White);
+        fmt_print("%s[%s%s%s]", White, BrightBlue, static_cast<unsigned>(error_code), White);
         facing_length += 2 + count_digits(static_cast<unsigned>(error_code));
     }
-    fmt_print(StdErr, "%s -> ", BrightWhite), facing_length += 4;
+    fmt_print("%s -> ", BrightWhite), facing_length += 4;
 
     const auto& path = file.path.empty() ? L"[buffer]" : file.path;
-    fmt_print(StdErr, "%s%s", BrightCyan, path);
+    fmt_print("%s%s", BrightCyan, path);
     facing_length += path.length();
 
     auto [line_number, column_number] = file.line_table.get_line_and_column_number(main_location.point);
 
-    fmt_print(StdErr, "%s:%s%s", BrightWhite, BrightYellow, line_number);
+    fmt_print("%s:%s%s", BrightWhite, BrightYellow, line_number);
     facing_length += std::to_string(line_number).length() + 1;
-    fmt_print(StdErr, "%s:%s%s%s: ", BrightWhite, BrightYellow, column_number, BrightWhite);
+    fmt_print("%s:%s%s%s: ", BrightWhite, BrightYellow, column_number, BrightWhite);
     facing_length += std::to_string(column_number).length() + 3;
 
     primary_print_cb();
 
-    fmt_print(StdErr, "%s.\n", White);
+    fmt_print("%s.\n", White);
 
     for (const auto& printer : line_printers) {
-        print(StdErr, std::string(facing_length, ' '));
+        print(std::string(facing_length, ' '));
         printer.print_cb(*this);
         if (printer.add_period) {
-            fmt_print(StdErr, "%s.", White);
+            fmt_print("%s.", White);
         }
-        print(StdErr, "\n");
+        print("\n");
     }
 }
 
@@ -451,9 +451,9 @@ void acorn::Logger::end_error(ErrCode error_code) {
 
     print_header(error_code);
 
-    auto print_bar = [pad = info.line_number_pad](bool include_new_line = true){
-        fmt_print(StdErr, " %s %s|%s ", pad, BrightWhite, White);
-        if (include_new_line) print(StdErr, "\n");
+    auto print_bar = [this, pad = info.line_number_pad](bool include_new_line = true){
+        fmt_print(" %s %s|%s ", pad, BrightWhite, White);
+        if (include_new_line) print("\n");
     };
     
     print_bar();
@@ -466,19 +466,19 @@ void acorn::Logger::end_error(ErrCode error_code) {
         // Displaying the line number and bar.
         auto line_number_pad_width = count_digits(info.last_line_number) - count_digits(line_number);
         auto line_number_pad = std::string(line_number_pad_width, ' ');
-        fmt_print(StdErr, " %s%s%s %s|%s ", BrightYellow, line_number++, line_number_pad, BrightWhite, White);
+        fmt_print(" %s%s%s %s|%s ", BrightYellow, line_number++, line_number_pad, BrightWhite, White);
 
         // Printing the line.
         if (is_first && info.exceeded_start)
-            fmt_print(StdErr, "%s...%s ", Green, White);
+            fmt_print("%s...%s ", Green, White);
         else if (info.exceeded_start)
-            print(StdErr, "    "); // Want to make sure the lines are still aligned as seen in the file.
+            print("    "); // Want to make sure the lines are still aligned as seen in the file.
         
-        print(StdErr, line);
+        print(line);
 
         if (is_last && info.exceeded_end)
-            fmt_print(StdErr, " %s...%s", Green, White);
-        print(StdErr, "\n");
+            fmt_print(" %s...%s", Green, White);
+        print("\n");
         
         // Displaying the underline/arrow and bar.
         bool arrow_after = !arrow_msg.msg.empty() && arrow_msg.loc == ArrowLoc::After;
@@ -490,12 +490,12 @@ void acorn::Logger::end_error(ErrCode error_code) {
         if (arrow_after) {
             if (is_last) {
                 print_bar(false);
-                print(StdErr, std::string(underscore_offset + 1, ' '));
-                fmt_print(StdErr, "%s%s", BrightRed, '^');
+                print(std::string(underscore_offset + 1, ' '));
+                fmt_print("%s%s", BrightRed, '^');
             }
         } else {
             print_bar(false);
-            print(StdErr, std::string(underscore_offset, ' '));
+            print(std::string(underscore_offset, ' '));
 
             size_t underscore_width = line.length() - underscore_offset + dots_width;
             // This can happen sometimes when at the end of the buffer of within a new line.
@@ -507,15 +507,15 @@ void acorn::Logger::end_error(ErrCode error_code) {
                 underscore.back() = '^';
             }
             
-            fmt_print(StdErr, "%s%s", BrightRed, underscore);
+            fmt_print("%s%s", BrightRed, underscore);
         }
         if (!arrow_msg.msg.empty() && is_last) {
-            fmt_print(StdErr, " %s", arrow_msg.msg);
+            fmt_print(" %s", arrow_msg.msg);
         }
-        fmt_print(StdErr, "%s\n", White);
+        fmt_print("%s\n", White);
 
     }
-    print(StdErr, "\n");
+    print("\n");
 
     ++num_errors;
     if (context.inc_error_count()) {

@@ -72,8 +72,8 @@ namespace acorn {
             return static_cast<L&>(*this);
         }
 
-        template<typename T, typename... TArgs>
-        void fmt_print(const char* fmt, T&& arg, TArgs&&... args) {
+        template<typename... TArgs>
+        void fmt_print(const char* fmt, TArgs&&... args) {
             fmt_print(stream, fmt, std::forward<TArgs>(args)...);
         }
 
