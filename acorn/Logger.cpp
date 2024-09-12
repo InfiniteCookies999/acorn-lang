@@ -21,6 +21,15 @@
 using enum acorn::Color;
 using enum acorn::Stream;
 
+static size_t count_digits(size_t number) {
+    size_t digits = 0;
+    do {
+        digits++;
+        number /= 10;
+    } while (number != 0);
+    return digits;
+}
+
 // We want to use a recursive mutext because it is possible that
 // on the same thread we are trying to print an error message we encounter
 // a fatal error which needs to print. This would result in a recursive
@@ -129,6 +138,10 @@ void acorn::GlobalLogger::end_error(ErrCode error_code) {
     int facing_length = 0;
 
     fmt_print("[%serror%s]", BrightRed, White), facing_length += 7;
+    if (context.should_show_error_codes()) {
+        fmt_print("%s[%s%s%s]", White, BrightBlue, static_cast<unsigned>(error_code), White);
+        facing_length += 2 + count_digits(static_cast<unsigned>(error_code));
+    }
     fmt_print("%s -> ", BrightWhite), facing_length += 4;
     set_color(stream, White);
 
@@ -235,15 +248,6 @@ namespace acorn {
     static size_t count_leading_spaces(const std::string& s) {
         auto count = s.find_first_not_of(' ');
         return count == std::string::npos ? 0 : count;
-    }
-
-    static size_t count_digits(size_t number) {
-        size_t digits = 0;
-        do {
-            digits++;
-            number /= 10;
-        } while (number != 0);
-        return digits;
     }
 
     struct PtrCalcInfo {
