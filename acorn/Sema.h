@@ -106,6 +106,7 @@ namespace acorn {
         void create_cast(Expr* expr, Type* to_type);
         bool check_condition(Expr* cond);
         bool is_condition(Expr* cond) const;
+        void check_modifier_incompatibilities(Decl* decl);
 
         llvm::Constant* gen_constant(PointSourceLoc error_loc, Expr* expr);
         

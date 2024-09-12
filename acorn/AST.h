@@ -48,6 +48,8 @@ namespace acorn {
     struct Modifier {
         const static uint32_t Native    = 0x01;
         const static uint32_t DllImport = 0x02;
+
+        static const char* to_string(uint32_t modifier);
     };
 
     struct Node {
@@ -87,6 +89,12 @@ namespace acorn {
         bool has_modifier(uint32_t modifier) {
             return (modifiers & modifier) != 0;
         }
+
+        // Scans backwords until the modifier text is found. Required
+        // since the locations of the modifiers are not stored for
+        // performance sake. Luckily they are easily reobtainable by
+        // simply iterating backwards.
+        SourceLoc get_modifier_location(uint32_t modifier);
 
         Logger& get_logger() const { return file->logger; }
 

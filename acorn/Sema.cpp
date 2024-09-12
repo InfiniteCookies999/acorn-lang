@@ -143,6 +143,8 @@ void acorn::Sema::check_function(Func* func) {
 
     // Logger::debug("checking function: %s", func->name);
 
+    check_modifier_incompatibilities(func);
+
     cur_func = func;
 
     // If we ever decide to allow nesting functions for some reason then this
@@ -162,6 +164,8 @@ void acorn::Sema::check_function(Func* func) {
 }
 
 void acorn::Sema::check_variable(Var* var) {
+
+    check_modifier_incompatibilities(var);
     
     // If not a global variable we need to tell the current function to
     // provide us with stack memory.
@@ -1119,6 +1123,14 @@ bool acorn::Sema::check_condition(Expr* cond) {
 
 bool acorn::Sema::is_condition(Expr* cond) const {
     return cond->type->is(context.bool_type);
+}
+
+void acorn::Sema::check_modifier_incompatibilities(Decl* decl) {
+    if (decl->has_modifier(Modifier::DllImport) && !decl->has_modifier(Modifier::Native)) {
+        error(decl->get_modifier_location(Modifier::DllImport),
+              "Cannot have dllimport modifier without native modifier")
+            .end_error(ErrCode::SemaDllImportWithoutNativeModifier);
+    }
 }
 
 llvm::Constant* acorn::Sema::gen_constant(PointSourceLoc error_loc, Expr* expr) {
