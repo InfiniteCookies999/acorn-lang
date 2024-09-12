@@ -27,17 +27,29 @@ void acorn::Sema::resolve_global_comptime(Context& context, Module& modl) {
     }
 }
 
-bool acorn::Sema::is_potential_main_function(const Func* canidate) {
-    if (!canidate->params.empty()) {
-        return false;
+bool acorn::Sema::is_potential_main_function(Context& context, const Func* canidate) {
+    if (canidate->params.empty()) {
+        return true;
     }
-    return true;
+
+    if (canidate->params.size() == 2) {
+        Type* param_type1 = canidate->params[0]->type;
+        Type* param_type2 = canidate->params[1]->type;
+        bool valid_param1 = param_type1->is(context.int_type) ||
+                            param_type1->is(context.const_int_type);
+        bool valid_param2 = param_type2->is(context.const_char_ptr_ptr_type);
+        if (valid_param1 && valid_param2) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool acorn::Sema::find_main_function(Context& context) {
     auto& canidates = context.get_canidate_main_funcs();
     for (Func* canidate : canidates) {
-        if (!is_potential_main_function(canidate)) {
+        if (!is_potential_main_function(context, canidate)) {
             continue;
         }
 
@@ -195,7 +207,8 @@ void acorn::Sema::check_variable(Var* var) {
         return;
     }
 
-    if (!var->assignment && var->type->is_const() && !var->has_modifier(Modifier::Native)) {
+    if (!var->assignment && var->type->is_const() &&
+        !var->has_modifier(Modifier::Native) && !var->is_param()) {
         error(var, "Variables declared const must be assigned a value")
             .end_error(ErrCode::SemaVariableConstNoValue);
         return;

@@ -21,7 +21,7 @@ namespace acorn {
 
         static void resolve_global_comptime(Context& context, Module& modl);
 
-        static bool is_potential_main_function(const Func* canidate);
+        static bool is_potential_main_function(Context& context, const Func* canidate);
         static bool find_main_function(Context& context);
 
         static void check_for_duplicate_functions(Module& modl);

@@ -34,6 +34,7 @@ namespace acorn {
         Type* invalid_type;
         Type* void_type;
         Type* int_type;
+        Type* const_int_type;
         Type* int8_type;
         Type* int16_type;
         Type* int32_type;
@@ -51,6 +52,7 @@ namespace acorn {
         Type* const_char_ptr_type;
         Type* const_char16_ptr_type;
         Type* const_char32_ptr_type;
+        Type* const_char_ptr_ptr_type;
         Type* funcs_ref_type;
         Type* null_type;
         Type* void_ptr_type;
