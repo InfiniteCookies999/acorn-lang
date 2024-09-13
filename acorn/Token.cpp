@@ -40,7 +40,7 @@ std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
     case Token::PostSubSub:           return "--";
 
     default: {
-        if (kind >= Token::KeywordStart && kind <= Token::KeywordEnd) {
+        if (kind > Token::KeywordStart && kind < Token::KeywordEnd) {
             return context.get_keyword_from_kind(kind).str();
         } else if (kind < Token::UniqueTokens) {
             uint32_t utf8_kind = static_cast<uint32_t>(kind);

@@ -303,6 +303,14 @@ namespace acorn {
 
     static PtrCalcInfo calc_end_ptr(const char* ptr, const char* buffer_end, const char* high_point) {
         
+        // TODO: There are still cases where this leads to less than ideal output. Because
+        //       we are not including the leading whitespace it is possible that there is
+        //       is way more leading whitespace on the next new line than the first line
+        //       resulting in a very long line output. What should happen is it should start
+        //       calculating whitespace again if it exceeds the line with the shortest leading
+        //       whitespace. Obviously since we don't have the line information at this point
+        //       this approach is not possible.
+        const char* start = ptr;
         long long count = 0;
         while (ptr < buffer_end) {
             long long whitespace_count = 0;
@@ -341,6 +349,15 @@ namespace acorn {
     CalcEndFinishedLab:
         ptr -= std::max(count - CUTOFF_LIMIT, 0ll);
         if (*ptr == '\r' || *ptr == '\n' || ptr == buffer_end) {
+            --ptr;
+        }
+
+        // We do not want to include the trailing whitespace because
+        // later on calculations are done using the end point we calculate
+        // here and each line is trailed which can lead to inconsistencies.
+        while (*ptr == ' ' || *ptr == '\t' && ptr > start) {
+            if (*ptr == ' ') count -= 1;
+            else             count -= 4;
             --ptr;
         }
 
@@ -388,7 +405,9 @@ namespace acorn {
             last_line_number,
             line_number_pad,
             start_info.exceeded, end_info.exceeded,
+            // start_width
             static_cast<size_t>(location.ptr > start_info.ptr ? location.ptr - start_info.ptr : 0),
+            // end_width
             static_cast<size_t>(end_pt > org_end_pt ? end_pt - org_end_pt : 0)
         };
     }

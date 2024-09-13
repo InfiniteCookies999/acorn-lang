@@ -20,9 +20,9 @@ namespace acorn {
             // Reserve space for ASCII characters
             UniqueTokens = 256,
 
-            KeywordStart = UniqueTokens,
+            KeywordStart,
 
-            KwInt = KeywordStart,
+            KwInt,
             KwInt8,
             KwInt16,
             KwInt32,
@@ -53,13 +53,13 @@ namespace acorn {
             KwReturn,
 
             ComptimeKeywordStart,
-            KwCTIf = ComptimeKeywordStart,
+            KwCTIf,
             KwCTElIf,
             KwCTElse,
             KwCTEndIf,
-            ComptimeKeywordEnd = KwCTEndIf,
+            ComptimeKeywordEnd,
 
-            KeywordEnd = ComptimeKeywordEnd,
+            KeywordEnd,
 
             LtLt,
             GtGt,
@@ -118,8 +118,8 @@ namespace acorn {
 
         // Checks if the token is a keyword.
         [[nodiscard]] constexpr bool is_keyword() const noexcept {
-            return kind >= Token::KeywordStart && kind <= Token::KeywordEnd &&
-                   kind <  Token::ComptimeKeywordStart;
+            return kind > Token::KeywordStart && kind < Token::KeywordEnd &&
+                   kind < Token::ComptimeKeywordStart;
         }
 
         [[nodiscard]] constexpr bool is_number_literal() const noexcept {
