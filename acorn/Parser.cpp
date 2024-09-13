@@ -73,7 +73,7 @@ void acorn::Parser::parse() {
         } else if (node->is(NodeKind::ComptimeIfStmt)) {
             modl.add_global_comptime_control_flow(node);
         } else {
-            modl.mark_bad_scope(BadScopeLocation::Global, node, file);
+            modl.mark_bad_scope(BadScopeLocation::Global, node, logger);
         }
     }
 
@@ -308,6 +308,14 @@ acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
     ifs->cond = parse_expr();
     ifs->scope = new_node<ScopeStmt>(cur_token);
 
+    auto add_statement = [this](ScopeStmt* stmts, Node* stmt) finline{
+        if (!cur_func &&
+            !(stmt->is(NodeKind::Func) || stmt->is(NodeKind::Var))) {
+            modl.mark_bad_scope(BadScopeLocation::Global, stmt, logger);
+        }
+        stmts->push_back(stmt);
+    };
+
     while (cur_token.is_not(Token::KwCTEndIf) &&
            cur_token.is_not(Token::KwCTIf) &&
            cur_token.is_not(Token::EOB)) {
@@ -324,18 +332,18 @@ acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
                    cur_token.is_not(Token::EOB) &&
                    cur_token.is_not(Token::KwCTElIf) &&
                    cur_token.is_not(Token::KwCTElse)) {
-                else_stmts->push_back(parse_statement());
+                add_statement(else_stmts, parse_statement());
             }
             ifs->elseif = else_stmts;
             break;
         } else {
-            ifs->scope->push_back(parse_statement());
+            add_statement(ifs->scope, parse_statement());
         }
     }
 
     if (chain_start) {
         if (cur_token.is_not(Token::KwCTEndIf)) {
-            error(cur_token.loc, "Expected #endif for comptime if statement")
+            error(cur_token.loc, "Expected #endif for comptime #if statement")
                 .end_error(ErrCode::ParseMissingComptimeEndIf);
         } else {
             next_token();

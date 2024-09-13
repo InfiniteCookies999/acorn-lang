@@ -192,6 +192,11 @@ void acorn::AcornLang::initialize_codegen() {
 
 void acorn::AcornLang::sema_and_irgen() {
 
+    Sema::check_nodes_wrong_scopes(modl);
+    if (context.has_errors()) {
+        return;
+    }
+
     Sema::resolve_global_comptime(context, modl);
     Sema::find_main_function(context);
 
@@ -205,7 +210,6 @@ void acorn::AcornLang::sema_and_irgen() {
 
     Sema::check_for_duplicate_functions(modl);
     Sema::check_for_duplicate_variables(modl);
-    Sema::check_nodes_wrong_scopes(modl);
 
     if (context.has_errors()) {
         return;

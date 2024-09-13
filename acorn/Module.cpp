@@ -23,8 +23,8 @@ void acorn::Module::add_global_variable(Var* var) {
     }
 }
 
-void acorn::Module::mark_bad_scope(BadScopeLocation location, Node* node, SourceFile* file) {
-    bad_scope_nodes.push_back({ location, node, file });
+void acorn::Module::mark_bad_scope(BadScopeLocation location, Node* node, Logger& logger) {
+    bad_scope_nodes.push_back({ location, node, logger });
 }
 
 acorn::FuncList* acorn::Module::find_global_funcs(Identifier name) {

@@ -127,23 +127,23 @@ void acorn::Sema::report_redeclaration(const Decl* decl1, const Decl* decl2, con
 
 void acorn::Sema::check_nodes_wrong_scopes(Module& modl) {
 
-    auto report = []<typename T>(SourceFile* file,
+    auto report = []<typename T>(Logger& logger,
                                  T loc,
                                  BadScopeLocation location,
                                  auto expr_or_stmt_str) finline {
         const char* scope_str = "global"; // TODO: Once there are more kinds of scopes to report this will need to change.
-        file->logger.begin_error(loc, "%s does not belong at %s scope",
-                                 expr_or_stmt_str, scope_str)
+        logger.begin_error(loc, "%s does not belong at %s scope",
+                           expr_or_stmt_str, scope_str)
             .end_error(ErrCode::SemaNodeAtWrongScope);
     };
 
-    for (auto [location, node, file] : modl.get_bad_scope_nodes()) {
+    for (auto [location, node, logger] : modl.get_bad_scope_nodes()) {
         if (location == BadScopeLocation::Global) {
             if (node->is_expression()) {
                 Expr* expr = as<Expr*>(node);
-                report(file, expand(expr), location, "Expression");
+                report(logger, expand(expr), location, "Expression");
             } else {
-                report(file, node->loc, location, "Statement");
+                report(logger, node->loc, location, "Statement");
             }
         }
     }
@@ -405,6 +405,7 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope& new_sem_scope) {
 
     ContinueToCheckNodeLab:
         
+
         if (stmt->is(NodeKind::Func)) {
             if (is_global_comptime) {
                 modl.add_global_function(as<Func*>(stmt));

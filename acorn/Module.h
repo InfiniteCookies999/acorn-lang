@@ -7,6 +7,8 @@
 
 namespace acorn {
 
+    class Logger;
+
     enum class BadScopeLocation {
         Global
     };
@@ -16,7 +18,7 @@ namespace acorn {
         struct BadScopeNode {
             BadScopeLocation location;
             Node*            node;
-            SourceFile*      file;
+            Logger&          logger;
         };
         using BadScopeList = llvm::SmallVector<BadScopeNode>;
 
@@ -24,7 +26,7 @@ namespace acorn {
         void add_global_variable(Var* var);
         void add_global_comptime_control_flow(Node* control_flow);
 
-        void mark_bad_scope(BadScopeLocation location, Node* node, SourceFile* file);
+        void mark_bad_scope(BadScopeLocation location, Node* node, Logger& logger);
 
         FuncList* find_global_funcs(Identifier name);
 
