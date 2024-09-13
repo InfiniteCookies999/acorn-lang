@@ -54,6 +54,7 @@ X(SemaNoLocalFuncs                         , 20028)
 X(SemaDllImportWithoutNativeModifier       , 20029)
 X(SemaDuplicateGlobalVar                   , 30030)
 X(SemaNodeAtWrongScope                     , 30031)
+X(SemaLocalVarHasModifiers                 , 30032)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

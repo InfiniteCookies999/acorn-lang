@@ -213,6 +213,18 @@ void acorn::Sema::check_function(Func* func) {
 void acorn::Sema::check_variable(Var* var) {
 
     check_modifier_incompatibilities(var);
+
+    // Reporting errors if the variable is local to a function and has
+    // modifiers.
+    if (!var->is_global && var->modifiers) {
+        for (uint32_t modifier = Modifier::Start;
+                      modifier != Modifier::End; modifier *= 2) {
+            if (var->modifiers & modifier) {
+                error(var->get_modifier_location(modifier), "Modifier cannot apply to local variable")
+                    .end_error(ErrCode::SemaLocalVarHasModifiers);
+            }
+        }
+    }
     
     // If not a global variable we need to tell the current function to
     // provide us with stack memory.

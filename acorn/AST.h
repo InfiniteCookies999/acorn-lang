@@ -48,8 +48,10 @@ namespace acorn {
     };
 
     struct Modifier {
+        const static uint32_t Start     = 0x01;
         const static uint32_t Native    = 0x01;
         const static uint32_t DllImport = 0x02;
+        const static uint32_t End       = 0x02;
 
         static const char* to_string(uint32_t modifier);
     };
