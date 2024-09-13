@@ -109,7 +109,8 @@ void acorn::AbstractLogger<L>::print(Stream stream, const char* s, size_t length
 template<typename L>
 void* acorn::AbstractLogger<L>::get_handle(Stream stream) {
 #else
-int acorn::Logger::get_handle(Stream stream) {
+template<typename L>
+int acorn::AbstractLogger<L>::get_handle(Stream stream) {
 #endif
 
 #if WIN_OS
