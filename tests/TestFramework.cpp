@@ -11,6 +11,9 @@ static TestSection*                    current_section = nullptr;
 static uint32_t                        current_depth   = 0;
 static llvm::SmallVector<TestSection*> sections;
 
+static int num_failed_tests = 0;
+static int num_tests_ran    = 0;
+
 static void set_color(acorn::Color color) {
     acorn::set_color(acorn::Stream::StdOut, color);
 }
@@ -76,6 +79,10 @@ void TestSection::run() {
     for (TestCase* test : tests) {
         current_test = test;
         test->run();
+        ++num_tests_ran;
+        if (test->failed()) {
+            ++num_failed_tests;
+        }
     }
 }
 
@@ -119,4 +126,16 @@ void run_tests() {
     for (TestSection* section : sections) {
         section->run();
     }
+    if (num_failed_tests == 0) {
+        set_color(acorn::Color::BrightGreen);
+        std::cout << "\n\n>>  ";
+        set_color(acorn::Color::White);
+        std::cout << "Passed all tests!\n\n";
+    } else {
+        set_color(acorn::Color::BrightRed);
+        std::cout << "\n\n>>  ";
+        set_color(acorn::Color::White);
+        std::cout << "Failed tests!\n\n";
+    }
+    std::cout << "    (" << (num_tests_ran - num_failed_tests) << "/" << num_tests_ran << ") tests passed.\n";
 }
