@@ -161,5 +161,25 @@ void test_codegen() {
             auto [success, result] = run_codegen_test(src(L"ptr_dereferencing.ac"));
             expect(result, std::identity()).to_be("hoh");
         });
+        test("if deduces true and false", [&] {
+            auto [success, result] = run_codegen_test(src(L"ifs/if_test1.ac"));
+            expect(result, std::identity()).to_be("True Case");
+        });
+        test("if with else", [&] {
+            auto [success, result] = run_codegen_test(src(L"ifs/if_test2.ac"));
+            expect(result, std::identity()).to_be("True CaseElse Case");
+        });
+        test("if with elif", [&] {
+            auto [success, result] = run_codegen_test(src(L"ifs/if_test3.ac"));
+            expect(result, std::identity()).to_be("True CaseElif Case");
+        });
+        test("if with elif and else", [&] {
+            auto [success, result] = run_codegen_test(src(L"ifs/if_test4.ac"));
+            expect(result, std::identity()).to_be("True CaseElif CaseElse Case");
+        });
+        test("if with pointers", [&] {
+            auto [success, result] = run_codegen_test(src(L"ifs/if_test5.ac"));
+            expect(result, std::identity()).to_be("Ptr Not Null Case1Ptr Not Null Case2Ptr Not Null Case3");
+        });
     });
 }

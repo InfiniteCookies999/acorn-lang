@@ -87,6 +87,8 @@ namespace acorn {
         llvm::Constant* gen_one(Type* type);
         llvm::Value* gen_cast(Type* to_type, Type* from_type, llvm::Value* ll_value);
 
+        llvm::Value* gen_condition(Expr* cond);
+
         llvm::BasicBlock* gen_bblock(const char* name, llvm::Function* ll_func = nullptr);
 
         llvm::Value* gen_isize(uint64_t v);

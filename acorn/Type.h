@@ -73,7 +73,11 @@ namespace acorn {
 
         bool is_comparable() const;
         bool is_pointer() const { return kind == TypeKind::Pointer; }
-
+        // Any type that has its underlying memory represented as a pointer.
+        bool is_real_pointer() const {
+            return kind == TypeKind::Pointer || kind == TypeKind::Null;
+        }
+             
         uint32_t get_number_of_bits() const;
 
         std::string to_string() const;

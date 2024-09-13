@@ -658,7 +658,10 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             error_cannot_apply(rhs);
             return;
         }
-        if (!rhs->type->is(lhs->type)) {
+        if (!(rhs->type->is(lhs->type) ||
+             (rhs->type->is_pointer() && lhs->type->get_kind() == TypeKind::Null) ||
+             (lhs->type->is_pointer() && rhs->type->get_kind() == TypeKind::Null)
+              )) {
             error_mismatched();
             return;
         }
@@ -1071,8 +1074,8 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
 }
 
 bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) const {
-    if ((to_type->is_pointer() || to_type->is_integer()) &&
-        (expr->type->is_pointer() || expr->type->is_integer())) {
+    if ((to_type->is_real_pointer() || to_type->is_integer()) &&
+        (expr->type->is_real_pointer() || expr->type->is_integer())) {
         Type* from_type = expr->type;
         if (!try_remove_const_for_compare(to_type, from_type, expr)) {
             return false;
@@ -1183,7 +1186,9 @@ bool acorn::Sema::check_condition(Expr* cond) {
 }
 
 bool acorn::Sema::is_condition(Expr* cond) const {
-    return cond->type->is(context.bool_type);
+    return cond->type->is(context.bool_type) ||
+           cond->type->is_pointer() ||
+           cond->type->get_kind() == TypeKind::Null;
 }
 
 void acorn::Sema::check_modifier_incompatibilities(Decl* decl) {

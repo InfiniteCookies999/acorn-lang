@@ -16,7 +16,7 @@ acorn::Type* acorn::Type::create(PageAllocator& allocator, TypeKind kind, bool i
 }
 
 bool acorn::Type::is_comparable() const {
-    return is_number();
+    return is_number() || is_pointer() || kind == TypeKind::Null;
 }
 
 uint32_t acorn::Type::get_number_of_bits() const {

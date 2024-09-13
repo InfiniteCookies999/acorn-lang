@@ -89,10 +89,38 @@ namespace acorn {
         }
         return std::format(L"{}.{}.{}.{}", best_ver[0], best_ver[1], best_ver[2], best_ver[3]);
     }
+
+    bool get_registry_value(HKEY key, const char* value_name, char*& buffer, PageAllocator& allocator) {
+        DWORD al_length;
+        // First request the allocation size.
+        if (RegQueryValueExA(key, value_name, nullptr, nullptr, nullptr, &al_length) != ERROR_SUCCESS) {
+            return false;
+        }
+
+        // Retrieving the registry value.
+        DWORD req_length = al_length + 2;
+        buffer = static_cast<char*>(allocator.allocate(req_length));
+        if (RegQueryValueExA(key, value_name, nullptr, nullptr, (LPBYTE)buffer, &req_length) != ERROR_SUCCESS) {
+            return false;
+        }
+
+        if (!buffer) {
+            return false;
+        }
+
+        // Null terminating.
+        if (buffer[req_length]) {
+            buffer[req_length] = '\0';
+        }
+
+        return true;
+    }
 }
 
 bool acorn::get_windows_kits_install_paths(Context& context, PageAllocator& allocator, bool is_64bit_target,
                                            std::wstring& winkit_lib_um_path, std::wstring& winkit_lib_ucrt_path) {
+
+    // TODO: Won't work on older versions of windows. This applies to windows 10+
     
     HKEY main_key;
     if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots",
@@ -103,32 +131,11 @@ bool acorn::get_windows_kits_install_paths(Context& context, PageAllocator& allo
     }
     defer(RegCloseKey(main_key));
 
-    DWORD al_length;
-    // First request the allocation size.
-    if (RegQueryValueExA(main_key, "KitsRoot10", nullptr, nullptr, nullptr, &al_length) != ERROR_SUCCESS) {
+    char* buffer = nullptr;
+    if (!get_registry_value(main_key, "KitsRoot10", buffer, allocator)) {
         Logger::global_error(context, "Failed to find registry value for KitsRoot10")
             .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
         return false;
-    }
-
-    // Retrieving the registry value.
-    DWORD req_length = al_length + 2;
-    char* buffer = static_cast<char*>(allocator.allocate(req_length));
-    if (RegQueryValueExA(main_key, "KitsRoot10", nullptr, nullptr, (LPBYTE)buffer, &req_length) != ERROR_SUCCESS) {
-        Logger::global_error(context, "Failed to find registry value for KitsRoot10")
-            .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
-        return false;
-    }
-
-    if (!buffer) {
-        Logger::global_error(context, "Failed to properly retrieve the KitsRoot10 buffer")
-            .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
-        return false;
-    }
-
-    // Null terminating.
-    if (buffer[req_length]) {
-        buffer[req_length] = '\0';
     }
 
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
@@ -249,7 +256,30 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
         }
     }
 
-    // TODO: if we get here we should instead try to find older versions of visual studio
+    // Well we could not find newer versions of visual studio so finding prior to 2017.
+    //
+
+    //HKEY main_key;
+    //if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\14.0",
+    //                  0, KEY_QUERY_VALUE | KEY_WOW64_32KEY, &main_key) != ERROR_SUCCESS) {
+    //    return false;
+    //}
+    //defer(RegCloseKey(main_key));
+    //
+    //char* buffer = nullptr;
+    //if (!get_registry_value(main_key, "InstallDir", buffer, allocator)) {
+    //    return false;
+    //}
+    //
+    
+    /*const char* versions[] = {"14.0", "13.0",  "12.0", "11.0", "10.0", "9.0"};
+    const int num_versions = sizeof(versions) / sizeof(versions[0]);
+
+    for (int i = 0; i < num_versions; ++i) {
+        const char* version = versions[i];
+
+
+    }*/
 
     return false;
 }
