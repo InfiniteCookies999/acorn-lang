@@ -70,7 +70,11 @@ namespace acorn {
         void check_if(IfStmt* ifs, bool& all_paths_return);
         void check_comptime_if(ComptimeIfStmt* ifs);
 
-        void check_scope(ScopeStmt* scope, SemScope& new_sem_scope);
+        SemScope push_scope();
+        void pop_scope();
+        void check_scope(ScopeStmt* scope);
+        // Use this version only if the caller sets up and tears down its own sem_scope.
+        void check_scope(ScopeStmt* scope, SemScope* sem_scope);
 
         // Expression checking
         //--------------------------------------        

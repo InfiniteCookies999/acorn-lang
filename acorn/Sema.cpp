@@ -176,10 +176,8 @@ void acorn::Sema::check_node(Node* node) {
     case NodeKind::String:
     case NodeKind::Null:
         break;
-    case NodeKind::ScopeStmt: {
-        SemScope sem_scope;
-        return check_scope(as<ScopeStmt*>(node), sem_scope);
-    }
+    case NodeKind::ScopeStmt:
+        return check_scope(as<ScopeStmt*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -196,14 +194,13 @@ void acorn::Sema::check_function(Func* func) {
 
     // If we ever decide to allow nesting functions for some reason then this
     // will possibly be a problem because it will have overriden the current scope.
-    SemScope sem_scope;
-    cur_scope = &sem_scope;
+    SemScope sem_scope = push_scope();
     for (Var* param : func->params) {
         check_variable(param);
     }
-    cur_scope = nullptr;
-
-    check_scope(func->scope, sem_scope);
+    
+    check_scope(func->scope, &sem_scope);
+    pop_scope();
     if (!sem_scope.all_paths_return && func->return_type->is_not(context.void_type)) {
         error(func, "Not all function paths return")
             .end_error(ErrCode::SemaNotAllFuncPathReturn);
@@ -296,18 +293,14 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
 
 void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
 
-    SemScope sem_scope;
+    // Must create the scope early so that the scope of
+    // the variable is the body of the if statement.
+    SemScope sem_scope = push_scope();
     if (ifs->cond->is(NodeKind::Var)) {
-        
-        // Must create the scope early so that the scope of
-        // the variable is the body of the if statement.
-        auto prev_scope = cur_scope;
-        cur_scope = &sem_scope;
-        
+            
         Var* var = as<Var*>(ifs->cond);
         check_variable(var);
-        cur_scope = prev_scope;
-
+        
         if (!var->assignment) {
             error(var, "Must assign a value")
                 .end_error(ErrCode::SemaExpectedAssignmentIfStmt);
@@ -325,16 +318,16 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
         }
     }
     
-    check_scope(ifs->scope, sem_scope);
+    check_scope(ifs->scope, &sem_scope);
     all_paths_return = sem_scope.all_paths_return;
-    
+    pop_scope();
+
     if (ifs->elseif && ifs->elseif->is(NodeKind::IfStmt)) {
         bool all_paths_return2;
         check_if(as<IfStmt*>(ifs->elseif), all_paths_return2);
         all_paths_return &= all_paths_return2;
     } else if (ifs->elseif) {
-        SemScope sem_scope;
-        check_scope(as<ScopeStmt*>(ifs->elseif), sem_scope);
+        check_scope(as<ScopeStmt*>(ifs->elseif));
     }
 
     cur_scope->all_paths_return = all_paths_return;
@@ -364,37 +357,46 @@ void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
     //       the state of the problem. For example a variable being declared on one
     //       operating system and trying to access it but not on another.
 
+    // We pass the current scope when calling check_scope because the comptime ifs do not
+    // create new scopes.
     auto ll_cond = llvm::cast<llvm::ConstantInt>(gen_constant(expand(cond), cond));
     if (!ll_cond->isZero()) {
         // Path taken!
         ifs->takes_path = true;
-        SemScope sem_scope;
-        check_scope(ifs->scope, sem_scope);
-        if (cur_scope) { // Have to check because possible it is a global context.
-            cur_scope->all_paths_return = sem_scope.all_paths_return;
-        }
+        check_scope(ifs->scope, cur_scope);
     } else if (ifs->elseif) {
         ifs->takes_path = false;
         if (ifs->elseif->is(NodeKind::ComptimeIfStmt)) {
             // Onto the next possible comptime condition.
             check_comptime_if(as<ComptimeIfStmt*>(ifs->elseif));
         } else {
-            // Must have failed all other branches.
-            SemScope sem_scope;
-            check_scope(as<ScopeStmt*>(ifs->elseif), sem_scope);
-            if (cur_scope) { // Have to check because possible it is a global context.
-                cur_scope->all_paths_return = sem_scope.all_paths_return;
-            }
+            check_scope(as<ScopeStmt*>(ifs->elseif), cur_scope);
         }
     }
 }
 
-void acorn::Sema::check_scope(ScopeStmt* scope, SemScope& new_sem_scope) {
-    new_sem_scope.parent = cur_scope;
-    cur_scope = &new_sem_scope;
+acorn::Sema::SemScope acorn::Sema::push_scope() {
+    SemScope sem_scope;
+    sem_scope.parent = cur_scope;
+    cur_scope = &sem_scope;
+    return sem_scope;
+}
 
+void acorn::Sema::pop_scope() {
+    cur_scope = cur_scope->parent;
+}
+
+void acorn::Sema::check_scope(ScopeStmt* scope) {
+    SemScope sem_scope = push_scope();
+    check_scope(scope, &sem_scope);
+    pop_scope();
+}
+
+
+void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
+    
     for (Node* stmt : *scope) {
-        if (new_sem_scope.all_paths_return) {
+        if (sem_scope && sem_scope->all_paths_return) {
             error(stmt, "Unreachable code")
                 .end_error(ErrCode::SemaUnreachableStmt);
             break;
@@ -465,8 +467,6 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope& new_sem_scope) {
             check_node(stmt);
         }
     }
-
-    cur_scope = cur_scope->parent;
 }
 
 // Expression checking
