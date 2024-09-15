@@ -302,7 +302,19 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
 
 llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs) {
 
-    llvm::Value* ll_cond = gen_condition(ifs->cond);
+    auto load_variable_cond = [this](Var* var) finline->llvm::Value* {
+    
+        gen_variable(var); // Generate assignment.
+
+        auto ll_value = builder.CreateLoad(gen_type(var->type), var->ll_address);
+        if (var->type->is_real_pointer()) {
+            return builder.CreateIsNotNull(ll_value);
+        }
+        return ll_value;
+    };
+
+    llvm::Value* ll_cond = ifs->cond->is(NodeKind::Var) ? load_variable_cond(as<Var*>(ifs->cond))
+                                                        : gen_condition(as<Expr*>(ifs->cond));
 
     auto ll_then_bb = gen_bblock("if.then", ll_cur_func);
     auto ll_end_bb  = gen_bblock("if.end" , ll_cur_func);

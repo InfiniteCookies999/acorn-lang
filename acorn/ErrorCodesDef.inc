@@ -55,6 +55,8 @@ X(SemaDllImportWithoutNativeModifier       , 20029)
 X(SemaDuplicateGlobalVar                   , 30030)
 X(SemaNodeAtWrongScope                     , 30031)
 X(SemaLocalVarHasModifiers                 , 30032)
+X(SemaComptimeIfCannotCompareToVar         , 30033)
+X(SemaExpectedAssignmentIfStmt             , 30034)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

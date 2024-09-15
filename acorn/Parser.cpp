@@ -285,7 +285,14 @@ acorn::IfStmt* acorn::Parser::parse_if() {
     // Note: If an error occures when trying to parse the expression
     //       the parser can simply recover at the next statement that
     //       represents the body of the if statement.
-    ifs->cond = parse_expr();
+    switch (cur_token.kind) {
+    case TypeTokens:
+        ifs->cond = parse_variable();
+        break;
+    default:
+        ifs->cond = parse_expr();
+        break;
+    }
 
     ifs->scope = parse_scope("for if");
 

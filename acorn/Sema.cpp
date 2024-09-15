@@ -295,10 +295,36 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
 }
 
 void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
-    check(ifs->cond);
-    check_condition(ifs->cond);
-    
+
     SemScope sem_scope;
+    if (ifs->cond->is(NodeKind::Var)) {
+        
+        // Must create the scope early so that the scope of
+        // the variable is the body of the if statement.
+        auto prev_scope = cur_scope;
+        cur_scope = &sem_scope;
+        
+        Var* var = as<Var*>(ifs->cond);
+        check_variable(var);
+        cur_scope = prev_scope;
+
+        if (!var->assignment) {
+            error(var, "Must assign a value")
+                .end_error(ErrCode::SemaExpectedAssignmentIfStmt);
+        }
+        
+        if (var->type && !is_condition(var->type)) {
+            error(var, "Variable expected to have a conditional type")
+                .end_error(ErrCode::SemaExpectedCondition);
+        }
+    } else {
+        check_node(ifs->cond);
+        Expr* cond = as<Expr*>(ifs->cond);
+        if (cond->type) {
+            check_condition(cond);
+        }
+    }
+    
     check_scope(ifs->scope, sem_scope);
     all_paths_return = sem_scope.all_paths_return;
     
@@ -315,12 +341,20 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
 }
 
 void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
-    check(ifs->cond);
-    if (!check_condition(ifs->cond)) {
+    if (ifs->is(NodeKind::Var)) {
+        error(ifs->cond, "Comptime if does not allow comparing to variables")
+            .end_error(ErrCode::SemaComptimeIfCannotCompareToVar);
         return;
     }
-    if (!ifs->cond->is_foldable) {
-        error(expand(ifs->cond), "Comptime if expects the condition to be determined at compile time")
+    
+    Expr* cond = as<Expr*>(ifs->cond);
+    check(cond);
+    if (!check_condition(cond)) {
+        return;
+    }
+    
+    if (!cond->is_foldable) {
+        error(expand(cond), "Comptime if expects the condition to be determined at compile time")
             .end_error(ErrCode::SemaNotComptimeCompute);
         return;
     }
@@ -330,7 +364,7 @@ void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
     //       the state of the problem. For example a variable being declared on one
     //       operating system and trying to access it but not on another.
 
-    auto ll_cond = llvm::cast<llvm::ConstantInt>(gen_constant(expand(ifs->cond), ifs->cond));
+    auto ll_cond = llvm::cast<llvm::ConstantInt>(gen_constant(expand(cond), cond));
     if (!ll_cond->isZero()) {
         // Path taken!
         ifs->takes_path = true;
@@ -1177,7 +1211,7 @@ void acorn::Sema::create_cast(Expr* expr, Type* to_type) {
 }
 
 bool acorn::Sema::check_condition(Expr* cond) {
-    if (!is_condition(cond)) {
+    if (!is_condition(cond->type)) {
         error(expand(cond), "Expected condition")
             .end_error(ErrCode::SemaExpectedCondition);
         return false;
@@ -1185,10 +1219,10 @@ bool acorn::Sema::check_condition(Expr* cond) {
     return true;
 }
 
-bool acorn::Sema::is_condition(Expr* cond) const {
-    return cond->type->is(context.bool_type) ||
-           cond->type->is_pointer() ||
-           cond->type->get_kind() == TypeKind::Null;
+bool acorn::Sema::is_condition(Type* type) const {
+    return type->is(context.bool_type) ||
+           type->is_pointer() ||
+           type->get_kind() == TypeKind::Null;
 }
 
 void acorn::Sema::check_modifier_incompatibilities(Decl* decl) {

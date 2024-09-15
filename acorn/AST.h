@@ -160,7 +160,7 @@ namespace acorn {
         IfStmt(NodeKind kind) : Node(kind) {
         }
 
-        Expr*      cond;
+        Node*      cond;
         Node*      elseif;
         ScopeStmt* scope;
     };
