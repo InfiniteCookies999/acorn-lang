@@ -306,10 +306,18 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
                 .end_error(ErrCode::SemaExpectedAssignmentIfStmt);
         }
         
-        if (var->type && !is_condition(var->type)) {
-            error(var, "Variable expected to have a conditional type")
-                .end_error(ErrCode::SemaExpectedCondition);
+        if (var->type) {
+            if (!ifs->post_variable_cond && !is_condition(var->type)) {
+                error(expand(var), "Variable expected to have a conditional type")
+                    .end_error(ErrCode::SemaExpectedCondition);
+            } else if (ifs->post_variable_cond) {
+                check_node(ifs->post_variable_cond);
+                if (ifs->post_variable_cond->type) {
+                    check_condition(ifs->post_variable_cond);
+                }
+            }
         }
+        
     } else {
         check_node(ifs->cond);
         Expr* cond = as<Expr*>(ifs->cond);

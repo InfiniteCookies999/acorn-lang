@@ -181,8 +181,12 @@ void test_codegen() {
             auto [success, result] = run_codegen_test(src(L"ifs/if_test5.ac"));
             expect(result, std::identity()).to_be("Ptr Not Null Case1Ptr Not Null Case2Ptr Not Null Case3");
         });
-        test("if with variable assignment", [&] {
+        test("if with var assign", [&] {
             auto [success, result] = run_codegen_test(src(L"ifs/if_test6.ac"));
+            expect(result, std::identity()).to_be("True Case");
+        });
+        test("if with var and post cond", [&] {
+            auto [success, result] = run_codegen_test(src(L"ifs/if_test7.ac"));
             expect(result, std::identity()).to_be("True Case");
         });
     });

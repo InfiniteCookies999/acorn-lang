@@ -161,6 +161,7 @@ namespace acorn {
         }
 
         Node*      cond;
+        Expr*      post_variable_cond = nullptr;
         Node*      elseif;
         ScopeStmt* scope;
     };

@@ -288,6 +288,10 @@ acorn::IfStmt* acorn::Parser::parse_if() {
     switch (cur_token.kind) {
     case TypeTokens:
         ifs->cond = parse_variable();
+        if (cur_token.is(';')) {
+            next_token();
+            ifs->post_variable_cond = parse_expr();
+        }
         break;
     default:
         ifs->cond = parse_expr();

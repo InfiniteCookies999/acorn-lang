@@ -25,20 +25,12 @@ void print(const char* s, int length) {
 #endif
 }
 
-bool get_true() {
-    return true
-}
-
-bool get_false() {
-    return false
-}
-
 void main() {
-    if bool tof = get_false() {
+    if int a = 4; a < 4 {
         print("False Case", 10)
     }
     
-    if bool tof = get_true() {
+    if int a = 4; a > 3 {
         print("True Case", 9)
     }
 }

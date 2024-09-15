@@ -302,9 +302,13 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
 
 llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs) {
 
-    auto load_variable_cond = [this](Var* var) finline->llvm::Value* {
+    auto load_variable_cond = [this, ifs](Var* var) finline->llvm::Value* {
     
         gen_variable(var); // Generate assignment.
+
+        if (ifs->post_variable_cond) {
+            return gen_condition(as<Expr*>(ifs->post_variable_cond));
+        }
 
         auto ll_value = builder.CreateLoad(gen_type(var->type), var->ll_address);
         if (var->type->is_real_pointer()) {
