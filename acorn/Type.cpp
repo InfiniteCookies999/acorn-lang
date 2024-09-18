@@ -44,26 +44,27 @@ uint32_t acorn::Type::get_number_of_bits() const {
 std::string acorn::Type::to_string() const {
 #define str(s) !is_const() ? s : "const " s;
     switch (kind) {
-    case TypeKind::Void:     return str("void");
-    case TypeKind::Int:      return str("int");
-    case TypeKind::Int8:     return str("int8");
-    case TypeKind::Int16:    return str("int16");
-    case TypeKind::Int32:    return str("int32");
-    case TypeKind::Int64:    return str("int64");
-    case TypeKind::UInt8:    return str("uint8");
-    case TypeKind::UInt16:   return str("uint16");
-    case TypeKind::UInt32:   return str("uint32");
-    case TypeKind::UInt64:   return str("uint64");
-    case TypeKind::Invalid:  return str("invalid");
-    case TypeKind::FuncsRef: return str("function reference");
-    case TypeKind::Bool:     return str("bool");
-    case TypeKind::Char:     return str("char");
-    case TypeKind::Char16:   return str("char16");
-    case TypeKind::Char32:   return str("char32");
-    case TypeKind::Null:     return str("null");
-    case TypeKind::ISize:    return str("isize");
-    case TypeKind::USize:    return str("usize");
-    case TypeKind::Pointer:  return as<const PointerType*>(this)->to_string();
+    case TypeKind::Void:      return str("void");
+    case TypeKind::Int:       return str("int");
+    case TypeKind::Int8:      return str("int8");
+    case TypeKind::Int16:     return str("int16");
+    case TypeKind::Int32:     return str("int32");
+    case TypeKind::Int64:     return str("int64");
+    case TypeKind::UInt8:     return str("uint8");
+    case TypeKind::UInt16:    return str("uint16");
+    case TypeKind::UInt32:    return str("uint32");
+    case TypeKind::UInt64:    return str("uint64");
+    case TypeKind::Invalid:   return str("invalid");
+    case TypeKind::FuncsRef:  return str("function reference");
+    case TypeKind::ModuleRef: return str("module reference");
+    case TypeKind::Bool:      return str("bool");
+    case TypeKind::Char:      return str("char");
+    case TypeKind::Char16:    return str("char16");
+    case TypeKind::Char32:    return str("char32");
+    case TypeKind::Null:      return str("null");
+    case TypeKind::ISize:     return str("isize");
+    case TypeKind::USize:     return str("usize");
+    case TypeKind::Pointer:   return as<const PointerType*>(this)->to_string();
     default:
         acorn_fatal("Type::to_string() missing to_string case");
         return "";

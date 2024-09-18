@@ -20,21 +20,27 @@ namespace llvm {
 
 namespace acorn {
     
+    struct Source {
+        std::wstring    path;
+        llvm::StringRef mod_name;
+    };
+
     class AcornLang {
     public:
-        using SourceVector = llvm::SmallVector<std::wstring>;
+        using SourceVector = llvm::SmallVector<Source>;
 
         ~AcornLang();
 
         AcornLang(PageAllocator& allocator);
 
-        void run(const SourceVector& sources);
+        void run(SourceVector& sources);
 
-        void set_released_build()      { release_build = true;       }
-        void set_should_show_times()   { should_show_times = true;   }
-        void set_should_show_llvm_ir() { should_show_llvm_ir = true; }
+        void set_released_build()          { release_build = true;                  }
+        void set_should_show_times()       { should_show_times = true;              }
+        void set_should_show_llvm_ir()     { should_show_llvm_ir = true;            }
         void set_should_show_error_codes() { context.set_should_show_error_codes(); }
-        void set_dont_show_wrote_to_msg() { dont_show_wrote_to_msg = true; }
+        void set_dont_show_wrote_to_msg()  { dont_show_wrote_to_msg = true;         }
+        void set_stand_alone()             { stand_alone = true;                    }
 
         void set_output_name(std::wstring output_name);
         void set_output_directory(std::wstring output_directory);
@@ -63,6 +69,7 @@ namespace acorn {
         bool should_show_times      = false;
         bool should_show_llvm_ir    = false;
         bool dont_show_wrote_to_msg = false;
+        bool stand_alone            = false;
         std::function<void(ErrCode, std::string, int)> error_code_interceptor;
 
         // Timers to keep track of how different
@@ -77,8 +84,6 @@ namespace acorn {
         PageAllocator& allocator;
         Context&       context;
 
-        acorn::Module modl;
-
         void show_time_table();
 
         void initialize_codegen();
@@ -91,12 +96,12 @@ namespace acorn {
 
         bool validate_sources(const SourceVector& sources);
 
-        void parse_files(const SourceVector& sources);
+        void parse_files(SourceVector& sources);
 
-        void parse_directory(const std::filesystem::path&);
+        void parse_directory(Module& modl, const std::filesystem::path&);
 
         Buffer read_file_to_buffer(const std::filesystem::path& path);
-        void parse_file(const std::filesystem::path& path);
+        void parse_file(Module& modl, const std::filesystem::path& path);
 
     };
 }

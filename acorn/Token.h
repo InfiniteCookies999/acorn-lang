@@ -43,6 +43,7 @@ namespace acorn {
             KwIf,
             KwElIf,
             KwElse,
+            KwImport,
 
             KwNull,
             KwTrue,

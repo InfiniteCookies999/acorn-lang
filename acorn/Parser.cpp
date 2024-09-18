@@ -46,6 +46,12 @@ void acorn::Parser::parse() {
     
     // Prime the parser.
     next_token();
+
+    // Parsing imports.
+    while (cur_token.is(Token::KwImport)) {
+        parse_import_top();
+    }
+
     // Have to set the previous token because the
     // current token does not exist.
     prev_token = cur_token;
@@ -82,12 +88,65 @@ void acorn::Parser::parse() {
 // Statement parsing
 //--------------------------------------
 
+void acorn::Parser::parse_import_top() {
+    auto importn = parse_import();
+    if (!importn) return;
+
+    if (auto prev_import = modl.try_add_import(importn)) {
+        error(importn->loc, "Duplicate import")
+            .end_error(ErrCode::ParseDuplicateImport);
+    }
+}
+
+acorn::ImportStmt* acorn::Parser::parse_import() {
+
+    auto importn = new_node<ImportStmt>(cur_token);
+    importn->file = file;
+    next_token(); // Consuming 'import' token.
+
+    Token start_token = cur_token;
+    
+    bool more_to_import = false;
+    do {
+
+        if (cur_token.is_not(Token::Identifier)) {
+            error(cur_token, "Expected identifier for import location")
+                .end_error(ErrCode::ParseExpectedImportIdentifier);
+            skip_recovery();
+            return nullptr;
+        }
+        Token ident_token = cur_token;
+        next_token(); // Consuming the identifier.
+
+        more_to_import = cur_token.is('.');
+        if (more_to_import) {
+            next_token();
+        } else {
+            importn->import_key = Identifier::get(ident_token.text());
+        }
+    } while (more_to_import);
+
+    Token end_token = prev_token;
+
+    const char* start = start_token.loc.ptr;
+    const char* end = end_token.loc.ptr + end_token.loc.length;
+    importn->location_key = llvm::StringRef(start, end - start);
+    
+    return importn;
+}
+
 acorn::Node* acorn::Parser::parse_statement() {
     uint32_t modifiers = 0;
     switch (cur_token.kind) {
     case Token::KwReturn: return parse_return();
     case Token::KwIf:     return parse_if();
     case Token::KwCTIf:   return parse_comptime_if();
+    case Token::KwImport: {
+        error(cur_token, "Import expected at top of file")
+            .end_error(ErrCode::ParseImportNotTopOfFile);
+        parse_import();
+        return nullptr;
+    }
     case ModifierTokens:
         modifiers = parse_modifiers();
         [[fallthrough]];
@@ -776,6 +835,17 @@ acorn::Expr* acorn::Parser::parse_postfix() {
     return term;
 }
 
+acorn::Expr* acorn::Parser::parse_ident_ref_postfix(Expr* site) {
+    while (cur_token.is('(') || cur_token.is('.')) {
+        if (cur_token.is('(')) {
+            site = parse_function_call(site);
+        } else if (cur_token.is('.')) {
+            site = parse_dot_operator(site);
+        }
+    }
+    return site;
+}
+
 acorn::Expr* acorn::Parser::parse_function_call(Expr* site) {
     
     FuncCall* call = new_node<FuncCall>(cur_token);
@@ -810,6 +880,16 @@ acorn::Expr* acorn::Parser::parse_function_call(Expr* site) {
     return call;
 }
 
+acorn::Expr* acorn::Parser::parse_dot_operator(Expr* site) {
+
+    auto dot = new_node<DotOperator>(cur_token);
+    next_token(); // Consuming '.' token.
+
+    dot->site = site;
+    dot->ident = expect_identifier("for '.' operator");
+    
+    return dot;
+}
 
 acorn::Expr* acorn::Parser::parse_term() {
     switch (cur_token.kind) {
@@ -831,10 +911,7 @@ acorn::Expr* acorn::Parser::parse_term() {
         ref->ident = Identifier::get(cur_token.text());
 
         next_token(); // Consuming the identifier.
-        if (cur_token.is('(')) {
-            return parse_function_call(ref);
-        }
-        return ref;
+        return parse_ident_ref_postfix(ref);
     }
     case '+': case '-': case '~': case '!':
     case '&': case Token::AddAdd: case Token::SubSub:
@@ -1283,11 +1360,21 @@ void acorn::Parser::skip_recovery() {
     while (true) {
         switch (cur_token.kind) {
         case Token::EOB:
-        case '}':
-        case ')':
-        case ',':
+        case ')': // TODO: Might want to count these so it doesn't just recover at bad times.
         case '{':
+        case '}':
             return;
+            // TODO: Should check for elif or #elif after } to improve recovery.
+        /*case '}': {
+            auto peek = peek_token(0);
+            if (peek.is(Token::KwElIf)) {
+                
+            } else if (peek.is(Token::KwCTElIf)) {
+
+            } else {
+                return;
+            }
+        }*/
         case ModifierTokens:
             return;
         case TypeTokens:
@@ -1295,6 +1382,7 @@ void acorn::Parser::skip_recovery() {
                 return;
             next_token();
             break;
+        case Token::KwImport:
         case Token::KwIf:
         case Token::KwReturn:
         case Token::KwCTIf:

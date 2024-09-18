@@ -32,7 +32,8 @@ namespace acorn {
 
         Void,
         Bool,
-        FuncsRef, // A reference to an identifier to overloaded functions.
+        FuncsRef,   // A reference to an identifier to overloaded functions.
+        ModuleRef,  // A reference to an identifier to a module.
         Pointer,
         Null,
 

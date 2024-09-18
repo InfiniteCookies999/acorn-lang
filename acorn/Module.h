@@ -22,6 +22,11 @@ namespace acorn {
         };
         using BadScopeList = llvm::SmallVector<BadScopeNode>;
 
+        // If it fails it returns the previous import.
+        ImportStmt* try_add_import(ImportStmt* importn);
+        ImportStmt* find_import(Identifier import_key);
+        llvm::DenseMap<Identifier, ImportStmt*>& get_imports() { return imports; }
+
         void add_global_function(Func* func);
         void add_global_variable(Var* var);
         void add_global_comptime_control_flow(Node* control_flow);
@@ -58,6 +63,8 @@ namespace acorn {
 
     private:
         llvm::SmallVector<SourceFile*> source_files;
+
+        llvm::DenseMap<Identifier, ImportStmt*> imports;
 
         // Global functions
         llvm::DenseMap<Identifier, FuncList> functions;

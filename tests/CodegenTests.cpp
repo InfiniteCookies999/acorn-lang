@@ -76,7 +76,7 @@ std::wstring get_executable_path() {
 static auto run_codegen_test(const wchar_t* file) {
     
     AcornLang::SourceVector sources;
-    sources.push_back(file);
+    sources.push_back(Source{ file, "" });
 
     PageAllocator allocator(get_system_page_size());
     bool has_errors = false;

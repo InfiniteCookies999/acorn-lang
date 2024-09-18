@@ -20,6 +20,12 @@
 
 namespace fs = std::filesystem;
 
+static const char* StdLibEnvironmentVariable = "acorn_std_lib";
+
+static const char* get_std_lib_path() {
+    return std::getenv(StdLibEnvironmentVariable);
+}
+
 acorn::AcornLang::~AcornLang() {
     delete ll_module;
 }
@@ -40,7 +46,7 @@ acorn::AcornLang::AcornLang(PageAllocator& allocator)
     set_output_name(L"program");
 }
 
-void acorn::AcornLang::run(const SourceVector& sources) {
+void acorn::AcornLang::run(SourceVector& sources) {
 #define go(f) { f; if (context.has_errors()) return; }
 
     total_timer.start();
@@ -192,12 +198,24 @@ void acorn::AcornLang::initialize_codegen() {
 
 void acorn::AcornLang::sema_and_irgen() {
 
-    Sema::check_nodes_wrong_scopes(modl);
+    for (auto& entry : context.get_modules()) {
+        Sema::check_nodes_wrong_scopes(*entry.second);
+    }
     if (context.has_errors()) {
         return;
     }
 
-    Sema::resolve_global_comptime(context, modl);
+    for (auto& entry : context.get_modules()) {
+        Sema::resolve_global_comptime(context, *entry.second);
+    }
+    if (context.has_errors()) {
+        return;
+    }
+
+    for (auto& entry : context.get_modules()) {
+        Sema::resolve_imports(context, *entry.second);
+    }
+
     Sema::find_main_function(context);
 
     if (!context.get_main_function()) {
@@ -208,8 +226,10 @@ void acorn::AcornLang::sema_and_irgen() {
     }
     context.queue_gen(context.get_main_function());
 
-    Sema::check_for_duplicate_functions(modl);
-    Sema::check_for_duplicate_variables(modl);
+    for (auto& entry : context.get_modules()) {
+        Sema::check_for_duplicate_functions(*entry.second);
+        Sema::check_for_duplicate_variables(*entry.second);
+    }
 
     if (context.has_errors()) {
         return;
@@ -372,16 +392,16 @@ bool acorn::AcornLang::validate_sources(const SourceVector& sources) {
     
     bool failed_to_find_source = false;
     for (const auto& source : sources) {
-        fs::path path = fs::path(source.data());
+        fs::path path = fs::path(source.path);
         std::error_code ec;
         if (!fs::exists(path, ec) || ec) {
             if (ec) {
                 Logger::global_error(context,
                     "Could not check if source \"%s\" exists. Please check permissions. Error: '%s'",
-                    source, ec.message())
+                    source.path, ec.message())
                     .end_error(ErrCode::GlobalCouldNotCheckIfSourceExists);
             } else {
-                Logger::global_error(context, "Source \"%s\" does not exist", source)
+                Logger::global_error(context, "Source \"%s\" does not exist", source.path)
                     .end_error(ErrCode::GlobalSourceDoesNotExists);
             }
             failed_to_find_source = true;
@@ -391,7 +411,7 @@ bool acorn::AcornLang::validate_sources(const SourceVector& sources) {
     return !failed_to_find_source;
 }
 
-void acorn::AcornLang::parse_files(const SourceVector& sources) {
+void acorn::AcornLang::parse_files(SourceVector& sources) {
     parse_timer.start();
 
     if (sources.empty()) {
@@ -400,34 +420,52 @@ void acorn::AcornLang::parse_files(const SourceVector& sources) {
         return;
     }
 
+    // Finding to find the standard library.
+    if (!stand_alone) {
+        if (const char* lib_path = get_std_lib_path()) {
+            std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+            auto wpath = converter.from_bytes(lib_path);
+            sources.push_back(Source{
+                              .path     = std::move(wpath),
+                              .mod_name = "std"
+                              });
+        } else {
+            Logger::global_error(context, "Missing standard library environment variable")
+                .add_line("Make sure you set environment variable '%s'", StdLibEnvironmentVariable)
+                .end_error(ErrCode::GlobalNoStdLibrary);
+            return;
+        }
+    }
+
     if (!validate_sources(sources)) {
         return; // Validation failed, so exit early.
     }
 
     for (const auto& source : sources) {
-        fs::path path = fs::path(source.data());
+        fs::path path = fs::path(source.path);
+        auto modl = context.get_or_create_modl(source.mod_name);
 
         std::error_code ec;
         if (fs::is_directory(path, ec) && !ec) {
             // The user specified a path to a directory (parsing all acorn
             // files under the directory).
-            parse_directory(path);
+            parse_directory(*modl, path);
         } else if (ec) {
             Logger::global_error(context,
                 "Failed to check if source \"%s\" is a directory. "
                 "Make sure not to modify files while compiling. Error: '%s'",
-                source, ec.message())
+                source.path, ec.message())
                 .end_error(ErrCode::GlobalFailedToCheckSourceIsDir);
         } else {
             if (path.extension() != ".ac") {
                 Logger::global_error(context, "Expected source file with extension type "
-                                              ".ac for file \"%s\"", source)
+                                              ".ac for file \"%s\"", source.path)
                     .end_error(ErrCode::GlobalWrongExtensionTypeForFile);
                 continue; // Skip this file.
             }
             
             // The user specified a path to a file.
-            parse_file(source);
+            parse_file(*modl, path);
         }
     }
 
@@ -435,11 +473,11 @@ void acorn::AcornLang::parse_files(const SourceVector& sources) {
 
 }
 
-void acorn::AcornLang::parse_directory(const fs::path& path) {
+void acorn::AcornLang::parse_directory(Module& modl, const fs::path& path) {
     for (const auto& entry : fs::recursive_directory_iterator(path)) {
         if (entry.is_regular_file()) {
             const auto& path = entry.path().generic_wstring();
-            parse_file(path);
+            parse_file(modl, path);
         }
     }
 }
@@ -457,7 +495,7 @@ acorn::Buffer acorn::AcornLang::read_file_to_buffer(const std::filesystem::path&
     return buffer;
 }
 
-void acorn::AcornLang::parse_file(const fs::path& path) {
+void acorn::AcornLang::parse_file(Module& modl, const fs::path& path) {
     auto buffer = read_file_to_buffer(path);
 
     SourceFile* file = allocator.alloc_type<SourceFile>();

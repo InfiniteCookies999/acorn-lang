@@ -149,12 +149,34 @@ void acorn::Sema::check_nodes_wrong_scopes(Module& modl) {
     }
 }
 
+void acorn::Sema::resolve_imports(Context& context, Module& modl) {
+    for (auto& entry : modl.get_imports()) {
+        resolve_import(context, entry.second);
+    }
+}
+
+void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
+    if (auto modl = context.find_module(importn->location_key)) {
+        importn->set_imported_module(modl);
+    } else {
+        auto& logger = importn->file->logger;
+        SourceLoc error_loc = {
+            .ptr    = importn->location_key.data(),
+            .length = as<uint16_t>(importn->location_key.size())
+        };
+        logger.begin_error(error_loc, "Could not find module '%s'", importn->location_key)
+            .end_error(ErrCode::SemaCouldNotResolveImport);
+    }
+}
+
 void acorn::Sema::check_node(Node* node) {
     switch (node->kind) {
     case NodeKind::Var:
         return check_variable(as<Var*>(node));
     case NodeKind::IdentRef:
-        return check_ident_ref(as<IdentRef*>(node), false);
+        return check_ident_ref(as<IdentRef*>(node), &modl, false);
+    case NodeKind::DotOperator:
+        return check_dot_operator(as<DotOperator*>(node), false);
     case NodeKind::ReturnStmt:
         return check_return(as<ReturnStmt*>(node));
     case NodeKind::IfStmt: {
@@ -796,22 +818,22 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
     }
 }
 
-void acorn::Sema::check_ident_ref(IdentRef* ref, bool is_for_call) {
+void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_for_call) {
     
-    auto find_function = [this, ref]() finline{
-        if (auto* funcs = modl.find_global_funcs(ref->ident)) {
+    auto find_function = [this, ref, search_modl]() finline {
+        if (auto* funcs = search_modl->find_global_funcs(ref->ident)) {
             ref->set_funcs_ref(funcs);
         }
     };
 
-    auto find_variable = [this, ref]() finline {
+    auto find_variable = [this, ref, &search_modl]() finline {
         if (cur_scope) {
             if (auto* var = cur_scope->find_variable(ref->ident)) {
                 ref->set_var_ref(var);
                 return;
             }
         }
-        if (auto* var = modl.find_global_variable(ref->ident)) {
+        if (auto* var = search_modl->find_global_variable(ref->ident)) {
             ref->set_var_ref(var);
             return;
         }
@@ -822,13 +844,20 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, bool is_for_call) {
 
     if (is_for_call) {
         find_function();
-        if (!ref->found_kind) {
+        if (!ref->found_ref()) {
             find_variable();
         }
     } else {
         find_variable();
-        if (!ref->found_kind) {
+        if (!ref->found_ref()) {
             find_function();
+        }
+    }
+
+    // If still not found let us try and search for an imported module.
+    if (!ref->found_ref() && search_modl == &modl) {
+        if (auto importn = modl.find_import(ref->ident)) {
+            ref->set_import(importn);
         }
     }
     
@@ -853,12 +882,36 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, bool is_for_call) {
         ref->type = ref->universal_ref->type;
         break;
     }
+    case IdentRef::ImportKind : {
+        ref->type = context.module_ref_type;
+        break;
+    }
     case IdentRef::NoneKind: {
         error(ref, "Could not find %s '%s'", is_for_call ? "function" : "identifier", ref->ident)
             .end_error(!is_for_call ? ErrCode::SemaNoFindIdentRef : ErrCode::SemaNoFindFuncIdentRef);
         break;
     }
     }
+}
+
+void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
+    if (dot->site->is(NodeKind::IdentRef)) {
+        IdentRef* site = as<IdentRef*>(dot->site);
+        check_ident_ref(site, &modl, false);
+        if (site->type == context.module_ref_type) {
+            auto importn = site->import_ref;
+            // Special case in which we search in a given module.
+            check_ident_ref(dot, importn->imported_modl, is_for_call);
+        } else if (!site->type) {
+            return;
+        }
+    } else {
+        check(dot->site);
+    }
+    
+
+
+    //check_ident_ref(dot, modl, is_for_call);
 }
 
 void acorn::Sema::check_function_call(FuncCall* call) {
@@ -872,8 +925,21 @@ void acorn::Sema::check_function_call(FuncCall* call) {
 
     bool is_callable = true;
     if (call->site->is(NodeKind::IdentRef)) {
+        
         IdentRef* ref = as<IdentRef*>(call->site);
-        check_ident_ref(ref, true);
+        check_ident_ref(ref, &modl, true);
+        yield_if(ref);
+
+        if (ref->found_kind != IdentRef::FuncsKind) {
+            is_callable = false;
+        }
+    } else if (call->site->is(NodeKind::DotOperator)) {
+        // This is very similar to check to IdentRef but it is too much
+        // small differences to abstract in any meaningfull way as far
+        // as I can tell.
+
+        DotOperator* ref = as<DotOperator*>(call->site);
+        check_dot_operator(ref, true);
         yield_if(ref);
 
         if (ref->found_kind != IdentRef::FuncsKind) {

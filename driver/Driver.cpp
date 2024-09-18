@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
                 ++i;
             }
         } else {
-            sources.push_back(wconverter.from_bytes(argv[i]));
+            sources.push_back(acorn::Source{ wconverter.from_bytes(argv[i]), "" });
         }
     }
 

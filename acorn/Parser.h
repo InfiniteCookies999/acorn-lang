@@ -42,6 +42,9 @@ namespace acorn {
         // Statement parsing
         //--------------------------------------
 
+        void parse_import_top();
+        ImportStmt* parse_import();
+
         Node* parse_statement();
 
         Func* parse_function(uint32_t modifiers, Type* type);
@@ -74,7 +77,9 @@ namespace acorn {
         template<typename T>
         Expr* fold_int(Token op, Number* lhs, Number* rhs, Type* to_type);
         Expr* parse_postfix();
+        Expr* parse_ident_ref_postfix(Expr* site);
         Expr* parse_function_call(Expr* site);
+        Expr* parse_dot_operator(Expr* site);
         Expr* parse_term();
 
         Expr* parse_int_literal();

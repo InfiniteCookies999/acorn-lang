@@ -3,6 +3,7 @@
 #include "Type.h"
 #include "Logger.h"
 #include "ir/IRGen.h"
+#include "Module.h"
 
 namespace acorn {
     template<typename E>
@@ -40,6 +41,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       char16_type(Type::create(allocator, TypeKind::Char16)),
       char32_type(Type::create(allocator, TypeKind::Char32)),
       funcs_ref_type(Type::create(allocator, TypeKind::FuncsRef)),
+      module_ref_type(Type::create(allocator, TypeKind::ModuleRef)),
       const_char_ptr_type(type_table.get_ptr_type(type_table.get_const_type(char_type))),
       const_char16_ptr_type(type_table.get_ptr_type(type_table.get_const_type(char16_type))),
       const_char32_ptr_type(type_table.get_ptr_type(type_table.get_const_type(char32_type))),
@@ -75,6 +77,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "if"       , Token::KwIf        },
           { "elif"     , Token::KwElIf      },
           { "else"     , Token::KwElse      },
+          { "import"   , Token::KwImport    },
 
           { "native"   , Token::KwNative    },
           { "dllimport", Token::KwDllimport },
@@ -134,6 +137,22 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
         v->value = false;
 #endif
     }));
+}
+
+acorn::Module* acorn::Context::get_or_create_modl(llvm::StringRef mod_name) {
+    auto itr = modls.find(mod_name);
+    if (itr != modls.end()) {
+        return itr->second;
+    }
+    Module* modl = allocator.alloc_type<Module>();
+    new (modl) Module();
+    modls.insert({ mod_name, modl });
+    return modl;
+}
+
+acorn::Module* acorn::Context::find_module(llvm::StringRef location_path) {
+    auto itr = modls.find(location_path);
+    return itr == modls.end() ? nullptr : itr->second;
 }
 
 void acorn::Context::queue_gen(Decl* decl) {

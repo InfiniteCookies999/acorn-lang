@@ -30,6 +30,9 @@ namespace acorn {
         static void report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code);
 
         static void check_nodes_wrong_scopes(Module& modl);
+        
+        static void resolve_imports(Context& context, Module& modl);
+        static void resolve_import(Context& context, ImportStmt* importn);
 
         void check_function(Func* func);
         void check_variable(Var* var);
@@ -81,7 +84,8 @@ namespace acorn {
 
         void check_binary_op(BinOp* bin_op);
         void check_unary_op(UnaryOp* unary_op);
-        void check_ident_ref(IdentRef* ref, bool is_for_call);
+        void check_ident_ref(IdentRef* ref, Module* search_modl, bool is_for_call);
+        void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
         Func* find_best_call_canidate(FuncList& canidates,
                                       llvm::SmallVector<Expr*, 8>& args);

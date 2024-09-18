@@ -31,6 +31,7 @@ namespace acorn {
         IfStmt,
         ComptimeIfStmt,
         ScopeStmt,
+        ImportStmt,
 
         ExprStart,
         InvalidExpr,
@@ -39,6 +40,7 @@ namespace acorn {
         Number,
         Bool,
         IdentRef,
+        DotOperator,
         FuncCall,
         String,
         Null,
@@ -145,6 +147,34 @@ namespace acorn {
 
         bool is_param() const { return param_idx != NotParam; }
 
+    };
+
+    struct ImportStmt : Node {
+        ImportStmt() : Node(NodeKind::ImportStmt) {
+        }
+
+        SourceFile* file;
+
+        llvm::StringRef location_key; // Full path for resolving the import.
+        Identifier      import_key;   // What gets referenced in the code by
+                                      // the user when they want to use a
+                                      // namespace.
+
+        // Discriminated union.
+        enum {
+            ModuleKind
+        } imported_kind;
+
+        union {
+            Module* imported_modl;
+        };
+
+        bool is_imported_module() const { return imported_kind == ModuleKind; }
+
+        void set_imported_module(Module* modl) {
+            imported_kind = ModuleKind;
+            imported_modl = modl;
+        }
     };
 
     struct ReturnStmt : Node {
@@ -259,6 +289,9 @@ namespace acorn {
         IdentRef() : Expr(NodeKind::IdentRef) {
         }
 
+        IdentRef(NodeKind kind) : Expr(kind) {
+        }
+
         Identifier ident;
     
         bool found_ref() const {
@@ -271,17 +304,20 @@ namespace acorn {
             VarKind,
             FuncsKind,
             UniversalKind,
+            ImportKind,
         } found_kind = NoneKind;
 
         union {
-            Var*      var_ref = nullptr;
-            FuncList* funcs_ref;
-            Expr*     universal_ref;
+            Var*        var_ref = nullptr;
+            FuncList*   funcs_ref;
+            Expr*       universal_ref;
+            ImportStmt* import_ref;
         };
 
         bool is_var_ref() const       { return found_kind == VarKind;       }
         bool is_funcs_ref() const     { return found_kind == FuncsKind;     }
         bool is_universal_ref() const { return found_kind == UniversalKind; }
+        bool is_import_ref() const    { return found_kind == ImportKind;    }
 
         void set_var_ref(Var* var) {
             var_ref    = var;
@@ -297,6 +333,18 @@ namespace acorn {
             universal_ref = universal;
             found_kind = UniversalKind;
         }
+
+        void set_import(ImportStmt* importn) {
+            import_ref = importn;
+            found_kind = ImportKind;
+        }
+    };
+
+    struct DotOperator : IdentRef {
+        DotOperator() : IdentRef(NodeKind::DotOperator) {
+        }
+
+        Expr* site;
     };
 
     struct FuncCall : Expr {
