@@ -96,7 +96,9 @@ namespace acorn {
             String16BitLiteral,
             String32BitLiteral,
             CharLiteral,
-            InvalidLiteral,
+            InvalidStringLiteral,
+            InvalidCharLiteral,
+            InvalidNumberLiteral,
 
             // End of buffer
             EOB

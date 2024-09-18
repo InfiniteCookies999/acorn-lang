@@ -192,17 +192,27 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
 }
 
+template<typename D, bool uses_linkname>
+D* acorn::Parser::new_declaration(uint32_t modifiers, Identifier name, Token loc_token) {
+    D* decl = new_node<D>(loc_token);
+    decl->file      = file;
+    decl->modifiers = modifiers;
+    decl->name      = name;
+    if constexpr (uses_linkname) {
+        decl->linkname = linkname;
+    }
+    linkname = "";
+    return decl;
+}
+
 acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type) {
     return parse_function(modifiers, type, expect_identifier());
 }
 
 acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Identifier name) {
     
-    Func* func = new_node<Func>(prev_token);
-    func->file        = file;
-    func->modifiers   = modifiers;
+    Func* func = new_declaration<Func, true>(modifiers, name, prev_token);
     func->return_type = type;
-    func->name        = name;
 
     Func* prev_func = cur_func;
     cur_func = func;
@@ -269,12 +279,9 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type) {
 
 acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identifier name) {
     
-    Var* var = new_node<Var>(prev_token);
-    var->file      = file;
-    var->modifiers = modifiers;
-    var->type      = type;
-    var->name      = name;
-
+    Var* var = new_declaration<Var, true>(modifiers, name, prev_token);
+    var->type = type;
+    
     if (cur_token.is('=')) {
         next_token(); // Consume '=' token.
         var->assignment = parse_expr();
@@ -300,6 +307,29 @@ uint32_t acorn::Parser::parse_modifiers() {
             modifiers |= Modifier::Native;
 
             next_token();
+            if (cur_token.is('(')) {
+                next_token();
+                if (cur_token.is(Token::String8BitLiteral)) {
+                    
+                    linkname = cur_token.text();
+                    linkname = linkname.substr(1, linkname.size() - 2);
+                    
+                    next_token();
+                } else if (cur_token.is(Token::String16BitLiteral) ||
+                           cur_token.is(Token::String32BitLiteral)) {
+                    error(cur_token, "Linkage name cannot contain unicode")
+                        .end_error(ErrCode::ParseNativeLinkNameHasUnicode);
+                } else if (cur_token.is(Token::InvalidStringLiteral)) {
+                    // They writed to write a string but it was improperly lexed so
+                    // we will just eat the token.
+                    next_token();
+                } else {
+                    error(cur_token, "Expected string literal for linkage name")
+                        .end_error(ErrCode::ParseNativeLinkNameNotString);
+                }
+                
+                expect(')', "for native modifier");
+            }
             break;
         }
         case Token::KwDllimport: {
@@ -901,7 +931,9 @@ acorn::Expr* acorn::Parser::parse_term() {
     case Token::String16BitLiteral:   return parse_string16bit_literal();
     case Token::String32BitLiteral:   return parse_string32bit_literal();
     case Token::CharLiteral:          return parse_char_literal();
-    case Token::InvalidLiteral: {
+    case Token::InvalidStringLiteral:
+    case Token::InvalidCharLiteral:
+    case Token::InvalidNumberLiteral: {
         next_token();
         return new_node<InvalidExpr>(cur_token);
     }

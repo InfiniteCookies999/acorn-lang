@@ -196,8 +196,13 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
     }
     case '~':
         return builder.CreateXor(gen_rvalue(expr), -1, "neg");
-    case '!':
+    case '!': {
+        if (expr->type->is_pointer()) {
+            auto ll_null = llvm::Constant::getNullValue(llvm::PointerType::get(ll_context, 0));
+            return builder.CreateICmpEQ(gen_rvalue(expr), ll_null);
+        }
         return builder.CreateXor(gen_rvalue(expr), 1, "not");
+    }    
     case '&':
         // To get the address of the lvalue all we have to do is
         // get the value from gen_value since if we do not call

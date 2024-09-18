@@ -15,7 +15,11 @@ native isize write(int32 fd, const void* buf, usize count)
 
 #endif
 
-native isize strlen(const char* s)
+int strlen(const char* s) {
+    if !s  return 0
+    return as(int) istrlen(s)
+}
+native("strlen") isize istrlen(const char* s)
 
 void print(const char* s, int length) {
 #if OS_GROUP_WINDOWS
@@ -28,7 +32,7 @@ void print(const char* s, int length) {
 }
 
 void print(const char* s) {
-    print(s, as(int) strlen(s))
+    print(s, strlen(s))
 }
 
 void println(const char* s) {

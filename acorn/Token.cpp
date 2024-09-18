@@ -16,7 +16,9 @@ std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
     case Token::String16BitLiteral:   return "string-bit16-literal";
     case Token::String32BitLiteral:   return "string-bit32-literal";
     case Token::CharLiteral:          return "char-literal";
-    case Token::InvalidLiteral:       return "invalid-literal";
+    case Token::InvalidStringLiteral: return "invalid-string-literal";
+    case Token::InvalidCharLiteral:   return "invalid-char-literal";
+    case Token::InvalidNumberLiteral: return "invalid-number-literal";
     case Token::GtGt:                 return ">>";
     case Token::LtLt:                 return "<<";
     case Token::GtEq:                 return ">=";

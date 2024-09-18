@@ -39,6 +39,9 @@ namespace acorn {
         Token  peeked_tokens[MAX_PEEKED_TOKENS];
         size_t peeked_size = 0;
 
+        // Linkage name set by the native modifier.
+        llvm::StringRef linkname;
+
         // Statement parsing
         //--------------------------------------
 
@@ -46,6 +49,9 @@ namespace acorn {
         ImportStmt* parse_import();
 
         Node* parse_statement();
+
+        template<typename D, bool uses_linkname>
+        D* new_declaration(uint32_t modifiers, Identifier name, Token loc_token);
 
         Func* parse_function(uint32_t modifiers, Type* type);
         Func* parse_function(uint32_t modifiers, Type* type, Identifier name);

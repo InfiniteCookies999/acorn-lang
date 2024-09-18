@@ -133,6 +133,8 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
 
     auto get_name = [func, &contx = context, is_main] {
         bool dont_fix_name = is_main || func->has_modifier(Modifier::Native);
+        if (!func->linkname.empty())
+            return llvm::Twine(func->linkname);
         llvm::Twine ll_name = func->name.reduce();
         return dont_fix_name ? ll_name : ll_name.concat(".acorn");
     };
@@ -190,7 +192,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     // Creating the return block and address if they are needed.
     bool is_main = func == context.get_main_function();
     if (func->num_returns > 1) {
-        ll_ret_block = gen_bblock("ret.block");
+        ll_ret_block = gen_bblock("ret.block", ll_cur_func);
         if (func->return_type->is_not(context.void_type)) {
             ll_ret_addr = builder.CreateAlloca(gen_type(func->return_type), nullptr, "ret.addr");
         } else if (is_main) {
@@ -215,13 +217,15 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     }
 
     if (func->num_returns > 1) {
-        builder.CreateBr(ll_ret_block);
+        // Have to check for termination because the last statement might
+        // have been an if statement that already branched.
+        gen_branch_if_not_term(ll_ret_block);
         builder.SetInsertPoint(ll_ret_block);
     
         // The return value returns to an address so need to load
         // the value.
-        auto load_type = is_main ? llvm::Type::getInt32Ty(ll_context) : gen_type(func->return_type);
-        ll_ret_addr = builder.CreateLoad(load_type, ll_ret_addr, "ret.val");
+        auto ll_load_type = is_main ? llvm::Type::getInt32Ty(ll_context) : gen_type(func->return_type);
+        ll_ret_value = builder.CreateLoad(ll_load_type, ll_ret_addr, "ret.val");
     }
 
     if (func->return_type->is(context.void_type) && !is_main) {
@@ -248,7 +252,7 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
     // TODO: const: !>_<
     auto ll_linkage = var->has_modifier(Modifier::Native) ? llvm::GlobalValue::ExternalLinkage
                                                           : llvm::GlobalValue::InternalLinkage;
-    auto ll_name = var->name.reduce();
+    auto ll_name = var->linkname.empty() ? var->name.reduce() : var->linkname;
     auto ll_final_name = var->has_modifier(Modifier::Native) ? ll_name
                                                              : ll_name + "." + llvm::Twine(global_counter++);
     auto ll_address = gen_global_variable(ll_final_name,

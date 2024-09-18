@@ -358,6 +358,9 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
         all_paths_return &= all_paths_return2;
     } else if (ifs->elseif) {
         check_scope(as<ScopeStmt*>(ifs->elseif));
+    } else {
+        // If an else does not exist then not all paths return.
+        all_paths_return = false;
     }
 
     cur_scope->all_paths_return = all_paths_return;
@@ -768,11 +771,11 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
         break;
     }
     case '!': {
-        if (!expr->type->is(context.bool_type)) {
+        if (!is_condition(expr->type)) {
             error_no_applies();
             return;
         }
-        unary_op->type = expr->type;
+        unary_op->type = context.bool_type;
         unary_op->is_foldable = expr->is_foldable;
         break;
     }

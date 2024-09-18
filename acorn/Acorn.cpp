@@ -420,7 +420,7 @@ void acorn::AcornLang::parse_files(SourceVector& sources) {
         return;
     }
 
-    // Finding to find the standard library.
+    // Trying to find the standard library.
     if (!stand_alone) {
         if (const char* lib_path = get_std_lib_path()) {
             std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;

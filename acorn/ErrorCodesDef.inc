@@ -24,6 +24,8 @@ X(ParseIntegerValueNotFitType              , 20016)
 X(ParseExpectedImportIdentifier            , 20017)
 X(ParseDuplicateImport                     , 20018)
 X(ParseImportNotTopOfFile                  , 20019)
+X(ParseNativeLinkNameNotString             , 20020)
+X(ParseNativeLinkNameHasUnicode            , 20021)
                                            
 X(SemaNotAllFuncPathReturn                 , 30000)
 X(SemaVariableCannotHaveVoidType           , 30001)

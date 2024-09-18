@@ -316,7 +316,7 @@ acorn::Token acorn::Lexer::finish_mumber(tokkind kind, const char* start) {
         auto error_loc = SourceLoc{ start, static_cast<uint16_t>(ptr - start) };
         logger.begin_error(error_loc, "Numbers cannot end with _")
               .end_error(ErrCode::LexNumberCannotEndUnderscore);
-        return new_token(Token::InvalidLiteral, start);
+        return new_token(Token::InvalidNumberLiteral, start);
     }
     
     if (*ptr == '\'') {
@@ -325,7 +325,7 @@ acorn::Token acorn::Lexer::finish_mumber(tokkind kind, const char* start) {
             logger.begin_error(error_loc, "Expected to end in a type specifier")
                   .add_line("One of: 'i8, 'i16, 'i32, 'i64, 'u8, 'u16, 'u32, 'u64")
                   .end_error(ErrCode::LexNumberBadTypeSpec);
-            return new_token(Token::InvalidLiteral, start);
+            return new_token(Token::InvalidNumberLiteral, start);
         };
         
         // Explicit type specification.
@@ -412,7 +412,7 @@ FinishedStringLexLab:
             .end_error(ErrCode::LexStringMissingEndQuote);
     }
     
-    return new_token(start, static_cast<uint16_t>(ptr - start), !invalid ? kind : Token::InvalidLiteral);
+    return new_token(start, static_cast<uint16_t>(ptr - start), !invalid ? kind : Token::InvalidStringLiteral);
 }
 
 acorn::Token acorn::Lexer::next_char() {
@@ -427,13 +427,13 @@ acorn::Token acorn::Lexer::next_char() {
     case '\n': {
         error("Expected closing ' for character")
             .end_error(ErrCode::LexCharMissingEndQuote);
-        return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidLiteral);
+        return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidCharLiteral);
     }
     case '\\': {
         ++ptr;
         if (*ptr == 'u' || *ptr == 'U') {
             if (!skip_unicode_seq_digits(*ptr == 'u' ? 4 : 8)) {
-                return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidLiteral);
+                return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidCharLiteral);
             }
         } else if(!(*ptr == '\n' || *ptr == '\r' || *ptr == '\0')) {
             ++ptr;
@@ -448,7 +448,7 @@ acorn::Token acorn::Lexer::next_char() {
     if (*ptr != '\'') {
         error("Expected closing ' for character")
             .end_error(ErrCode::LexCharMissingEndQuote);
-        return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidLiteral);
+        return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidCharLiteral);
     } else {
         ++ptr; // Eating closing '
         return new_token(start, static_cast<uint16_t>(ptr - start), Token::CharLiteral);

@@ -120,6 +120,8 @@ namespace acorn {
 
         llvm::Function* ll_func = nullptr;
 
+        llvm::StringRef linkname;
+
         Type* return_type;
         llvm::SmallVector<Var*, 8> params;
 
@@ -135,6 +137,8 @@ namespace acorn {
 
         Var() : Decl(NodeKind::Var) {
         }
+
+        llvm::StringRef linkname;
         
         uint32_t param_idx = NotParam;
         bool     is_global = false;
