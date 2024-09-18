@@ -91,6 +91,7 @@ static auto run_codegen_test(const wchar_t* file) {
         acorn->set_output_directory(executable_path);
     }
     acorn->set_dont_show_wrote_to_msg();
+    acorn->set_stand_alone();
     // acorn->set_should_show_llvm_ir();
 
     acorn->run(sources);
