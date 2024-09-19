@@ -511,14 +511,14 @@ llvm::Value* acorn::IRGenerator::gen_cast(Cast* cast) {
 llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr) {
     // TODO: deal with case where dest_addr == nullptr
 
+    auto arr_type = as<ArrayType*>(arr->type);
+    auto ll_elm_type = gen_type(arr_type->get_elm_type());
+    auto ll_arr_type = llvm::ArrayType::get(ll_elm_type, arr->elms.size());
+
     // If the array is foldable then a constant global array is created which
     // will then be copied over using memcpy into the destination array.
     if (arr->is_foldable) {
-        auto arr_type = as<ArrayType*>(arr->type);
         
-        auto ll_elm_type = gen_type(arr_type->get_elm_type());
-        llvm::ArrayType* ll_arr_type = llvm::ArrayType::get(ll_elm_type, arr->elms.size());
-
         llvm::Align ll_alignment = get_alignment(ll_elm_type);
 
         auto ll_const_arr = gen_constant_array(arr, ll_arr_type);
@@ -535,9 +535,20 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
         return ll_dest_addr;
     }
 
-    // TODO: deal with case where it is not foldable.
+    // Indexing all the addresses of the array and assigning a value.
 
-    return nullptr;
+    bool elms_are_arrays = arr_type->get_elm_type()->is_array();
+    for (size_t i = 0; i < arr->elms.size(); i++) {
+        
+        auto ll_index = gen_isize(i);
+        auto ll_elm_addr = builder.CreateInBoundsGEP(ll_arr_type->getElementType(),
+                                                     ll_dest_addr, 
+                                                     { ll_index });
+
+        gen_assignment(ll_elm_addr, arr->elms[i]);
+    }
+
+    return ll_dest_addr;
 }
 
 llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, llvm::ArrayType* ll_arr_type) {
