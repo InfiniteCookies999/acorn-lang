@@ -39,6 +39,7 @@ namespace acorn {
         Array,
         UnresolvedArrayType, // Length could not be resolved during parsing.
         Null,
+        EmptyArrayType
 
     };
     
@@ -157,6 +158,8 @@ namespace acorn {
                             uint32_t length, bool is_const = false);
 
         uint32_t get_length() const { return length; }
+
+        uint64_t get_total_linear_length() const;
 
         std::string to_string() const;
 

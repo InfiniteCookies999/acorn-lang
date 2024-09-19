@@ -63,6 +63,21 @@ if (e1 > e) { e = e1; }           \
             get(named_value->assignment);
             break;
         }
+        case NodeKind::Array: {
+            Array* arr = as<Array*>(node);
+            if (!arr->elms.empty()) {
+                get(arr->elms.back());
+            }
+            // Include the closing ]
+            while (*e != ']' && *e != '\0') {
+                ++e;
+            }
+            if (*e == '\0') {
+                --e;
+            }
+            ++e;
+            break;
+        }
         case NodeKind::Number:
         case NodeKind::IdentRef:
         case NodeKind::String:

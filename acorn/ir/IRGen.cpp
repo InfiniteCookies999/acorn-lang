@@ -470,12 +470,12 @@ llvm::Value* acorn::IRGenerator::gen_string(String* string) {
                                                             llvm::Type* ll_elm_type,
                                                             uint64_t alignment) {
         llvm::Constant* const_array = text_to_const_array(text, ll_elm_type);
-        auto global = gen_const_global_variable(get_global_name("global.string"), 
-                                                const_array->getType(),
-                                                const_array);
-        global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-        global->setAlignment(llvm::Align(alignment));
-        return global;
+        auto ll_global = gen_const_global_variable(get_global_name("global.string"), 
+                                                   const_array->getType(),
+                                                   const_array);
+        ll_global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+        ll_global->setAlignment(llvm::Align(alignment));
+        return ll_global;
     };
 
     if (string->bit_type == String::Str8Bit) {
@@ -508,9 +508,70 @@ llvm::Value* acorn::IRGenerator::gen_cast(Cast* cast) {
     return gen_cast(cast->explicit_cast_type, cast->value->type, gen_rvalue(cast->value));
 }
 
+llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr) {
+    // TODO: deal with case where dest_addr == nullptr
+
+    // If the array is foldable then a constant global array is created which
+    // will then be copied over using memcpy into the destination array.
+    if (arr->is_foldable) {
+        auto arr_type = as<ArrayType*>(arr->type);
+        
+        auto ll_elm_type = gen_type(arr_type->get_elm_type());
+        llvm::ArrayType* ll_arr_type = llvm::ArrayType::get(ll_elm_type, arr->elms.size());
+
+        llvm::Align ll_alignment = get_alignment(ll_elm_type);
+
+        auto ll_const_arr = gen_constant_array(arr, ll_arr_type);
+        auto ll_global_arr = gen_const_global_variable("const_array", ll_arr_type, ll_const_arr);
+        ll_global_arr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+        ll_global_arr->setAlignment(ll_alignment);
+         
+        uint64_t total_linear_length = arr_type->get_total_linear_length();
+        builder.CreateMemCpy(
+            ll_dest_addr, ll_alignment,
+            ll_global_arr, ll_alignment,
+            total_linear_length * sizeof_type_in_bytes(ll_elm_type)
+        );
+        return ll_dest_addr;
+    }
+
+    // TODO: deal with case where it is not foldable.
+
+    return nullptr;
+}
+
+llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, llvm::ArrayType* ll_arr_type) {
+    
+    auto arr_type = as<ArrayType*>(arr->type);
+    bool elms_are_arrays = arr_type->get_elm_type()->is_array();
+    auto ll_elm_type = ll_arr_type->getElementType();
+
+    llvm::SmallVector<llvm::Constant*> ll_values;
+    ll_values.reserve(arr->elms.size());
+
+    auto get_element = [=](Expr* elm) finline {
+        if (elms_are_arrays) {
+            auto elm_arr = as<Array*>(elm);
+            return gen_constant_array(elm_arr, llvm::cast<llvm::ArrayType>(ll_elm_type));
+        } else {
+            return llvm::cast<llvm::Constant>(gen_node(elm));
+        }
+    };
+
+    for (Expr* elm : arr->elms) {
+        ll_values.push_back(get_element(elm));
+    }
+
+    return llvm::ConstantArray::get(ll_arr_type, ll_values);
+}
+
 void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Expr* value) {
-    auto ll_assignment = gen_rvalue(value);
-    builder.CreateStore(ll_assignment, ll_address);
+    if (value->is(NodeKind::Array)) {
+        gen_array(as<Array*>(value), ll_address);
+    } else {
+        auto ll_assignment = gen_rvalue(value);
+        builder.CreateStore(ll_assignment, ll_address);
+    }
 }
 
 void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) {
@@ -656,4 +717,12 @@ llvm::GlobalVariable* acorn::IRGenerator::gen_global_variable(const llvm::Twine&
         ll_initial_value,
         name
     );
+}
+
+llvm::Align acorn::IRGenerator::get_alignment(llvm::Type* ll_type) {
+    return llvm::Align(ll_module.getDataLayout().getABITypeAlign(ll_type));
+}
+
+uint64_t acorn::IRGenerator::sizeof_type_in_bytes(llvm::Type* ll_type) {
+    return ll_module.getDataLayout().getTypeAllocSize(ll_type);
 }

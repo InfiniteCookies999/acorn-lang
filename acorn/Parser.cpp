@@ -1046,6 +1046,8 @@ acorn::Expr* acorn::Parser::parse_term() {
         expect(')');
         return expr;
     }
+    case '[':
+        return parse_array();
     case Token::KwTrue: {
         Bool* b = new_node<Bool>(cur_token);
         next_token(); // Consuming 'true' token.
@@ -1359,6 +1361,25 @@ acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* 
 
     next_token();
     return number;
+}
+
+acorn::Expr* acorn::Parser::parse_array() {
+    Array* arr = new_node<Array>(cur_token);
+    next_token(); // Consuming '[' token.
+
+    bool more_values = false;
+    do {
+
+        arr->elms.push_back(parse_expr());
+
+        more_values = cur_token.is(',');
+        if (more_values) {
+            next_token();
+        }
+    } while (more_values);
+
+    expect(']', "for array");
+    return arr;
 }
 
 // Utility functions

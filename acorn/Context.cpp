@@ -49,7 +49,8 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       null_type(Type::create(allocator, TypeKind::Null)),
       void_ptr_type(type_table.get_ptr_type(void_type)),
       const_void_type(type_table.get_const_type(void_type)),
-
+      empty_array_type(Type::create(allocator, TypeKind::EmptyArrayType)),
+      
       main_identifier(Identifier::get("main")),
 
       keyword_mapping({

@@ -66,6 +66,8 @@ namespace acorn {
 
         void check_node(Node* node);
 
+        Type* fixup_type(Type* type);
+
         // Statement checking
         //--------------------------------------
 
@@ -106,8 +108,8 @@ namespace acorn {
                                         bool indent) const;
         void check_cast(Cast* cast);
         void check_named_value(NamedValue* named_value);
-
-        Type* fixup_type(Type* type);
+        
+        void check_array(Array* arr);
 
         // Utility functions
         //--------------------------------------

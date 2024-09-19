@@ -106,6 +106,17 @@ acorn::Type* acorn::ArrayType::create(PageAllocator& allocator, Type* elm_type,
     return new (arr_type) ArrayType(is_const, elm_type, length);
 }
 
+uint64_t acorn::ArrayType::get_total_linear_length() const {
+    uint64_t length = this->length;
+    Type* type_itr = elm_type;
+    while (type_itr->is_array()) {
+        auto arr_type = as<ArrayType*>(type_itr);
+        length *= arr_type->length;
+        type_itr = arr_type->elm_type;
+    }
+    return length;
+}
+
 std::string acorn::ArrayType::to_string() const {
     return elm_type->to_string() + "[" + std::to_string(length) + "]";
 }

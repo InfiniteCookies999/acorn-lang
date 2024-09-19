@@ -58,6 +58,7 @@ namespace acorn {
         Type* null_type;
         Type* void_ptr_type;
         Type* const_void_type;
+        Type* empty_array_type;
 
         // Used to identifier the entry point of
         // the program.

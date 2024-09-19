@@ -46,6 +46,7 @@ namespace acorn {
         String,
         Null,
         Cast,
+        Array,
         ExprEnd
 
     };
@@ -400,6 +401,13 @@ namespace acorn {
 
         Type* explicit_cast_type;
         Expr* value;
+    };
+
+    struct Array : Expr {
+        Array() : Expr(NodeKind::Array) {
+        }
+
+        llvm::SmallVector<Expr*> elms;
     };
 }
 

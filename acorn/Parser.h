@@ -100,6 +100,8 @@ namespace acorn {
         template<uint32_t radix, uint64_t convert_table[256], bool use_table = true>
         Expr* parse_number_literal(const char* start, const char* end);
 
+        Expr* parse_array();
+
         // Utility functions
         //--------------------------------------
 
