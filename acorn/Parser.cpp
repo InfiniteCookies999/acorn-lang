@@ -179,7 +179,7 @@ acorn::Node* acorn::Parser::parse_statement() {
     case '{':
         return parse_scope();
     case ')': case '}': {
-        // Handling thses cases as if it is special because the skip recovery.
+        // Handling these cases as if it is special because the skip recovery.
         // will treat them as recovery points.
         error("Expected an expression")
             .end_error(ErrCode::ParseExpectedExpression);
@@ -1390,19 +1390,18 @@ void acorn::Parser::skip_recovery() {
         case Token::EOB:
         case ')': // TODO: Might want to count these so it doesn't just recover at bad times.
         case '{':
-        case '}':
             return;
-            // TODO: Should check for elif or #elif after } to improve recovery.
-        /*case '}': {
+        case '}': {
             auto peek = peek_token(0);
+            // Replace peeked token with if/#if statement so that it thinks
+            // it is a valid statement after }.
             if (peek.is(Token::KwElIf)) {
-                
+                peeked_tokens[0] = Token(Token::KwIf, peek.loc);
             } else if (peek.is(Token::KwCTElIf)) {
-
-            } else {
-                return;
+                peeked_tokens[0] = Token(Token::KwCTIf, peek.loc);
             }
-        }*/
+            return;
+        }
         case ModifierTokens:
             return;
         case TypeTokens:
@@ -1416,7 +1415,7 @@ void acorn::Parser::skip_recovery() {
         case Token::KwCTIf:
             return;
         case Token::KwElIf: {
-            // Replace current token with if statement so that it thinks
+            // Replace current token with if/#if statement so that it thinks
             // it is a valid statement.
             cur_token = Token(Token::KwIf, cur_token.loc);
             return;
