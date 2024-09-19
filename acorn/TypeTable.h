@@ -19,13 +19,19 @@ namespace acorn {
 
         Type* get_ptr_type(Type* elm_type);
 
+        Type* get_arr_type(Type* elm_type, uint32_t length);
+
     private:
         PageAllocator& allocator;
 
         std::mutex const_types_mtx;
         llvm::DenseMap<Type*, Type*> const_types;
+        
         std::mutex ptr_types_mtx;
         llvm::DenseMap<Type*, Type*> ptr_types;
+        
+        std::mutex arr_types_mtx;
+        llvm::DenseMap<std::pair<Type*, uint32_t>, Type*> arr_types;
     };
 }
 

@@ -8,6 +8,7 @@ namespace acorn {
     
     class PageAllocator;
     class TypeTable;
+    struct Expr;
 
     enum class TypeKind {
         Invalid,
@@ -35,6 +36,8 @@ namespace acorn {
         FuncsRef,   // A reference to an identifier to overloaded functions.
         ModuleRef,  // A reference to an identifier to a module.
         Pointer,
+        Array,
+        UnresolvedArrayType, // Length could not be resolved during parsing.
         Null,
 
     };
@@ -73,7 +76,10 @@ namespace acorn {
         }
 
         bool is_comparable() const;
-        bool is_pointer() const { return kind == TypeKind::Pointer; }
+        bool is_container() const { return is_pointer() || is_array(); }
+        bool is_pointer() const   { return kind == TypeKind::Pointer;  }
+        bool is_array() const     { return kind == TypeKind::Array;    }
+
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
             return kind == TypeKind::Pointer || kind == TypeKind::Null;
@@ -100,21 +106,66 @@ namespace acorn {
         bool     contains_const;
     };
 
-    class PointerType : public Type {
+    class ContainerType : public Type {
+    public:
+
+        Type* get_elm_type() const { return elm_type; }
+
+        Type* get_base_type() const;
+
+    protected:
+        ContainerType(TypeKind kind, bool vconst, Type* elm_type)
+            : Type(kind, vconst), elm_type(elm_type) {
+        }
+
+        Type* elm_type;
+    };
+
+    class PointerType : public ContainerType {
     public:
 
         static Type* create(PageAllocator& allocator, Type* elm_type, bool is_const = false);
-
-        Type* get_elm_type() const { return elm_type; }
 
         std::string to_string() const;
 
     protected:
         PointerType(bool vconst, Type* elm_type) 
-            : Type(TypeKind::Pointer, vconst), elm_type(elm_type)
-        {}
+            : ContainerType(TypeKind::Pointer, vconst, elm_type) {
+        }
+    };
 
-        Type* elm_type;
+    class UnresolvedArrayType : public ContainerType {
+    public:
+
+        static Type* create(PageAllocator& allocator, Type* elm_type,
+                            Expr* length_expr, bool is_const = false);
+
+        Expr* get_length_expr() const { return length_expr; }
+
+    private:
+        UnresolvedArrayType(bool vconst, Expr* length_expr, Type* elm_type) :
+            ContainerType(TypeKind::UnresolvedArrayType, vconst, elm_type) {
+        }
+        
+        Expr* length_expr;
+    };
+
+    class ArrayType : public ContainerType {
+    public:
+
+        static Type* create(PageAllocator& allocator, Type* elm_type,
+                            uint32_t length, bool is_const = false);
+
+        uint32_t get_length() const { return length; }
+
+        std::string to_string() const;
+
+    protected:
+        ArrayType(bool vconst, Type* elm_type, uint32_t length)
+            : ContainerType(TypeKind::Array, vconst, elm_type), length(length) {
+        }
+
+        uint32_t length;
     };
 }
 

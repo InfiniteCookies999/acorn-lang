@@ -78,3 +78,34 @@ acorn::Type* acorn::TypeTable::get_ptr_type(Type* elm_type) {
 
     return ptr_type;
 }
+
+acorn::Type* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length) {
+    std::scoped_lock<std::mutex> lock(arr_types_mtx);
+    
+    auto itr = arr_types.find({ elm_type, length });
+    if (itr != arr_types.end()) {
+        return itr->second;
+    }
+
+    auto arr_type = ArrayType::create(allocator, elm_type, length);
+    arr_types.insert({ { elm_type, length }, arr_type });
+    
+    // Read comment under get_ptr_type for explaination as to what is happening here.
+    if (elm_type->does_contain_const()) {
+        arr_type->contains_const = true;
+        Type* non_const_elm_ptr_version = elm_type->non_const_version;
+
+        auto itr = arr_types.find({ non_const_elm_ptr_version, length });
+        if (itr != arr_types.end()) {
+            arr_type->non_const_version = itr->second;
+        } else {
+            auto new_non_const_ptr_type = ArrayType::create(allocator, non_const_elm_ptr_version, length);
+            arr_types.insert({ { elm_type, length }, new_non_const_ptr_type });
+            arr_type->non_const_version = new_non_const_ptr_type;
+        }
+    } else {
+        arr_type->non_const_version = arr_type;
+    }
+
+    return arr_type;
+}

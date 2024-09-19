@@ -98,7 +98,7 @@ namespace acorn {
 
         void parse_files(SourceVector& sources);
 
-        void parse_directory(Module& modl, const std::filesystem::path&);
+        void parse_directory(Module& modl, const std::filesystem::path& path);
 
         Buffer read_file_to_buffer(const std::filesystem::path& path);
         void parse_file(Module& modl, const std::filesystem::path& path);

@@ -167,6 +167,10 @@ case c1:                                        \
         return new_token_and_eat('(');
     case ')':
         return new_token_and_eat(')');
+    case '[':
+        return new_token_and_eat('[');
+    case ']':
+        return new_token_and_eat(']');
     case '{':
         return new_token_and_eat('{');
     case '}':

@@ -29,6 +29,11 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Mod
     case TypeKind::USize: case TypeKind::ISize:
         return gen_ptrsize_int_type(ll_context, ll_module);
     case TypeKind::Bool: return llvm::Type::getInt1Ty(ll_context);
+    case TypeKind::Array: {
+        auto arr_type = as<ArrayType*>(type);
+        auto ll_elm_type = gen_type(arr_type->get_elm_type(), ll_context, ll_module);
+        return llvm::ArrayType::get(ll_elm_type, arr_type->get_length());
+    }
     default:
         acorn_fatal("gen_type: Unknown type");
         return nullptr;

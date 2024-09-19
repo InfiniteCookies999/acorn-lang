@@ -65,11 +65,21 @@ std::string acorn::Type::to_string() const {
     case TypeKind::ISize:     return str("isize");
     case TypeKind::USize:     return str("usize");
     case TypeKind::Pointer:   return as<const PointerType*>(this)->to_string();
+    case TypeKind::Array:     return as<const ArrayType*>(this)->to_string();
     default:
         acorn_fatal("Type::to_string() missing to_string case");
         return "";
     }
 #undef str
+}
+
+acorn::Type* acorn::ContainerType::get_base_type() const {
+    Type* type_itr = elm_type;
+    TypeKind our_kind = get_kind();
+    while (type_itr->get_kind() == our_kind) {
+        type_itr = as<ContainerType*>(type_itr);
+    }
+    return type_itr;
 }
 
 acorn::Type* acorn::PointerType::create(PageAllocator& allocator, Type* elm_type, bool is_const) {
@@ -80,4 +90,22 @@ acorn::Type* acorn::PointerType::create(PageAllocator& allocator, Type* elm_type
 
 std::string acorn::PointerType::to_string() const {
     return elm_type->to_string() + "*";
+}
+
+acorn::Type* acorn::UnresolvedArrayType::create(PageAllocator& allocator, Type* elm_type,
+                                                Expr* length_expr, bool is_const) {
+    UnresolvedArrayType* unarr_type = allocator.alloc_type<UnresolvedArrayType>();
+    unarr_type->contains_const = is_const;
+    return new (unarr_type) UnresolvedArrayType(is_const, length_expr, elm_type);
+}
+
+acorn::Type* acorn::ArrayType::create(PageAllocator& allocator, Type* elm_type, 
+                                      uint32_t length, bool is_const) {
+    ArrayType* arr_type = allocator.alloc_type<ArrayType>();
+    arr_type->contains_const = is_const;
+    return new (arr_type) ArrayType(is_const, elm_type, length);
+}
+
+std::string acorn::ArrayType::to_string() const {
+    return elm_type->to_string() + "[" + std::to_string(length) + "]";
 }

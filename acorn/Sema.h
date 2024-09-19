@@ -107,12 +107,15 @@ namespace acorn {
         void check_cast(Cast* cast);
         void check_named_value(NamedValue* named_value);
 
+        Type* fixup_type(Type* type);
+
         // Utility functions
         //--------------------------------------
 
         bool is_assignable_to(Type* to_type, Expr* expr) const;
         bool is_castable_to(Type* to_type, Expr* expr) const;
         bool try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr) const;
+        bool has_valid_constness(Type* to_type, Type* from_type) const;
         void check_modifiable(Expr* expr);
         bool is_lvalue(Expr* expr);
         void check_division_by_zero(PointSourceLoc error_loc, Expr* expr);

@@ -535,6 +535,8 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), 0, false);
     case TypeKind::Pointer:
         return llvm::Constant::getNullValue(llvm::PointerType::get(ll_context, 0));
+    case TypeKind::Array:
+        return llvm::ConstantAggregateZero::get(gen_type(type));
     default:
         acorn_fatal("gen_zero(): Missing case");
         return nullptr;

@@ -480,6 +480,35 @@ acorn::Type* acorn::Parser::parse_type() {
         next_token();
     }
 
+    llvm::SmallVector<Expr*, 8> arr_lengths;
+    while (cur_token.is('[')) {
+        next_token();
+        
+        arr_lengths.push_back(parse_expr());
+
+        expect(']');
+    }
+
+    for (auto itr = arr_lengths.rbegin(); itr != arr_lengths.rend(); ++itr) {
+        Expr* length_expr = *itr;
+
+        bool resolvable = length_expr->is(NodeKind::Number);
+        Number* number;
+        if (resolvable) {
+            number = as<Number*>(length_expr);
+            resolvable &= number->type->is_integer() && number->type->get_number_of_bits() <= 32 &&
+                          number->value_s32 > 0;
+        }
+
+        if (resolvable) {
+            // handle common cases first in which it can resolve the length
+            // immediately.
+            type = type_table.get_arr_type(type, number->value_s32);
+        } else {
+            type = UnresolvedArrayType::create(context.get_allocator(), type, length_expr);
+        }
+    }
+
     if (type->is(context.const_void_type)) {
         SourceLoc error_loc = {
             .ptr = first_token.loc.ptr,

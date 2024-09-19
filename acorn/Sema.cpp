@@ -214,6 +214,12 @@ void acorn::Sema::check_function(Func* func) {
 
     check_modifier_incompatibilities(func);
 
+    func->return_type = fixup_type(func->return_type);
+    if (!func->return_type) {
+        // Failed to fixup return type so returning early.
+        return;
+    }
+
     cur_func = func;
 
     // If we ever decide to allow nesting functions for some reason then this
@@ -267,6 +273,12 @@ void acorn::Sema::check_variable(Var* var) {
 
     if (var->assignment) {
         check(var->assignment);
+    }
+
+    var->type = fixup_type(var->type);
+    if (!var->type) {
+        // Failed to fixup the type so returning early.
+        return;
     }
 
     if (var->type->is(context.void_type)) {
@@ -1179,7 +1191,7 @@ void acorn::Sema::check_cast(Cast* cast) {
     check(cast->value);
     if (!is_castable_to(cast->explicit_cast_type, cast->value)) {
         error(expand(cast), "Cannot cast to type '%s' from '%s'",
-              cast->explicit_cast_type, cast->value)
+              cast->explicit_cast_type, cast->value->type)
             .end_error(ErrCode::SemaInvalidCast);
     }
 }
@@ -1187,6 +1199,61 @@ void acorn::Sema::check_cast(Cast* cast) {
 void acorn::Sema::check_named_value(NamedValue* named_value) {
     check_node(named_value->assignment);
     named_value->type = named_value->assignment->type;
+}
+
+acorn::Type* acorn::Sema::fixup_type(Type* type) {
+    // TODO: This will eventually need to take into account that a type
+    // may contain an unsolved type in which case it needs to descend
+    // the type and resolve any contained types.
+    
+    if (type->get_kind() == (TypeKind::UnresolvedArrayType)) {
+
+        auto unarr_type = as<UnresolvedArrayType*>(type);
+        Expr* length_expr = unarr_type->get_length_expr();
+        
+        if (!length_expr->type->is_integer()) {
+            error(expand(length_expr), "Array length must be an integer type")
+                .end_error(ErrCode::SemaArrayLengthNotInteger);
+            return nullptr;
+        }
+
+        if (length_expr->type->get_number_of_bits() > 32) {
+            error(expand(length_expr), "Array length must be less than or equal a 32 bit integer")
+                .end_error(ErrCode::SemaArrayLengthTooLargeType);
+            return nullptr;
+        }
+
+        if (!length_expr->is_foldable) {
+            error(expand(length_expr), "Array length must be able to be determined at compile time")
+                .end_error(ErrCode::SemaArrayLengthTooLargeType);
+            return nullptr;
+        }
+
+        if (auto ll_length = gen_constant(expand(length_expr), length_expr)) {
+            auto ll_int_length = llvm::cast<llvm::ConstantInt>(ll_length);
+            uint32_t length = static_cast<uint32_t>(ll_int_length->getZExtValue());
+
+            if (length == 0) {
+                error(expand(length_expr), "Array length cannot be zero")
+                    .end_error(ErrCode::SemaArrayLengthZero);
+                return nullptr;
+            }
+
+            if (length_expr->type->is_signed() && static_cast<int32_t>(length) < 0) {
+                error(expand(length_expr), "Array length cannot be negative")
+                    .end_error(ErrCode::SemaArrayLengthNegative);
+                return nullptr;
+            }
+
+            // Everything is okay we can create a new array out of it!
+            return type_table.get_arr_type(unarr_type->get_elm_type(), length);
+
+        } else {
+            return nullptr;
+        }
+    }
+
+    return type;
 }
 
 // Utility functions
@@ -1280,14 +1347,50 @@ bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) const {
 }
 
 bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr) const {
-    if (to_type->is_pointer()) {
-        if (expr->is(NodeKind::Null)) {
-            return true;
+
+    if (to_type->is_array() && from_type->does_contain_const()) {
+        if (!from_type->is_array()) {
+            return false;
         }
 
+        auto to_arr_Type = as<ArrayType*>(to_type);
+        Type* to_base_type = to_arr_Type->get_base_type();
+
+        auto from_arr_Type = as<ArrayType*>(from_type);
+        Type* from_base_type = from_arr_Type->get_base_type();
+
+        if (!has_valid_constness(to_base_type, from_base_type)) {
+            return false;
+        }
+    } else if (to_type->is_pointer() && expr->is(NodeKind::Null)) {
+        // Ignore this case because null can assign to all pointers
+        // so we do not want to decense the pointers.
+    } else if (!has_valid_constness(to_type, from_type)) {
+        return false;
+    }
+
+    if (to_type->does_contain_const()) {
+        to_type = to_type->remove_all_const();
+    }
+    if (from_type->does_contain_const()) {
+        from_type = from_type->remove_all_const();
+    }
+   
+    return true;
+}
+
+bool acorn::Sema::has_valid_constness(Type* to_type, Type* from_type) const {
+
+    // There is nothing that can be violated if the from_type does not
+    // even contain const.
+    if (!from_type->does_contain_const()) {
+        return true;
+    }
+
+    if (to_type->is_pointer()) {
+        
         auto to_type_itr = to_type;
-        auto from_type_itr = expr->type;
-        bool to_contains_const = false, from_contains_const = false;
+        auto from_type_itr = from_type;
         do {
             if (!from_type_itr->is_pointer()) {
                 // The pointers do not have the same depth.
@@ -1300,8 +1403,6 @@ bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type,
             auto to_elm_type = to_ptr_type->get_elm_type();
             auto from_elm_type = from_ptr_type->get_elm_type();
 
-            from_contains_const = from_elm_type->is_const();
-            to_contains_const   = to_elm_type->is_const();
             if (from_elm_type->is_const() && !to_elm_type->is_const()) {
                 // Underlying memory is const by the assignment's not
                 // const memory.
@@ -1310,22 +1411,8 @@ bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type,
             to_type_itr = to_elm_type;
             from_type_itr = from_elm_type;
         } while (to_type_itr->is_pointer());
-
-        if (from_contains_const) {
-            from_type = from_type->remove_all_const();
-        }
-        if (to_contains_const) {
-            to_type = to_type->remove_all_const();
-        }
     }
 
-    if (to_type->does_contain_const()) {
-        to_type = to_type->remove_all_const();
-    }
-    if (from_type->does_contain_const()) {
-        from_type = from_type->remove_all_const();
-    }
-   
     return true;
 }
 
