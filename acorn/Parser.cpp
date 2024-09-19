@@ -1390,18 +1390,8 @@ void acorn::Parser::skip_recovery() {
         case Token::EOB:
         case ')': // TODO: Might want to count these so it doesn't just recover at bad times.
         case '{':
+        case '}':
             return;
-        case '}': {
-            auto peek = peek_token(0);
-            // Replace peeked token with if/#if statement so that it thinks
-            // it is a valid statement after }.
-            if (peek.is(Token::KwElIf)) {
-                peeked_tokens[0] = Token(Token::KwIf, peek.loc);
-            } else if (peek.is(Token::KwCTElIf)) {
-                peeked_tokens[0] = Token(Token::KwCTIf, peek.loc);
-            }
-            return;
-        }
         case ModifierTokens:
             return;
         case TypeTokens:
