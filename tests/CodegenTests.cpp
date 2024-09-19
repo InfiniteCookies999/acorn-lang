@@ -190,5 +190,17 @@ void test_codegen() {
             auto [success, result] = run_codegen_test(src(L"ifs/if_test7.ac"));
             expect(result, std::identity()).to_be("True Case");
         });
+        test("named args ordered", [&] {
+            auto [success, result] = run_codegen_test(src(L"named_args/named_args_test1.ac"));
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("named args not ordered", [&] {
+            auto [success, result] = run_codegen_test(src(L"named_args/named_args_test2.ac"));
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("named args with non-named", [&] {
+            auto [success, result] = run_codegen_test(src(L"named_args/named_args_test3.ac"));
+            expect(result, std::identity()).to_be("Lets go!");
+        });
     });
 }

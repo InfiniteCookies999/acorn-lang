@@ -224,8 +224,8 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
         uint32_t param_idx = 0;
         do {
             Var* param = parse_variable();
-            param->param_idx++;
-            
+            param->param_idx = param_idx++;
+
             if (func->params.size() != MAX_FUNC_PARAMS) {
                 func->params.push_back(param);
             } else if (!full_reported) {
@@ -882,14 +882,25 @@ acorn::Expr* acorn::Parser::parse_function_call(Expr* site) {
     if (cur_token.is_not(')')) {
         bool more_args = false, full_reported = false;
         do {
-            Expr* arg = parse_expr();
+            Expr* arg;
+            if (cur_token.is(Token::Identifier) && peek_token(0).is('=')) {
+                
+                auto named_arg = new_node<NamedValue>(cur_token);
+                named_arg->name = Identifier::get(cur_token.text());
+                arg = named_arg;
+                next_token(); // Consuming identifier token.
+                next_token(); // Consuming '=' token.
+
+                named_arg->assignment = parse_expr();
+            } else {
+                arg = parse_expr();
+            }
 
             if (call->args.size() != MAX_FUNC_PARAMS) {
                 call->args.push_back(arg);
             } else if (!full_reported) {
-                // TODO: The arg might not refer to a location correctly.
-                error(arg->loc,
-                    "Exceeded maximum number of function arguments. Max (%s)", MAX_FUNC_PARAMS)
+                logger.begin_error(expand(arg), "Exceeded maximum number of function arguments. Max (%s)",
+                                   MAX_FUNC_PARAMS)
                     .end_error(ErrCode::ParseExceededMaxFuncCallArgs);
                 full_reported = true;
             }

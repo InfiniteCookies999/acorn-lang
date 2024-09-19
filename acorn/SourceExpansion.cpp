@@ -58,6 +58,11 @@ if (e1 > e) { e = e1; }           \
             get(cast->value);
             break;
         }
+        case NodeKind::NamedValue: {
+            NamedValue* named_value = as<NamedValue*>(node);
+            get(named_value->assignment);
+            break;
+        }
         case NodeKind::Number:
         case NodeKind::IdentRef:
         case NodeKind::String:

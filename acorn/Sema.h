@@ -105,6 +105,7 @@ namespace acorn {
                                         const llvm::SmallVector<Expr*, 8>& args,
                                         bool indent) const;
         void check_cast(Cast* cast);
+        void check_named_value(NamedValue* named_value);
 
         // Utility functions
         //--------------------------------------

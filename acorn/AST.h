@@ -41,6 +41,7 @@ namespace acorn {
         Bool,
         IdentRef,
         DotOperator,
+        NamedValue,
         FuncCall,
         String,
         Null,
@@ -129,6 +130,8 @@ namespace acorn {
         llvm::SmallVector<Var*, 16> vars_to_alloc;
         
         ScopeStmt* scope = nullptr;
+
+        Var* find_parameter(Identifier name) const;
 
     };
 
@@ -349,6 +352,15 @@ namespace acorn {
         }
 
         Expr* site;
+    };
+
+    struct NamedValue : Expr {
+        NamedValue() : Expr(NodeKind::NamedValue) {
+        }
+
+        size_t     mapped_idx;
+        Identifier name;
+        Expr*      assignment;
     };
 
     struct FuncCall : Expr {

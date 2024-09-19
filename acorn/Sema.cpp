@@ -193,6 +193,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_function_call(as<FuncCall*>(node));
     case NodeKind::Cast:
         return check_cast(as<Cast*>(node));
+    case NodeKind::NamedValue:
+        return check_named_value(as<NamedValue*>(node));
     case NodeKind::Number:
     case NodeKind::Bool:
     case NodeKind::String:
@@ -970,7 +972,19 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
 
     for (size_t i = 0; i < call->args.size(); i++) {
-        create_cast(call->args[i], called_func->params[i]->type);
+        auto arg_value = call->args[i];
+        Var* param;
+        if (arg_value->is(NodeKind::NamedValue)) {
+            auto named_arg = as<NamedValue*>(arg_value);
+            param = called_func->find_parameter(named_arg->name);
+            named_arg->mapped_idx = param->param_idx;
+            
+            arg_value = named_arg->assignment;
+        } else {
+            param = called_func->params[i];
+        }
+
+        create_cast(arg_value, param->type);
     }
 
     call->called_func = called_func;
@@ -981,7 +995,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
 
 acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
                                                   llvm::SmallVector<Expr*, 8>& args) {
-    // TODO: Need to check the arguments of the canidate functions.
+    
     Func* selected = nullptr;
     uint32_t best_mimatched_types = 0;
     
@@ -1015,15 +1029,44 @@ bool acorn::Sema::compare_as_call_canidate(Func* canidate,
         return false;
     }
 
+    bool named_args_out_of_order = false;
+    uint32_t named_arg_high_idx = 0;
     for (size_t i = 0; i < canidate->params.size(); i++) {
-        Expr* arg   = args[i];
-        Var*  param = canidate->params[i];
-    
-        if (!is_assignable_to(param->type, arg)) {
+        Expr* arg_value = args[i];
+        Var* param;
+
+        if (arg_value->is(NodeKind::NamedValue)) {
+            // Handle named arguments by finding the corresponding parameter
+
+            auto named_arg = as<NamedValue*>(arg_value);
+            arg_value = named_arg->assignment;
+            param = canidate->find_parameter(named_arg->name);
+            
+            // Check to make sure we found the parameter by the given name.
+            if (!param) {
+                return false;
+            }
+
+            if (param->param_idx != i) {
+                named_args_out_of_order = true;
+            }
+            named_arg_high_idx = std::max(param->param_idx, named_arg_high_idx);
+        } else {
+            param = canidate->params[i];
+
+            // Cannot determine the order of the arguments if the
+            // non-named arguments come after the name arguments
+            // and the named arguments are not in order.
+            if (named_args_out_of_order || named_arg_high_idx > i) {
+                return false;
+            }
+        }
+        
+        if (!is_assignable_to(param->type, arg_value)) {
             return false;
         }
 
-        if (param->type->is_not(arg->type)) {
+        if (param->type->is_not(arg_value->type)) {
             ++mimatched_types;
         }
     }
@@ -1086,13 +1129,44 @@ void acorn::Sema::display_call_mismatch_info(const Func* canidate,
         return;
     }
 
+    bool named_args_out_of_order = false;
+    uint32_t named_arg_high_idx = 0;
     for (size_t i = 0; i < params.size(); i++) {
-        Expr* arg = args[i];
-        Var* param = params[i];
+        
+        Expr* arg_value = args[i];
+        Var* param;
 
-        if (!is_assignable_to(param->type, arg)) {
+        if (arg_value->is(NodeKind::NamedValue)) {
+            
+            auto named_arg = as<NamedValue*>(arg_value);
+            arg_value = named_arg->assignment;
+            param = canidate->find_parameter(named_arg->name);
+            
+            if (!param) {
+                err_line("Could not find param '%s' for named arg", named_arg->name);
+                return;
+            }
+
+            named_arg_high_idx = std::max(param->param_idx, named_arg_high_idx);
+            if (param->param_idx != i) {
+                named_args_out_of_order = true;
+            }
+        } else {
+            param = canidate->params[i];
+
+            if (named_args_out_of_order || named_arg_high_idx > i) {
+                // Do not continue reporting errors because the arguments
+                // being disordered would mean the error messages would not
+                // make any sense.
+                err_line("Arg %s causes the arguments to be out of order", i + 1);
+                logger.add_line("  Order named arguments or place before named arguments");
+                return;
+            }
+        }
+        
+        if (!is_assignable_to(param->type, arg_value)) {
             err_line("Wrong type for arg %s. Expected '%s' but found '%s'",
-                i + 1, param->type, arg->type);
+                     i + 1, param->type, arg_value->type);
         }
     }
 
@@ -1108,6 +1182,11 @@ void acorn::Sema::check_cast(Cast* cast) {
               cast->explicit_cast_type, cast->value)
             .end_error(ErrCode::SemaInvalidCast);
     }
+}
+
+void acorn::Sema::check_named_value(NamedValue* named_value) {
+    check_node(named_value->assignment);
+    named_value->type = named_value->assignment->type;
 }
 
 // Utility functions

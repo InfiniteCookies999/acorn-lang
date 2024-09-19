@@ -45,3 +45,10 @@ acorn::SourceLoc acorn::Decl::get_modifier_location(uint32_t modifier) {
     acorn_fatal("unreachable");
     return SourceLoc{};
 }
+
+acorn::Var* acorn::Func::find_parameter(Identifier name) const {
+    auto itr = std::ranges::find_if(params, [name](Var* param) {
+        return param->name == name;
+    });
+    return itr != params.end() ? *itr : nullptr;
+}

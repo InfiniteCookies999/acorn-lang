@@ -410,9 +410,15 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call) {
     gen_function_decl(called_func);
 
     llvm::SmallVector<llvm::Value*> ll_args;
-    ll_args.reserve(call->args.size());
-    for (Expr* arg : call->args) {
-        ll_args.push_back(gen_rvalue(arg));
+    ll_args.resize(call->args.size());
+    for (size_t i = 0; i < call->args.size(); ++i) {
+        Expr* arg = call->args[i];
+        if (arg->is(NodeKind::NamedValue)) {
+            auto named_arg = as<NamedValue*>(arg);
+            ll_args[named_arg->mapped_idx] = gen_rvalue(named_arg->assignment);
+        } else {
+            ll_args[i] = gen_rvalue(arg);
+        }
     }
 
     // std::string debug_info = "Calling function with name: " + called_func->name.reduce().str() + "\n";
