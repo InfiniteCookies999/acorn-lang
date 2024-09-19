@@ -291,6 +291,8 @@ void acorn::Sema::check_variable(Var* var) {
 void acorn::Sema::check_return(ReturnStmt* ret) {
     cur_scope->all_paths_return = true;
 
+    ++cur_func->num_returns;
+
     bool is_assignable;
     if (ret->value) {
         check(ret->value);

@@ -359,10 +359,6 @@ acorn::ReturnStmt* acorn::Parser::parse_return() {
         ret->value = parse_expr();
     }
 
-    // Must make sure the function actually exists in case
-    // the user added a return statement outside a function.
-    if (cur_func) ++cur_func->num_returns;
-
     return ret;
 }
 
