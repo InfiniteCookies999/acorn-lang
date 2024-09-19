@@ -73,10 +73,16 @@ std::wstring get_executable_path() {
 #endif
 }
 
-static auto run_codegen_test(const wchar_t* file) {
+static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file) {
     
     AcornLang::SourceVector sources;
     sources.push_back(Source{ file, "" });
+
+    if (!std::filesystem::exists(file)) {
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
+        std::string bad_path = wconverter.to_bytes(file);
+        return { std::format("Test path: \"{}\" does not exist.", bad_path), "" };
+    }
 
     PageAllocator allocator(get_system_page_size());
     bool has_errors = false;
@@ -103,31 +109,33 @@ static auto run_codegen_test(const wchar_t* file) {
     context->~Context();
     allocator.dealloc_all();
 
-    if (!has_errors) {
-        std::string result;
-        int exit_code;
+    if (has_errors) {
+        return { "", "" };
+    }
+
+    std::string result;
+    int exit_code;
         
 #if WIN_OS
-    std::wstring program_path{ L"program" };
+std::wstring program_path{ L"program" };
 #elif UNIX_OS
-    std::wstring program_path{ L"./program" };
+std::wstring program_path{ L"./program" };
 #endif
 
-        if (!executable_path.empty()) {
+    if (!executable_path.empty()) {
 #if WIN_OS
-            program_path =executable_path + L"\\" + program_path;
+        program_path =executable_path + L"\\" + program_path;
 #elif UNIX_OS
-            program_path =executable_path + L"/" + program_path;
+        program_path =executable_path + L"/" + program_path;
 #endif
-        }
-
-        exe_hidden_process(program_path.data(), nullptr, result, exit_code);
-        if (!exit_code) {
-            return std::make_tuple(true, result);
-        }
     }
-    // Either a compilation failure of runtime error from the test executable.
-    return std::make_tuple(false, std::string(""));
+
+    exe_hidden_process(program_path.data(), nullptr, result, exit_code);
+    if (exit_code) {
+        return { std::format("Processed exited with code {}", exit_code), result };
+    }
+    
+    return { "", result };
 }
 
 void test_codegen() {
@@ -143,63 +151,93 @@ void test_codegen() {
 
     section("codegen", [&] {
         test("print test", [&] {
-            auto [success, result] = run_codegen_test(src(L"print_test.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"print_test.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+            
             expect(result, std::identity()).to_be("hello yuki ^-^");
         });
         test("arithmetic test", [&] {
-            auto [success, result] = run_codegen_test(src(L"arithmetic_test.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"arithmetic_test.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("EjZQ;-C7 H$");
         });
         test("ptr arithmetic test", [&] {
-            auto [success, result] = run_codegen_test(src(L"ptr_arithmetic_test.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"ptr_arithmetic_test.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("he!he!heleh");
         });
         test("global test 1", [&] {
-            auto [success, result] = run_codegen_test(src(L"globals/global_test1.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"globals/global_test1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("Hello from global!");
         });
         test("ptr dereferencing", [&] {
-            auto [success, result] = run_codegen_test(src(L"ptr_dereferencing.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"ptr_dereferencing.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("hoh");
         });
         test("if deduces true and false", [&] {
-            auto [success, result] = run_codegen_test(src(L"ifs/if_test1.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("True Case");
         });
         test("if with else", [&] {
-            auto [success, result] = run_codegen_test(src(L"ifs/if_test2.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("True CaseElse Case");
         });
         test("if with elif", [&] {
-            auto [success, result] = run_codegen_test(src(L"ifs/if_test3.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test3.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("True CaseElif Case");
         });
         test("if with elif and else", [&] {
-            auto [success, result] = run_codegen_test(src(L"ifs/if_test4.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test4.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("True CaseElif CaseElse Case");
         });
         test("if with pointers", [&] {
-            auto [success, result] = run_codegen_test(src(L"ifs/if_test5.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test5.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("Ptr Not Null Case1Ptr Not Null Case2Ptr Not Null Case3");
         });
         test("if with var assign", [&] {
-            auto [success, result] = run_codegen_test(src(L"ifs/if_test6.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test6.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("True Case");
         });
         test("if with var and post cond", [&] {
-            auto [success, result] = run_codegen_test(src(L"ifs/if_test7.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test7.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("True Case");
         });
         test("named args ordered", [&] {
-            auto [success, result] = run_codegen_test(src(L"named_args/named_args_test1.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"named_args/named_args_test1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("Lets go!");
         });
         test("named args not ordered", [&] {
-            auto [success, result] = run_codegen_test(src(L"named_args/named_args_test2.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"named_args/named_args_test2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("Lets go!");
         });
         test("named args with non-named", [&] {
-            auto [success, result] = run_codegen_test(src(L"named_args/named_args_test3.ac"));
+            auto [err_msg, result] = run_codegen_test(src(L"named_args/named_args_test3.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
             expect(result, std::identity()).to_be("Lets go!");
         });
     });

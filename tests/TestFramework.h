@@ -183,6 +183,15 @@ Expector<T> expect_impl(T given, auto&& printer, const char* cpp_file, int line)
 #define expect(given, printer) expect_impl(given, printer, __FILE__, __LINE__)
 #define expect_none() expect_impl(0, [](int){ return ""; }, __FILE__, __LINE__)
 
+inline void force_fail_impl(std::string fail_msg, const char* cpp_file, int line) {
+    intercepted_error_codes.clear();
+    current_test->set_fail([fail_msg] {
+        std::cout << fail_msg << "\n";
+    }, cpp_file, line);
+    throw TestCaseFailedException();
+}
+#define force_fail(fail_msg) force_fail_impl(fail_msg, __FILE__, __LINE__)
+
 acorn::AcornLang* mock_acorn_instance(acorn::PageAllocator& allocator);
 acorn::Logger&    mock_logger(acorn::Logger& logger);
 
