@@ -86,6 +86,7 @@ namespace acorn {
         Expr* parse_ident_ref_postfix(Expr* site);
         Expr* parse_function_call(Expr* site);
         Expr* parse_dot_operator(Expr* site);
+        Expr* parse_memory_access(Expr* site);
         Expr* parse_term();
 
         Expr* parse_int_literal();

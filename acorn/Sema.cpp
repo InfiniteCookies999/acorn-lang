@@ -259,6 +259,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_scope(as<ScopeStmt*>(node));
     case NodeKind::Array:
         return check_array(as<Array*>(node));
+    case NodeKind::MemoryAccess:
+        return check_memory_access(as<MemoryAccess*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -1295,6 +1297,28 @@ void acorn::Sema::check_array(Array* arr) {
     }
 
     arr->type = type_table.get_arr_type(elm_type, arr->elms.size());
+}
+
+void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
+    check(mem_access->site);
+
+    Type* access_type = mem_access->site->type;
+    if (!access_type->is_array()) {
+        error(mem_access, "Cannot index memory of type '%s'", access_type)
+            .end_error(ErrCode::SemaMemoryAccessBadType);
+    } else {
+        auto ctr_type = as<ContainerType*>(access_type);
+        mem_access->type = ctr_type->get_elm_type();
+    }
+
+    check(mem_access->index);
+
+    if (!mem_access->index->type->is_integer()) {
+        error(expand(mem_access->index), "Expected index of memory access to be an integer")
+            .end_error(ErrCode::SemaMemoryIndexNotInteger);
+    } else {
+        create_cast(mem_access->index, context.usize_type);
+    }
 }
 
 // Utility functions

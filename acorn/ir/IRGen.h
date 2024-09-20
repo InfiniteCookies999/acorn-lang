@@ -82,6 +82,7 @@ namespace acorn {
         llvm::Value* gen_cast(Cast* cast);
         llvm::Value* gen_array(Array* arr, llvm::Value* ll_dest_addr);
         llvm::Constant* gen_constant_array(Array* arr, llvm::ArrayType* ll_arr_type);
+        llvm::Value* gen_memory_access(MemoryAccess* mem_access);
 
         void gen_assignment(llvm::Value* ll_address, Expr* value);
         void gen_default_value(llvm::Value* ll_address, Type* type);
@@ -126,6 +127,9 @@ namespace acorn {
 
         llvm::Align get_alignment(llvm::Type* ll_type);
         uint64_t sizeof_type_in_bytes(llvm::Type* ll_type);
+
+        llvm::Value* gen_array_memory_access(llvm::Value* ll_address, Type* arr_type, Expr* index);
+        llvm::Value* gen_array_memory_access(llvm::Value* ll_address, llvm::Type* arr_type, llvm::Value* ll_index);
 
     };
 }

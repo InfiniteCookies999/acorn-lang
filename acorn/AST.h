@@ -41,6 +41,7 @@ namespace acorn {
         Bool,
         IdentRef,
         DotOperator,
+        MemoryAccess,
         NamedValue,
         FuncCall,
         String,
@@ -353,6 +354,14 @@ namespace acorn {
         }
 
         Expr* site;
+    };
+
+    struct MemoryAccess : IdentRef {
+        MemoryAccess() : IdentRef(NodeKind::MemoryAccess) {
+        }
+
+        Expr* site;
+        Expr* index;
     };
 
     struct NamedValue : Expr {

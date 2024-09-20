@@ -108,8 +108,8 @@ namespace acorn {
                                         bool indent) const;
         void check_cast(Cast* cast);
         void check_named_value(NamedValue* named_value);
-        
         void check_array(Array* arr);
+        void check_memory_access(MemoryAccess* mem_access);
 
         // Utility functions
         //--------------------------------------

@@ -891,11 +891,13 @@ acorn::Expr* acorn::Parser::parse_postfix() {
 }
 
 acorn::Expr* acorn::Parser::parse_ident_ref_postfix(Expr* site) {
-    while (cur_token.is('(') || cur_token.is('.')) {
+    while (cur_token.is('(') || cur_token.is('.') || cur_token.is('[')) {
         if (cur_token.is('(')) {
             site = parse_function_call(site);
         } else if (cur_token.is('.')) {
             site = parse_dot_operator(site);
+        } else if (cur_token.is('[')) {
+            site = parse_memory_access(site);
         }
     }
     return site;
@@ -955,6 +957,18 @@ acorn::Expr* acorn::Parser::parse_dot_operator(Expr* site) {
     dot->ident = expect_identifier("for '.' operator");
     
     return dot;
+}
+
+acorn::Expr* acorn::Parser::parse_memory_access(Expr* site) {
+    
+    auto mem_access = new_node<MemoryAccess>(cur_token);
+    next_token(); // Consuming '[' token.
+
+    mem_access->site = site;
+    mem_access->index = parse_expr();
+
+    expect(']', "for memory access");
+    return mem_access;
 }
 
 acorn::Expr* acorn::Parser::parse_term() {

@@ -59,6 +59,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_null();
     case NodeKind::Cast:
         return gen_cast(as<Cast*>(node));
+    case NodeKind::MemoryAccess:
+        return gen_memory_access(as<MemoryAccess*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -99,6 +101,8 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
         if (unary_op->op == '*') {
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
+    } else if (node->kind == NodeKind::MemoryAccess) {
+        ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
     }
 
     if (node->cast_type) {
@@ -576,6 +580,14 @@ llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, llvm::ArrayTy
     return llvm::ConstantArray::get(ll_arr_type, ll_values);
 }
 
+llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
+    
+    auto ll_address = gen_node(mem_access->site);
+    Type* arr_type = mem_access->site->type;
+    
+    return gen_array_memory_access(ll_address, arr_type, mem_access->index);
+}
+
 void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Expr* value) {
     if (value->is(NodeKind::Array)) {
         gen_array(as<Array*>(value), ll_address);
@@ -736,4 +748,12 @@ llvm::Align acorn::IRGenerator::get_alignment(llvm::Type* ll_type) {
 
 uint64_t acorn::IRGenerator::sizeof_type_in_bytes(llvm::Type* ll_type) {
     return ll_module.getDataLayout().getTypeAllocSize(ll_type);
+}
+
+llvm::Value* acorn::IRGenerator::gen_array_memory_access(llvm::Value* ll_address, Type* arr_type, Expr* index) {
+    return gen_array_memory_access(ll_address, gen_type(arr_type), gen_rvalue(index));
+}
+
+llvm::Value* acorn::IRGenerator::gen_array_memory_access(llvm::Value* ll_address, llvm::Type* ll_arr_type, llvm::Value* ll_index) {
+    return builder.CreateInBoundsGEP(ll_arr_type, ll_address, { gen_isize(0), ll_index });
 }

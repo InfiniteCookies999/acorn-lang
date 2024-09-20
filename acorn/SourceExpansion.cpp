@@ -10,6 +10,18 @@ if (s1 < s) { s = s1; }           \
 if (e1 > e) { e = e1; }           \
 }
 
+    static void go_until(const char*& e, char c) {
+        // Only include '\0' for safety but only it should
+        // not be needed.
+        while (*e != c && *e != '\0') {
+            ++e;
+        }
+        if (*e == '\0') {
+            --e;
+        }
+        ++e;
+    }
+
     static std::pair<const char*, const char*> get_expansion(Node* node) {
         
         auto s = node->uses_expanded_loc ? node->expanded_loc.ptr : node->loc.ptr;;
@@ -42,15 +54,8 @@ if (e1 > e) { e = e1; }           \
             } else {
                 e = call->loc.ptr + call->loc.length;
             }
-            // Only include '\0' for safety but only it should
-            // not be needed.
-            while (*e != ')' && *e != '\0') {
-                ++e;
-            }
-            if (*e == '\0') {
-                --e;
-            }
-            ++e;
+            // Include the closing )
+            go_until(e, ')');
             break;
         }
         case NodeKind::Cast: {
@@ -69,13 +74,14 @@ if (e1 > e) { e = e1; }           \
                 get(arr->elms.back());
             }
             // Include the closing ]
-            while (*e != ']' && *e != '\0') {
-                ++e;
-            }
-            if (*e == '\0') {
-                --e;
-            }
-            ++e;
+            go_until(e, ']');
+            break;
+        }
+        case NodeKind::MemoryAccess: {
+            MemoryAccess* mem_access = as<MemoryAccess*>(node);
+            get(mem_access->index);
+            // Include the closing ]
+            go_until(e, ']');
             break;
         }
         case NodeKind::Number:

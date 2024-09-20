@@ -67,6 +67,8 @@ X(SemaArrayLengthNotInteger                , 30036)
 X(SemaArrayLengthTooLargeType              , 30037)
 X(SemaArrayLengthZero                      , 30038)
 X(SemaArrayLengthNegative                  , 30039)
+X(SemaMemoryAccessBadType                  , 30040)
+X(SemaMemoryIndexNotInteger                , 30041)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)
