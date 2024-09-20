@@ -77,7 +77,8 @@ acorn::Type* acorn::ContainerType::get_base_type() const {
     Type* type_itr = elm_type;
     TypeKind our_kind = get_kind();
     while (type_itr->get_kind() == our_kind) {
-        type_itr = as<ContainerType*>(type_itr);
+        auto ctr_type = as<ContainerType*>(type_itr);
+        type_itr = ctr_type->elm_type;
     }
     return type_itr;
 }

@@ -125,8 +125,9 @@ namespace acorn {
                                                   llvm::Constant* ll_initial_value,
                                                   llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::PrivateLinkage);
 
-        llvm::Align get_alignment(llvm::Type* ll_type);
-        uint64_t sizeof_type_in_bytes(llvm::Type* ll_type);
+        llvm::Align get_alignment(Type* type) const { return get_alignment(gen_type(type)); }
+        llvm::Align get_alignment(llvm::Type* ll_type) const;
+        uint64_t sizeof_type_in_bytes(llvm::Type* ll_type) const;
 
         llvm::Value* gen_array_memory_access(llvm::Value* ll_address, Type* arr_type, Expr* index);
         llvm::Value* gen_array_memory_access(llvm::Value* ll_address, llvm::Type* arr_type, llvm::Value* ll_index);

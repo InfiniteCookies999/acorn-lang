@@ -242,9 +242,23 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 }
 
 void acorn::IRGenerator::gen_variable_address(Var* var) {
-    var->ll_address = builder.CreateAlloca(gen_type(var->type),
-                                           nullptr,
-                                           llvm::Twine(var->name.reduce()));
+
+    // LLVM uses preferred alignment for some reason by default. Possibly because they 
+    // still want to be able to allow for generating IR without setting the data layout.
+    //
+    // But we always want to use ABI alignment so we generate the instruction manually.
+    
+    auto ll_type = gen_type(var->type);
+    
+    llvm::Align ll_alignment = get_alignment(ll_type); // Uses ABI alignment.
+    unsigned ll_address_space = ll_module.getDataLayout().getAllocaAddrSpace();
+    
+    auto ll_address = new llvm::AllocaInst(ll_type,
+                                           ll_address_space, 
+                                           nullptr, // "Array size"
+                                           ll_alignment);
+    builder.Insert(ll_address, llvm::Twine(var->name.reduce()));
+    var->ll_address = ll_address;
 }
 
 void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
@@ -530,11 +544,13 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
         ll_global_arr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
         ll_global_arr->setAlignment(ll_alignment);
          
+        auto ll_base_type = gen_type(arr_type->get_base_type());
+
         uint64_t total_linear_length = arr_type->get_total_linear_length();
         builder.CreateMemCpy(
             ll_dest_addr, ll_alignment,
             ll_global_arr, ll_alignment,
-            total_linear_length * sizeof_type_in_bytes(ll_elm_type)
+            total_linear_length * sizeof_type_in_bytes(ll_base_type)
         );
         return ll_dest_addr;
     }
@@ -742,11 +758,11 @@ llvm::GlobalVariable* acorn::IRGenerator::gen_global_variable(const llvm::Twine&
     );
 }
 
-llvm::Align acorn::IRGenerator::get_alignment(llvm::Type* ll_type) {
+llvm::Align acorn::IRGenerator::get_alignment(llvm::Type* ll_type) const {
     return llvm::Align(ll_module.getDataLayout().getABITypeAlign(ll_type));
 }
 
-uint64_t acorn::IRGenerator::sizeof_type_in_bytes(llvm::Type* ll_type) {
+uint64_t acorn::IRGenerator::sizeof_type_in_bytes(llvm::Type* ll_type) const {
     return ll_module.getDataLayout().getTypeAllocSize(ll_type);
 }
 
