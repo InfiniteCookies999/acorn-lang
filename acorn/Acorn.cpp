@@ -22,6 +22,8 @@ namespace fs = std::filesystem;
 
 static const char* StdLibEnvironmentVariable = "acorn_std_lib";
 
+llvm::TargetMachine* acorn::AcornLang::ll_target_machine = nullptr;
+
 static const char* get_std_lib_path() {
     return std::getenv(StdLibEnvironmentVariable);
 }
@@ -186,7 +188,9 @@ void acorn::AcornLang::initialize_codegen() {
         return;
     }
 
-    ll_target_machine = create_llvm_target_machine(context, release_build);
+    if (!ll_target_machine) {
+        ll_target_machine = create_llvm_target_machine(context, release_build);
+    }
     if (!ll_target_machine) {
         return;
     }

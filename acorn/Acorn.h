@@ -54,9 +54,10 @@ namespace acorn {
         }
 
     private:
-        llvm::LLVMContext    ll_context;
-        llvm::TargetMachine* ll_target_machine;
-        llvm::Module*        ll_module;
+        llvm::LLVMContext ll_context;
+        llvm::Module*     ll_module;
+        // Set to static to share between tests.
+        static llvm::TargetMachine* ll_target_machine;
 
         std::wstring output_name = L"program";
         std::wstring output_directory;
