@@ -338,7 +338,8 @@ void acorn::Sema::check_variable(Var* var) {
         return;
     }
 
-    var->is_foldable = var->type->is_integer() && var->type->is_const() &&
+    var->is_foldable = (var->type->is_integer() || var->type->is_bool()) &&
+                       var->type->is_const() &&
                        var->assignment && var->assignment->is_foldable;
 
     if (!var->is_foldable) {
@@ -678,11 +679,11 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     };
 
     auto check_logical_bitwise = [this, lhs, rhs, error_cannot_apply, error_mismatched]() finline -> bool{
-        if (!(lhs->type->is_integer() || lhs->type->is(context.bool_type))) {
+        if (!(lhs->type->is_integer() || lhs->type->is_bool())) {
             error_cannot_apply(lhs);
             return false;
         }
-        if (!(rhs->type->is_integer() || rhs->type->is(context.bool_type))) {
+        if (!(rhs->type->is_integer() || rhs->type->is_bool())) {
             error_cannot_apply(rhs);
             return false;
         }
@@ -1546,7 +1547,7 @@ bool acorn::Sema::check_condition(Expr* cond) {
 }
 
 bool acorn::Sema::is_condition(Type* type) const {
-    return type->get_kind() == TypeKind::Bool ||
+    return type->is_bool() ||
            type->is_pointer() ||
            type->get_kind() == TypeKind::Null;
 }

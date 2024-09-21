@@ -373,14 +373,17 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
 llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs) {
 
     auto load_variable_cond = [this, ifs](Var* var) finline->llvm::Value* {
-    
-        gen_variable(var); // Generate assignment.
+        
+        if (!var->is_foldable) {
+            gen_variable(var); // Generate assignment.
+        }
 
         if (ifs->post_variable_cond) {
             return gen_condition(as<Expr*>(ifs->post_variable_cond));
         }
 
-        auto ll_value = builder.CreateLoad(gen_type(var->type), var->ll_address);
+        auto ll_value = var->is_foldable ? gen_node(var->assignment)
+                                         : builder.CreateLoad(gen_type(var->type), var->ll_address);
         if (var->type->is_real_pointer()) {
             return builder.CreateIsNotNull(ll_value);
         }
@@ -442,7 +445,7 @@ llvm::Value* acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
-    if (var->is_foldable) return gen_node(var->assignment);
+    if (var->is_foldable) return nullptr; // Nothing to generate since the variable doesn't have an address.
 
     if (var->assignment) {
         gen_assignment(var->ll_address, var->assignment);

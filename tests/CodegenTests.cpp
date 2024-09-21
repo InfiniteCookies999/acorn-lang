@@ -240,6 +240,12 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("True Case");
         });
+        test("if with foldable var", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test8.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("True Case");
+        });
         test("named args ordered", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"named_args/named_args_test1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

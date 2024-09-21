@@ -154,7 +154,7 @@ namespace acorn {
         bool is_foldable = false;
 
         llvm::Value* ll_address;
-
+        
         bool is_param() const { return param_idx != NotParam; }
 
     };
