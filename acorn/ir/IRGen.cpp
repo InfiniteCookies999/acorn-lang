@@ -207,7 +207,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     }
 
     // Setup takedown function dependencies.
-    ll_global_init_call_bb = ll_entry;
+    if (is_main) {
+        ll_global_init_call_bb = ll_entry;
+    }
 
     // Allocating and storing incoming variables.
     for (size_t idx = 0; idx < func->params.size(); ++idx) {
@@ -277,12 +279,13 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
                                                           : llvm::GlobalValue::InternalLinkage;
     auto ll_name = var->linkname.empty() ? var->name.reduce() : var->linkname;
     auto ll_final_name = var->has_modifier(Modifier::Native) ? ll_name
-                                                             : ll_name + "." + llvm::Twine(global_counter++);
+                                                             : "global." + ll_name + "." + llvm::Twine(global_counter++);
     auto ll_address = gen_global_variable(ll_final_name,
                                           gen_type(var->type),
                                           false,
                                           nullptr,
                                           ll_linkage);
+    ll_address->setAlignment(get_alignment(gen_type(var->type)));
 
     if (var->has_modifier(Modifier::DllImport)) {
         ll_address->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
