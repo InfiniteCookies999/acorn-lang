@@ -151,6 +151,7 @@ namespace acorn {
         Type* type;
 
         Expr* assignment = nullptr;
+        bool is_foldable = false;
 
         llvm::Value* ll_address;
 

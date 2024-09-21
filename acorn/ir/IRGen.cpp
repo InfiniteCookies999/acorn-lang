@@ -74,7 +74,7 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
 
     if (node->kind == NodeKind::IdentRef) {
         IdentRef* ref = as<IdentRef*>(node);
-        if (ref->is_var_ref()) {
+        if (ref->is_var_ref() && !ref->is_foldable) {
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
     } else if (node->kind == NodeKind::UnaryOp) {
@@ -442,6 +442,7 @@ llvm::Value* acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
+    if (var->is_foldable) return gen_node(var->assignment);
 
     if (var->assignment) {
         gen_assignment(var->ll_address, var->assignment);
@@ -458,6 +459,10 @@ llvm::Value* acorn::IRGenerator::gen_number(Number* number) {
 
 llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
     if (ref->is_var_ref()) {
+        if (ref->var_ref->is_foldable) {
+            return gen_node(ref->var_ref->assignment);
+        }
+
         if (ref->var_ref->is_global) {
             gen_global_variable_decl(ref->var_ref);
         }

@@ -89,6 +89,12 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
 
         auto unarr_type = as<UnresolvedArrayType*>(type);
         Expr* length_expr = unarr_type->get_length_expr();
+
+        check_node(length_expr);
+        if (!length_expr->type) {
+            // Failed to check the length expression so returning early.
+            return nullptr;
+        }
         
         if (!length_expr->type->is_integer()) {
             error(expand(length_expr), "Array length must be an integer type")
@@ -104,7 +110,7 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
 
         if (!length_expr->is_foldable) {
             error(expand(length_expr), "Array length must be able to be determined at compile time")
-                .end_error(ErrCode::SemaArrayLengthTooLargeType);
+                .end_error(ErrCode::SemaArrayLengthNotComptime);
             return nullptr;
         }
 
@@ -311,14 +317,6 @@ void acorn::Sema::check_variable(Var* var) {
             }
         }
     }
-    
-    // If not a global variable we need to tell the current function to
-    // provide us with stack memory.
-    if (cur_func && !var->is_param() && !var->is_global) {
-        cur_func->vars_to_alloc.push_back(var);
-    } else if (var->is_global) {
-        context.queue_gen(var);
-    }
 
     if (cur_scope) {
         if (Var* prev_var = cur_scope->find_variable(var->name)) {
@@ -338,6 +336,19 @@ void acorn::Sema::check_variable(Var* var) {
     if (!var->type) {
         // Failed to fixup the type so returning early.
         return;
+    }
+
+    var->is_foldable = var->type->is_integer() && var->type->is_const() &&
+                       var->assignment && var->assignment->is_foldable;
+
+    if (!var->is_foldable) {
+        // If not a global variable we need to tell the current function to
+       // provide us with stack memory.
+        if (cur_func && !var->is_param() && !var->is_global) {
+            cur_func->vars_to_alloc.push_back(var);
+        } else if (var->is_global) {
+            context.queue_gen(var);
+        }
     }
 
     if (var->type->is(context.void_type)) {
@@ -640,7 +651,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             error_cannot_apply(rhs);
             return false;
         }
-        if (!rhs->type->is(lhs->type)) {
+        if (!rhs->type->is_ignore_const(lhs->type)) {
             error_mismatched();
             return false;
         }
@@ -659,7 +670,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             
         check_division_by_zero(expand(bin_op), rhs);
         
-        if (!rhs->type->is(lhs->type)) {
+        if (!rhs->type->is_ignore_const(lhs->type)) {
             error_mismatched();
             return false;
         }
@@ -675,7 +686,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             error_cannot_apply(rhs);
             return false;
         }
-        if (!rhs->type->is(lhs->type)) {
+        if (!rhs->type->is_ignore_const(lhs->type)) {
             error_mismatched();
             return false;
         }
@@ -691,7 +702,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             error_cannot_apply(rhs);
             return false;
         }
-        if (!rhs->type->is(lhs->type)) {
+        if (!rhs->type->is_ignore_const(lhs->type)) {
             error_mismatched();
             return false;
         }
@@ -800,7 +811,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             error_cannot_apply(rhs);
             return;
         }
-        if (!(rhs->type->is(lhs->type) ||
+        if (!(rhs->type->is_ignore_const(lhs->type) ||
              (rhs->type->is_pointer() && lhs->type->get_kind() == TypeKind::Null) ||
              (lhs->type->is_pointer() && rhs->type->get_kind() == TypeKind::Null)
               )) {
@@ -941,7 +952,6 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_fo
     
     switch (ref->found_kind) {
     case IdentRef::VarKind: {
-        ref->is_foldable = false;
         
         Var* var_ref = ref->var_ref;
         if (!var_ref->generated && var_ref->is_global) {
@@ -949,6 +959,12 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_fo
             sema.check_variable(var_ref);
         }
         
+        if (var_ref->type->is_integer() && var_ref->type->is_const()) {
+            ref->is_foldable = true;
+        } else {
+            ref->is_foldable = false;
+        }
+
         ref->type = var_ref->type;
         break;
     }
@@ -1530,7 +1546,7 @@ bool acorn::Sema::check_condition(Expr* cond) {
 }
 
 bool acorn::Sema::is_condition(Type* type) const {
-    return type->is(context.bool_type) ||
+    return type->get_kind() == TypeKind::Bool ||
            type->is_pointer() ||
            type->get_kind() == TypeKind::Null;
 }

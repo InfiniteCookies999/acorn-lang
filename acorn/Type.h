@@ -59,6 +59,9 @@ namespace acorn {
 
         bool is(const Type* type)     const { return type == this; }
         bool is_not(const Type* type) const { return type != this; }
+        bool is_ignore_const(const Type* type) const {
+            return remove_all_const()->is(type->remove_all_const());
+        }
 
         bool is_number() const {
             return is_integer();

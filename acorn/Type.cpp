@@ -97,6 +97,7 @@ acorn::Type* acorn::UnresolvedArrayType::create(PageAllocator& allocator, Type* 
                                                 Expr* length_expr, bool is_const) {
     UnresolvedArrayType* unarr_type = allocator.alloc_type<UnresolvedArrayType>();
     unarr_type->contains_const = is_const;
+    unarr_type->length_expr = length_expr;
     return new (unarr_type) UnresolvedArrayType(is_const, length_expr, elm_type);
 }
 
