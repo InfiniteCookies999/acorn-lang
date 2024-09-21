@@ -19,6 +19,8 @@ namespace acorn {
 
         void gen_function(Func* func);
         void gen_global_variable(Var* var);
+        void finish_incomplete_global_variables();
+        void finish_incomplete_global_variable(Var* var);
 
         llvm::Value* gen_node(Node* node);
 
@@ -54,8 +56,10 @@ namespace acorn {
             llvm::Value* ll_ret_addr;
         };
 
-        static int global_counter;
-        
+        static int                         global_counter;
+        static llvm::SmallVector<Var*, 32> incomplete_global_variables;
+        static llvm::BasicBlock*           ll_global_init_call_bb;
+
         void gen_function_decl(Func* func);
         void gen_function_body(Func* func);
         void gen_variable_address(Var* var);
@@ -131,6 +135,8 @@ namespace acorn {
 
         llvm::Value* gen_array_memory_access(llvm::Value* ll_address, Type* arr_type, Expr* index);
         llvm::Value* gen_array_memory_access(llvm::Value* ll_address, llvm::Type* arr_type, llvm::Value* ll_index);
+
+        llvm::Function* gen_void_function_decl(llvm::Twine ll_name);
 
     };
 }

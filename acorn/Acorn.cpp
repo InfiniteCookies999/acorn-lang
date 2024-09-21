@@ -263,7 +263,6 @@ void acorn::AcornLang::sema_and_irgen() {
         if (decl->is(NodeKind::Func)) {
             generator.gen_function(as<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {
-            IRGenerator generator(context);
             generator.gen_global_variable(as<Var*>(decl));
         } else {
             acorn_fatal("Unreachable: Missing generation case");
@@ -271,6 +270,9 @@ void acorn::AcornLang::sema_and_irgen() {
         ir_timer.stop();
 
     }
+
+    IRGenerator generator(context);
+    generator.finish_incomplete_global_variables();
 
     // Checking any declarations that were not checked.
     for (Decl* decl : context.get_unchecked()) {

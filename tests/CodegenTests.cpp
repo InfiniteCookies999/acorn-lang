@@ -168,11 +168,17 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("he!he!heleh");
         });
-        test("global test 1", [&] {
+        test("global foldable value", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"globals/global_test1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());
 
             expect(result, std::identity()).to_be("Hello from global!");
+        });
+        test("global foldable value", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"globals/global_test2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("H");
         });
         test("ptr dereferencing", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"ptr_dereferencing.ac"));

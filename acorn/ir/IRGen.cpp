@@ -4,7 +4,9 @@
 #include "../Util.h"
 #include "../Logger.h"
 
-int acorn::IRGenerator::global_counter = 0;
+int                                acorn::IRGenerator::global_counter = 0;
+llvm::SmallVector<acorn::Var*, 32> acorn::IRGenerator::incomplete_global_variables;
+llvm::BasicBlock*                  acorn::IRGenerator::ll_global_init_call_bb;
 
 acorn::IRGenerator::IRGenerator(Context& context)
     : context(context),
@@ -204,6 +206,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
         }
     }
 
+    // Setup takedown function dependencies.
+    ll_global_init_call_bb = ll_entry;
+
     // Allocating and storing incoming variables.
     for (size_t idx = 0; idx < func->params.size(); ++idx) {
         Var* param = func->params[idx];
@@ -297,8 +302,37 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
         ll_global->setInitializer(llvm::cast<llvm::Constant>(ll_value));
     } else {
         ll_global->setInitializer(gen_zero(var->type));
+        incomplete_global_variables.push_back(var);
+    }
+}
+
+
+void acorn::IRGenerator::finish_incomplete_global_variables() {
+    if (incomplete_global_variables.empty()) {
+        return;
     }
 
+    auto ll_func = gen_void_function_decl("__acorn.global_init");
+
+    // Move the insert point to the call location for the init globals function.
+    builder.SetInsertPoint(ll_global_init_call_bb,
+                           ll_global_init_call_bb->getFirstInsertionPt());
+    builder.CreateCall(ll_func);
+
+    auto ll_entry = gen_bblock("entry.block", ll_func);
+    builder.SetInsertPoint(ll_entry);
+    
+    for (Var* var : incomplete_global_variables) {
+        finish_incomplete_global_variable(var);
+    }
+
+    builder.CreateRetVoid();
+
+    incomplete_global_variables.clear();
+}
+
+void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
+    gen_assignment(var->ll_address, var->assignment);
 }
 
 llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
@@ -772,4 +806,16 @@ llvm::Value* acorn::IRGenerator::gen_array_memory_access(llvm::Value* ll_address
 
 llvm::Value* acorn::IRGenerator::gen_array_memory_access(llvm::Value* ll_address, llvm::Type* ll_arr_type, llvm::Value* ll_index) {
     return builder.CreateInBoundsGEP(ll_arr_type, ll_address, { gen_isize(0), ll_index });
+}
+
+llvm::Function* acorn::IRGenerator::gen_void_function_decl(llvm::Twine ll_name) {
+    
+    auto ll_func_type = llvm::FunctionType::get(llvm::Type::getVoidTy(ll_context), {}, false);
+
+    return llvm::Function::Create(
+        ll_func_type,
+        llvm::GlobalValue::InternalLinkage,
+        ll_name,
+        ll_module
+    );
 }
