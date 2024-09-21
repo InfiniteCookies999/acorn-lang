@@ -180,6 +180,12 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("H");
         });
+        test("global array fold", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"globals/global_test3.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
         test("ptr dereferencing", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"ptr_dereferencing.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

@@ -297,12 +297,23 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
 
     auto ll_global = llvm::cast<llvm::GlobalVariable>(var->ll_address);
     
+    auto gen_constant_value = [this, var]() {
+        if (var->assignment->type->is_array()) {
+            auto ll_array_type = llvm::cast<llvm::ArrayType>(gen_type(var->assignment->type));
+            return gen_constant_array(as<Array*>(var->assignment), ll_array_type);
+        } else {
+            auto ll_value = gen_rvalue(var->assignment);
+            return llvm::cast<llvm::Constant>(ll_value);
+        }
+    };
+
     if (var->assignment && var->assignment->is_foldable) {
-        auto ll_value = gen_rvalue(var->assignment);
-        ll_global->setInitializer(llvm::cast<llvm::Constant>(ll_value));
+        ll_global->setInitializer(gen_constant_value());
     } else {
         ll_global->setInitializer(gen_zero(var->type));
-        incomplete_global_variables.push_back(var);
+        if (var->assignment) {
+            incomplete_global_variables.push_back(var);
+        }
     }
 }
 
