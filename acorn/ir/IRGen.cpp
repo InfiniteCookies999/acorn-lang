@@ -724,7 +724,7 @@ llvm::Constant* acorn::IRGenerator::gen_one(Type* type) {
 llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::Value* ll_value) {
     switch (to_type->get_kind()) {
     case TypeKind::Pointer: {
-        if (from_type->is_integer() || from_type->is(context.bool_type)) {
+        if (from_type->is_integer() || from_type->is_bool()) {
             return builder.CreatePtrToInt(ll_value, llvm::PointerType::get(ll_context, 0), "cast");
         } else if (from_type->is_real_pointer() || from_type->is(context.null_type)) {
             // Pointer to pointer doesn't need casting because of opaque pointers.
@@ -747,7 +747,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
     case TypeKind::Char16: 
     case TypeKind::Char32:
     case TypeKind::Bool: {
-        if (from_type->is_integer() || from_type->is(context.bool_type)) {
+        if (from_type->is_integer() || from_type->is_bool()) {
             return builder.CreateIntCast(ll_value, gen_type(to_type), to_type->is_signed(), "cast");
         } else if (from_type->is_real_pointer()) {
             return builder.CreateIntToPtr(ll_value, gen_type(to_type), "cast");
