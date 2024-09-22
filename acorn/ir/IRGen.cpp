@@ -493,15 +493,29 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call) {
     Func* called_func = call->called_func;
     gen_function_decl(called_func);
 
+    auto gen_function_call_arg = [this](Expr* arg) finline -> llvm::Value* {
+        if (arg->is(NodeKind::IdentRef)) {
+            auto ref = as<IdentRef*>(arg);
+            if (ref->is_var_ref() &&
+                ref->var_ref->is_param() &&
+                ref->var_ref->type->is_array()) {
+                // The argument references an already decayed array
+                // from a parameter so it must be loaded.
+                return builder.CreateLoad(llvm::PointerType::get(ll_context, 0), gen_node(arg));
+            }
+        }
+        return gen_rvalue(arg);
+    };
+
     llvm::SmallVector<llvm::Value*> ll_args;
     ll_args.resize(call->args.size());
     for (size_t i = 0; i < call->args.size(); ++i) {
         Expr* arg = call->args[i];
         if (arg->is(NodeKind::NamedValue)) {
             auto named_arg = as<NamedValue*>(arg);
-            ll_args[named_arg->mapped_idx] = gen_rvalue(named_arg->assignment);
+            ll_args[named_arg->mapped_idx] = gen_function_call_arg(named_arg->assignment);
         } else {
-            ll_args[i] = gen_rvalue(arg);
+            ll_args[i] = gen_function_call_arg(arg);
         }
     }
 
@@ -666,6 +680,8 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
     
     auto ll_memory = gen_rvalue(mem_access->site);
     bool mem_access_ptr = mem_access->type->is_pointer();
+
+    // Checking to see if the memory refers to a decayed arrayed for a parameter.
     if (mem_access->site->is(NodeKind::IdentRef)) {
         auto ref = as<IdentRef*>(mem_access->site);
         if (ref->is_var_ref() && ref->var_ref->is_param()) {
