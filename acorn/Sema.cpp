@@ -1320,7 +1320,7 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
     check(mem_access->site);
 
     Type* access_type = mem_access->site->type;
-    if (!access_type->is_array()) {
+    if (!(access_type->is_array() || access_type->is_pointer())) {
         error(mem_access, "Cannot index memory of type '%s'", access_type)
             .end_error(ErrCode::SemaMemoryAccessBadType);
     } else {

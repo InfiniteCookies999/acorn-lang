@@ -74,7 +74,10 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
 
     if (node->kind == NodeKind::IdentRef) {
         IdentRef* ref = as<IdentRef*>(node);
-        if (ref->is_var_ref() && !ref->is_foldable) {
+        if (ref->is_var_ref() &&
+            !ref->is_foldable &&   // If the reference is foldable then no memory address is provided for storage to load.
+            !ref->type->is_array() // Arrays are essentially always treated like lvalues.
+            ) {
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
     } else if (node->kind == NodeKind::UnaryOp) {
@@ -104,7 +107,9 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
     } else if (node->kind == NodeKind::MemoryAccess) {
-        ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
+        if (!node->type->is_array()) { // Arrays are always lvalues
+            ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
+        }
     }
 
     if (node->cast_type) {
@@ -127,7 +132,7 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     ll_param_types.reserve(func->params.size());
 
     for (const Var* param : func->params) {
-        ll_param_types.push_back(gen_type(param->type));
+        ll_param_types.push_back(gen_function_param_type(param));
     }
 
     bool is_main = func == context.get_main_function();
@@ -214,13 +219,13 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     // Allocating and storing incoming variables.
     for (size_t idx = 0; idx < func->params.size(); ++idx) {
         Var* param = func->params[idx];
-        gen_variable_address(param);
+        gen_variable_address(param, gen_function_param_type(param));
         builder.CreateStore(ll_cur_func->getArg(idx), param->ll_address);
     }
 
     // Allocating memory for variables declared in the function.
     for (Var* var : func->vars_to_alloc) {
-        gen_variable_address(var);
+        gen_variable_address(var, gen_type(var->type));
     }
 
     for (Node* node : *func->scope) {
@@ -248,24 +253,29 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     }
 }
 
-void acorn::IRGenerator::gen_variable_address(Var* var) {
+void acorn::IRGenerator::gen_variable_address(Var* var, llvm::Type* ll_alloc_type) {
 
     // LLVM uses preferred alignment for some reason by default. Possibly because they 
     // still want to be able to allow for generating IR without setting the data layout.
     //
     // But we always want to use ABI alignment so we generate the instruction manually.
     
-    auto ll_type = gen_type(var->type);
-    
-    llvm::Align ll_alignment = get_alignment(ll_type); // Uses ABI alignment.
+    llvm::Align ll_alignment = get_alignment(ll_alloc_type); // Uses ABI alignment.
     unsigned ll_address_space = ll_module.getDataLayout().getAllocaAddrSpace();
     
-    auto ll_address = new llvm::AllocaInst(ll_type,
+    auto ll_address = new llvm::AllocaInst(ll_alloc_type,
                                            ll_address_space, 
                                            nullptr, // "Array size"
                                            ll_alignment);
     builder.Insert(ll_address, llvm::Twine(var->name.reduce()));
     var->ll_address = ll_address;
+}
+
+llvm::Type* acorn::IRGenerator::gen_function_param_type(const Var* param) const {
+    if (param->type->is_array()) {
+        return llvm::PointerType::get(ll_context, 0);
+    }
+    return gen_type(param->type);
 }
 
 void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
@@ -654,10 +664,32 @@ llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, llvm::ArrayTy
 
 llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
     
-    auto ll_address = gen_node(mem_access->site);
-    Type* arr_type = mem_access->site->type;
-    
-    return gen_array_memory_access(ll_address, arr_type, mem_access->index);
+    auto ll_memory = gen_rvalue(mem_access->site);
+    bool mem_access_ptr = mem_access->type->is_pointer();
+    if (mem_access->site->is(NodeKind::IdentRef)) {
+        auto ref = as<IdentRef*>(mem_access->site);
+        if (ref->is_var_ref() && ref->var_ref->is_param()) {
+            // We have to load again because gen_rvalue says to always treat
+            // nodes with array types as lvalues but it was decayed so it
+            // was stored into a variable that now needs loaded.
+            //
+            // Conceptually this makes sense to do here since gen_array_memory_access
+            // works under the assumption that the memory given is the lvalue of the
+            // array.
+            ll_memory = builder.CreateLoad(llvm::PointerType::get(ll_context, 0), ll_memory);
+            mem_access_ptr = true;
+        }
+    }
+    Type* type = mem_access->site->type;
+
+    if (mem_access_ptr) {
+        auto ctr_type = as<ContainerType*>(type);
+        auto ll_load_type = gen_type(ctr_type->get_elm_type());
+        return builder.CreateInBoundsGEP(ll_load_type, ll_memory, {gen_rvalue(mem_access->index)});
+    } else {
+        // Should be an array type otherwise.
+        return gen_array_memory_access(ll_memory, type, mem_access->index);
+    }
 }
 
 void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Expr* value) {
@@ -827,6 +859,8 @@ llvm::Value* acorn::IRGenerator::gen_array_memory_access(llvm::Value* ll_address
 }
 
 llvm::Value* acorn::IRGenerator::gen_array_memory_access(llvm::Value* ll_address, llvm::Type* ll_arr_type, llvm::Value* ll_index) {
+    // First index gives back the offset into the array pointer.
+    // Second index gives back a pointer to the element.
     return builder.CreateInBoundsGEP(ll_arr_type, ll_address, { gen_isize(0), ll_index });
 }
 

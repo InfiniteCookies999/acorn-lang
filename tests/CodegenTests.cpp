@@ -294,5 +294,17 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("Lets go!");
         });
+        test("Array func pass", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_decay_test1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("Multi array func pass", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_decay_test2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
     });
 }

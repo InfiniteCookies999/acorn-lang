@@ -209,6 +209,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         // gen_rvalue it generates the address.
         return gen_node(expr);
     case '*': {
+        // TODO: can we just call gen_rvalue here instead?
         auto ll_ptr = gen_node(expr);
 
         if (expr->is(NodeKind::BinOp)) {
