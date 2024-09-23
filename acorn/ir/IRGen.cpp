@@ -403,31 +403,36 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
     bool is_main = cur_func == context.get_main_function();
 
     if (cur_func->num_returns > 1) {
-        if (not_void) {
-            if (!cur_func->aggr_ret_var) {
-                builder.CreateStore(gen_rvalue(ret->value), ll_ret_addr);
-            }
+        if (not_void && !cur_func->aggr_ret_var) {
+            // Not-void so store the return value into the return address
+            // if it was not already stored due to an aggregate return variable.
+            builder.CreateStore(gen_rvalue(ret->value), ll_ret_addr);
         } else if (is_main) {
+            // Special case for main because even if the user declares main as having
+            // type void it still must return an integer.
             builder.CreateStore(builder.getInt32(0), ll_ret_addr);
         }
-        // Jumping to the end of the function.
+        // Jumping to the return block.
         builder.CreateBr(ll_ret_block);
-    } else if (not_void) {
+        return nullptr;
+    }
+    
+    if (not_void) {
         if (cur_func->return_type->is_array()) {
-            if (cur_func->uses_aggr_param) {
-                // If there is an aggregate return variable then the value would
-                // have already been stored into the address so there is nothing
-                // to do.
-                if (!cur_func->aggr_ret_var) {
-                    gen_assignment(cur_func->ll_aggr_ret_address, ret->value);
-                }
-            } else {
+            // If there is an aggregate return variable then the value would
+            // have already been stored into the address so there is nothing
+            // to do.
+            if (cur_func->uses_aggr_param && !cur_func->aggr_ret_var) {
+                gen_assignment(cur_func->ll_aggr_ret_address, ret->value);
+            } else if (!cur_func->uses_aggr_param) {
                 ll_ret_value = builder.CreateLoad(cur_func->ll_aggr_int_ret_type, gen_node(ret->value));
             }
         } else {
+            // Return non-aggregate value.
             ll_ret_value = gen_rvalue(ret->value);
         }
     } else if (is_main) {
+        // Special case for main. Read above for explaination.
         ll_ret_value = builder.getInt32(0);
     }
 
