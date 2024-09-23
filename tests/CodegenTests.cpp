@@ -332,6 +332,15 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("Lets go!");
         });
+        test("Array bg val multi rets", [&] {
+            // Similar to above but because the return references different arrays
+            // it cannot simply use the variable's address as the array and must
+            // copy memory to the return address.
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test9.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!Lets go!");
+        });
         test("Array sm val ret", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test8.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

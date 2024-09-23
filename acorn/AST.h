@@ -142,7 +142,6 @@ namespace acorn {
         // may use a parameter that points to the return value instead
         // of returning a value directory.
         bool uses_aggr_param = false;
-        llvm::Value* ll_aggr_ret_address;
 
         bool cannot_use_aggr_ret_var = false;
         Var* aggr_ret_var = nullptr;

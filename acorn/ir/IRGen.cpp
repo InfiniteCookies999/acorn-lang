@@ -131,7 +131,6 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
 
     llvm::SmallVector<llvm::Type*> ll_param_types;
     ll_param_types.reserve(func->params.size());
-    size_t param_offset = 0;
 
     bool is_main = func == context.get_main_function();
     auto ll_ret_type = gen_function_return_type(func, is_main);
@@ -139,7 +138,6 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     // Creating the parameter types.
     if (func->uses_aggr_param) {
         ll_param_types.push_back(llvm::PointerType::get(ll_context, 0));
-        ++param_offset;
     }
 
     for (const Var* param : func->params) {
@@ -183,16 +181,21 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         ll_func->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
     }
 
-    // Assigning names to parameters.
-    for (size_t idx = 0; idx < func->params.size(); ++idx) {
-        const Var* param = func->params[idx];
-        size_t ll_param_idx = param_offset + idx;
-        ll_func->getArg(as<unsigned int>(ll_param_idx))->setName(llvm::Twine("in.") + param->name.reduce());
+    // Assigning names to parameters and attributes to parameters.
+    auto assign_param_info = [ll_func](size_t param_idx, llvm::Twine ll_name) finline{
+        auto ll_param = ll_func->getArg(as<unsigned int>(param_idx));
+        ll_param->setName(ll_name);
+        ll_param->addAttr(llvm::Attribute::NoUndef);
+    };
+
+    size_t param_idx = 0;
+    if (func->uses_aggr_param) {
+        assign_param_info(param_idx, "aggr.ret.addr");
+        ++param_idx;
+    }
     
-        // Allows for better optimization by assuming it is not a undefined or poisioned value.
-        if (!func->has_modifier(Modifier::DllImport)) {
-            ll_func->addParamAttr(as<unsigned int>(ll_param_idx), llvm::Attribute::NoUndef);
-        }
+    for (Var* param : func->params) {
+        assign_param_info(param_idx++, llvm::Twine("in.") + param->name.reduce());
     }
 }
 
@@ -228,7 +231,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     bool is_main = func == context.get_main_function();
     if (func->num_returns > 1) {
         ll_ret_block = gen_bblock("ret.block", ll_cur_func);
-        if (!func->aggr_ret_var) {
+        if (!func->uses_aggr_param) {
             if (func->return_type->is_not(context.void_type)) {
                 ll_ret_addr = builder.CreateAlloca(gen_type(func->return_type), nullptr, "ret.addr");
             } else if (is_main) {
@@ -245,7 +248,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     // Allocating and storing incoming variables.
     size_t param_idx = 0;
     if (func->uses_aggr_param) {
-        func->ll_aggr_ret_address = ll_cur_func->getArg(param_idx++);
+        ll_ret_addr = ll_cur_func->getArg(param_idx++);
     }
 
     for (Var* param : func->params) {
@@ -256,7 +259,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     // Allocating memory for variables declared in the function.
     for (Var* var : func->vars_to_alloc) {
         if (func->uses_aggr_param && var == func->aggr_ret_var) {
-            var->ll_address = func->ll_aggr_ret_address;
+            var->ll_address = ll_ret_addr;
         } else {
             gen_variable_address(var, gen_type(var->type));
         }
@@ -408,7 +411,7 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
         if (not_void && !cur_func->aggr_ret_var) {
             // Not-void so store the return value into the return address
             // if it was not already stored due to an aggregate return variable.
-            builder.CreateStore(gen_rvalue(ret->value), ll_ret_addr);
+            gen_assignment(ll_ret_addr, ret->value);
         } else if (is_main) {
             // Special case for main because even if the user declares main as having
             // type void it still must return an integer.
@@ -425,7 +428,7 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
             // have already been stored into the address so there is nothing
             // to do.
             if (cur_func->uses_aggr_param && !cur_func->aggr_ret_var) {
-                gen_assignment(cur_func->ll_aggr_ret_address, ret->value);
+                gen_assignment(ll_ret_addr, ret->value);
             } else if (!cur_func->uses_aggr_param) {
                 ll_ret_value = builder.CreateLoad(cur_func->ll_aggr_int_ret_type, gen_node(ret->value));
             }
@@ -795,6 +798,22 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Expr* value) {
         gen_array(as<Array*>(value), ll_address);
     } else if (value->is(NodeKind::FuncCall)) {
         gen_function_call(as<FuncCall*>(value), ll_address);
+    } else if (value->type->is_array()) {
+        // Assigning one array to another so using memory copy for performance
+        // sake.
+        auto ll_array = gen_node(value);
+
+        auto arr_type = as<ArrayType*>(value->type);
+        auto ll_base_type = gen_type(arr_type->get_base_type());
+        uint64_t total_linear_length = arr_type->get_total_linear_length();
+
+        auto ll_elm_type = gen_type(arr_type);
+        llvm::Align ll_alignment = get_alignment(ll_elm_type);
+        builder.CreateMemCpy(
+            ll_address, ll_alignment,
+            ll_array, ll_alignment,
+            total_linear_length * sizeof_type_in_bytes(ll_base_type)
+        );
     } else {
         auto ll_assignment = gen_rvalue(value);
         builder.CreateStore(ll_assignment, ll_address);
