@@ -186,11 +186,15 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         auto ll_param = ll_func->getArg(as<unsigned int>(param_idx));
         ll_param->setName(ll_name);
         ll_param->addAttr(llvm::Attribute::NoUndef);
+        return ll_param;
     };
 
     size_t param_idx = 0;
     if (func->uses_aggr_param) {
-        assign_param_info(param_idx, "aggr.ret.addr");
+        auto ll_param = assign_param_info(param_idx, "aggr.ret.addr");
+        // Add noalias attribute which tells the compiler no other pointer
+        // could possibly point to this pointer.
+        ll_param->addAttr(llvm::Attribute::NoAlias);
         ++param_idx;
     }
     
