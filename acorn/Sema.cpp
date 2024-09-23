@@ -1062,7 +1062,8 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         }
     } else {
         check(call->site);
-        is_callable = true;
+        // TODO: Deal with
+        is_callable = false;
     }
 
     if (!is_callable) {

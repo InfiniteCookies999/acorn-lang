@@ -63,6 +63,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_cast(as<Cast*>(node));
     case NodeKind::MemoryAccess:
         return gen_memory_access(as<MemoryAccess*>(node));
+    case NodeKind::Array:
+        return gen_array(as<Array*>(node), nullptr);
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -685,7 +687,9 @@ llvm::Value* acorn::IRGenerator::gen_cast(Cast* cast) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr) {
-    // TODO: deal with case where dest_addr == nullptr
+    if (!ll_dest_addr) {
+        ll_dest_addr = gen_unseen_alloca(arr->type, "tmp.arr");
+    }
 
     auto arr_type = as<ArrayType*>(arr->type);
     auto ll_elm_type = gen_type(arr_type->get_elm_type());
@@ -970,4 +974,17 @@ llvm::Function* acorn::IRGenerator::gen_void_function_decl(llvm::Twine ll_name) 
         ll_name,
         ll_module
     );
+}
+
+llvm::AllocaInst* acorn::IRGenerator::gen_unseen_alloca(Type* type, llvm::Twine ll_name) {
+    auto ll_backup_insert_block = builder.GetInsertBlock();
+    auto ll_entry_block = &ll_cur_func->getEntryBlock();
+    if (ll_entry_block->empty()) {
+        builder.SetInsertPoint(ll_entry_block);
+    } else {
+        builder.SetInsertPoint(&ll_entry_block->front());
+    }
+    auto ll_address = gen_alloca(gen_type(type), ll_name);
+    builder.SetInsertPoint(ll_backup_insert_block);
+    return ll_address;
 }

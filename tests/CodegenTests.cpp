@@ -338,5 +338,17 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("hi");
         });
+        test("Memory access inline array", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_inline_test1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Q");
+        });
+        test("Func pass inline array", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_inline_test2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
     });
 }

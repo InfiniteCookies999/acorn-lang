@@ -219,6 +219,15 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
             // it is the eqv. of returning i32* (the pointer) rather than i32**
             // the address of the pointer).
             return ll_ptr;
+        } else if (expr->is(NodeKind::UnaryOp)) {
+            auto unary_op = as<UnaryOp*>(expr);
+            auto op = unary_op->op;
+            if (op == Token::AddAdd || op == Token::SubSub ||
+                op == Token::PostAddAdd || op == Token::PostSubSub) {
+                // Read comment for binary op. It is pointer arithmetic so
+                // don't load.
+                return ll_ptr;
+            }
         } else if (expr->is(NodeKind::FuncCall)) {
             // If it is a function since functions dont return addresses what
             // we recieve is just the pointer value itself so there is nothing

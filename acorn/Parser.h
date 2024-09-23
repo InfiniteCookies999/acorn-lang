@@ -83,7 +83,7 @@ namespace acorn {
         template<typename T>
         Expr* fold_int(Token op, Number* lhs, Number* rhs, Type* to_type);
         Expr* parse_postfix();
-        Expr* parse_ident_ref_postfix(Expr* site);
+        Expr* parse_postfix(Expr* term);
         Expr* parse_function_call(Expr* site);
         Expr* parse_dot_operator(Expr* site);
         Expr* parse_memory_access(Expr* site);

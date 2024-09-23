@@ -141,6 +141,8 @@ namespace acorn {
 
         llvm::Function* gen_void_function_decl(llvm::Twine ll_name);
 
+        llvm::AllocaInst* gen_unseen_alloca(Type* type, llvm::Twine ll_name);
+
     };
 }
 

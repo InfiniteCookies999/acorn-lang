@@ -869,7 +869,10 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
 }
 
 acorn::Expr* acorn::Parser::parse_postfix() {
-    Expr* term = parse_term();
+    return parse_postfix(parse_term());
+}
+
+acorn::Expr* acorn::Parser::parse_postfix(Expr* term) {
     if (cur_token.is(Token::AddAdd) || cur_token.is(Token::SubSub)) {
         // Language spec. if there is a whitespace then it does not consider it a post
         // inc/dec.
@@ -886,21 +889,14 @@ acorn::Expr* acorn::Parser::parse_postfix() {
         }
         next_token();
         return unary_op;
+    } else if (cur_token.is('(')) {
+        return parse_postfix(parse_function_call(term));
+    } else if (cur_token.is('.')) {
+        return parse_postfix(parse_dot_operator(term));
+    } else if (cur_token.is('[')) {
+        return parse_postfix(parse_memory_access(term));
     }
     return term;
-}
-
-acorn::Expr* acorn::Parser::parse_ident_ref_postfix(Expr* site) {
-    while (cur_token.is('(') || cur_token.is('.') || cur_token.is('[')) {
-        if (cur_token.is('(')) {
-            site = parse_function_call(site);
-        } else if (cur_token.is('.')) {
-            site = parse_dot_operator(site);
-        } else if (cur_token.is('[')) {
-            site = parse_memory_access(site);
-        }
-    }
-    return site;
 }
 
 acorn::Expr* acorn::Parser::parse_function_call(Expr* site) {
@@ -993,7 +989,7 @@ acorn::Expr* acorn::Parser::parse_term() {
         ref->ident = Identifier::get(cur_token.text());
 
         next_token(); // Consuming the identifier.
-        return parse_ident_ref_postfix(ref);
+        return ref;
     }
     case '+': case '-': case '~': case '!':
     case '&': case Token::AddAdd: case Token::SubSub:
@@ -1003,7 +999,7 @@ acorn::Expr* acorn::Parser::parse_term() {
 
         bool unary_on_num_literal = cur_token.is(Token::IntLiteral);
         Token after_op_token = cur_token;
-        Expr* expr = parse_term();
+        Expr* expr = parse_postfix();
 
         if (unary_token.kind == '+' && expr->is(NodeKind::Number)) {
             return expr; // + has no effect on value.
@@ -1088,7 +1084,7 @@ acorn::Expr* acorn::Parser::parse_term() {
         expect('(');
         cast->explicit_cast_type = parse_type();
         expect(')');
-        cast->value = parse_term();
+        cast->value = parse_postfix();
         return cast;
     }
     default:
