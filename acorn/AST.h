@@ -8,6 +8,7 @@
 namespace llvm {
     class Function;
     class Value;
+    class Type;
 }
 
 namespace acorn {
@@ -132,6 +133,19 @@ namespace acorn {
         llvm::SmallVector<Var*, 16> vars_to_alloc;
         
         ScopeStmt* scope = nullptr;
+
+        // when the function returns an aggregate type such
+        // as an array then if the aggregate type can fit into
+        // an integer this is the integer llvm type.
+        llvm::Type* ll_aggr_int_ret_type = nullptr;
+        // when the function returns an aggregate type the function
+        // may use a parameter that points to the return value instead
+        // of returning a value directory.
+        bool uses_aggr_param = false;
+        llvm::Value* ll_aggr_ret_address;
+
+        bool cannot_use_aggr_ret_var = false;
+        Var* aggr_ret_var = nullptr;
 
         Var* find_parameter(Identifier name) const;
 

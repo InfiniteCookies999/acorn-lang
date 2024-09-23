@@ -61,8 +61,10 @@ namespace acorn {
         static llvm::BasicBlock*           ll_global_init_call_bb;
 
         void gen_function_decl(Func* func);
+        llvm::Type* gen_function_return_type(Func* func, bool is_main);
         void gen_function_body(Func* func);
         void gen_variable_address(Var* var, llvm::Type* ll_alloc_type);
+        llvm::AllocaInst* gen_alloca(llvm::Type* ll_alloc_type, llvm::Twine ll_name);
         llvm::Type* gen_function_param_type(const Var* param) const;
 
         void gen_global_variable_decl(Var* var);
@@ -80,7 +82,7 @@ namespace acorn {
         llvm::Value* gen_binary_numeric_op(tokkind op, BinOp* bin_op,
                                            llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
-        llvm::Value* gen_function_call(FuncCall* call);
+        llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_address);
         llvm::Value* gen_bool(Bool* b);
         llvm::Value* gen_string(String* string);
         llvm::Value* gen_null();

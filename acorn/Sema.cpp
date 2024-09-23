@@ -382,6 +382,26 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
     if (ret->value) {
         check(ret->value);
         is_assignable = is_assignable_to(cur_func->return_type, ret->value);
+
+        if (cur_func->return_type->is_array() && ret->value->is(NodeKind::IdentRef)) {
+            auto ref = as<IdentRef*>(ret->value);
+            if (ref->is_var_ref()) {
+                if (cur_func->aggr_ret_var &&
+                    cur_func->aggr_ret_var != ref->var_ref) {
+                    // Returning multiple different variable references
+                    // so we cannot treat the variable as the return address.
+                    cur_func->cannot_use_aggr_ret_var = true;
+                    cur_func->aggr_ret_var = nullptr;
+                } else if (!cur_func->cannot_use_aggr_ret_var) {
+                    // May be the only variable returned in which case the
+                    // variable may be used as the return address.
+                    cur_func->aggr_ret_var = ref->var_ref;
+                }
+            }
+        } else {
+            cur_func->cannot_use_aggr_ret_var = true;
+        }
+
     } else {
         is_assignable = cur_func->return_type->is(context.void_type);
     }

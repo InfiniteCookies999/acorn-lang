@@ -45,6 +45,8 @@ namespace acorn {
         return true;
     }
 
+    uint64_t next_pow2(uint64_t value);
+
     enum class Color {
 
         Black,

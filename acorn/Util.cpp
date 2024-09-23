@@ -70,6 +70,21 @@ void acorn::set_color(Stream stream, Color color) {
 #endif
 }
 
+uint64_t acorn::next_pow2(uint64_t value) {
+    if (value <= 1) return 1;
+
+    --value;
+
+    value |= value >> 1;
+    value |= value >> 2;
+    value |= value >> 4;
+    value |= value >> 8;
+    value |= value >> 16;
+    value |= value >> 32;
+        
+    return value + 1;
+}
+
 std::string& acorn::trim_leading(std::string& s) {
     auto view = s | std::views::drop_while(isspace);
     s.assign(view.begin(), view.end());

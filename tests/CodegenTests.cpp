@@ -318,5 +318,25 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("Lets go!");
         });
+        test("Array bg type ret (aggr var)", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test6.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("Array bg val rets (aggr var)", [&] {
+            // This case is effectively the same as above except it ensures that even when
+            // there are multiple returns it can still use the address of the variable.
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test7.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("Array sm val ret", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test8.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("hi");
+        });
     });
 }
