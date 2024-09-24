@@ -434,7 +434,11 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
             if (cur_func->uses_aggr_param && !cur_func->aggr_ret_var) {
                 gen_assignment(ll_ret_addr, ret->value);
             } else if (!cur_func->uses_aggr_param) {
-                ll_ret_value = builder.CreateLoad(cur_func->ll_aggr_int_ret_type, gen_node(ret->value));
+                llvm::Value* ll_array = gen_node(ret->value);
+                if (!ll_array->getType()->isIntegerTy()) {
+                    ll_array = builder.CreateLoad(cur_func->ll_aggr_int_ret_type, ll_array);
+                }
+                ll_ret_value = ll_array;
             }
         } else {
             // Return non-aggregate value.
