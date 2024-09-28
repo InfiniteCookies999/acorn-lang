@@ -401,5 +401,29 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("Lets go!");
         });
+        test("Array 0 fill remain one dim fold", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test12.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("Array 0 fill remain one dim nofold", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test13.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("Array 0 fill remain inner arr", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test14.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("Array 0 fill remain inner arr & outer", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test15.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
     });
 }

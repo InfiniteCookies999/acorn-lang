@@ -363,7 +363,8 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
     auto gen_constant_value = [this, var]() {
         if (var->assignment->type->is_array()) {
             auto ll_array_type = llvm::cast<llvm::ArrayType>(gen_type(var->assignment->type));
-            return gen_constant_array(as<Array*>(var->assignment), ll_array_type);
+            auto arr_type = as<ArrayType*>(var->assignment->get_final_type());
+            return gen_constant_array(as<Array*>(var->assignment), arr_type, ll_array_type);
         } else {
             auto ll_value = gen_rvalue(var->assignment);
             return llvm::cast<llvm::Constant>(ll_value);
@@ -704,9 +705,11 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
         ll_dest_addr = gen_unseen_alloca(arr->type, "tmp.arr");
     }
 
-    auto arr_type = as<ArrayType*>(arr->type);
+    auto to_type = arr->get_final_type();;
+
+    auto arr_type = as<ArrayType*>(to_type);
     auto ll_elm_type = gen_type(arr_type->get_elm_type());
-    auto ll_arr_type = llvm::ArrayType::get(ll_elm_type, arr->elms.size());
+    auto ll_arr_type = llvm::ArrayType::get(ll_elm_type, arr_type->get_length());
 
     // If the array is foldable then a constant global array is created which
     // will then be copied over using memcpy into the destination array.
@@ -714,7 +717,7 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
         
         llvm::Align ll_alignment = get_alignment(ll_elm_type);
 
-        auto ll_const_arr = gen_constant_array(arr, ll_arr_type);
+        auto ll_const_arr = gen_constant_array(arr, arr_type, ll_arr_type);
         auto ll_global_arr = gen_const_global_variable("const_array", ll_arr_type, ll_const_arr);
         ll_global_arr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
         ll_global_arr->setAlignment(ll_alignment);
@@ -731,34 +734,40 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
     }
 
     // Indexing all the addresses of the array and assigning a value.
+    auto gen_gep_index = [this, ll_arr_type, ll_dest_addr](uint32_t i) finline {
+        auto ll_index = gen_isize(i);
+        return builder.CreateInBoundsGEP(ll_arr_type->getElementType(), 
+                                         ll_dest_addr,
+                                         { ll_index });
+    };
 
     bool elms_are_arrays = arr_type->get_elm_type()->is_array();
-    for (size_t i = 0; i < arr->elms.size(); i++) {
-        
-        auto ll_index = gen_isize(i);
-        auto ll_elm_addr = builder.CreateInBoundsGEP(ll_arr_type->getElementType(),
-                                                     ll_dest_addr, 
-                                                     { ll_index });
-
+    for (uint32_t i = 0; i < arr->elms.size(); i++) {
+        auto ll_elm_addr = gen_gep_index(i);
         gen_assignment(ll_elm_addr, arr->elms[i]);
+    }
+    // Zero fill the rest.
+    for (uint32_t i = arr->elms.size(); i < ll_arr_type->getNumElements(); ++i) {
+        auto ll_elm_addr = gen_gep_index(i);
+        builder.CreateStore(gen_zero(arr_type->get_elm_type()), ll_elm_addr);
     }
 
     return ll_dest_addr;
 }
 
-llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, llvm::ArrayType* ll_arr_type) {
+llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, ArrayType* arr_type, llvm::ArrayType* ll_arr_type) {
     
-    auto arr_type = as<ArrayType*>(arr->type);
     bool elms_are_arrays = arr_type->get_elm_type()->is_array();
     auto ll_elm_type = ll_arr_type->getElementType();
 
     llvm::SmallVector<llvm::Constant*> ll_values;
-    ll_values.reserve(arr->elms.size());
+    ll_values.reserve(ll_arr_type->getNumElements());
 
     auto get_element = [this, elms_are_arrays, ll_elm_type](Expr* elm) finline {
         if (elms_are_arrays) {
             auto elm_arr = as<Array*>(elm);
-            return gen_constant_array(elm_arr, llvm::cast<llvm::ArrayType>(ll_elm_type));
+            auto elm_arr_type = as<ArrayType*>(elm_arr->get_final_type());
+            return gen_constant_array(elm_arr, elm_arr_type, llvm::cast<llvm::ArrayType>(ll_elm_type));
         } else {
             return llvm::cast<llvm::Constant>(gen_node(elm));
         }
@@ -766,6 +775,10 @@ llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, llvm::ArrayTy
 
     for (Expr* elm : arr->elms) {
         ll_values.push_back(get_element(elm));
+    }
+    // Zero fill the rest.
+    for (uint32_t i = arr->elms.size(); i < ll_arr_type->getNumElements(); ++i) {
+        ll_values.push_back(gen_zero(arr_type->get_elm_type()));
     }
 
     return llvm::ConstantArray::get(ll_arr_type, ll_values);

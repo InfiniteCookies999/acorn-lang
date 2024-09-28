@@ -88,7 +88,7 @@ namespace acorn {
         llvm::Value* gen_null();
         llvm::Value* gen_cast(Cast* cast);
         llvm::Value* gen_array(Array* arr, llvm::Value* ll_dest_addr);
-        llvm::Constant* gen_constant_array(Array* arr, llvm::ArrayType* ll_arr_type);
+        llvm::Constant* gen_constant_array(Array* arr, ArrayType* arr_type, llvm::ArrayType* ll_arr_type);
         llvm::Value* gen_memory_access(MemoryAccess* mem_access);
         llvm::Value* gen_dot_operator(DotOperator* dot);
 

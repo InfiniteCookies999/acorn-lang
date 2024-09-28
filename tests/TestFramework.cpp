@@ -31,12 +31,12 @@ void TestCase::run() {
     }
     if (!failed()) {
         set_color(acorn::Color::BrightGreen);
-        std::cout << std::setw(40 - 4 * depth - strlen(name)) << "passed";
+        std::cout << std::setw(50 - 4 * depth - strlen(name)) << "passed";
         set_color(acorn::Color::White);
         std::cout << "!";
     } else {
         set_color(acorn::Color::BrightRed);
-        std::cout << std::setw(40 - 4 * depth - strlen(name)) << "failed";
+        std::cout << std::setw(50 - 4 * depth - strlen(name)) << "failed";
         set_color(acorn::Color::White);
         std::cout << "!\n" << std::string(4 * depth + 4, ' ');
         set_color(acorn::Color::BrightRed);

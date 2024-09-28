@@ -1439,6 +1439,34 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
         
         return to_type->is(from_type) || expr->is(NodeKind::Null) || to_type->is(context.void_ptr_type);
     }
+    case TypeKind::Array: {
+        if (expr->is(NodeKind::Array)) {
+            auto to_arr_type = as<ArrayType*>(to_type);
+            auto from_arr_type = as<ArrayType*>(from_type);
+
+            while (to_arr_type->get_elm_type()->is_array()) {
+                if (!from_arr_type->get_elm_type()->is_array()) {
+                    // Not the same dimensionality.
+                    return false;
+                }
+
+                // Allow for zero filling the remainder.
+                if (from_arr_type->get_length() > to_arr_type->get_length()) {
+                    return false;
+                }
+
+                to_arr_type = as<ArrayType*>(to_arr_type->get_elm_type());
+                from_arr_type = as<ArrayType*>(from_arr_type->get_elm_type());
+            }
+            
+            if (to_arr_type->get_elm_type()->is_not(from_arr_type->get_elm_type())) {
+                return false;
+            }
+            // Allow for zero filling the remainder.
+            return true;
+        }
+        return to_type->is(from_type);
+    }
     default:
         return to_type->is(from_type);
     }

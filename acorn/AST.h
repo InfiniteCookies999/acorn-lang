@@ -260,6 +260,9 @@ namespace acorn {
         //
         Type* cast_type = nullptr;
 
+        Type* get_final_type() const {
+            return cast_type ? cast_type : type;
+        }
     };
 
     struct InvalidExpr : Expr {
