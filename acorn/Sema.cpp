@@ -1013,6 +1013,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
     if (dot->site->is(NodeKind::IdentRef)) {
         IdentRef* site = as<IdentRef*>(dot->site);
         check_ident_ref(site, &modl, false);
+        dot->is_foldable = site->is_foldable;
         if (site->type == context.module_ref_type) {
             auto importn = site->import_ref;
             // Special case in which we search in a given module.
@@ -1023,8 +1024,9 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         }
     } else {
         check(dot->site);
+        dot->is_foldable = dot->site->is_foldable;
     }
-    
+
     if (dot->ident == context.length_identifier && dot->site->type->is_array()) {
         dot->is_array_length = true;
         dot->type = context.int_type;
@@ -1345,6 +1347,8 @@ void acorn::Sema::check_array(Array* arr) {
 void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
     check(mem_access->site);
 
+    mem_access->is_foldable = false;
+
     Type* access_type = mem_access->site->type;
     if (!(access_type->is_array() || access_type->is_pointer())) {
         error(mem_access, "Cannot index memory of type '%s'", access_type)
@@ -1543,7 +1547,7 @@ void acorn::Sema::check_modifiable(Expr* expr) {
 }
 
 bool acorn::Sema::is_lvalue(Expr* expr) {
-    return expr->is(NodeKind::IdentRef);
+    return expr->is(NodeKind::IdentRef) || expr->is(NodeKind::MemoryAccess);
 }
 
 void acorn::Sema::check_division_by_zero(PointSourceLoc error_loc, Expr* expr) {

@@ -389,5 +389,17 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("&");
         });
+        test("Array assign one dim", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_assignment1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("Array assign two dim", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_assignment2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
     });
 }

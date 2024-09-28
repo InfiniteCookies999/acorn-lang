@@ -79,6 +79,7 @@ if (e1 > e) { e = e1; }           \
         }
         case NodeKind::MemoryAccess: {
             MemoryAccess* mem_access = as<MemoryAccess*>(node);
+            get(mem_access->site);
             get(mem_access->index);
             // Include the closing ]
             go_until(e, ']');
