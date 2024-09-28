@@ -63,6 +63,7 @@ namespace acorn {
         // Used to identifier the entry point of
         // the program.
         Identifier main_identifier;
+        Identifier length_identifier;
 
         llvm::LLVMContext& get_ll_context() const { return ll_context; }
 

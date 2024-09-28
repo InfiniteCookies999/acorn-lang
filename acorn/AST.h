@@ -367,6 +367,7 @@ namespace acorn {
         DotOperator() : IdentRef(NodeKind::DotOperator) {
         }
 
+        bool is_array_length = false;
         Expr* site;
     };
 

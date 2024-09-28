@@ -1017,6 +1017,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             auto importn = site->import_ref;
             // Special case in which we search in a given module.
             check_ident_ref(dot, importn->imported_modl, is_for_call);
+            return;
         } else if (!site->type) {
             return;
         }
@@ -1024,9 +1025,13 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         check(dot->site);
     }
     
-
-
-    //check_ident_ref(dot, modl, is_for_call);
+    if (dot->ident == context.length_identifier && dot->site->type->is_array()) {
+        dot->is_array_length = true;
+        dot->type = context.int_type;
+    } else {
+        error(expand(dot), "Cannot access field '%s' of type '%s'", dot->ident, dot->site->type)
+            .end_error(ErrCode::SemaDotOperatorCannotAccessType);
+    }
 }
 
 void acorn::Sema::check_function_call(FuncCall* call) {

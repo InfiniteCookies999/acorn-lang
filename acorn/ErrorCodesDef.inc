@@ -70,6 +70,7 @@ X(SemaArrayLengthNegative                  , 30039)
 X(SemaMemoryAccessBadType                  , 30040)
 X(SemaMemoryIndexNotInteger                , 30041)
 X(SemaArrayLengthNotComptime               , 30042)
+X(SemaDotOperatorCannotAccessType          , 30043)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

@@ -65,6 +65,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_memory_access(as<MemoryAccess*>(node));
     case NodeKind::Array:
         return gen_array(as<Array*>(node), nullptr);
+    case NodeKind::DotOperator:
+        return gen_dot_operator(as<DotOperator*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -799,6 +801,14 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
         // Should be an array type otherwise.
         return gen_array_memory_access(ll_memory, type, mem_access->index);
     }
+}
+
+llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
+    if (dot->is_array_length) {
+        auto arr_type = as<ArrayType*>(dot->site->type);
+        return builder.getInt32(arr_type->get_length());
+    }
+    return nullptr;
 }
 
 void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Expr* value) {

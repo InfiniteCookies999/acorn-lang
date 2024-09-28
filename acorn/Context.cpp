@@ -52,6 +52,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       empty_array_type(Type::create(allocator, TypeKind::EmptyArrayType)),
       
       main_identifier(Identifier::get("main")),
+      length_identifier(Identifier::get("length")),
 
       keyword_mapping({
           { "void"     , Token::KwVoid      },
