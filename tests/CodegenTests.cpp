@@ -431,5 +431,11 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("Lets go!");
         });
+        test("Array mixed inner lengths 2", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test17.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
     });
 }

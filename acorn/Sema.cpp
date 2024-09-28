@@ -1312,6 +1312,7 @@ void acorn::Sema::check_array(Array* arr) {
     }
 
     Type* elm_type = nullptr;
+    Expr* value_for_elm_type;
     bool values_have_errors = false;
     for (Expr* value : arr->elms) {
 
@@ -1328,14 +1329,19 @@ void acorn::Sema::check_array(Array* arr) {
 
         if (!elm_type) {
             elm_type = value->type;
+            value_for_elm_type = value;
         } else if (elm_type->is_not(value->type)) {
             if (!is_assignable_to(elm_type, value)) {
-                error(expand(value), "Incompatible element types. First found '%s' but now '%s'",
-                      elm_type, value->type)
-                    .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
+                // Check the reverse case.
+                if (!is_assignable_to(value->type, value_for_elm_type)) {
+                    error(expand(value), "Incompatible element types. First found '%s' but now '%s'",
+                          elm_type, value->type)
+                        .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
+                } else {
+                    elm_type = value->type;
+                    value_for_elm_type = value;
+                }
             }
-            
-            // TODO: else we want to check the reverse case.
         }
     }
 
