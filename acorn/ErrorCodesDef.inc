@@ -71,6 +71,7 @@ X(SemaMemoryAccessBadType                  , 30040)
 X(SemaMemoryIndexNotInteger                , 30041)
 X(SemaArrayLengthNotComptime               , 30042)
 X(SemaDotOperatorCannotAccessType          , 30043)
+X(SemaIncompatibleArrayElmTypes            , 30044)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

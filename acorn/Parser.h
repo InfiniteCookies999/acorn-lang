@@ -14,6 +14,7 @@ namespace acorn {
 
     class Parser {
         static const size_t MAX_PEEKED_TOKENS = 8;
+        static const size_t MAX_ARRAY_DIMENSION = 16;
 
     public:
 

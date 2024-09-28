@@ -1328,8 +1328,14 @@ void acorn::Sema::check_array(Array* arr) {
 
         if (!elm_type) {
             elm_type = value->type;
-        } else {
-            // TODO: select the best possible base type.
+        } else if (elm_type->is_not(value->type)) {
+            if (!is_assignable_to(elm_type, value)) {
+                error(expand(value), "Incompatible element types. First found '%s' but now '%s'",
+                      elm_type, value->type)
+                    .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
+            }
+            
+            // TODO: else we want to check the reverse case.
         }
     }
 
