@@ -755,7 +755,7 @@ llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, llvm::ArrayTy
     llvm::SmallVector<llvm::Constant*> ll_values;
     ll_values.reserve(arr->elms.size());
 
-    auto get_element = [=](Expr* elm) finline {
+    auto get_element = [this, elms_are_arrays, ll_elm_type](Expr* elm) finline {
         if (elms_are_arrays) {
             auto elm_arr = as<Array*>(elm);
             return gen_constant_array(elm_arr, llvm::cast<llvm::ArrayType>(ll_elm_type));
