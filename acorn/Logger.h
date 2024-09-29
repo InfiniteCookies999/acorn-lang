@@ -326,7 +326,7 @@ namespace acorn {
             return *this;
         }
 
-        void print_header(ErrCode error_code);
+        void print_header(ErrCode error_code, const std::string& line_number_pad);
         void end_error(ErrCode error_code);
 
         static void set_color(Stream stream, Color color);

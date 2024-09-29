@@ -415,7 +415,7 @@ namespace acorn {
 }
 
 
-void acorn::Logger::print_header(ErrCode error_code) {
+void acorn::Logger::print_header(ErrCode error_code, const std::string& line_number_pad) {
     
     fmt_print("%serror", BrightRed), facing_length += 5;
     if (context.should_show_error_codes()) {
@@ -439,7 +439,11 @@ void acorn::Logger::print_header(ErrCode error_code) {
 
     fmt_print("%s.\n", White);
 
+    facing_length -= line_number_pad.size() + 4;
+    bool first_line = true;
     for (const auto& printer : line_printers) {
+        fmt_print(" %s %s%s%s ", line_number_pad, BrightWhite, first_line ? '|' : '.', White);
+        if (first_line)  first_line = false;
         print(std::string(facing_length, ' '));
         printer.print_cb(*this);
         if (printer.add_period) {
@@ -473,7 +477,7 @@ void acorn::Logger::end_error(ErrCode error_code) {
     // Placed after collecting information to reduce the time locked.
     mtx.lock();
 
-    print_header(error_code);
+    print_header(error_code, info.line_number_pad);
 
     auto print_bar = [this, pad = info.line_number_pad](bool include_new_line = true){
         fmt_print(" %s %s|%s ", pad, BrightWhite, White);
