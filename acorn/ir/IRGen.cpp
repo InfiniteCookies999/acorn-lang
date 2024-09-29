@@ -407,7 +407,7 @@ void acorn::IRGenerator::finish_incomplete_global_variables() {
 }
 
 void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
-    gen_assignment(var->ll_address, var->assignment);
+    gen_assignment(var->ll_address, var->type, var->assignment);
 }
 
 llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
@@ -418,7 +418,7 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
         if (not_void && !cur_func->aggr_ret_var) {
             // Not-void so store the return value into the return address
             // if it was not already stored due to an aggregate return variable.
-            gen_assignment(ll_ret_addr, ret->value);
+            gen_assignment(ll_ret_addr, cur_func->return_type, ret->value);
         } else if (is_main) {
             // Special case for main because even if the user declares main as having
             // type void it still must return an integer.
@@ -435,7 +435,7 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
             // have already been stored into the address so there is nothing
             // to do.
             if (cur_func->uses_aggr_param && !cur_func->aggr_ret_var) {
-                gen_assignment(ll_ret_addr, ret->value);
+                gen_assignment(ll_ret_addr, cur_func->return_type, ret->value);
             } else if (!cur_func->uses_aggr_param) {
                 llvm::Value* ll_array = gen_node(ret->value);
                 if (!ll_array->getType()->isIntegerTy()) {
@@ -533,7 +533,7 @@ llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
     if (var->is_foldable) return nullptr; // Nothing to generate since the variable doesn't have an address.
 
     if (var->assignment) {
-        gen_assignment(var->ll_address, var->assignment);
+        gen_assignment(var->ll_address, var->type, var->assignment);
     } else {
         gen_default_value(var->ll_address, var->type);
     }
@@ -744,7 +744,7 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
     bool elms_are_arrays = arr_type->get_elm_type()->is_array();
     for (uint32_t i = 0; i < arr->elms.size(); i++) {
         auto ll_elm_addr = gen_gep_index(i);
-        gen_assignment(ll_elm_addr, arr->elms[i]);
+        gen_assignment(ll_elm_addr, arr_type->get_elm_type(), arr->elms[i]);
     }
     // Zero fill the rest.
     for (uint32_t i = arr->elms.size(); i < ll_arr_type->getNumElements(); ++i) {
@@ -824,12 +824,12 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
     return nullptr;
 }
 
-void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Expr* value) {
+void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Type* to_type, Expr* value) {
     if (value->is(NodeKind::Array)) {
         gen_array(as<Array*>(value), ll_address);
     } else if (value->is(NodeKind::FuncCall)) {
         gen_function_call(as<FuncCall*>(value), ll_address);
-    } else if (value->type->is_array()) {
+    } else if (value->type->is_array() && to_type->is_array()) {
         // Assigning one array to another so using memory copy for performance
         // sake.
         auto ll_array = gen_node(value);
@@ -910,6 +910,8 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
             return builder.CreatePtrToInt(ll_value, llvm::PointerType::get(ll_context, 0), "cast");
         } else if (from_type->is_real_pointer() || from_type->is(context.null_type)) {
             // Pointer to pointer doesn't need casting because of opaque pointers.
+            return ll_value;
+        } else if (from_type->is_array()) {
             return ll_value;
         }
         goto NoCastFound;

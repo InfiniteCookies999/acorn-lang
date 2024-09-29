@@ -19,7 +19,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     switch (bin_op->op) {
     case '=': {
         auto ll_address = gen_node(lhs);
-        gen_assignment(ll_address, rhs);
+        gen_assignment(ll_address, lhs->type, rhs);
         return ll_address;
     }
     case Token::AddEq:   return apply_op_eq('+');

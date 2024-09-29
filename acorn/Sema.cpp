@@ -370,6 +370,11 @@ void acorn::Sema::check_variable(Var* var) {
             .end_error(ErrCode::SemaVariableTypeMismatch);
     } else if (var->assignment) {
         create_cast(var->assignment, var->type);
+
+        if (var->type->is_pointer() && var->assignment->is(NodeKind::Array)) {
+            error(expand(var), "Cannot assign an array directly to a pointer")
+                .end_error(ErrCode::SemaCannotAssignArrayDirectlyToPtr);
+        }
     }
 }
 
@@ -1447,6 +1452,14 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
                        to_type->is(context.const_char32_ptr_type)) {
                 return true;
             }
+        } else if (from_type->is_array()) {
+            auto to_arr_Type = as<ArrayType*>(to_type);
+            auto from_ptr_type = as<PointerType*>(from_type);
+
+            auto to_elm_type = to_arr_Type->get_elm_type();
+            auto from_elm_type = from_ptr_type->get_elm_type();
+
+            return to_elm_type->is(from_elm_type);
         }
         
         return to_type->is(from_type) || expr->is(NodeKind::Null) || to_type->is(context.void_ptr_type);
@@ -1502,6 +1515,18 @@ bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type,
 
     if (to_type->is_array() && from_type->does_contain_const()) {
         if (!from_type->is_array()) {
+            if (from_type->is_pointer()) {
+                auto to_arr_Type = as<ArrayType*>(to_type);
+                auto from_ptr_type = as<PointerType*>(from_type);
+
+                auto to_elm_type = to_arr_Type->get_elm_type();
+                auto from_elm_type = from_ptr_type->get_elm_type();
+
+                if (from_elm_type->does_contain_const() && !to_elm_type->does_contain_const()) {
+                    return false;
+                }
+            }
+
             return false;
         }
 

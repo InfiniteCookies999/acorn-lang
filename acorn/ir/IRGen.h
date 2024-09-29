@@ -92,7 +92,7 @@ namespace acorn {
         llvm::Value* gen_memory_access(MemoryAccess* mem_access);
         llvm::Value* gen_dot_operator(DotOperator* dot);
 
-        void gen_assignment(llvm::Value* ll_address, Expr* value);
+        void gen_assignment(llvm::Value* ll_address, Type* to_type, Expr* value);
         void gen_default_value(llvm::Value* ll_address, Type* type);
         llvm::Constant* gen_zero(Type* type);
         llvm::Constant* gen_one(Type* type);

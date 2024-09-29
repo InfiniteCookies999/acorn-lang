@@ -72,6 +72,7 @@ X(SemaMemoryIndexNotInteger                , 30041)
 X(SemaArrayLengthNotComptime               , 30042)
 X(SemaDotOperatorCannotAccessType          , 30043)
 X(SemaIncompatibleArrayElmTypes            , 30044)
+X(SemaCannotAssignArrayDirectlyToPtr       , 30045)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)
