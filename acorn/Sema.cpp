@@ -705,7 +705,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
                 return type_table.get_ptr_type(arr_type->get_elm_type());
             }
             return lhs->type;
-        } else if (rhs->type->is_pointer() || rhs->type->is_array()) {
+        } else if (!enforce_lhs && rhs->type->is_pointer() || rhs->type->is_array()) {
             // Pointer arithmetic
             if (bin_op->op == '+' && !lhs->type->is_integer()) {
                 error_mismatched();
