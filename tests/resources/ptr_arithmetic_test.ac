@@ -1,67 +1,67 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle)
+native dllimport void* GetStdHandle(uint32 nStdHandle);
 
 native dllimport int32 WriteFile(void*       hFile,
                                  const void* lpBuffer,
                                  uint32      nNumberOfBytesToWrite,
                                  uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped)
+                                 void*       lpOverlapped);
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count)
+native isize write(int32 fd, const void* buf, usize count);
 
 #endif
 
 void write_val(const char* c) {
 
-    char c2 = *c
+    char c2 = *c;
 
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11)
-    uint32 written
-    WriteFile(handle, &c2, 1, &written, null)
+    void* handle = GetStdHandle(-11);
+    uint32 written;
+    WriteFile(handle, &c2, 1, &written, null);
 #elif OS_GROUP_UNIX
-    write(1, &c2, 1)
+    write(1, &c2, 1);
 #endif
 
 }
 
 void main() {
-    const char* ptr   = "hello!"
-    const char* start = ptr
+    const char* ptr   = "hello!";
+    const char* start = ptr;
     
-    write_val(ptr)
+    write_val(ptr);
 
-    ptr = ptr + 1
-    write_val(ptr)
+    ptr = ptr + 1;
+    write_val(ptr);
 
-    ptr = ptr + 4
-    write_val(ptr)
+    ptr = ptr + 4;
+    write_val(ptr);
 
-    ptr = ptr - 5
-    write_val(ptr)
+    ptr = ptr - 5;
+    write_val(ptr);
 
-    ptr += 1
-    write_val(ptr)
+    ptr += 1;
+    write_val(ptr);
 
-    ptr += 4
-    write_val(ptr)
+    ptr += 4;
+    write_val(ptr);
 
-    isize length = ptr - start
-    ptr -= length
-    write_val(ptr)
+    isize length = ptr - start;
+    ptr -= length;
+    write_val(ptr);
 
-    ++ptr
-    write_val(ptr)
-    ptr++
-    write_val(ptr)
+    ++ptr;
+    write_val(ptr);
+    ptr++;
+    write_val(ptr);
 
-    --ptr
-    write_val(ptr)
-    ptr--
-    write_val(ptr)
+    --ptr;
+    write_val(ptr);
+    ptr--;
+    write_val(ptr);
 
 }

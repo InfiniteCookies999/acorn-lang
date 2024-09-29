@@ -64,9 +64,9 @@ void test_parser() {
 
     section("parsing", [&] {
         test("integer parse", [&] {
-            const char* program = "123456789 74532 2147483647 2147483648 9223372036854775807 9223372036854775808 18446744073709551615 "
-                "123'i8  123'i16  123'i32  123'i64"
-                "123'u8  123'u16  123'u32  123'u64";
+            const char* program = "123456789; 74532; 2147483647; 2147483648; 9223372036854775807; 9223372036854775808; 18446744073709551615; "
+                "123'i8;  123'i16;  123'i32;  123'i64;"
+                "123'u8;  123'u16;  123'u32;  123'u64;";
             Module& modl = *mock_parser(program);
     
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
@@ -137,7 +137,7 @@ void test_parser() {
 
         });
         test("parsing hexidecimals", [&] {
-            const char* program = "0x0 0x123 0x5aF1Ba7C 0xabcdef 0xABCDEF";
+            const char* program = "0x0; 0x123; 0x5aF1Ba7C; 0xabcdef; 0xABCDEF;";
             Module& modl = *mock_parser(program);
 
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
@@ -167,7 +167,7 @@ void test_parser() {
 
         });
         test("parsing binary", [&] {
-            const char* program = "0b0 0b11010 0b111111111";
+            const char* program = "0b0; 0b11010; 0b111111111;";
             Module& modl = *mock_parser(program);
 
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
@@ -189,7 +189,7 @@ void test_parser() {
 
         });
         test("octal parsing", [&] {
-            const char* program = "00 0123 01234567 0523471";
+            const char* program = "00; 0123; 01234567; 0523471;";
             Module& modl = *mock_parser(program);
 
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
@@ -215,7 +215,7 @@ void test_parser() {
 
         });
         test("integer parsing overflow", [&] {
-            const char* program = "18446744073709551616";
+            const char* program = "18446744073709551616;";
             Module& modl = *mock_parser(program);
     
             expect_none().to_produce_error(ErrCode::ParseIntegerValueCalcOverflow);
@@ -223,15 +223,15 @@ void test_parser() {
         });
         test("type parsing", [&] {
             const char* program = R"(
-                int         a1
-                int32       a2
-                uint32      a3
-                int*        a4
-                uint32*     a5
-                const int   a6
-                const int*  a7
-                int**       a8
-                const int** a9
+                int         a1;
+                int32       a2;
+                uint32      a3;
+                int*        a4;
+                uint32*     a5;
+                const int   a6;
+                const int*  a7;
+                int**       a8;
+                const int** a9;
             )";
             Module& modl = *mock_parser(program);
             auto nodes = modl.get_global_variables()
@@ -271,7 +271,7 @@ void test_parser() {
             const char* program = R"(
                 void foo() {}
                 void foo(int a) {}
-                native dllimport void foo2()
+                native dllimport void foo2();
                 void foo3(int a, int b, int c) {}
             )";
             Module& modl = *mock_parser(program); 
@@ -310,21 +310,21 @@ void test_parser() {
         });
         test("numeric operations", [&] {
             const char* program = R"(
-                4624 + 67423
-                256 - 6
-                34 - 743
-                13 * 52
-                3452 / 56
-                417 % 5
-                324 + 33 * 22
-                22 * 324 + 33
-                436 -346
-                53 +74
-                436 + -346
-                53 + +74
-                22 * (324 + 33)
-                52 + 23 / 88 * 32 - 5 + 12 / 6
-                32 & 63 >> 2 ^ 12 * 94 - 32 / 3 >> 13 | ~11
+                4624 + 67423;
+                256 - 6;
+                34 - 743;
+                13 * 52;
+                3452 / 56;
+                417 % 5;
+                324 + 33 * 22;
+                22 * 324 + 33;
+                436 -346;
+                53 +74;
+                436 + -346;
+                53 + +74;
+                22 * (324 + 33);
+                52 + 23 / 88 * 32 - 5 + 12 / 6;
+                32 & 63 >> 2 ^ 12 * 94 - 32 / 3 >> 13 | ~11;
             )";
             Module& modl = *mock_parser(program);
 
@@ -400,60 +400,60 @@ void test_parser() {
         });
 
         test("add signed overflow", [&] {
-            Module& modl = *mock_parser("2147483647 + 1");
+            Module& modl = *mock_parser("2147483647 + 1;");
             expect_none().to_produce_error(ErrCode::NumericOverflow);
         });
         test("add signed underflow", [&] {
-            Module& modl = *mock_parser("-2147483648 + -1");
+            Module& modl = *mock_parser("-2147483648 + -1;");
             expect_none().to_produce_error(ErrCode::NumericUnderflow);
         });
         test("add unsigned overflow", [&] {
-            Module& modl = *mock_parser("4294967295'u32 + 1'u32");
+            Module& modl = *mock_parser("4294967295'u32 + 1'u32;");
             expect_none().to_produce_error(ErrCode::NumericOverflow);
         });
         test("sub signed overflow", [&] {
-            Module& modl = *mock_parser("2147483647 - -1");
+            Module& modl = *mock_parser("2147483647 - -1;");
             expect_none().to_produce_error(ErrCode::NumericOverflow);
         });
         test("sub signed underflow", [&] {
-            Module& modl = *mock_parser("-2147483648 - 1");
+            Module& modl = *mock_parser("-2147483648 - 1;");
             expect_none().to_produce_error(ErrCode::NumericUnderflow);
         });
         test("sub unsigned overflow", [&] {
-            Module& modl = *mock_parser("5'u32 - 10'u32");
+            Module& modl = *mock_parser("5'u32 - 10'u32;");
             expect_none().to_produce_error(ErrCode::NumericUnderflow);
         });
         test("integer calc overflow", [&] {
-            Module& modl = *mock_parser("18446744073709551616");
+            Module& modl = *mock_parser("18446744073709551616;");
             expect_none().to_produce_error(ErrCode::ParseIntegerValueCalcOverflow);
         });
         test("integer calc underflow", [&] {
-            Module& modl = *mock_parser("-9223372036854775809");
+            Module& modl = *mock_parser("-9223372036854775809;");
             expect_none().to_produce_error(ErrCode::ParseIntegerValueCalcUnderflow);
         });
         test("int8 lit does not fit", [&] {
-            Module& modl = *mock_parser("128'i8");
+            Module& modl = *mock_parser("128'i8;");
             expect_none().to_produce_error(ErrCode::ParseIntegerValueNotFitType);
         });
         test("signed int8 lit does not fit", [&] {
-            Module& modl = *mock_parser("-129'i8");
+            Module& modl = *mock_parser("-129'i8;");
             expect_none().to_produce_error(ErrCode::ParseIntegerValueNotFitType);
         });
         test("uint8 lit does not fit", [&] {
-            Module& modl = *mock_parser("256'u8");
+            Module& modl = *mock_parser("256'u8;");
             expect_none().to_produce_error(ErrCode::ParseIntegerValueNotFitType);
         });
         test("int16 lit does not fit", [&] {
-            Module& modl = *mock_parser("32768'i16");
+            Module& modl = *mock_parser("32768'i16;");
             expect_none().to_produce_error(ErrCode::ParseIntegerValueNotFitType);
         });
         test("string literals", [&] {
             const char* program = R"(
-                ""
-                "abcASwe325#@R12eAsF/.,(1"
-                "abc\n\\\tew@\f"
-                "abc\uBA1F:D"
-                "abc\U000Abf03jt"
+                "";
+                "abcASwe325#@R12eAsF/.,(1";
+                "abc\n\\\tew@\f";
+                "abc\uBA1F:D";
+                "abc\U000Abf03jt";
             )";
             Module& modl = *mock_parser(program);
 
@@ -483,10 +483,10 @@ void test_parser() {
         });
         test("char literals", [&] {
             const char* program = R"(
-                'a'
-                '^'
-                '\uB35c'
-                '\U62Ab0DD7'
+                'a';
+                '^';
+                '\uB35c';
+                '\U62Ab0DD7';
             )";
             Module& modl = *mock_parser(program);
 

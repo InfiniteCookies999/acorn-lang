@@ -197,36 +197,6 @@ case c1:                                        \
     }
 }
 
-bool acorn::Lexer::is_next_token_on_line() {
-    while (true) {
-        switch (*ptr) {
-        // Skip any whitespace.
-        case ' ': case '\t': case '\v': case '\f':
-            ++ptr;
-            break;
-        
-        // Encountered a new line.
-        case '\n':
-            ++ptr;
-            return false;
-        case '\r':
-            ++ptr;
-            // Check for windows \r\n case.
-            if (*ptr == '\n') {
-                ++ptr;
-            }
-            return false;
-        
-        case '/':
-            return !(*(ptr + 1) == '/');
-
-        default:
-            return true;
-        }
-    }
-    return false;
-}
-
 void acorn::Lexer::eat_single_line_comment() {
     
     while (*ptr != '\r' && *ptr != '\n' && *ptr != '\0') {

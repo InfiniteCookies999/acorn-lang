@@ -136,9 +136,14 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
 }
 
 acorn::Node* acorn::Parser::parse_statement() {
+
     uint32_t modifiers = 0;
     switch (cur_token.kind) {
-    case Token::KwReturn: return parse_return();
+    case Token::KwReturn: {
+        auto stmt = parse_return();
+        expect(';');
+        return stmt;
+    }
     case Token::KwIf:     return parse_if();
     case Token::KwCTIf:   return parse_comptime_if();
     case Token::KwLoop:   return parse_loop();
@@ -146,6 +151,7 @@ acorn::Node* acorn::Parser::parse_statement() {
         error(cur_token, "Import expected at top of file")
             .end_error(ErrCode::ParseImportNotTopOfFile);
         parse_import();
+        expect(';');
         return nullptr;
     }
     case ModifierTokens:
@@ -157,17 +163,23 @@ acorn::Node* acorn::Parser::parse_statement() {
             if (peek_token(0).is('(')) {
                 return parse_function(modifiers, type);
             } else {
-                return parse_variable(modifiers, type);
+                auto stmt = parse_variable(modifiers, type);
+                expect(';');
+                return stmt;
             }
         } else {
             expect_identifier("for declaration");
             if (cur_token.is('=')) {
-                return parse_variable(modifiers, type, Identifier());
+                auto stmt = parse_variable(modifiers, type, Identifier());
+                expect(';');
+                return stmt;
             } else if (cur_token.is('(')) {
                 return parse_function(modifiers, type, Identifier());
             } else if (cur_token.is_keyword() && peek_token(0).is('=')) {
                 next_token(); // Consuming the extra keyword.
-                return parse_variable(modifiers, type, Identifier());
+                auto stmt = parse_variable(modifiers, type, Identifier());
+                expect(';');
+                return stmt;
             } else if (cur_token.is_keyword() && peek_token(0).is('(')) {
                 next_token(); // Consuming the extra keyword.
                 return parse_function(modifiers, type, Identifier());
@@ -188,8 +200,15 @@ acorn::Node* acorn::Parser::parse_statement() {
         skip_recovery();
         return nullptr;
     }
-    default:
-        return parse_assignment_and_expr();
+    case ';': {
+        next_token();
+        return nullptr;
+    }
+    default: {
+        auto stmt = parse_assignment_and_expr();;
+        expect(';');
+        return stmt;
+    }
     }
 }
 
@@ -261,6 +280,8 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
             func->scope->push_back(stmt);
         }
         expect('}', "for function body");
+    } else if (func->has_modifier(Modifier::Native)) {
+        expect(';');
     }
 
     cur_func = prev_func;
@@ -351,12 +372,9 @@ acorn::ReturnStmt* acorn::Parser::parse_return() {
     
     ReturnStmt* ret = new_node<ReturnStmt>(cur_token);
 
-    bool has_value = lex.is_next_token_on_line() && peek_token(0).is_not('}');
-
-    // Must go after checking if on a new line.
     next_token(); // Consuming 'return' keyword.
-    
-    if (has_value) {
+
+    if (cur_token.is_not(';')) {
         ret->value = parse_expr();
     }
 
@@ -1473,6 +1491,7 @@ void acorn::Parser::skip_recovery() {
         case ')': // TODO: Might want to count these so it doesn't just recover at bad times.
         case '{':
         case '}':
+        case ';':
             return;
         case ModifierTokens:
             return;

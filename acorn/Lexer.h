@@ -17,8 +17,6 @@ namespace acorn {
         
         [[nodiscard]] Token next_token();
 
-        [[nodiscard]] bool is_next_token_on_line();
-
     private:
         const Context& context;
         Logger&        logger;

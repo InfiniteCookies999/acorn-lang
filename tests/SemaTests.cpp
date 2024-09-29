@@ -74,13 +74,13 @@ void test_sema() {
         return mock_modl;
     };
 
-    section("parsing", [&] {
+    section("sema", [&] {
         test("no find param, named args", [&] {
             mock_sema(R"(
                 void foo(int a) {}
 
                 void main() {
-                    foo(z = 4)
+                    foo(z = 4);
                 }
             )");
 
@@ -91,7 +91,7 @@ void test_sema() {
                 void foo(int a, int b) {}
 
                 void main() {
-                    foo(b = 4, 2)
+                    foo(b = 4, 2);
                 }
             )");
 
@@ -102,7 +102,7 @@ void test_sema() {
                 void foo(int a, int b, int c) {}
 
                 void main() {
-                    foo(b = 3, a = 6, 66)
+                    foo(b = 3, a = 6, 66);
                 }
             )");
 

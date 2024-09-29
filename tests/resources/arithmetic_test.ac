@@ -1,95 +1,95 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle)
+native dllimport void* GetStdHandle(uint32 nStdHandle);
 
 native dllimport int32 WriteFile(void*       hFile,
                                  const void* lpBuffer,
                                  uint32      nNumberOfBytesToWrite,
                                  uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped)
+                                 void*       lpOverlapped);
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count)
+native isize write(int32 fd, const void* buf, usize count);
 
 #endif
 
 void write_val(int val) {
 
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11)
-    uint32 written
-    char c = as(char) val
-    WriteFile(handle, &c, 1, &written, null)
+    void* handle = GetStdHandle(-11);
+    uint32 written;
+    char c = as(char) val;
+    WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val
-    write(1, &c, 1)
+    char c = as(char) val;
+    write(1, &c, 1);
 #endif
 
 }
 
 void main() {
     {
-        int a = 52
-        int b = 17
-        write_val(a + b)
+        int a = 52;
+        int b = 17;
+        write_val(a + b);
     }
     {
-        int a = 120
-        int b = 14
-        write_val(a - b)
+        int a = 120;
+        int b = 14;
+        write_val(a - b);
     }
     {
-        int a = 3
-        int b = 30
-        write_val(a * b)
+        int a = 3;
+        int b = 30;
+        write_val(a * b);
     }
     {
-        int a = 486
-        int b = 6
-        write_val(a / b)
+        int a = 486;
+        int b = 6;
+        write_val(a / b);
     }
     {
-        int a = 52
-        int b = 17
-        int c = 10
-        write_val(a + b - c) // 59 -> ';'
+        int a = 52;
+        int b = 17;
+        int c = 10;
+        write_val(a + b - c); // 59 -> ';'
     }
     {
-        int x = 100
-        int y = 5
-        int z = 25
-        write_val((x / y) + z) // 45 -> '-'
+        int x = 100;
+        int y = 5;
+        int z = 25;
+        write_val((x / y) + z); // 45 -> '-';
     }
     {
-        int p = 35
-        int q = 7
-        int r = 50
-        write_val(((p * q) - r) % 128) // 67 -> 'C'
+        int p = 35;
+        int q = 7;
+        int r = 50;
+        write_val(((p * q) - r) % 128); // 67 -> 'C'
     }
     {
-        int m = 80
-        int n = 30
-        int o = 5
-        write_val(((m + n) / o) + 33) // 55 -> '7'
+        int m = 80;
+        int n = 30;
+        int o = 5;
+        write_val(((m + n) / o) + 33); // 55 -> '7'
     }
     {
-        int i = 42
-        int j = 10
-        int k = 5
-        write_val(((i + j) * k - 100) % 128) // 32 -> ' '
+        int i = 42;
+        int j = 10;
+        int k = 5;
+        write_val(((i + j) * k - 100) % 128); // 32 -> ' '
     }
     {
-        int x1 = 50
-        int y1 = 3
-        int z1 = 10
-        write_val((x1 * y1 - z1 + 60) % 128) // 72 -> 'H'
+        int x1 = 50;
+        int y1 = 3;
+        int z1 = 10;
+        write_val((x1 * y1 - z1 + 60) % 128); // 72 -> 'H'
     }
     {
-        int a1 = 33
-        int b1 = 20
-        int c1 = 4
-        write_val(((a1 * b1) / c1 - 1) % 128) // 36 -> '$'
+        int a1 = 33;
+        int b1 = 20;
+        int c1 = 4;
+        write_val(((a1 * b1) / c1 - 1) % 128); // 36 -> '$'
     }
 }
