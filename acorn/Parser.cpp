@@ -1451,10 +1451,10 @@ void acorn::Parser::expect(tokkind kind, const char* for_msg) {
         const std::string str_kind = token_kind_to_string(context, kind);
         const std::string arrow_msg = std::format("add '{}' here", str_kind);
         const bool is_closing = kind == ')' || kind == '}';
-        const auto closing_msg = is_closing ? "closing" : "";
+        const auto closing_msg = is_closing ? " closing" : "";
         auto fixed_for_msg = for_msg ? std::string{ " " } + for_msg : "";
 
-        logger.begin_error(prev_token.loc, "Expected %s '%s' token%s", closing_msg, str_kind, fixed_for_msg)
+        logger.begin_error(prev_token.loc, "Expected%s '%s' token%s", closing_msg, str_kind, fixed_for_msg)
               .add_arrow_msg(Logger::ArrowLoc::After, arrow_msg)
               .end_error(ErrCode::ParseExpect);
     }

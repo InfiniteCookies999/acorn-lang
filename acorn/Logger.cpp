@@ -386,6 +386,18 @@ namespace acorn {
 
     static ErrorInfo collect_error_information(PointSourceLoc location, SourceFile& file) {
        
+        //  [ start_width ]
+        //  |             |
+        //  |             location.ptr (Because the error is about the assignment)
+        //  |             |
+        //  |             |
+        //  |             |                        [ end width        ]
+        //  v             v                        v                  v
+        //  int*        a = 14142 + 5233 + 66 + 212; // example comment
+        //  ^           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        //  |                                      |
+        //  start_info.ptr                         end_info.ptr
+
         auto [start_info, end_info] = get_range_pointers(location, file.buffer);
         std::string error_display = std::string(start_info.ptr, end_info.ptr - start_info.ptr + 1);
         error_display = tabs_to_spaces(error_display);
@@ -509,24 +521,31 @@ void acorn::Logger::end_error(ErrCode error_code) {
         print("\n");
         
         // Displaying the underline/arrow and bar.
-        bool arrow_after = !arrow_msg.msg.empty() && arrow_msg.loc == ArrowLoc::After;
         size_t dots_width = info.exceeded_start ? 4 : 0;
-        size_t underscore_offset = dots_width;
-        if (is_first)
-            underscore_offset += info.start_width;
-        else underscore_offset += count_leading_spaces(line);
+        bool arrow_after = !arrow_msg.msg.empty() && arrow_msg.loc == ArrowLoc::After;
         if (arrow_after) {
             if (is_last) {
+                // This can happen sometimes when at the end of the buffer or within a new line.
+                size_t offset = line.length() + dots_width;
+                if (offset == 0) offset = 1;
+                offset -= info.end_width;
+
                 print_bar(false);
-                print(std::string(underscore_offset + 1, ' '));
+                print(std::string(offset, ' '));
                 fmt_print("%s%s", BrightRed, '^');
             }
         } else {
+
+            size_t underscore_offset = dots_width;
+            if (is_first)
+                underscore_offset += info.start_width;
+            else underscore_offset += count_leading_spaces(line);
+
             print_bar(false);
             print(std::string(underscore_offset, ' '));
 
             size_t underscore_width = line.length() - underscore_offset + dots_width;
-            // This can happen sometimes when at the end of the buffer of within a new line.
+            // This can happen sometimes when at the end of the buffer or within a new line.
             if (underscore_width == 0) underscore_width = 1;
             if (is_last) underscore_width -= info.end_width;
 
