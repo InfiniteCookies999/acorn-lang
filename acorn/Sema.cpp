@@ -650,7 +650,35 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
               .end_error(ErrCode::SemaBinOpTypeMismatch);
     };
 
-    auto check_add_sub_mul = [bin_op, this, lhs, rhs, error_cannot_apply, error_mismatched]() finline {
+    auto valid_integer_types = [=, this](bool enforce_lhs) finline {
+        auto rhs_type = rhs->type;
+        auto lhs_type = lhs->type;
+        if (rhs_type->is_ignore_const(lhs_type)) {
+            return true;
+        }
+
+        // Allow numeric operations on integer types when one of them is
+        // an integer literal but without an explicit type.
+        if (lhs_type->is_integer() && rhs_type->is_integer()) {
+            if (rhs->is(NodeKind::Number) &&
+                (rhs_type->is(context.int_type) || rhs_type->is(context.char_type))) {
+                return true;
+            }
+            if (!enforce_lhs && lhs->is(NodeKind::Number) &&
+                (lhs_type->is(context.int_type) || lhs_type->is(context.char_type))) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    auto valid_number_types = [=](bool enforce_lhs) finline {
+        return valid_integer_types(enforce_lhs);
+    };
+
+    //lhs, rhs, error_cannot_apply, error_mismatched, valid_number_compare
+    auto check_add_sub_mul = [=, this](bool enforce_lhs) finline {
         // valid pointer arithmetic cases:
         // 
         // ptr + int
@@ -692,14 +720,14 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             error_cannot_apply(rhs);
             return false;
         }
-        if (!rhs->type->is_ignore_const(lhs->type)) {
+        if (!valid_number_types(enforce_lhs)) {
             error_mismatched();
             return false;
         }
         return true;
     };
 
-    auto check_div_mod = [this, bin_op, lhs, rhs, error_cannot_apply, error_mismatched]() finline {
+    auto check_div_mod = [=, this](bool enforce_lhs) finline {
         if (!lhs->type->is_number()) {
             error_cannot_apply(lhs);
             return false;
@@ -711,14 +739,14 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             
         check_division_by_zero(expand(bin_op), rhs);
         
-        if (!rhs->type->is_ignore_const(lhs->type)) {
+        if (!valid_number_types(enforce_lhs)) {
             error_mismatched();
             return false;
         }
         return true;
     };
 
-    auto check_logical_bitwise = [this, lhs, rhs, error_cannot_apply, error_mismatched]() finline -> bool{
+    auto check_logical_bitwise = [=, this](bool enforce_lhs) finline -> bool{
         if (!(lhs->type->is_integer() || lhs->type->is_bool())) {
             error_cannot_apply(lhs);
             return false;
@@ -727,14 +755,14 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             error_cannot_apply(rhs);
             return false;
         }
-        if (!rhs->type->is_ignore_const(lhs->type)) {
+        if (!valid_integer_types(enforce_lhs)) {
             error_mismatched();
             return false;
         }
         return true;
     };
 
-    auto check_shifts = [this, lhs, rhs, error_cannot_apply, error_mismatched]() finline -> bool {
+    auto check_shifts = [=, this](bool enforce_lhs) finline -> bool {
         if (!lhs->type->is_integer()) {
             error_cannot_apply(lhs);
             return false;
@@ -743,7 +771,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             error_cannot_apply(rhs);
             return false;
         }
-        if (!rhs->type->is_ignore_const(lhs->type)) {
+        if (!valid_integer_types(enforce_lhs)) {
             error_mismatched();
             return false;
         }
@@ -775,15 +803,15 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
 
         switch (bin_op->op) {
         case Token::AddEq: case Token::SubEq: case Token::MulEq: {
-            if (!check_add_sub_mul()) return;
+            if (!check_add_sub_mul(true)) return;
             break;
         }
         case Token::DivEq: case Token::ModEq: {
-            if (!check_div_mod()) return;
+            if (!check_div_mod(true)) return;
             break;
         }
         case Token::AndEq: case Token::OrEq: case Token::CaretEq: {
-            if (!check_logical_bitwise()) return;
+            if (!check_logical_bitwise(true)) return;
             break;
         }
         case Token::TildeEq: {
@@ -795,13 +823,13 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
                 error_cannot_apply(rhs);
                 return;
             }
-            if (!rhs->type->is(lhs->type)) {
+            if (!valid_integer_types(true)) {
                 error_mismatched();
                 return;
             }
             break;
         case Token::LtLtEq: case Token::GtGtEq: {
-            if (check_shifts()) return;
+            if (check_shifts(true)) return;
             break;
         }
         }
@@ -811,7 +839,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         break;
     }
     case '+': case '-': case '*': {
-        if (!check_add_sub_mul()) return;
+        if (!check_add_sub_mul(true)) return;
         // Pointer type takes preference.
         if (lhs->type->is_pointer() && rhs->type->is_pointer()) {
             // This is a unique case of subtracting pointers which
@@ -827,17 +855,17 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         break;
     }
     case '/': case '%': {
-        if (!check_div_mod()) return;
+        if (!check_div_mod(true)) return;
         bin_op->type = lhs->type;
         break;
     }
     case '^': case '&': case '|': {
-        if (!check_logical_bitwise()) return;
+        if (!check_logical_bitwise(true)) return;
         bin_op->type = lhs->type;
         break;
     }
     case Token::LtLt: case Token::GtGt: {
-        if (!check_shifts()) return;
+        if (!check_shifts(true)) return;
         bin_op->type = lhs->type;
         break;
     }
@@ -852,7 +880,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             error_cannot_apply(rhs);
             return;
         }
-        if (!(rhs->type->is_ignore_const(lhs->type) ||
+        if (!(valid_integer_types(false) ||
              (rhs->type->is_pointer() && lhs->type->get_kind() == TypeKind::Null) ||
              (lhs->type->is_pointer() && rhs->type->get_kind() == TypeKind::Null)
               )) {
