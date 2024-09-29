@@ -33,6 +33,7 @@ namespace acorn {
         ComptimeIfStmt,
         ScopeStmt,
         ImportStmt,
+        LoopStmt,
 
         ExprStart,
         InvalidExpr,
@@ -225,6 +226,14 @@ namespace acorn {
 
         SourceFile* file;
         bool takes_path;
+    };
+
+    struct LoopStmt : Node {
+        LoopStmt() : Node(NodeKind::LoopStmt) {
+        }
+
+        Expr*      cond;
+        ScopeStmt* scope;
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {

@@ -67,6 +67,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_array(as<Array*>(node), nullptr);
     case NodeKind::DotOperator:
         return gen_dot_operator(as<DotOperator*>(node));
+    case NodeKind::LoopStmt:
+        return gen_loop(as<LoopStmt*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -519,6 +521,30 @@ llvm::Value* acorn::IRGenerator::gen_comptime_if(ComptimeIfStmt* ifs) {
             gen_node(stmt);
         }
     }
+    return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_loop(LoopStmt* loop) {
+    
+    auto ll_end_bb = gen_bblock("loop.end", ll_cur_func);
+    auto ll_body_bb = gen_bblock("loop.body", ll_cur_func);
+    auto ll_cond_bb = gen_bblock("loop.cond", ll_cur_func);
+    
+    builder.CreateBr(ll_cond_bb);
+    builder.SetInsertPoint(ll_cond_bb);
+
+    auto ll_cond = loop->cond ? gen_condition(loop->cond) : builder.getTrue();
+    builder.CreateCondBr(ll_cond, ll_body_bb, ll_end_bb);
+
+    builder.SetInsertPoint(ll_body_bb);
+    gen_scope(loop->scope);
+
+    // End of loop scope, jump back to the condition.
+    gen_branch_if_not_term(ll_cond_bb);
+
+    // Continue generating code after the the loop.
+    builder.SetInsertPoint(ll_end_bb);
+
     return nullptr;
 }
 

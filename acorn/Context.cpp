@@ -84,6 +84,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "native"   , Token::KwNative    },
           { "dllimport", Token::KwDllimport },
           { "return"   , Token::KwReturn    },
+          { "loop"     , Token::KwLoop      },
 
           { "#if"      , Token::KwCTIf      },
           { "#elif"    , Token::KwCTElIf    },

@@ -267,6 +267,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_array(as<Array*>(node));
     case NodeKind::MemoryAccess:
         return check_memory_access(as<MemoryAccess*>(node));
+    case NodeKind::LoopStmt:
+        return check_loop(as<LoopStmt*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -520,6 +522,18 @@ void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
     }
 }
 
+void acorn::Sema::check_loop(LoopStmt* loop) {
+    check_node(loop->cond);
+    if (loop->cond->type) {
+        check_condition(loop->cond);
+    }
+
+    SemScope sem_scope = push_scope();
+    check_scope(loop->scope, &sem_scope);
+    cur_scope->all_paths_return = sem_scope.all_paths_return;
+    pop_scope();
+}
+
 acorn::Sema::SemScope acorn::Sema::push_scope() {
     SemScope sem_scope;
     sem_scope.parent = cur_scope;
@@ -555,6 +569,7 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
         case NodeKind::IfStmt:
         case NodeKind::ComptimeIfStmt:
         case NodeKind::ScopeStmt:
+        case NodeKind::LoopStmt:
             break;
         case NodeKind::BinOp: {
             BinOp* bin_op = as<BinOp*>(stmt);

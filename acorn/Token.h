@@ -52,6 +52,7 @@ namespace acorn {
             KwNative,
             KwDllimport,
             KwReturn,
+            KwLoop,
 
             ComptimeKeywordStart,
             KwCTIf,

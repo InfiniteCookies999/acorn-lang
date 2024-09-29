@@ -66,6 +66,7 @@ namespace acorn {
         ReturnStmt*     parse_return();
         IfStmt*         parse_if();
         ComptimeIfStmt* parse_comptime_if(bool chain_start = true);
+        LoopStmt*       parse_loop();
 
         ScopeStmt* parse_scope(const char* closing_for = nullptr);
 

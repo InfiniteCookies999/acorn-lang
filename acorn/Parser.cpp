@@ -141,6 +141,7 @@ acorn::Node* acorn::Parser::parse_statement() {
     case Token::KwReturn: return parse_return();
     case Token::KwIf:     return parse_if();
     case Token::KwCTIf:   return parse_comptime_if();
+    case Token::KwLoop:   return parse_loop();
     case Token::KwImport: {
         error(cur_token, "Import expected at top of file")
             .end_error(ErrCode::ParseImportNotTopOfFile);
@@ -447,6 +448,16 @@ acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
     }
 
     return ifs;
+}
+
+acorn::LoopStmt* acorn::Parser::parse_loop() {
+    LoopStmt* loop = new_node<LoopStmt>(cur_token);
+    next_token();
+    
+    loop->cond = parse_expr();
+    loop->scope = parse_scope();
+
+    return loop;
 }
 
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
