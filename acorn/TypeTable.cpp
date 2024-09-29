@@ -62,14 +62,14 @@ acorn::Type* acorn::TypeTable::get_ptr_type(Type* elm_type) {
 
     if (elm_type->does_contain_const()) {
         ptr_type->contains_const = true;
-        Type* non_const_elm_ptr_version = elm_type->non_const_version;
+        Type* non_const_elm_type = elm_type->non_const_version;
 
-        auto itr = ptr_types.find(non_const_elm_ptr_version);
+        auto itr = ptr_types.find(non_const_elm_type);
         if (itr != ptr_types.end()) {
             ptr_type->non_const_version = itr->second;
         } else {
-            auto new_non_const_ptr_type = PointerType::create(allocator, non_const_elm_ptr_version);
-            ptr_types.insert({ elm_type, new_non_const_ptr_type });
+            auto new_non_const_ptr_type = PointerType::create(allocator, non_const_elm_type);
+            ptr_types.insert({ non_const_elm_type, new_non_const_ptr_type });
             ptr_type->non_const_version = new_non_const_ptr_type;
         }
     } else {

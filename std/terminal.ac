@@ -39,3 +39,23 @@ void println(const char* s) {
     print(s);
     print("\n");
 }
+
+void print(int value) {
+    if value < 0 {
+        print("-");
+        value = -value;
+    }
+
+    print(as(uint64) value);
+}
+
+void print(uint64 value) {
+
+    const int BufferSize = 21;
+    char[BufferSize] buffer;
+    char* buffer_start = buffer;
+    char* ptr = uint64_to_chars(value, buffer_start + BufferSize - 1);
+    
+    int length = as(int) ((buffer_start + BufferSize) - ptr);
+    print(ptr, length);
+}

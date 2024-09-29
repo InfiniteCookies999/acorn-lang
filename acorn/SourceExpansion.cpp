@@ -85,6 +85,11 @@ if (e1 > e) { e = e1; }           \
             go_until(e, ']');
             break;
         }
+        case NodeKind::DotOperator: {
+            DotOperator* dot = as<DotOperator*>(node);
+            get(dot->site);
+            break;
+        }
         case NodeKind::Number:
         case NodeKind::IdentRef:
         case NodeKind::String:
