@@ -2,14 +2,17 @@
 
 #include "Logger.h"
 
-void acorn::Decl::get_declared_msg(Logger& logger) const {
+void acorn::Decl::show_prev_declared_msg(Logger& logger) const {
+    logger.print("Previously declared at: ");
+    show_location_msg(logger);
+}
+
+void acorn::Decl::show_location_msg(Logger& logger) const {
     auto [line_number, column_number] =
         file->line_table.get_line_and_column_number(loc.ptr);
-
-    logger.print("Previously declared at: ");
+    
     logger.fmt_print("%s%s%s:", Color::BrightCyan, file->path, Color::BrightWhite);
-    logger.fmt_print("%s%s%s:", Color::BrightYellow, line_number, Color::BrightWhite);
-    logger.fmt_print("%s%s%s", Color::BrightYellow, column_number, Color::BrightWhite);
+    logger.fmt_print("%s%s%s", Color::BrightYellow, line_number, Color::BrightWhite);
 }
 
 const char* acorn::Modifier::to_string(uint32_t modifier) {

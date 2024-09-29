@@ -57,7 +57,7 @@ bool acorn::Sema::find_main_function(Context& context) {
 
         if (Func* prev_main = context.get_main_function()) {
             logger.begin_error(canidate->loc, "Duplicate main (entry point) function")
-                              .add_line([prev_main](Logger& l) { prev_main->get_declared_msg(l); })
+                              .add_line([prev_main](Logger& l) { prev_main->show_prev_declared_msg(l); })
                               .end_error(ErrCode::ParseDuplicateMainFunc);
         } else {
             context.set_main_function(canidate);
@@ -182,7 +182,7 @@ void acorn::Sema::report_redeclaration(const Decl* decl1, const Decl* decl2, con
         std::swap(decl1, decl2);
     }
     decl1->get_logger().begin_error(decl1->loc, "Duplicate declaration of %s '%s'", node_kind_str, decl1->name)
-                       .add_line([decl2](Logger& l) { decl2->get_declared_msg(l); })
+                       .add_line([decl2](Logger& l) { decl2->show_prev_declared_msg(l); })
                        .end_error(error_code);
 }
 
@@ -306,6 +306,11 @@ void acorn::Sema::check_function(Func* func) {
 
 void acorn::Sema::check_variable(Var* var) {
 
+    auto cleanup = [this, var]() finline {
+        var->is_being_checked = false;
+        cur_global_var = nullptr;
+    };
+
     check_modifier_incompatibilities(var);
 
     // Reporting errors if the variable is local to a function and has
@@ -323,15 +328,23 @@ void acorn::Sema::check_variable(Var* var) {
     if (cur_scope) {
         if (Var* prev_var = cur_scope->find_variable(var->name)) {
             logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
-                  .add_line([prev_var](Logger& l) { prev_var->get_declared_msg(l); })
+                  .add_line([prev_var](Logger& l) { prev_var->show_prev_declared_msg(l); })
                   .end_error(ErrCode::SemaDuplicateLocVariableDecl);
         } else {
             cur_scope->variables.push_back(var);
         }
     }
 
+    if (var->is_global) {
+        cur_global_var = var;
+    }
+    var->is_being_checked = true;
+
     if (var->assignment) {
-        check(var->assignment);
+        check_node(var->assignment);
+        if (!var->assignment) {
+            return cleanup();
+        }
     }
 
     var->type = fixup_type(var->type);
@@ -357,14 +370,14 @@ void acorn::Sema::check_variable(Var* var) {
     if (var->type->is(context.void_type)) {
         error(var, "Variables cannot have type 'void'")
             .end_error(ErrCode::SemaVariableCannotHaveVoidType);
-        return;
+        return cleanup();
     }
 
     if (!var->assignment && var->type->is_const() &&
         !var->has_modifier(Modifier::Native) && !var->is_param()) {
         error(var, "Variables declared const must be assigned a value")
             .end_error(ErrCode::SemaVariableConstNoValue);
-        return;
+        return cleanup();
     }
 
     if (var->assignment && !is_assignable_to(var->type, var->assignment)) {
@@ -378,6 +391,8 @@ void acorn::Sema::check_variable(Var* var) {
                 .end_error(ErrCode::SemaCannotAssignArrayDirectlyToPtr);
         }
     }
+
+    return cleanup();
 }
 
 void acorn::Sema::check_return(ReturnStmt* ret) {
@@ -1055,8 +1070,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_fo
         
         Var* var_ref = ref->var_ref;
         if (!var_ref->generated && var_ref->is_global) {
-            Sema sema(context, var_ref->get_module(), var_ref->get_logger());
-            sema.check_variable(var_ref);
+            check_global_variable(ref->loc, ref->var_ref);
         }
         
         if (var_ref->type->is_integer() && var_ref->type->is_const()) {
@@ -1459,6 +1473,24 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
     }
 }
 
+void acorn::Sema::check_global_variable(SourceLoc error_loc, Var* var) {
+    if (cur_global_var) {
+        cur_global_var->dependency = var;
+        
+        if (var->is_being_checked) {
+            display_circular_dep_error(error_loc, 
+                                       cur_global_var,
+                                       "Global variables form circular dependency", 
+                                       ErrCode::SemaGlobalCircularDependency);
+        }
+    }
+    
+    if (!var->is_being_checked) {
+        Sema sema(context, var->get_module(), var->get_logger());
+        sema.check_variable(var);
+    }
+}
+
 // Utility functions
 //--------------------------------------
 
@@ -1736,6 +1768,36 @@ void acorn::Sema::check_modifier_incompatibilities(Decl* decl) {
               "Cannot have dllimport modifier without native modifier")
             .end_error(ErrCode::SemaDllImportWithoutNativeModifier);
     }
+}
+
+void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code) {
+    logger.begin_error(error_loc, msg);
+    llvm::SmallVector<Decl*> dep_chain;
+    Decl* start_dep = dep;
+    while (dep) {
+        if (std::ranges::find(dep_chain, dep) != dep_chain.end()) {
+            // Prevent possible endless dependency determination.
+            break;
+        }
+
+        dep_chain.push_back(dep);
+        dep = dep->dependency;
+    }
+
+    logger.add_line("Dependency graph:").remove_period();
+    logger.add_empty_line();
+
+    for (auto itr = dep_chain.begin(); itr != dep_chain.end(); ++itr) {
+        Decl* dep_lhs = *itr;
+        Decl* dep_rhs = (itr + 1) != dep_chain.end() ? *(itr + 1) : start_dep;
+
+        logger.add_line([dep_lhs, dep_rhs](Logger& logger) {
+            logger.fmt_print("  '%s' deps-on '%s'.   ", dep_lhs->name, dep_rhs->name);
+            dep_lhs->show_location_msg(logger);
+        }).remove_period();
+    }
+
+    logger.end_error(error_code);
 }
 
 llvm::Constant* acorn::Sema::gen_constant(PointSourceLoc error_loc, Expr* expr) {

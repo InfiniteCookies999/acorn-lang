@@ -44,6 +44,7 @@ namespace acorn {
         TypeTable& type_table;
 
         Func* cur_func;
+        Var*  cur_global_var = nullptr;
 
         bool is_global_comptime = false;
 
@@ -112,6 +113,8 @@ namespace acorn {
         void check_array(Array* arr);
         void check_memory_access(MemoryAccess* mem_access);
 
+        void check_global_variable(SourceLoc error_loc, Var* var);
+
         // Utility functions
         //--------------------------------------
 
@@ -126,6 +129,7 @@ namespace acorn {
         bool check_condition(Expr* cond);
         bool is_condition(Type* type) const;
         void check_modifier_incompatibilities(Decl* decl);
+        void display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code);
 
         llvm::Constant* gen_constant(PointSourceLoc error_loc, Expr* expr);
         

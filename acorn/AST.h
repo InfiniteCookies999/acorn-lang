@@ -96,10 +96,19 @@ namespace acorn {
         }
 
         bool generated = false;
+        bool is_being_checked = false;
 
         SourceFile* file;
         Identifier  name;
         uint32_t    modifiers;
+
+        // When checking declaration it will assign to the
+        // current declaration being checked the reference
+        // of another declaration it depends on.
+        //
+        // This is used to help display information about circular
+        // dependencies.
+        Var* dependency = nullptr;
 
         bool has_modifier(uint32_t modifier) {
             return (modifiers & modifier) != 0;
@@ -115,7 +124,8 @@ namespace acorn {
 
         Module& get_module() const { return file->modl; }
 
-        void get_declared_msg(Logger& logger) const;
+        void show_prev_declared_msg(Logger& logger) const;
+        void show_location_msg(Logger& logger) const;
 
     };
 
@@ -168,7 +178,7 @@ namespace acorn {
         bool is_foldable = false;
 
         llvm::Value* ll_address;
-        
+
         bool is_param() const { return param_idx != NotParam; }
 
     };
