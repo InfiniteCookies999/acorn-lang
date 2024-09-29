@@ -687,7 +687,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         // ptr - int
         // ptr - ptr
         
-        if (lhs->type->is_pointer()) {
+        if (lhs->type->is_pointer() || lhs->type->is_array()) {
             // Pointer arithmetic
             if (bin_op->op == '+' && !rhs->type->is_integer()) {
                 error_mismatched();
@@ -697,11 +697,15 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
                 return nullptr;
             }
 
-            if (rhs->type->is_pointer()) {
+            if (lhs->type->is_pointer() && rhs->type->is_pointer()) {
                 return context.isize_type;
             }
+            if (lhs->type->is_array()) {
+                auto arr_type = as<ArrayType*>(lhs->type);
+                return type_table.get_ptr_type(arr_type->get_elm_type());
+            }
             return lhs->type;
-        } else if (rhs->type->is_pointer()) {
+        } else if (rhs->type->is_pointer() || rhs->type->is_array()) {
             // Pointer arithmetic
             if (bin_op->op == '+' && !lhs->type->is_integer()) {
                 error_mismatched();
@@ -712,6 +716,10 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
                 return nullptr;
             }
 
+            if (rhs->type->is_array()) {
+                auto arr_type = as<ArrayType*>(rhs->type);
+                return type_table.get_ptr_type(arr_type->get_elm_type());
+            }
             return rhs->type;
         }
 
@@ -853,7 +861,8 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         if (!result_type) return;
 
         // Create needed casts if not pointer arithmetic.
-        if (!lhs->type->is_pointer() && !rhs->type->is_pointer()) {
+        if (!lhs->type->is_pointer() && !rhs->type->is_pointer() &&
+            !lhs->type->is_array() && !rhs->type->is_array()) {
             create_cast(lhs, result_type);
             create_cast(rhs, result_type);
         }

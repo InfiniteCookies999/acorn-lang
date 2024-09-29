@@ -53,9 +53,8 @@ void print(uint64 value) {
 
     const int BufferSize = 21;
     char[BufferSize] buffer;
-    char* buffer_start = buffer;
-    char* ptr = uint64_to_chars(value, buffer_start + BufferSize - 1);
+    char* ptr = uint64_to_chars(value, buffer + BufferSize - 1);
     
-    int length = as(int) ((buffer_start + BufferSize) - ptr);
+    int length = as(int) ((buffer + BufferSize) - ptr);
     print(ptr, length);
 }

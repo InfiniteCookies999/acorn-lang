@@ -55,19 +55,28 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 llvm::Value* acorn::IRGenerator::gen_binary_numeric_op(tokkind op, BinOp* bin_op,
                                                        llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
     
+    auto is_ptr_or_arr = [](Type* type) finline {
+        return type->is_pointer() || type->is_array();
+    };
+
     switch (op) {
     // Arithmetic Operators
     // -------------------------------------------
     case '+': {
         if (bin_op->type->is_pointer()) {
             // Pointer arithmetic
-            auto ll_ptr = bin_op->lhs->type->is_pointer() ? ll_lhs : ll_rhs;
-            auto ll_off = bin_op->lhs->type->is_pointer() ? ll_rhs : ll_lhs;
-            auto ptr_type = bin_op->lhs->type->is_pointer() ? bin_op->lhs->type : bin_op->rhs->type;
-            auto elm_type = as<PointerType*>(ptr_type)->get_elm_type();
+            auto lhs_mem = is_ptr_or_arr(bin_op->lhs->type);
+            auto ll_mem = lhs_mem ? ll_lhs : ll_rhs;
+            auto ll_off = lhs_mem ? ll_rhs : ll_lhs;
+            auto mem_type = lhs_mem ? bin_op->lhs->type : bin_op->rhs->type;
 
             ll_off = builder.CreateIntCast(ll_off, gen_ptrsize_int_type(), true);
-            return builder.CreateInBoundsGEP(gen_type(elm_type), ll_ptr, ll_off, "ptr.add");
+            if (mem_type->is_pointer()) {
+                auto elm_type = as<PointerType*>(mem_type)->get_elm_type();
+                return builder.CreateInBoundsGEP(gen_type(elm_type), ll_mem, ll_off, "ptr.add");
+            }
+
+            return builder.CreateInBoundsGEP(gen_type(mem_type), ll_mem, { gen_isize(0), ll_off }, "arr.add");
         } else {
             if (bin_op->type->is_signed())
                 return builder.CreateNSWAdd(ll_lhs, ll_rhs, "add");
@@ -83,16 +92,21 @@ llvm::Value* acorn::IRGenerator::gen_binary_numeric_op(tokkind op, BinOp* bin_op
         } else if (bin_op->type->is_pointer()) {
             // Subtracting an integer from a pointer.
 
-            auto ll_ptr = bin_op->lhs->type->is_pointer() ? ll_lhs : ll_rhs;
-            auto ll_off = bin_op->lhs->type->is_pointer() ? ll_rhs : ll_lhs;
-            auto ptr_type = bin_op->lhs->type->is_pointer() ? bin_op->lhs->type : bin_op->rhs->type;
-            auto elm_type = as<PointerType*>(ptr_type)->get_elm_type();
-            auto val_type = bin_op->lhs->type->is_pointer() ? bin_op->rhs->type : bin_op->lhs->type;
+            auto lhs_mem = is_ptr_or_arr(bin_op->lhs->type);
+            auto ll_mem = lhs_mem ? ll_lhs : ll_rhs;
+            auto ll_off = lhs_mem ? ll_rhs : ll_lhs;
+            auto mem_type = lhs_mem ? bin_op->lhs->type : bin_op->rhs->type;
+            auto val_type = lhs_mem ? bin_op->rhs->type : bin_op->lhs->type;
 
             auto ll_zero = gen_zero(val_type);
             auto ll_neg  = builder.CreateSub(ll_zero, ll_off, "neg");
             ll_neg = builder.CreateIntCast(ll_neg, gen_ptrsize_int_type(), true);
-            return builder.CreateInBoundsGEP(gen_type(elm_type), ll_ptr, ll_neg, "ptr.sub");
+            if (mem_type->is_pointer()) {
+                auto elm_type = as<PointerType*>(mem_type)->get_elm_type();
+                return builder.CreateInBoundsGEP(gen_type(elm_type), ll_mem, ll_neg, "ptr.sub");
+            }
+
+            return builder.CreateInBoundsGEP(gen_type(mem_type), ll_mem, { gen_isize(0), ll_neg }, "arr.sub");
         } else {
             if (bin_op->type->is_signed())
                 return builder.CreateNSWSub(ll_lhs, ll_rhs, "sub");
