@@ -471,7 +471,7 @@ void acorn::AcornLang::parse_files(SourceVector& sources) {
             }
             
             // The user specified a path to a file.
-            parse_file(*modl, path);
+            parse_file(*modl, path, path.root_directory());
         }
     }
 
@@ -479,11 +479,12 @@ void acorn::AcornLang::parse_files(SourceVector& sources) {
 
 }
 
-void acorn::AcornLang::parse_directory(Module& modl, const fs::path& path) {
-    for (const auto& entry : fs::recursive_directory_iterator(path)) {
+void acorn::AcornLang::parse_directory(Module& modl, const fs::path& dir_path) {
+    auto root_dir_path = dir_path.parent_path();
+    for (const auto& entry : fs::recursive_directory_iterator(dir_path)) {
         if (entry.is_regular_file()) {
             const auto& path = entry.path().generic_wstring();
-            parse_file(modl, path);
+            parse_file(modl, path, root_dir_path);
         }
     }
 }
@@ -501,11 +502,20 @@ acorn::Buffer acorn::AcornLang::read_file_to_buffer(const std::filesystem::path&
     return buffer;
 }
 
-void acorn::AcornLang::parse_file(Module& modl, const fs::path& path) {
+void acorn::AcornLang::parse_file(Module& modl, 
+                                  const fs::path& path, 
+                                  const fs::path& root_path) {
     auto buffer = read_file_to_buffer(path);
 
+    size_t root_path_size = root_path.generic_wstring().size();
+    if (root_path_size) {
+        // If it exists we need to add one to get rid of the '/'.
+        ++root_path_size;
+    }
+    std::wstring wpath = path.generic_wstring().substr(root_path_size);
+
     SourceFile* file = allocator.alloc_type<SourceFile>();
-    new (file) SourceFile(context, path.generic_wstring(), buffer, modl);
+    new (file) SourceFile(context, std::move(wpath), buffer, modl);
     if (error_code_interceptor) {
         file->logger.set_error_code_interceptor(error_code_interceptor);
     }
