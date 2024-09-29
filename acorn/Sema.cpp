@@ -1787,12 +1787,25 @@ void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, con
     logger.add_line("Dependency graph:").remove_period();
     logger.add_empty_line();
 
+    // Calculate the maximum name length to format the display better.
+    size_t max_name_length = 0;
+    for (const auto& dep : dep_chain) {
+        max_name_length = std::max(max_name_length, dep->name.reduce().size());
+    }
+
     for (auto itr = dep_chain.begin(); itr != dep_chain.end(); ++itr) {
         Decl* dep_lhs = *itr;
         Decl* dep_rhs = (itr + 1) != dep_chain.end() ? *(itr + 1) : start_dep;
 
-        logger.add_line([dep_lhs, dep_rhs](Logger& logger) {
-            logger.fmt_print("  '%s' deps-on '%s'.   ", dep_lhs->name, dep_rhs->name);
+        logger.add_line([dep_lhs, dep_rhs, max_name_length](Logger& logger) {
+            size_t lhs_pad = max_name_length - dep_lhs->name.reduce().size();
+            size_t rhs_pad = max_name_length - dep_rhs->name.reduce().size();
+
+            logger.fmt_print("  '%s'%s deps-on '%s'.   %s",
+                             dep_lhs->name,
+                             std::string(lhs_pad, ' '),
+                             dep_rhs->name,
+                             std::string(rhs_pad, ' '));
             dep_lhs->show_location_msg(logger);
         }).remove_period();
     }
