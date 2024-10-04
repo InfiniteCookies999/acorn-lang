@@ -5,6 +5,7 @@
 #include "PageAllocator.h"
 #include "Module.h"
 #include "Acorn.h"
+#include "Util.h"
 
 #include "CommandProcessor.h"
 

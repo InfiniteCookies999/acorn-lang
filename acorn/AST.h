@@ -3,7 +3,7 @@
 
 #include "Identifier.h"
 #include "Token.h"
-#include "SourceFile.h"
+#include <llvm/ADT/SmallVector.h>
 
 namespace llvm {
     class Function;
@@ -19,6 +19,8 @@ namespace acorn {
     struct Expr;
     struct Func;
     struct ScopeStmt;
+    struct SourceFile;
+    class Logger;
 
     const size_t MAX_FUNC_PARAMS = 64;
 
@@ -120,9 +122,9 @@ namespace acorn {
         // simply iterating backwards.
         SourceLoc get_modifier_location(uint32_t modifier);
 
-        Logger& get_logger() const { return file->logger; }
+        Logger& get_logger() const;
 
-        Module& get_module() const { return file->modl; }
+        Module& get_module() const;
 
         void show_prev_declared_msg(Logger& logger) const;
         void show_location_msg(Logger& logger) const;

@@ -8,6 +8,7 @@
 #include "Module.h"
 #include "Util.h"
 #include "SourceExpansion.h"
+#include "SourceFile.h"
 
 #define TypeTokens    \
      Token::KwVoid:   \

@@ -17,6 +17,7 @@
 #include "CodeGen.h"
 #include "link/Linking.h"
 #include "Process.h"
+#include "SourceFile.h"
 
 namespace fs = std::filesystem;
 

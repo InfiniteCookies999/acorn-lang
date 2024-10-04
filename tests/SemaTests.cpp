@@ -9,6 +9,7 @@
 #include "PageAllocator.h"
 #include "Module.h"
 #include "Sema.h"
+#include "SourceFile.h"
 
 using namespace acorn;
 

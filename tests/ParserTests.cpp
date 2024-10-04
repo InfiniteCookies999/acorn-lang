@@ -10,6 +10,7 @@
 #include "Context.h"
 #include "PageAllocator.h"
 #include "Module.h"
+#include "SourceFile.h"
 
 using namespace acorn;
 

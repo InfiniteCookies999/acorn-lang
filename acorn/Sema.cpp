@@ -6,6 +6,7 @@
 #include "SourceExpansion.h"
 #include "ir/IRGen.h"
 #include "Module.h"
+#include "SourceFile.h"
 
 /* Utility for returning from check functions if an error occures */
 #define nvalid(n) !(n->type)

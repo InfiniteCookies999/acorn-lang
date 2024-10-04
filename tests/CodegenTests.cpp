@@ -22,6 +22,7 @@
 #include "Module.h"
 #include "Acorn.h"
 #include "Process.h"
+#include "Util.h"
 
 using namespace acorn;
 

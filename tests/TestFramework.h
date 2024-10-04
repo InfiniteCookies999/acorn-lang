@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include "Acorn.h"
+#include "Logger.h"
 
 class TestCase;
 

@@ -12,6 +12,7 @@
 #include "Context.h"
 #include "Module.h"
 #include "Timer.h"
+#include "Errors.h"
 
 namespace llvm {
     class TargetMachine;

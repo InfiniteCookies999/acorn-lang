@@ -1,11 +1,16 @@
 #include "AST.h"
 
 #include "Logger.h"
+#include "SourceFile.h"
 
 void acorn::Decl::show_prev_declared_msg(Logger& logger) const {
     logger.print("Previously declared at: ");
     show_location_msg(logger);
 }
+
+acorn::Logger& acorn::Decl::get_logger() const { return file->logger; }
+
+acorn::Module& acorn::Decl::get_module() const { return file->modl; }
 
 void acorn::Decl::show_location_msg(Logger& logger) const {
     auto [line_number, column_number] =

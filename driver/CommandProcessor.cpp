@@ -1,5 +1,7 @@
 #include "CommandProcessor.h"
 
+#include "Logger.h"
+
 CommandLineProcessor::CommandLineProcessor(acorn::AcornLang& acorn, int argc)
     : acorn(acorn), argc(argc) {
 }

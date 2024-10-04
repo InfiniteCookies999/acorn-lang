@@ -14,4 +14,4 @@ mkdir -p "$BUILD_DIRECTORY"
 cmake -B $BUILD_DIRECTORY -S .
 
 # Compile the build.
-cmake --build $BUILD_DIRECTORY
+cmake --build $BUILD_DIRECTORY -j8
