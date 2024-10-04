@@ -235,7 +235,7 @@ void test_parser() {
                 const int** a9;
             )";
             Module& modl = *mock_parser(program);
-            auto nodes = modl.get_global_variables()
+            auto nodes = modl.get_variables()
                 | std::views::transform(get_second<Identifier, Var*>)
                 | std::ranges::to<llvm::SmallVector<Var*>>();
             TypeTable& type_table = context->type_table;
@@ -277,7 +277,7 @@ void test_parser() {
             )";
             Module& modl = *mock_parser(program); 
             
-            auto funcs = modl.get_global_functions()
+            auto funcs = modl.get_functions()
                 | std::views::transform(get_second<Identifier, FuncList>)
                 | std::views::join
                 | std::ranges::to<llvm::SmallVector<Func*>>();

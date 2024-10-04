@@ -146,7 +146,7 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
 //--------------------------------------
 
 void acorn::Sema::check_for_duplicate_functions(Module& modl) {
-    for (const auto& [_, funcs] : modl.get_global_functions()) {
+    for (const auto& [_, funcs] : modl.get_functions()) {
         for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
             for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
                 if (check_for_duplicate_match(*itr, *itr2)) {
@@ -632,13 +632,13 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
 
         if (stmt->is(NodeKind::Func)) {
             if (is_global_comptime) {
-                modl.add_global_function(as<Func*>(stmt));
+                modl.add_function(as<Func*>(stmt));
             } else {
                 error(stmt, "Functions cannot be declared within another function")
                     .end_error(ErrCode::SemaNoLocalFuncs);
             }
         } else if (stmt->is(NodeKind::Var) && is_global_comptime) {
-            modl.add_global_variable(as<Var*>(stmt));
+            modl.add_variable(as<Var*>(stmt));
         } else {
             check_node(stmt);
         }
@@ -1026,7 +1026,7 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
 void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_for_call) {
     
     auto find_function = [this, ref, search_modl]() finline {
-        if (auto* funcs = search_modl->find_global_funcs(ref->ident)) {
+        if (auto* funcs = search_modl->find_functions(ref->ident)) {
             ref->set_funcs_ref(funcs);
         }
     };
@@ -1038,7 +1038,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_fo
                 return;
             }
         }
-        if (auto* var = search_modl->find_global_variable(ref->ident)) {
+        if (auto* var = search_modl->find_variable(ref->ident)) {
             ref->set_var_ref(var);
             return;
         }

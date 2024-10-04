@@ -65,7 +65,7 @@ void acorn::Parser::parse() {
             
             auto func = as<Func*>(node);
             if (func->name != Identifier::Invalid) {
-                modl.add_global_function(func);
+                modl.add_function(func);
             }
 
             if (func->name == context.main_identifier) {
@@ -75,7 +75,7 @@ void acorn::Parser::parse() {
 
             auto var = as<Var*>(node);
             if (var->name != Identifier::Invalid) {
-                modl.add_global_variable(var);
+                modl.add_variable(var);
             }
         } else if (node->is(NodeKind::ComptimeIfStmt)) {
             modl.add_global_comptime_control_flow(node);

@@ -2,6 +2,7 @@
 #define MODULE_H
 
 #include "AST.h"
+#include "Namespace.h"
 
 #include <llvm/ADT/SmallVector.h>
 
@@ -13,7 +14,7 @@ namespace acorn {
         Global
     };
 
-    class Module {
+    class Module : public Namespace {
     public:
         struct BadScopeNode {
             BadScopeLocation location;
@@ -22,20 +23,19 @@ namespace acorn {
         };
         using BadScopeList = llvm::SmallVector<BadScopeNode>;
 
+        Module() : Namespace(*this) {
+        }
+
         // If it fails it returns the previous import.
         ImportStmt* try_add_import(ImportStmt* importn);
         ImportStmt* find_import(Identifier import_key);
         llvm::DenseMap<Identifier, ImportStmt*>& get_imports() { return imports; }
 
-        void add_global_function(Func* func);
-        void add_global_variable(Var* var);
+        void add_duplicate_variable(Var* var, Var* prev_var);
+
         void add_global_comptime_control_flow(Node* control_flow);
 
         void mark_bad_scope(BadScopeLocation location, Node* node, Logger& logger);
-
-        FuncList* find_global_funcs(Identifier name);
-
-        Var* find_global_variable(Identifier name);
 
         void add_source_file(SourceFile* file) {
             source_files.push_back(file);
@@ -43,14 +43,6 @@ namespace acorn {
 
         const BadScopeList& get_bad_scope_nodes() const {
             return bad_scope_nodes;
-        }
-
-        const llvm::DenseMap<Identifier, Var*>& get_global_variables() const {
-            return variables;
-        }
-
-        const llvm::DenseMap<Identifier, FuncList>& get_global_functions() const {
-            return functions;
         }
 
         const llvm::SmallVector<Node*>& get_comptime_control_flows() const {

@@ -7,11 +7,14 @@
 
 BUILD_DIRECTORY="out"
 
+SCRIPT=$(realpath "$0")
+SCRIPTPATH=$(dirname "$SCRIPT")
+
 mkdir -p "$BUILD_DIRECTORY"
 
 # Shove the cmake build files such as the cache files and
 # so on into the output directory.
-cmake -B $BUILD_DIRECTORY -S .
+cmake -B "$SCRIPTPATH/$BUILD_DIRECTORY" -S $SCRIPTPATH
 
 # Compile the build.
-cmake --build $BUILD_DIRECTORY -j8
+cmake --build "$SCRIPTPATH/$BUILD_DIRECTORY" -j8
