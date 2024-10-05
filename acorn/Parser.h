@@ -11,7 +11,7 @@ namespace acorn {
     class Type;
     class Module;
     class TypeTable;
-    struct SourceFile;
+    class SourceFile;
 
     class Parser {
         static const size_t MAX_PEEKED_TOKENS = 8;

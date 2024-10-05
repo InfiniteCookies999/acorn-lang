@@ -49,8 +49,13 @@ namespace acorn {
             KwTrue,
             KwFalse,
 
+            ModifierStart,
             KwNative,
             KwDllimport,
+            KwPub,
+            KwPrv,
+            ModifierEnd,
+
             KwReturn,
             KwLoop,
 
@@ -131,7 +136,7 @@ namespace acorn {
         }
 
         [[nodiscard]] constexpr bool is_modifier() const noexcept {
-            return kind == Token::KwNative || kind == Token::KwDllimport;
+            return kind > Token::ModifierStart && kind < Token::ModifierEnd;
         }
 
         // Get a text representation of the token.

@@ -83,6 +83,8 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
 
           { "native"   , Token::KwNative    },
           { "dllimport", Token::KwDllimport },
+          { "pub"      , Token::KwPub       },
+          { "prv"      , Token::KwPrv       },
           { "return"   , Token::KwReturn    },
           { "loop"     , Token::KwLoop      },
 

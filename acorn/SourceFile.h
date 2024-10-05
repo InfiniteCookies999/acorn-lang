@@ -4,11 +4,13 @@
 #include "Source.h"
 #include "LineTable.h"
 #include "Logger.h"
+#include "Namespace.h"
 
 namespace acorn {
     class Module;
     
-    struct SourceFile {
+    class SourceFile : public Namespace {
+    public:
         std::wstring path;
         Buffer       buffer;
         LineTable    line_table;
@@ -19,12 +21,16 @@ namespace acorn {
 
         SourceFile(SourceFile&&) = default;
 
+        void add_function(Func* func);
+        void add_variable(Var* var);
+
         SourceFile(Context& context, std::wstring path, Buffer buffer, Module& modl)
             : logger(context, *this),
-              path(path),
+              path(std::move(path)),
               line_table(buffer.content, buffer.length),
               buffer(buffer),
-              modl(modl) {
+              modl(modl),
+              Namespace(modl) {
         }
     };
 }

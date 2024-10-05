@@ -1,5 +1,5 @@
 
-char* uint64_to_chars(uint64 value, char* end_of_buffer) {
+pub char* uint64_to_chars(uint64 value, char* end_of_buffer) {
     char* ptr = end_of_buffer;
 
     if value == 0 {
