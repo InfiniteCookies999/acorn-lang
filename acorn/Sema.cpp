@@ -343,7 +343,7 @@ void acorn::Sema::check_variable(Var* var) {
 
     if (var->assignment) {
         check_node(var->assignment);
-        if (!var->assignment) {
+        if (!var->assignment->type) {
             return cleanup();
         }
     }
@@ -1111,7 +1111,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_fo
         break;
     }
     case IdentRef::NoneKind: {
-        error(ref, "Could not find %s '%s'", is_for_call ? "function" : "identifier", ref->ident)
+        error(expand(ref), "Could not find %s '%s'", is_for_call ? "function" : "identifier", ref->ident)
             .end_error(!is_for_call ? ErrCode::SemaNoFindIdentRef : ErrCode::SemaNoFindFuncIdentRef);
         break;
     }

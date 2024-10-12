@@ -64,6 +64,7 @@ namespace acorn {
         // the program.
         Identifier main_identifier;
         Identifier length_identifier;
+        Identifier access_identifier;
 
         llvm::LLVMContext& get_ll_context() const { return ll_context; }
 

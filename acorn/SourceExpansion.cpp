@@ -87,7 +87,7 @@ if (e1 > e) { e = e1; }           \
         }
         case NodeKind::DotOperator: {
             DotOperator* dot = as<DotOperator*>(node);
-            get(dot->site);
+            e += dot->ident.reduce().size();
             break;
         }
         case NodeKind::Number:

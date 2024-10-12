@@ -28,7 +28,9 @@ X(ParseNativeLinkNameNotString             , 20020)
 X(ParseNativeLinkNameHasUnicode            , 20021)
 X(ParseTooManyArgsForComptimeFile          , 20022)
 X(ParseNoArgsForComptimeFile               , 20023)
-                                           
+X(ParseExpectedAccessValueForComptimeFile  , 20024)
+X(ParseUknownArgNameForComptimeFile        , 20025)
+
 X(SemaNotAllFuncPathReturn                 , 30000)
 X(SemaVariableCannotHaveVoidType           , 30001)
 X(SemaVariableConstNoValue                 , 30002)

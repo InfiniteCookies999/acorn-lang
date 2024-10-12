@@ -50,6 +50,10 @@ void acorn::Parser::parse() {
     // Prime the parser.
     next_token();
 
+    if (cur_token.is(Token::KwCTFile)) {
+        parse_comptime_file_info();
+    }
+
     // Parsing imports.
     while (cur_token.is(Token::KwImport)) {
         parse_import_top();
@@ -528,10 +532,37 @@ void acorn::Parser::parse_comptime_file_info() {
         bool more_args = false;
         int count = 0;
         do {
-            Identifier identifier = expect_identifier("for named argument for #file statement");
+            Token ident_token = cur_token;
+            Identifier identifier = expect_identifier("for named argument of #file statement");
+            if (identifier.get_id() == Identifier::Invalid) {
+                skip_recovery(false);
+                goto NextCTFileArgLab;
+            }
             
+            if (!expect('=', "for named argument of #file statement")) {
+                skip_recovery(false);
+                goto NextCTFileArgLab;
+            }
 
+            if (identifier == context.access_identifier) {
+                if (cur_token.is(Token::KwPub)) {
+                    next_token();
+                    file->set_default_access(Modifier::Public);
+                } else if (cur_token.is(Token::KwPrv)) {
+                    next_token();
+                    file->set_default_access(Modifier::Private);
+                } else {
+                    error(cur_token, "Expected access modifier")
+                        .end_error(ErrCode::ParseExpectedAccessValueForComptimeFile);
+                    skip_recovery(false);
+                }
+            } else {
+                error(ident_token, "Expected '%s' argument name", context.access_identifier)
+                    .end_error(ErrCode::ParseUknownArgNameForComptimeFile);
+                skip_recovery(false);
+            }
 
+        NextCTFileArgLab:
             ++count;
             more_args = cur_token.is(',');
             if (more_args) {
@@ -1493,9 +1524,10 @@ acorn::Token acorn::Parser::peek_token(size_t n) {
     return peeked_tokens[n];
 }
 
-void acorn::Parser::expect(tokkind kind, const char* for_msg) {
+bool acorn::Parser::expect(tokkind kind, const char* for_msg) {
     if (cur_token.is(kind)) {
         next_token();
+        return true;
     } else {
         const std::string str_kind = token_kind_to_string(context, kind);
         const std::string arrow_msg = std::format("add '{}' here", str_kind);
@@ -1506,6 +1538,7 @@ void acorn::Parser::expect(tokkind kind, const char* for_msg) {
         logger.begin_error(prev_token.loc, "Expected%s '%s' token%s", closing_msg, str_kind, fixed_for_msg)
               .add_arrow_msg(Logger::ArrowLoc::After, arrow_msg)
               .end_error(ErrCode::ParseExpect);
+        return false;
     }
 }
 
@@ -1533,7 +1566,7 @@ acorn::Expr* acorn::Parser::new_binary_op(Token op_tok, Expr* lhs, Expr* rhs) {
     return bin_op;
 };
 
-void acorn::Parser::skip_recovery() {
+void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
     while (true) {
         switch (cur_token.kind) {
         case Token::EOB:
@@ -1541,9 +1574,14 @@ void acorn::Parser::skip_recovery() {
         case '{':
         case '}':
         case ';':
+        case ',':
             return;
-        case ModifierTokens:
-            return;
+        case ModifierTokens: {
+            if (stop_on_modifiers)
+                return;
+            next_token();
+            break;
+        }
         case TypeTokens:
             if (peek_token(0).is(Token::Identifier))
                 return;

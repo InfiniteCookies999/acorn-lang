@@ -121,7 +121,7 @@ namespace acorn {
 
         // Expect the current token to be of kind and if it is it consumes
         // it.
-        void expect(tokkind kind, const char* for_msg = nullptr);
+        bool expect(tokkind kind, const char* for_msg = nullptr);
 
         // Expect the current token to be an identifier and construct
         // an identifier object if it is. It then consumes the token.
@@ -160,7 +160,7 @@ namespace acorn {
 
         // Continues to skip tokens until it can find a new valid
         // location to start parsing again.
-        void skip_recovery();
+        void skip_recovery(bool stop_on_modifiers = true);
 
     };
 }

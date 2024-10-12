@@ -24,6 +24,13 @@ namespace acorn {
         void add_function(Func* func);
         void add_variable(Var* var);
 
+        void set_default_access(uint32_t default_access) {
+            this->default_access = default_access;
+        }
+        uint32_t get_default_access() const {
+            return default_access;
+        }
+
         SourceFile(Context& context, std::wstring path, Buffer buffer, Module& modl)
             : logger(context, *this),
               path(std::move(path)),
@@ -32,6 +39,12 @@ namespace acorn {
               modl(modl),
               Namespace(modl) {
         }
+
+    private:
+        uint32_t default_access = Modifier::Private;
+    
+        bool has_public_access(Decl* decl) const;
+
     };
 }
 

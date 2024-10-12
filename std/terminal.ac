@@ -1,3 +1,4 @@
+#file(access=pub)
 
 #if OS_GROUP_WINDOWS
 
@@ -15,13 +16,13 @@ native isize write(int32 fd, const void* buf, usize count);
 
 #endif
 
-pub int strlen(const char* s) {
+int strlen(const char* s) {
     if !s  return 0;
     return as(int) istrlen(s);
 }
-native("strlen") isize istrlen(const char* s);
+prv native("strlen") isize istrlen(const char* s);
 
-pub void print(const char* s, int length) {
+void print(const char* s, int length) {
 #if OS_GROUP_WINDOWS
     void* handle = GetStdHandle(-11);
     uint32 num_written;
@@ -31,16 +32,16 @@ pub void print(const char* s, int length) {
 #endif
 }
 
-pub void print(const char* s) {
+void print(const char* s) {
     print(s, strlen(s));
 }
 
-pub void println(const char* s) {
+void println(const char* s) {
     print(s);
     print("\n");
 }
 
-pub void print(int value) {
+void print(int value) {
     if value < 0 {
         print("-");
         value = -value;
@@ -49,7 +50,7 @@ pub void print(int value) {
     print(as(uint64) value);
 }
 
-pub void print(uint64 value) {
+void print(uint64 value) {
 
     const int BufferSize = 21;
     char[BufferSize] buffer;
