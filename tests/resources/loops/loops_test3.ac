@@ -1,0 +1,35 @@
+
+#if OS_GROUP_WINDOWS
+
+native dllimport void* GetStdHandle(uint32 nStdHandle);
+
+native dllimport int32 WriteFile(void*       hFile,
+                                 const void* lpBuffer,
+                                 uint32      nNumberOfBytesToWrite,
+                                 uint32*     lpNumberOfBytesWritten,
+                                 void*       lpOverlapped);
+
+#elif OS_GROUP_UNIX
+
+native isize write(int32 fd, const void* buf, usize count);
+
+#endif
+
+void write(char c) {
+
+#if OS_GROUP_WINDOWS
+    void* handle = GetStdHandle(-11);
+    uint32 written;
+    WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    write(1, &c, 1);
+#endif
+
+}
+
+void main() {
+    int a = 0;
+    loop ; a < 5; a = a + 1 {
+        write('a');
+    }
+}

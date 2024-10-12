@@ -295,7 +295,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 
     if (func->return_type->is(context.void_type) && !is_main) {
         builder.CreateRetVoid();
-    } else if (func->num_returns == 0 && is_main) {
+    } else if (is_main && !func->scope->empty() && func->scope->back()->is_not(NodeKind::ReturnStmt)) {
+        // Implicit return for main function but since the main function always returns an
+        // integer it is handled specially.
         builder.CreateRet(builder.getInt32(0));
     } else if (func->uses_aggr_param) {
         builder.CreateRetVoid();
@@ -535,8 +537,7 @@ llvm::Value* acorn::IRGenerator::gen_predicate_loop(PredicateLoopStmt* loop) {
     builder.CreateBr(ll_cond_bb);
     builder.SetInsertPoint(ll_cond_bb);
 
-    auto ll_cond = loop->cond ? gen_condition(loop->cond) : builder.getTrue();
-    builder.CreateCondBr(ll_cond, ll_body_bb, ll_end_bb);
+    gen_cond_branch_for_loop(loop->cond, ll_body_bb, ll_end_bb);
 
     builder.SetInsertPoint(ll_body_bb);
     gen_scope(loop->scope);
@@ -565,8 +566,7 @@ llvm::Value* acorn::IRGenerator::gen_range_loop(RangeLoopStmt* loop) {
     builder.CreateBr(ll_cond_bb);
     builder.SetInsertPoint(ll_cond_bb);
 
-    auto ll_cond = loop->cond ? gen_condition(loop->cond) : builder.getTrue();
-    builder.CreateCondBr(ll_cond, ll_body_bb, ll_end_bb);
+    gen_cond_branch_for_loop(loop->cond, ll_body_bb, ll_end_bb);
 
     builder.SetInsertPoint(ll_body_bb);
     gen_scope(loop->scope);
@@ -584,6 +584,11 @@ llvm::Value* acorn::IRGenerator::gen_range_loop(RangeLoopStmt* loop) {
     builder.SetInsertPoint(ll_end_bb);
 
     return nullptr;
+}
+
+void acorn::IRGenerator::gen_cond_branch_for_loop(Expr* cond, llvm::BasicBlock* ll_body_bb, llvm::BasicBlock* ll_end_bb) {
+    auto ll_cond = cond ? gen_condition(cond) : builder.getTrue();
+    builder.CreateCondBr(ll_cond, ll_body_bb, ll_end_bb);
 }
 
 llvm::Value* acorn::IRGenerator::gen_scope(ScopeStmt* scope) {

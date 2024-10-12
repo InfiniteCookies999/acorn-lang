@@ -305,6 +305,14 @@ void acorn::Sema::check_function(Func* func) {
         error(func, "Not all function paths return")
             .end_error(ErrCode::SemaNotAllFuncPathReturn);
     }
+
+    if (func->return_type->is(context.void_type) && !func->scope->empty()) {
+        auto last_stmt = func->scope->back();
+        if (last_stmt->is_not(NodeKind::ReturnStmt)) {
+            // Implicit return statement!
+            ++func->num_returns;
+        }
+    }
 }
 
 void acorn::Sema::check_variable(Var* var) {
