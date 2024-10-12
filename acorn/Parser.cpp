@@ -493,12 +493,50 @@ acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
     return ifs;
 }
 
-acorn::LoopStmt* acorn::Parser::parse_loop() {
-    LoopStmt* loop = new_node<LoopStmt>(cur_token);
+acorn::Node* acorn::Parser::parse_loop() {
+    Token loop_token = cur_token;
     next_token();
-    
+
+    switch (cur_token.kind) {
+    case TypeTokens:
+        return parse_range_loop(loop_token, true);
+    case ';':
+        return parse_range_loop(loop_token, false);
+    default:
+        return parse_predicate_loop(loop_token);
+    }
+}
+
+acorn::PredicateLoopStmt* acorn::Parser::parse_predicate_loop(Token loop_token) {
+    auto loop = new_node<PredicateLoopStmt>(loop_token);
+
     loop->cond = parse_expr();
     loop->scope = parse_scope();
+
+    return loop;
+}
+
+acorn::RangeLoopStmt* acorn::Parser::parse_range_loop(Token loop_token, bool type_start) {
+    auto loop = new_node<RangeLoopStmt>(loop_token);
+
+    if (type_start) {
+        loop->init_node = parse_variable();
+    }
+
+    expect(';');
+
+    if (cur_token.is_not(';')) {
+        loop->cond = parse_expr();
+    }
+
+    expect(';');
+
+    if (cur_token.is_not('{')) {
+        loop->inc = parse_assignment_and_expr();
+        loop->scope = parse_scope();
+    } else { // loop node; expr; {}
+        loop->scope = parse_scope("for loop");
+    }
 
     return loop;
 }

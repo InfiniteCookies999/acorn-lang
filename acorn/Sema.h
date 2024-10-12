@@ -77,7 +77,8 @@ namespace acorn {
         void check_return(ReturnStmt* ret);
         void check_if(IfStmt* ifs, bool& all_paths_return);
         void check_comptime_if(ComptimeIfStmt* ifs);
-        void check_loop(LoopStmt* loop);
+        void check_predicate_loop(PredicateLoopStmt* loop);
+        void check_range_loop(RangeLoopStmt* loop);
 
         SemScope push_scope();
         void pop_scope();

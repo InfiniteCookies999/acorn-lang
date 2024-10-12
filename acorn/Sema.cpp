@@ -268,8 +268,10 @@ void acorn::Sema::check_node(Node* node) {
         return check_array(as<Array*>(node));
     case NodeKind::MemoryAccess:
         return check_memory_access(as<MemoryAccess*>(node));
-    case NodeKind::LoopStmt:
-        return check_loop(as<LoopStmt*>(node));
+    case NodeKind::PredicateLoopStmt:
+        return check_predicate_loop(as<PredicateLoopStmt*>(node));
+    case NodeKind::RangeLoopStmt:
+        return check_range_loop(as<RangeLoopStmt*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -538,13 +540,33 @@ void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
     }
 }
 
-void acorn::Sema::check_loop(LoopStmt* loop) {
+void acorn::Sema::check_predicate_loop(PredicateLoopStmt* loop) {
     check_node(loop->cond);
     if (loop->cond->type) {
         check_condition(loop->cond);
     }
 
     SemScope sem_scope = push_scope();
+    check_scope(loop->scope, &sem_scope);
+    cur_scope->all_paths_return = sem_scope.all_paths_return;
+    pop_scope();
+}
+
+void acorn::Sema::check_range_loop(RangeLoopStmt* loop) {
+    
+    SemScope sem_scope = push_scope();
+    if (loop->init_node) {
+        check_node(loop->init_node);
+    }
+
+    if (loop->cond) {
+        check_node(loop->cond);
+    }
+
+    if (loop->inc) {
+        check_node(loop->inc);
+    }
+
     check_scope(loop->scope, &sem_scope);
     cur_scope->all_paths_return = sem_scope.all_paths_return;
     pop_scope();
@@ -585,7 +607,8 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
         case NodeKind::IfStmt:
         case NodeKind::ComptimeIfStmt:
         case NodeKind::ScopeStmt:
-        case NodeKind::LoopStmt:
+        case NodeKind::PredicateLoopStmt:
+        case NodeKind::RangeLoopStmt:
             break;
         case NodeKind::BinOp: {
             BinOp* bin_op = as<BinOp*>(stmt);

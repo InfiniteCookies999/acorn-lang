@@ -64,10 +64,12 @@ namespace acorn {
 
         uint32_t parse_modifiers();
 
-        ReturnStmt*     parse_return();
-        IfStmt*         parse_if();
-        ComptimeIfStmt* parse_comptime_if(bool chain_start = true);
-        LoopStmt*       parse_loop();
+        ReturnStmt*        parse_return();
+        IfStmt*            parse_if();
+        ComptimeIfStmt*    parse_comptime_if(bool chain_start = true);
+        Node*              parse_loop();
+        PredicateLoopStmt* parse_predicate_loop(Token loop_token);
+        RangeLoopStmt*     parse_range_loop(Token loop_token, bool type_start);
 
         ScopeStmt* parse_scope(const char* closing_for = nullptr);
 

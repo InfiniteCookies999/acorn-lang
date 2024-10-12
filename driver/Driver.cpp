@@ -10,7 +10,7 @@
 #include "CommandProcessor.h"
 
 int main(int argc, char* argv[]) {
-    
+
     acorn::PageAllocator allocator(acorn::get_system_page_size());
     acorn::AcornLang acorn(allocator);
 

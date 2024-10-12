@@ -67,8 +67,10 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_array(as<Array*>(node), nullptr);
     case NodeKind::DotOperator:
         return gen_dot_operator(as<DotOperator*>(node));
-    case NodeKind::LoopStmt:
-        return gen_loop(as<LoopStmt*>(node));
+    case NodeKind::PredicateLoopStmt:
+        return gen_predicate_loop(as<PredicateLoopStmt*>(node));
+    case NodeKind::RangeLoopStmt:
+        return gen_range_loop(as<RangeLoopStmt*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -524,7 +526,7 @@ llvm::Value* acorn::IRGenerator::gen_comptime_if(ComptimeIfStmt* ifs) {
     return nullptr;
 }
 
-llvm::Value* acorn::IRGenerator::gen_loop(LoopStmt* loop) {
+llvm::Value* acorn::IRGenerator::gen_predicate_loop(PredicateLoopStmt* loop) {
     
     auto ll_end_bb = gen_bblock("loop.end", ll_cur_func);
     auto ll_body_bb = gen_bblock("loop.body", ll_cur_func);
@@ -541,6 +543,42 @@ llvm::Value* acorn::IRGenerator::gen_loop(LoopStmt* loop) {
 
     // End of loop scope, jump back to the condition.
     gen_branch_if_not_term(ll_cond_bb);
+
+    // Continue generating code after the the loop.
+    builder.SetInsertPoint(ll_end_bb);
+
+    return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_range_loop(RangeLoopStmt* loop) {
+
+    auto ll_end_bb = gen_bblock("loop.end", ll_cur_func);
+    auto ll_body_bb = gen_bblock("loop.body", ll_cur_func);
+    auto ll_inc_bb = loop->inc ? gen_bblock("loop.inc", ll_cur_func) : nullptr;
+    auto ll_cond_bb = gen_bblock("loop.cond", ll_cur_func);
+    auto ll_continue_bb = ll_inc_bb ? ll_inc_bb : ll_cond_bb;
+
+    if (loop->init_node) {
+        gen_node(loop->init_node);
+    }
+
+    builder.CreateBr(ll_cond_bb);
+    builder.SetInsertPoint(ll_cond_bb);
+
+    auto ll_cond = loop->cond ? gen_condition(loop->cond) : builder.getTrue();
+    builder.CreateCondBr(ll_cond, ll_body_bb, ll_end_bb);
+
+    builder.SetInsertPoint(ll_body_bb);
+    gen_scope(loop->scope);
+
+    // End of loop scope, jump back to condition or increment.
+    gen_branch_if_not_term(ll_continue_bb);
+
+    if (loop->inc) {
+        builder.SetInsertPoint(ll_inc_bb);
+        gen_node(loop->inc);
+        builder.CreateBr(ll_cond_bb);
+    }
 
     // Continue generating code after the the loop.
     builder.SetInsertPoint(ll_end_bb);

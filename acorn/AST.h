@@ -35,7 +35,8 @@ namespace acorn {
         ComptimeIfStmt,
         ScopeStmt,
         ImportStmt,
-        LoopStmt,
+        PredicateLoopStmt,
+        RangeLoopStmt,
 
         ExprStart,
         InvalidExpr,
@@ -242,12 +243,22 @@ namespace acorn {
         bool takes_path;
     };
 
-    struct LoopStmt : Node {
-        LoopStmt() : Node(NodeKind::LoopStmt) {
+    struct PredicateLoopStmt : Node {
+        PredicateLoopStmt() : Node(NodeKind::PredicateLoopStmt) {
         }
 
         Expr*      cond;
         ScopeStmt* scope;
+    };
+
+    struct RangeLoopStmt : Node {
+        RangeLoopStmt() : Node(NodeKind::RangeLoopStmt) {
+        }
+
+        Node*      init_node = nullptr;
+        Expr*      cond = nullptr;
+        ScopeStmt* scope;
+        Node*      inc = nullptr;
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {

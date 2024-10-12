@@ -456,5 +456,11 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("aaaaa");
         });
+        test("Range loop init, cond, and inc", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("aaaaa");
+        });
     });
 }
