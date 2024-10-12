@@ -498,6 +498,34 @@ acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
     return scope;
 }
 
+void acorn::Parser::parse_comptime_file_info() {
+    Token start_token = cur_token;
+    next_token();
+    
+    expect('(');
+
+    if (cur_token.is_not(')')) {
+        bool more_args = false;
+        int count = 0;
+        do {
+            Identifier identifier = expect_identifier("for named argument for #file statement");
+            
+
+
+            ++count;
+            more_args = cur_token.is(',');
+            if (more_args) {
+                next_token();
+            }
+        } while (more_args);
+    } else {
+        error(start_token.loc, "Expected arguments for #file statement")
+            .end_error(ErrCode::ParseNoArgsForComptimeFile);
+    }
+
+    expect(')');
+}
+
 // Expression parsing
 //--------------------------------------
 
@@ -706,8 +734,8 @@ template<typename T>
 acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* to_type) {
 
     constexpr bool is_signed = std::is_signed_v<T>;
-    T lval = is_signed ? lhs->value_s64 : lhs->value_u64;
-    T rval = is_signed ? rhs->value_s64 : rhs->value_u64;
+    T lval = static_cast<T>(is_signed ? lhs->value_s64 : lhs->value_u64);
+    T rval = static_cast<T>(is_signed ? rhs->value_s64 : rhs->value_u64);
 
     auto calc = [op, lhs, rhs, to_type](T result) finline {
         if constexpr (is_signed) {
@@ -929,7 +957,7 @@ acorn::Expr* acorn::Parser::parse_postfix(Expr* term) {
     return term;
 }
 
-acorn::Expr* acorn::Parser::parse_function_call(Expr* site) {
+acorn::FuncCall* acorn::Parser::parse_function_call(Expr* site) {
     
     FuncCall* call = new_node<FuncCall>(cur_token);
     call->site = site;

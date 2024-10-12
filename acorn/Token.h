@@ -59,6 +59,7 @@ namespace acorn {
             KwCTElIf,
             KwCTElse,
             KwCTEndIf,
+            KwCTFile,
             ComptimeKeywordEnd,
 
             KeywordEnd,

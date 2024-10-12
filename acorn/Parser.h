@@ -71,6 +71,8 @@ namespace acorn {
 
         ScopeStmt* parse_scope(const char* closing_for = nullptr);
 
+        void parse_comptime_file_info();
+
         // Expression parsing
         //--------------------------------------
 
@@ -87,7 +89,7 @@ namespace acorn {
         Expr* fold_int(Token op, Number* lhs, Number* rhs, Type* to_type);
         Expr* parse_postfix();
         Expr* parse_postfix(Expr* term);
-        Expr* parse_function_call(Expr* site);
+        FuncCall* parse_function_call(Expr* site);
         Expr* parse_dot_operator(Expr* site);
         Expr* parse_memory_access(Expr* site);
         Expr* parse_term();

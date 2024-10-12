@@ -90,6 +90,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "#elif"    , Token::KwCTElIf    },
           { "#else"    , Token::KwCTElse    },
           { "#endif"   , Token::KwCTEndIf   },
+          { "#file"    , Token::KwCTFile    },
       }),
 
       precedence({
