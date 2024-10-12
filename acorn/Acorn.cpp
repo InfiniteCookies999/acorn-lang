@@ -243,7 +243,7 @@ void acorn::AcornLang::sema_and_irgen() {
     auto check_decl = [this](Decl* decl) finline {
         sema_timer.start();
         
-        Sema sema(context, decl->get_module(), decl->get_logger());
+        Sema sema(context, decl->file, decl->get_logger());
         if (decl->is(NodeKind::Func)) {    
             sema.check_function(as<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {

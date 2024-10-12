@@ -64,7 +64,7 @@ void test_sema() {
         }
 
         for (Decl* decl : context->get_unchecked()) {
-            Sema sema(*context, *mock_modl, mock_file->logger);
+            Sema sema(*context, mock_file, mock_file->logger);
             if (decl->is(NodeKind::Func)) {
                 sema.check_function(as<Func*>(decl));
             } else if (decl->is(NodeKind::Var)) {

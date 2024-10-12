@@ -13,15 +13,15 @@
 #define yield_if(n) if (nvalid(n)) return;
 #define check(n) check_node(n); yield_if(n)
 
-acorn::Sema::Sema(Context& context, Module & modl, Logger& logger)
-    : context(context), modl(modl), logger(logger), type_table(context.type_table) {
+acorn::Sema::Sema(Context& context, SourceFile* file, Logger& logger)
+    : context(context), modl(file->modl), file(file), logger(logger), type_table(context.type_table) {
 }
 
 void acorn::Sema::resolve_global_comptime(Context& context, Module& modl) {
     for (Node* node : modl.get_comptime_control_flows()) {
         if (node->is(NodeKind::ComptimeIfStmt)) {
             auto ifs = as<ComptimeIfStmt*>(node);
-            Sema sema(context, modl, ifs->file->logger);
+            Sema sema(context, ifs->file, ifs->file->logger);
             sema.is_global_comptime = true;
             sema.check_comptime_if(ifs);
         }
@@ -146,7 +146,7 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
 //--------------------------------------
 
 void acorn::Sema::check_for_duplicate_functions(Module& modl) {
-    for (const auto& [_, funcs] : modl.get_global_functions()) {
+    for (const auto& [_, funcs] : modl.get_functions()) {
         for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
             for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
                 if (check_for_duplicate_match(*itr, *itr2)) {
@@ -629,16 +629,15 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
 
     ContinueToCheckNodeLab:
         
-
         if (stmt->is(NodeKind::Func)) {
             if (is_global_comptime) {
-                modl.add_global_function(as<Func*>(stmt));
+                file->add_function(as<Func*>(stmt));
             } else {
                 error(stmt, "Functions cannot be declared within another function")
                     .end_error(ErrCode::SemaNoLocalFuncs);
             }
         } else if (stmt->is(NodeKind::Var) && is_global_comptime) {
-            modl.add_global_variable(as<Var*>(stmt));
+            file->add_variable(as<Var*>(stmt));
         } else {
             check_node(stmt);
         }
@@ -1025,20 +1024,36 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
 
 void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_for_call) {
     
-    auto find_function = [this, ref, search_modl]() finline {
-        if (auto* funcs = search_modl->find_global_funcs(ref->ident)) {
+    bool same_modl = search_modl == &modl;
+
+    auto find_function = [=, this]() finline {
+        if (same_modl) {
+            if (auto* funcs = file->find_functions(ref->ident)) {
+                ref->set_funcs_ref(funcs);
+                return;
+            }
+        }
+
+        if (auto* funcs = search_modl->find_functions(ref->ident)) {
             ref->set_funcs_ref(funcs);
         }
     };
 
-    auto find_variable = [this, ref, &search_modl]() finline {
+    auto find_variable = [=, this]() finline {
         if (cur_scope) {
             if (auto* var = cur_scope->find_variable(ref->ident)) {
                 ref->set_var_ref(var);
                 return;
             }
         }
-        if (auto* var = search_modl->find_global_variable(ref->ident)) {
+        if (same_modl) {
+            if (auto* var = file->find_variable(ref->ident)) {
+                ref->set_var_ref(var);
+                return;
+            }
+        }
+
+        if (auto* var = search_modl->find_variable(ref->ident)) {
             ref->set_var_ref(var);
             return;
         }
@@ -1060,7 +1075,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_fo
     }
 
     // If still not found let us try and search for an imported module.
-    if (!ref->found_ref() && search_modl == &modl) {
+    if (!ref->found_ref() && same_modl) {
         if (auto importn = modl.find_import(ref->ident)) {
             ref->set_import(importn);
         }
@@ -1487,7 +1502,7 @@ void acorn::Sema::check_global_variable(SourceLoc error_loc, Var* var) {
     }
     
     if (!var->is_being_checked) {
-        Sema sema(context, var->get_module(), var->get_logger());
+        Sema sema(context, var->file, var->get_logger());
         sema.check_variable(var);
     }
 }

@@ -29,9 +29,11 @@ case Token::KwUSize:  \
 case Token::KwISize:  \
 case Token::KwBool
 
-#define ModifierTokens  \
-     Token::KwNative:   \
-case Token::KwDllimport
+#define ModifierTokens   \
+     Token::KwNative:    \
+case Token::KwDllimport: \
+case Token::KwPub:       \
+case Token::KwPrv
 
 acorn::Parser::Parser(Context& context, Module& modl, SourceFile* file)
     : context(context),
@@ -65,7 +67,7 @@ void acorn::Parser::parse() {
             
             auto func = as<Func*>(node);
             if (func->name != Identifier::Invalid) {
-                modl.add_global_function(func);
+                file->add_function(func);
             }
 
             if (func->name == context.main_identifier) {
@@ -75,7 +77,7 @@ void acorn::Parser::parse() {
 
             auto var = as<Var*>(node);
             if (var->name != Identifier::Invalid) {
-                modl.add_global_variable(var);
+                file->add_variable(var);
             }
         } else if (node->is(NodeKind::ComptimeIfStmt)) {
             modl.add_global_comptime_control_flow(node);
@@ -360,6 +362,24 @@ uint32_t acorn::Parser::parse_modifiers() {
                 error(cur_token, "Duplicate modifier")
                     .end_error(ErrCode::ParseDuplicateModifier);
             modifiers |= Modifier::DllImport;
+
+            next_token();
+            break;
+        }
+        case Token::KwPub: {
+            if (modifiers & Modifier::Public)
+                error(cur_token, "Duplicate modifier")
+                    .end_error(ErrCode::ParseDuplicateModifier);
+            modifiers |= Modifier::Public;
+
+            next_token();
+            break;
+        }
+        case Token::KwPrv: {
+            if (modifiers & Modifier::Private)
+                error(cur_token, "Duplicate modifier")
+                    .end_error(ErrCode::ParseDuplicateModifier);
+            modifiers |= Modifier::Private;
 
             next_token();
             break;

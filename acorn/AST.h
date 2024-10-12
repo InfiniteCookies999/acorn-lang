@@ -19,7 +19,7 @@ namespace acorn {
     struct Expr;
     struct Func;
     struct ScopeStmt;
-    struct SourceFile;
+    class SourceFile;
     class Logger;
 
     const size_t MAX_FUNC_PARAMS = 64;
@@ -60,7 +60,9 @@ namespace acorn {
         const static uint32_t Start     = 0x01;
         const static uint32_t Native    = 0x01;
         const static uint32_t DllImport = 0x02;
-        const static uint32_t End       = 0x02;
+        const static uint32_t Public    = 0x04;
+        const static uint32_t Private   = 0x08;
+        const static uint32_t End       = 0x08;
 
         static const char* to_string(uint32_t modifier);
     };

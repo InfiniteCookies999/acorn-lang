@@ -21,7 +21,7 @@ namespace acorn {
 
     class Context;
     class Type;
-    struct SourceFile;
+    class SourceFile;
 
     class Logger;
     class GlobalLogger;

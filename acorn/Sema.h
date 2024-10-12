@@ -13,11 +13,12 @@ namespace acorn {
     class Context;
     class Module;
     class TypeTable;
+    class SourceFile;
 
     class Sema {
     public:
 
-        Sema(Context& context, Module& modl, Logger& logger);
+        Sema(Context& context, SourceFile* file, Logger& logger);
 
         static void resolve_global_comptime(Context& context, Module& modl);
 
@@ -38,10 +39,11 @@ namespace acorn {
         void check_variable(Var* var);
 
     private:
-        Context&   context;
-        Logger&    logger;
-        Module&    modl;
-        TypeTable& type_table;
+        Context&    context;
+        Logger&     logger;
+        Module&     modl;
+        SourceFile* file;
+        TypeTable&  type_table;
 
         Func* cur_func;
         Var*  cur_global_var = nullptr;

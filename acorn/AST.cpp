@@ -24,6 +24,8 @@ const char* acorn::Modifier::to_string(uint32_t modifier) {
     switch (modifier) {
     case Native:    return "native";
     case DllImport: return "dllimport";
+    case Public:    return "pub";
+    case Private:   return "prv";
     default:
         acorn_fatal("Fail to implement to_string() for modifier");
         return nullptr;
