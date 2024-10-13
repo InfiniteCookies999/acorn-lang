@@ -79,6 +79,7 @@ namespace acorn {
         void check_comptime_if(ComptimeIfStmt* ifs);
         void check_predicate_loop(PredicateLoopStmt* loop);
         void check_range_loop(RangeLoopStmt* loop);
+        void check_iterator_loop(IteratorLoopStmt* loop);
 
         SemScope push_scope();
         void pop_scope();

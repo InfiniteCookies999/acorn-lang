@@ -37,6 +37,7 @@ namespace acorn {
         ImportStmt,
         PredicateLoopStmt,
         RangeLoopStmt,
+        IteratorLoopStmt,
 
         ExprStart,
         InvalidExpr,
@@ -259,6 +260,15 @@ namespace acorn {
         Expr*      cond = nullptr;
         ScopeStmt* scope;
         Node*      inc = nullptr;
+    };
+
+    struct IteratorLoopStmt : Node {
+        IteratorLoopStmt() : Node(NodeKind::IteratorLoopStmt) {
+        }
+
+        Var*       var;
+        Expr*      container;
+        ScopeStmt* scope;
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {

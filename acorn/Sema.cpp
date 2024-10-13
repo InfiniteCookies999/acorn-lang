@@ -272,6 +272,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_predicate_loop(as<PredicateLoopStmt*>(node));
     case NodeKind::RangeLoopStmt:
         return check_range_loop(as<RangeLoopStmt*>(node));
+    case NodeKind::IteratorLoopStmt:
+        return check_iterator_loop(as<IteratorLoopStmt*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -580,6 +582,37 @@ void acorn::Sema::check_range_loop(RangeLoopStmt* loop) {
     pop_scope();
 }
 
+void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
+    
+    SemScope sem_scope = push_scope();
+    check_node(loop->var);
+    check_node(loop->container);
+
+    if (loop->container->type) {
+        if (loop->container->type->is_array() && loop->var->type) {
+            auto arr_type = as<ArrayType*>(loop->container->type);
+            auto elm_type = arr_type->get_elm_type();
+
+            bool const_must_match = elm_type->is_aggregate() || elm_type->is_pointer();
+            bool types_match = const_must_match ? elm_type->is(loop->var->type)
+                                                : elm_type->is_ignore_const(loop->var->type);
+
+            if (!types_match) {
+                error(loop->container, "Cannot assign type '%s' to variable type '%s'",
+                      elm_type, loop->var->type)
+                    .end_error(ErrCode::SemaCannotAssignIteratorElmTypeToVar);
+            }
+        } else {
+            error(loop->container, "Cannot iterate over type '%s'", loop->container->type)
+                .end_error(ErrCode::SemaCannotIteratorOverType);
+        }
+    }
+
+    check_scope(loop->scope, &sem_scope);
+    cur_scope->all_paths_return = sem_scope.all_paths_return;
+    pop_scope();
+}
+
 acorn::Sema::SemScope acorn::Sema::push_scope() {
     SemScope sem_scope;
     sem_scope.parent = cur_scope;
@@ -617,6 +650,7 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
         case NodeKind::ScopeStmt:
         case NodeKind::PredicateLoopStmt:
         case NodeKind::RangeLoopStmt:
+        case NodeKind::IteratorLoopStmt:
             break;
         case NodeKind::BinOp: {
             BinOp* bin_op = as<BinOp*>(stmt);

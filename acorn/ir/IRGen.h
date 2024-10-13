@@ -75,6 +75,7 @@ namespace acorn {
         llvm::Value* gen_comptime_if(ComptimeIfStmt* ifs);
         llvm::Value* gen_predicate_loop(PredicateLoopStmt* loop);
         llvm::Value* gen_range_loop(RangeLoopStmt* loop);
+        llvm::Value* gen_iterator_loop(IteratorLoopStmt* loop);
         void gen_cond_branch_for_loop(Expr* cond, llvm::BasicBlock* ll_body_bb, llvm::BasicBlock* ll_end_bb);
         llvm::Value* gen_scope(ScopeStmt* scope);
 
@@ -146,6 +147,7 @@ namespace acorn {
         llvm::Function* gen_void_function_decl(llvm::Twine ll_name);
 
         llvm::AllocaInst* gen_unseen_alloca(Type* type, llvm::Twine ll_name);
+        llvm::AllocaInst* gen_unseen_alloca(llvm::Type* ll_type, llvm::Twine ll_name);
 
     };
 }

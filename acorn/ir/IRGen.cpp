@@ -71,6 +71,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_predicate_loop(as<PredicateLoopStmt*>(node));
     case NodeKind::RangeLoopStmt:
         return gen_range_loop(as<RangeLoopStmt*>(node));
+    case NodeKind::IteratorLoopStmt:
+        return gen_iterator_loop(as<IteratorLoopStmt*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -586,6 +588,74 @@ llvm::Value* acorn::IRGenerator::gen_range_loop(RangeLoopStmt* loop) {
     return nullptr;
 }
 
+llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
+    
+    auto ll_end_bb = gen_bblock("loop.end", ll_cur_func);
+    auto ll_body_bb = gen_bblock("loop.body", ll_cur_func);
+    auto ll_cond_bb = gen_bblock("loop.cond", ll_cur_func);
+    auto ll_inc_bb = gen_bblock("loop.inc", ll_cur_func);
+
+    if (loop->container->type->is_array()) {
+
+        // TODO: deal with container not being an lvalue.
+        // TODO: deal with container being an lvalue but decayed due
+        // to function passing.
+
+        // Calculate beginning and end of the array for determining
+        // the stop condition later.
+        // 
+        auto ll_ptr_type = llvm::PointerType::get(ll_context, 0);
+        auto arr_type = as<ArrayType*>(loop->container->type);
+        auto elm_type = arr_type->get_elm_type();
+        auto ll_arr_itr_ptr = gen_unseen_alloca(ll_ptr_type, "arr.itr.ptr");
+
+        auto ll_arr_length = gen_isize(arr_type->get_length());
+        auto ll_arr_beg = gen_node(loop->container);
+        auto ll_arr_end = gen_array_memory_access(ll_arr_beg, gen_type(arr_type), ll_arr_length);
+
+        builder.CreateStore(ll_arr_beg, ll_arr_itr_ptr);
+
+        // Branch into the condition block and determine when to stop
+        // iterating.
+        //
+        builder.CreateBr(ll_cond_bb);
+        builder.SetInsertPoint(ll_cond_bb);
+
+        auto ll_ptr_index1 = builder.CreateLoad(ll_ptr_type, ll_arr_itr_ptr);
+        auto ll_cond = builder.CreateICmpNE(ll_ptr_index1, ll_arr_end);
+
+        builder.CreateCondBr(ll_cond, ll_body_bb, ll_end_bb);
+
+        // Generate code for incrementing the array pointer.
+        //
+        builder.SetInsertPoint(ll_inc_bb);
+
+        auto ll_ptr_index2 = builder.CreateLoad(ll_ptr_type, ll_arr_itr_ptr);
+        auto ll_ptr_next = builder.CreateInBoundsGEP(gen_type(elm_type), ll_ptr_index2, gen_isize(1));
+        builder.CreateStore(ll_ptr_next, ll_arr_itr_ptr);
+
+        builder.CreateBr(ll_cond_bb);
+
+
+        builder.SetInsertPoint(ll_body_bb);
+        // Store the pointer value into the variable.
+        auto ll_ptr_index3 = builder.CreateLoad(ll_ptr_type, ll_arr_itr_ptr);
+        auto ll_ptr_value = builder.CreateLoad(gen_type(elm_type), ll_ptr_index3);
+        builder.CreateStore(ll_ptr_value, loop->var->ll_address);
+
+    }
+
+    gen_scope(loop->scope);
+
+    // End of loop scope, jump back to increment.
+    gen_branch_if_not_term(ll_inc_bb);
+
+    // Continue generating code after the the loop.
+    builder.SetInsertPoint(ll_end_bb);
+    
+    return nullptr;
+}
+
 void acorn::IRGenerator::gen_cond_branch_for_loop(Expr* cond, llvm::BasicBlock* ll_body_bb, llvm::BasicBlock* ll_end_bb) {
     auto ll_cond = cond ? gen_condition(cond) : builder.getTrue();
     builder.CreateCondBr(ll_cond, ll_body_bb, ll_end_bb);
@@ -1098,6 +1168,10 @@ llvm::Function* acorn::IRGenerator::gen_void_function_decl(llvm::Twine ll_name) 
 }
 
 llvm::AllocaInst* acorn::IRGenerator::gen_unseen_alloca(Type* type, llvm::Twine ll_name) {
+    return gen_unseen_alloca(gen_type(type), ll_name);
+}
+
+llvm::AllocaInst* acorn::IRGenerator::gen_unseen_alloca(llvm::Type* ll_type, llvm::Twine ll_name) {
     auto ll_backup_insert_block = builder.GetInsertBlock();
     auto ll_entry_block = &ll_cur_func->getEntryBlock();
     if (ll_entry_block->empty()) {
@@ -1105,7 +1179,7 @@ llvm::AllocaInst* acorn::IRGenerator::gen_unseen_alloca(Type* type, llvm::Twine 
     } else {
         builder.SetInsertPoint(&ll_entry_block->front());
     }
-    auto ll_address = gen_alloca(gen_type(type), ll_name);
+    auto ll_address = gen_alloca(ll_type, ll_name);
     builder.SetInsertPoint(ll_backup_insert_block);
     return ll_address;
 }
