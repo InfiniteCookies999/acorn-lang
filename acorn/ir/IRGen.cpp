@@ -597,20 +597,26 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
 
     if (loop->container->type->is_array()) {
 
-        // TODO: deal with container being an lvalue but decayed due
-        // to function passing.
-
         // Calculate beginning and end of the array for determining
         // the stop condition later.
         // 
         auto ll_ptr_type = llvm::PointerType::get(ll_context, 0);
         auto arr_type = as<ArrayType*>(loop->container->type);
         auto elm_type = arr_type->get_elm_type();
+        auto ll_elm_type = gen_type(elm_type);
         auto ll_arr_itr_ptr = gen_unseen_alloca(ll_ptr_type, "arr.itr.ptr");
 
+        bool is_decayed = is_decayed_array(loop->container);
         auto ll_arr_length = gen_isize(arr_type->get_length());
+        auto ll_arr_type = gen_type(arr_type);
+
         auto ll_arr_beg = gen_node(loop->container);
-        auto ll_arr_end = gen_array_memory_access(ll_arr_beg, gen_type(arr_type), ll_arr_length);
+        if (is_decayed) {
+            ll_arr_beg = builder.CreateLoad(ll_ptr_type, ll_arr_beg);
+        }
+
+        auto ll_arr_end = is_decayed ? builder.CreateInBoundsGEP(ll_elm_type, ll_arr_beg, ll_arr_length)
+                                     : gen_array_memory_access(ll_arr_beg, gen_type(arr_type), ll_arr_length);
 
         builder.CreateStore(ll_arr_beg, ll_arr_itr_ptr);
 
@@ -630,11 +636,10 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         builder.SetInsertPoint(ll_inc_bb);
 
         auto ll_ptr_index2 = builder.CreateLoad(ll_ptr_type, ll_arr_itr_ptr);
-        auto ll_ptr_next = builder.CreateInBoundsGEP(gen_type(elm_type), ll_ptr_index2, gen_isize(1));
+        auto ll_ptr_next = builder.CreateInBoundsGEP(ll_elm_type, ll_ptr_index2, gen_isize(1));
         builder.CreateStore(ll_ptr_next, ll_arr_itr_ptr);
 
         builder.CreateBr(ll_cond_bb);
-
 
         builder.SetInsertPoint(ll_body_bb);
         // Store the pointer value into the variable.
@@ -927,20 +932,16 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
     auto ll_memory = gen_rvalue(mem_access->site);
     bool mem_access_ptr = mem_access->type->is_pointer();
 
-    // Checking to see if the memory refers to a decayed arrayed for a parameter.
-    if (mem_access->site->is(NodeKind::IdentRef)) {
-        auto ref = as<IdentRef*>(mem_access->site);
-        if (ref->is_var_ref() && ref->var_ref->is_param()) {
-            // We have to load again because gen_rvalue says to always treat
-            // nodes with array types as lvalues but it was decayed so it
-            // was stored into a variable that now needs loaded.
-            //
-            // Conceptually this makes sense to do here since gen_array_memory_access
-            // works under the assumption that the memory given is the lvalue of the
-            // array.
-            ll_memory = builder.CreateLoad(llvm::PointerType::get(ll_context, 0), ll_memory);
-            mem_access_ptr = true;
-        }
+    if (is_decayed_array(mem_access->site)) {
+        // We have to load again because gen_rvalue says to always treat
+        // nodes with array types as lvalues but it was decayed so it
+        // was stored into a variable that now needs loaded.
+        //
+        // Conceptually this makes sense to do here since gen_array_memory_access
+        // works under the assumption that the memory given is the lvalue of the
+        // array.
+        ll_memory = builder.CreateLoad(llvm::PointerType::get(ll_context, 0), ll_memory);
+        mem_access_ptr = true;
     }
     Type* type = mem_access->site->type;
 
@@ -1181,4 +1182,10 @@ llvm::AllocaInst* acorn::IRGenerator::gen_unseen_alloca(llvm::Type* ll_type, llv
     auto ll_address = gen_alloca(ll_type, ll_name);
     builder.SetInsertPoint(ll_backup_insert_block);
     return ll_address;
+}
+
+bool acorn::IRGenerator::is_decayed_array(Expr* arr) {
+    if (arr->is_not(NodeKind::IdentRef)) return false;
+    auto ref = as<IdentRef*>(arr);
+    return ref->is_var_ref() && ref->var_ref->is_param();
 }

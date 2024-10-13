@@ -149,6 +149,8 @@ namespace acorn {
         llvm::AllocaInst* gen_unseen_alloca(Type* type, llvm::Twine ll_name);
         llvm::AllocaInst* gen_unseen_alloca(llvm::Type* ll_type, llvm::Twine ll_name);
 
+        bool is_decayed_array(Expr* arr);
+
     };
 }
 
