@@ -486,5 +486,11 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("ramen");
         });
+        test("Iterator loop iter over foldable arr", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test7.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ramen");
+        });
     });
 }

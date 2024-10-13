@@ -30,8 +30,7 @@ void write_val(int val) {
 }
 
 void main() {
-    int[5] a = [ 114, 97, 109, 101, 110 ];
-    loop int v : a {
+    loop int v : [ 114, 97, 109, 101, 110 ] {
         write_val(v);
     }
 }

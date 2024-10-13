@@ -597,7 +597,6 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
 
     if (loop->container->type->is_array()) {
 
-        // TODO: deal with container not being an lvalue.
         // TODO: deal with container being an lvalue but decayed due
         // to function passing.
 
