@@ -302,7 +302,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 
     if (func->return_type->is(context.void_type) && !is_main) {
         builder.CreateRetVoid();
-    } else if (is_main && !func->scope->empty() && func->scope->back()->is_not(NodeKind::ReturnStmt)) {
+    } else if (is_main &&
+               ((!func->scope->empty() && func->scope->back()->is_not(NodeKind::ReturnStmt))
+               || func->scope->empty())) {
         // Implicit return for main function but since the main function always returns an
         // integer it is handled specially.
         builder.CreateRet(builder.getInt32(0));

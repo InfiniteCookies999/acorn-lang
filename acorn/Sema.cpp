@@ -313,12 +313,16 @@ void acorn::Sema::check_function(Func* func) {
             .end_error(ErrCode::SemaNotAllFuncPathReturn);
     }
 
-    if (func->return_type->is(context.void_type) && !func->scope->empty()) {
+    bool uses_implicit_return = func->scope->empty();
+    if (func->return_type->is(context.void_type) && !uses_implicit_return) {
         auto last_stmt = func->scope->back();
         if (last_stmt->is_not(NodeKind::ReturnStmt)) {
-            // Implicit return statement!
-            ++func->num_returns;
+            uses_implicit_return = true;
         }
+    }
+
+    if (uses_implicit_return) {
+        ++func->num_returns;
     }
 }
 
@@ -1944,6 +1948,10 @@ void acorn::Sema::check_modifier_incompatibilities(Decl* decl) {
         error(decl->get_modifier_location(Modifier::DllImport),
               "Cannot have dllimport modifier without native modifier")
             .end_error(ErrCode::SemaDllImportWithoutNativeModifier);
+    }
+    if (decl->has_modifier(Modifier::Private) && decl->has_modifier(Modifier::Public)) {
+        error(decl, "Cannot have both prv and pub modifiers")
+            .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
     }
 }
 
