@@ -243,7 +243,7 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
             return builder.CreateICmpSLE(ll_lhs, ll_rhs, "lte");
         else return builder.CreateICmpULE(ll_lhs, ll_rhs, "lte");
     case Token::EqEq:
-        return builder.CreateICmpEQ(ll_lhs, ll_rhs, "eq");
+        return gen_equal(ll_lhs, ll_rhs);
     case Token::ExEq:
         return builder.CreateICmpNE(ll_lhs, ll_rhs, "neq");
     default:
@@ -251,6 +251,10 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
         return nullptr;
     }
     return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
+    return builder.CreateICmpEQ(ll_lhs, ll_rhs, "eq");
 }
 
 llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {

@@ -88,6 +88,8 @@ X(SemaLoopControlLoopCountExceedsLoopDepth , 30050)
 X(SemaCannotCompareCaseType                , 30051)
 X(SemaSwitchOnExpectedLValue               , 30052)
 X(SemaHaveBothPrivateAndPublicModifier     , 30053)
+X(SemaInvalidTypeForSwitch                 , 30054)
+X(SemaCaseCannotBeBoolLiteral              , 30055)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

@@ -659,8 +659,14 @@ void acorn::Sema::check_loop_scope(ScopeStmt* scope, SemScope* sem_scope) {
 void acorn::Sema::check_switch(SwitchStmt* switchn) {
     check_and_verify_type(switchn->on);
 
+    if (!switchn->on->type->is_comparable()) {
+        error(expand(switchn->on), "Type '%s' cannot be used in a switch", switchn->on->type)
+            .end_error(ErrCode::SemaInvalidTypeForSwitch);
+        return;
+    }
+
     if (!is_lvalue(switchn->on)) {
-        error(expand(switchn->on), "value switched on is expected to have an address")
+        error(expand(switchn->on), "Value switched on is expected to have an address")
             .end_error(ErrCode::SemaSwitchOnExpectedLValue);
     }
 
@@ -681,14 +687,23 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
     for (SwitchCase scase : switchn->cases) {
         check_node(scase.cond);
         if (scase.cond->type) {
-            if (!switchn->on->type->is_ignore_const(scase.cond->type)) {
+            bool is_bool_type = scase.cond->type->is_ignore_const(context.bool_type);
+            if (!is_bool_type &&
+                !switchn->on->type->is_ignore_const(scase.cond->type)) {
                 error(expand(scase.cond), "Cannot compare case type '%s' to type '%s'",
                       scase.cond->type, switchn->on->type)
                     .end_error(ErrCode::SemaCannotCompareCaseType);
             }
-        }
-        if (!scase.cond->is_foldable) {
-            switchn->all_conds_foldable = false;
+
+            if (scase.cond->is(NodeKind::Bool)) {
+                auto bool_cond = as<Bool*>(scase.cond);
+                error(scase.cond, "Cannot compare to %s", bool_cond->value ? "true" : "false")
+                    .end_error(ErrCode::SemaCaseCannotBeBoolLiteral);
+            }
+        
+            if (!scase.cond->is_foldable || is_bool_type) {
+                switchn->all_conds_foldable = false;
+            }
         }
         check_case_scope(scase.scope);
     }

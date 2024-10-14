@@ -704,8 +704,60 @@ llvm::Value* acorn::IRGenerator::gen_loop_control(LoopControlStmt* loop_control)
 }
 
 llvm::Value* acorn::IRGenerator::gen_switch(SwitchStmt* switchn) {
-    
-    // TODO: deal with cases being non-foldable.
+    if (switchn->all_conds_foldable) {
+        return gen_switch_foldable(switchn);
+    }
+    return gen_switch_non_foldable(switchn);
+}
+
+llvm::Value* acorn::IRGenerator::gen_switch_non_foldable(SwitchStmt* switchn) {
+
+    auto ll_end_bb = gen_bblock("sw.end", ll_cur_func);
+
+    size_t count = 0;
+    for (SwitchCase scase : switchn->cases) {
+        bool is_last = count == switchn->cases.size() - 1;
+
+        auto ll_then_bb = gen_bblock("sw.then", ll_cur_func);
+        auto ll_else_bb = (!is_last || switchn->default_scope) ? gen_bblock("sw.else", ll_cur_func) : ll_end_bb;
+
+        // Jump to either the then or else block depending on the condition.
+        if (scase.cond->type->is_ignore_const(context.bool_type)) {
+            // It is an operation that results in a boolean so branch on that condition.
+            gen_branch_on_condition(as<Expr*>(scase.cond), ll_then_bb, ll_else_bb);
+        } else {
+            // It is is simply
+            auto ll_cond = gen_equal(gen_rvalue(switchn->on), gen_rvalue(scase.cond));
+            builder.CreateCondBr(ll_cond, ll_then_bb, ll_else_bb);
+        }
+
+        builder.SetInsertPoint(ll_then_bb);
+        gen_scope(scase.scope);
+
+        // Jump to end after the else conidtion block.
+        // 
+        // Need to use gen_branch_if_not_term because our scope may
+        // have ended in a return statement or some other form of jump.
+        gen_branch_if_not_term(ll_end_bb);
+
+        if (!is_last) {
+            builder.SetInsertPoint(ll_else_bb);
+        } else if (switchn->default_scope) {
+            builder.SetInsertPoint(ll_else_bb);
+            gen_scope(switchn->default_scope);
+            gen_branch_if_not_term(ll_end_bb);
+        }
+
+        ++count;
+
+    }
+
+    builder.SetInsertPoint(ll_end_bb);
+
+    return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_switch_foldable(SwitchStmt* switchn) {
 
     auto ll_end_bb = gen_bblock("sw.end", ll_cur_func);
 
