@@ -49,8 +49,8 @@ acorn::AcornLang::AcornLang(PageAllocator& allocator)
     set_output_name(L"program");
 }
 
-void acorn::AcornLang::run(SourceVector& sources) {
-#define go(f) { f; if (context.has_errors()) return; }
+int acorn::AcornLang::run(SourceVector& sources) {
+#define go(f) { f; if (context.has_errors()) return 1; }
 
     total_timer.start();
 
@@ -67,6 +67,8 @@ void acorn::AcornLang::run(SourceVector& sources) {
     total_timer.stop();
 
     show_time_table();
+
+    return run_program();
 
 #undef go
 }
@@ -156,6 +158,18 @@ void acorn::AcornLang::show_time_table() {
 
 }
 
+int acorn::AcornLang::run_program() {
+    if (!should_run_program) return 0;
+
+    if (!dont_show_wrote_to_msg) {
+        std::cout << "\n";
+    }
+    
+    int exit_code;
+    exe_process(absolute_exe_path.data(), absolute_output_directory.data(), false, exit_code);
+    return exit_code;
+}
+
 void acorn::AcornLang::initialize_codegen() {
     codegen_timer.start();
     
@@ -177,7 +191,7 @@ void acorn::AcornLang::initialize_codegen() {
         return;
     }
 
-    auto absolute_output_directory =
+    absolute_output_directory =
         fs::absolute(output_directory_path).generic_wstring();
 
     absolute_obj_path = absolute_output_directory + L"/" + obj_name;

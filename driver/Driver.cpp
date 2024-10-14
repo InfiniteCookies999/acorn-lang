@@ -45,6 +45,9 @@ Options:
         the executable. Will create the director(ies) if they
         do not exist.
 
+    -run
+        Runs the program after it is compiled.
+
     -r, -rel, -release
         Compile in release mode.
 
@@ -78,6 +81,7 @@ int main(int argc, char* argv[]) {
     processor.add_flag("show-llvm-ir", &acorn::AcornLang::set_should_show_llvm_ir);
     processor.add_flag("show-error-codes", &acorn::AcornLang::set_should_show_error_codes);
     processor.add_flag("nshow-wrote-to-msg", &acorn::AcornLang::set_dont_show_wrote_to_msg);
+    processor.add_flag("run", &acorn::AcornLang::set_run_program);
     processor.add_flag("output-name", { "out-name", "o" }, [&acorn, &wconverter](char* rest[]) {
         acorn.set_output_name(wconverter.from_bytes(rest[0]));
     }).req_value("Missing output program name");
@@ -111,6 +115,5 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    acorn.run(sources);
-
+    return acorn.run(sources);
 }

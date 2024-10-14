@@ -34,7 +34,7 @@ namespace acorn {
 
         AcornLang(PageAllocator& allocator);
 
-        void run(SourceVector& sources);
+        int run(SourceVector& sources);
 
         void set_released_build()          { release_build = true;                  }
         void set_should_show_times()       { should_show_times = true;              }
@@ -42,6 +42,7 @@ namespace acorn {
         void set_should_show_error_codes() { context.set_should_show_error_codes(); }
         void set_dont_show_wrote_to_msg()  { dont_show_wrote_to_msg = true;         }
         void set_stand_alone()             { stand_alone = true;                    }
+        void set_run_program()             { should_run_program = true;             }
 
         void set_output_name(std::wstring output_name);
         void set_output_directory(std::wstring output_directory);
@@ -64,6 +65,7 @@ namespace acorn {
         std::wstring output_directory;
         std::wstring exe_name;
         std::wstring obj_name;
+        std::wstring absolute_output_directory;
         std::wstring absolute_exe_path;
         std::wstring absolute_obj_path;
 
@@ -72,6 +74,7 @@ namespace acorn {
         bool should_show_llvm_ir    = false;
         bool dont_show_wrote_to_msg = false;
         bool stand_alone            = false;
+        bool should_run_program     = false;
         std::function<void(ErrCode, std::string, int)> error_code_interceptor;
 
         // Timers to keep track of how different
@@ -87,6 +90,8 @@ namespace acorn {
         Context&       context;
 
         void show_time_table();
+
+        int run_program();
 
         void initialize_codegen();
 
