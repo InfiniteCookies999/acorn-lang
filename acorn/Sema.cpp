@@ -602,9 +602,12 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
             auto arr_type = as<ArrayType*>(loop->container->type);
             auto elm_type = arr_type->get_elm_type();
 
-            bool const_must_match = elm_type->is_aggregate() || elm_type->is_pointer();
-            bool types_match = const_must_match ? elm_type->is(loop->var->type)
-                                                : elm_type->is_ignore_const(loop->var->type);
+            bool types_match = has_valid_constness(loop->var->type, elm_type) && loop->var->type->is_ignore_const(elm_type);
+            if (!types_match) {
+                auto ptr_type = type_table.get_ptr_type(elm_type);
+                types_match = has_valid_constness(loop->var->type, ptr_type) && loop->var->type->is_ignore_const(ptr_type);
+                loop->references_memory = true;
+            }
 
             if (!types_match) {
                 error(loop->container, "Cannot assign type '%s' to variable type '%s'",
@@ -1817,6 +1820,7 @@ bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type,
 
     if (to_type->is_array() && from_type->does_contain_const()) {
         if (!from_type->is_array()) {
+            // Check for array to pointer.
             if (from_type->is_pointer()) {
                 auto to_arr_Type = as<ArrayType*>(to_type);
                 auto from_ptr_type = as<PointerType*>(from_type);
@@ -1890,6 +1894,18 @@ bool acorn::Sema::has_valid_constness(Type* to_type, Type* from_type) const {
             to_type_itr = to_elm_type;
             from_type_itr = from_elm_type;
         } while (to_type_itr->is_pointer());
+    } else if (to_type->is_array() && from_type->does_contain_const()) {
+        if (!from_type->is_array()) return false;
+
+        auto to_arr_Type = as<ArrayType*>(to_type);
+        Type* to_base_type = to_arr_Type->get_base_type();
+
+        auto from_arr_Type = as<ArrayType*>(from_type);
+        Type* from_base_type = from_arr_Type->get_base_type();
+
+        if (!has_valid_constness(to_base_type, from_base_type)) {
+            return false;
+        }
     }
 
     return true;

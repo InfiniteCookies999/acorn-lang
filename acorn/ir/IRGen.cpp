@@ -668,8 +668,12 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         builder.SetInsertPoint(ll_body_bb);
         // Store the pointer value into the variable.
         auto ll_ptr_index3 = builder.CreateLoad(ll_ptr_type, ll_arr_itr_ptr);
-        auto ll_ptr_value = builder.CreateLoad(gen_type(elm_type), ll_ptr_index3);
-        builder.CreateStore(ll_ptr_value, loop->var->ll_address);
+        auto ll_index_value = ll_ptr_index3;
+        if (!loop->references_memory) {
+            ll_index_value = builder.CreateLoad(ll_elm_type, ll_ptr_index3);
+        }
+
+        builder.CreateStore(ll_index_value, loop->var->ll_address);
 
     }
 

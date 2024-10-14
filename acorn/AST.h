@@ -273,6 +273,7 @@ namespace acorn {
         Var*       var;
         Expr*      container;
         ScopeStmt* scope;
+        bool       references_memory = false;
     };
 
     struct LoopControlStmt : Node {
