@@ -181,8 +181,13 @@ bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
 
         // Calling execvp will give over control of the this child process
         // to the command.
-        execvp(cmd_and_args[0], const_cast<char* const*>(cmd_and_args));
-
+        int status = execvp(cmd_and_args[0], const_cast<char* const*>(cmd_and_args));
+        
+        // Check to see if it could not find the specified command.
+        if (errno == ENOENT) {
+            _exit(127);
+        }
+        
         // If we get here then failed.
         _exit(EXIT_FAILURE);
 
@@ -230,6 +235,10 @@ bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
             exit_code = WEXITSTATUS(status);
         } else {
             exit_code = -1;
+        }
+
+        if (exit_code == 127) {
+            return false;
         }
     }
 
@@ -304,7 +313,12 @@ bool acorn::exe_process(wchar_t* process, wchar_t* process_dir, bool seperate_wi
         
         // Calling execvp will give over control of the this child process
         // to the command.
-        execvp(cmd_and_args[0], const_cast<char* const*>(cmd_and_args));
+        int status = execvp(cmd_and_args[0], const_cast<char* const*>(cmd_and_args));
+
+        // Check to see if it could not find the specified command.
+        if (errno == ENOENT) {
+            _exit(127);
+        }
 
         // If we get here then failed.
         _exit(EXIT_FAILURE);
@@ -318,6 +332,10 @@ bool acorn::exe_process(wchar_t* process, wchar_t* process_dir, bool seperate_wi
             exit_code = WEXITSTATUS(status);
         } else {
             exit_code = -1;
+        }
+
+        if (exit_code == 127) {
+            return false;
         }
     }
 
