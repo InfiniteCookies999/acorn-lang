@@ -44,6 +44,8 @@ namespace acorn {
             KwElIf,
             KwElse,
             KwImport,
+            KwContinue,
+            KwBreak,
 
             KwNull,
             KwTrue,

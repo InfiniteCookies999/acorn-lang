@@ -274,6 +274,9 @@ void acorn::Sema::check_node(Node* node) {
         return check_range_loop(as<RangeLoopStmt*>(node));
     case NodeKind::IteratorLoopStmt:
         return check_iterator_loop(as<IteratorLoopStmt*>(node));
+    case NodeKind::BreakStmt:
+    case NodeKind::ContinueStmt:
+        return check_loop_control(as<LoopControlStmt*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -410,6 +413,7 @@ void acorn::Sema::check_variable(Var* var) {
 
 void acorn::Sema::check_return(ReturnStmt* ret) {
     cur_scope->all_paths_return = true;
+    cur_scope->found_terminal = true;
 
     ++cur_func->num_returns;
 
@@ -506,6 +510,7 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
     }
 
     cur_scope->all_paths_return = all_paths_return;
+    cur_scope->found_terminal = all_paths_return;
 }
 
 void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
@@ -557,8 +562,7 @@ void acorn::Sema::check_predicate_loop(PredicateLoopStmt* loop) {
     }
 
     SemScope sem_scope = push_scope();
-    check_scope(loop->scope, &sem_scope);
-    cur_scope->all_paths_return = sem_scope.all_paths_return;
+    check_loop_scope(loop->scope, &sem_scope);
     pop_scope();
 }
 
@@ -577,8 +581,7 @@ void acorn::Sema::check_range_loop(RangeLoopStmt* loop) {
         check_node(loop->inc);
     }
 
-    check_scope(loop->scope, &sem_scope);
-    cur_scope->all_paths_return = sem_scope.all_paths_return;
+    check_loop_scope(loop->scope, &sem_scope);
     pop_scope();
 }
 
@@ -608,9 +611,41 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
         }
     }
 
-    check_scope(loop->scope, &sem_scope);
-    cur_scope->all_paths_return = sem_scope.all_paths_return;
+    check_loop_scope(loop->scope, &sem_scope);
     pop_scope();
+}
+
+void acorn::Sema::check_loop_control(LoopControlStmt* loop_control) {
+    cur_scope->found_terminal = true;
+
+    if (loop_depth == 0) {
+        if (loop_control->is(NodeKind::BreakStmt)) {
+            error(loop_control, "break statements may only be used in loops")
+                .end_error(ErrCode::LoopControlOnlyInLoops);
+        } else {
+            error(loop_control, "continue statements may only be used in loops")
+                .end_error(ErrCode::LoopControlOnlyInLoops);
+        }
+        return;
+    }
+
+    if (loop_control->loop_count > loop_depth) {
+        if (loop_control->is(NodeKind::BreakStmt)) {
+            error(loop_control, "number of requested breaks exceeds the loop depth")
+                .end_error(ErrCode::LoopControlLoopCountExceedsLoopDepth);
+        } else {
+            error(loop_control, "number of requested continues exceeds the loop depth")
+                .end_error(ErrCode::LoopControlLoopCountExceedsLoopDepth);
+        }
+    }
+}
+
+void acorn::Sema::check_loop_scope(ScopeStmt* scope, SemScope* sem_scope) {
+    ++loop_depth;
+    check_scope(scope, sem_scope);
+    --loop_depth;
+    cur_scope->all_paths_return = sem_scope->all_paths_return;
+    cur_scope->found_terminal = sem_scope->found_terminal;
 }
 
 acorn::Sema::SemScope acorn::Sema::push_scope() {
@@ -634,7 +669,7 @@ void acorn::Sema::check_scope(ScopeStmt* scope) {
 void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
     
     for (Node* stmt : *scope) {
-        if (sem_scope && sem_scope->all_paths_return) {
+        if (sem_scope && sem_scope->found_terminal) {
             error(stmt, "Unreachable code")
                 .end_error(ErrCode::SemaUnreachableStmt);
             break;
@@ -651,6 +686,8 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
         case NodeKind::PredicateLoopStmt:
         case NodeKind::RangeLoopStmt:
         case NodeKind::IteratorLoopStmt:
+        case NodeKind::BreakStmt:
+        case NodeKind::ContinueStmt:
             break;
         case NodeKind::BinOp: {
             BinOp* bin_op = as<BinOp*>(stmt);

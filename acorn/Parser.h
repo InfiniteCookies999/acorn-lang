@@ -71,6 +71,7 @@ namespace acorn {
         PredicateLoopStmt* parse_predicate_loop(Token loop_token);
         RangeLoopStmt*     parse_range_loop(Token loop_token, Node* init_node);
         IteratorLoopStmt*  parse_iterator_loop(Token loop_token, Var* var);
+        LoopControlStmt*   parse_loop_control();
 
         ScopeStmt* parse_scope(const char* closing_for = nullptr);
 

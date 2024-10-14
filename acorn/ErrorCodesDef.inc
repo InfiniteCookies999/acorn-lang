@@ -80,6 +80,8 @@ X(SemaCannotAssignArrayDirectlyToPtr       , 30045)
 X(SemaGlobalCircularDependency             , 30046)
 X(SemaCannotIteratorOverType               , 30047)
 X(SemaCannotAssignIteratorElmTypeToVar     , 30048)
+X(LoopControlOnlyInLoops                   , 30049)
+X(LoopControlLoopCountExceedsLoopDepth     , 30050)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

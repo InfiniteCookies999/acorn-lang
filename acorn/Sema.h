@@ -49,6 +49,8 @@ namespace acorn {
         Var*  cur_global_var = nullptr;
 
         bool is_global_comptime = false;
+        // How many nested loops currently within.
+        int loop_depth = 0;
 
         // A structure to keep track of current scope information
         // to help report errors.
@@ -58,6 +60,9 @@ namespace acorn {
             // If true then on every possible branch
             // path there exists a return statement.
             bool all_paths_return = false;
+            // True when encountering a statement that
+            // branches.
+            bool found_terminal = false;
 
             llvm::SmallVector<Var*> variables;
 
@@ -80,6 +85,8 @@ namespace acorn {
         void check_predicate_loop(PredicateLoopStmt* loop);
         void check_range_loop(RangeLoopStmt* loop);
         void check_iterator_loop(IteratorLoopStmt* loop);
+        void check_loop_control(LoopControlStmt* loop_control);
+        void check_loop_scope(ScopeStmt* scope, SemScope* sem_scope);
 
         SemScope push_scope();
         void pop_scope();

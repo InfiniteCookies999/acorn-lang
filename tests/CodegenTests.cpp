@@ -498,5 +498,41 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("ramen");
         });
+        test("Predicate loop break statement", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("aaaaa");
+        });
+        test("Range loop break statement", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("aaaaa");
+        });
+        test("Iterator loop break statement", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test3.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ramen");
+        });
+        test("Predicate loop continue statement", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test4.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("babaa");
+        });
+        test("Range loop continue statement", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test5.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("babaa");
+        });
+        test("Iterator loop continue statement", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test6.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("FaBen");
+        });
     });
 }

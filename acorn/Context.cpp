@@ -81,6 +81,8 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "elif"     , Token::KwElIf      },
           { "else"     , Token::KwElse      },
           { "import"   , Token::KwImport    },
+          { "continue" , Token::KwContinue  },
+          { "break"    , Token::KwBreak     },
 
           { "native"   , Token::KwNative    },
           { "dllimport", Token::KwDllimport },

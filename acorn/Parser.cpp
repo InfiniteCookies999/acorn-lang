@@ -161,6 +161,12 @@ acorn::Node* acorn::Parser::parse_statement() {
         expect(';');
         return nullptr;
     }
+    case Token::KwContinue:
+    case Token::KwBreak: {
+        auto stmt = parse_loop_control();
+        expect(';');
+        return stmt;
+    }
     case ModifierTokens:
         modifiers = parse_modifiers();
         [[fallthrough]];
@@ -557,6 +563,15 @@ acorn::IteratorLoopStmt* acorn::Parser::parse_iterator_loop(Token loop_token, Va
     loop->scope = parse_scope("for loop");
 
     return loop;
+}
+
+acorn::LoopControlStmt* acorn::Parser::parse_loop_control() {
+    auto loop_control = new_node<LoopControlStmt>(cur_token);
+    loop_control->kind = cur_token.is(Token::KwContinue) ? NodeKind::ContinueStmt : NodeKind::BreakStmt;
+
+    next_token();
+
+    return loop_control;
 }
 
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {

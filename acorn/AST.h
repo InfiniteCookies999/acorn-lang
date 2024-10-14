@@ -38,6 +38,8 @@ namespace acorn {
         PredicateLoopStmt,
         RangeLoopStmt,
         IteratorLoopStmt,
+        ContinueStmt,
+        BreakStmt,
 
         ExprStart,
         InvalidExpr,
@@ -269,6 +271,14 @@ namespace acorn {
         Var*       var;
         Expr*      container;
         ScopeStmt* scope;
+    };
+
+    struct LoopControlStmt : Node {
+        LoopControlStmt() : Node(NodeKind::InvalidExpr) {
+        }
+
+        // How many loops to break/continue from.
+        int loop_count = 1;
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {

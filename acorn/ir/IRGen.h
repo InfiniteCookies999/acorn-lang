@@ -56,6 +56,9 @@ namespace acorn {
             llvm::Value* ll_ret_addr;
         };
 
+        llvm::SmallVector<llvm::BasicBlock*, 8> loop_break_stack;
+        llvm::SmallVector<llvm::BasicBlock*, 8> loop_continue_stack;
+
         static int                         global_counter;
         static llvm::SmallVector<Var*, 32> incomplete_global_variables;
         static llvm::BasicBlock*           ll_global_init_call_bb;
@@ -77,6 +80,7 @@ namespace acorn {
         llvm::Value* gen_range_loop(RangeLoopStmt* loop);
         llvm::Value* gen_iterator_loop(IteratorLoopStmt* loop);
         void gen_cond_branch_for_loop(Expr* cond, llvm::BasicBlock* ll_body_bb, llvm::BasicBlock* ll_end_bb);
+        llvm::Value* gen_loop_control(LoopControlStmt* loop_control);
         llvm::Value* gen_scope(ScopeStmt* scope);
 
         llvm::Value* gen_variable(Var* var);

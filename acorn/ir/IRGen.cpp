@@ -73,6 +73,9 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_range_loop(as<RangeLoopStmt*>(node));
     case NodeKind::IteratorLoopStmt:
         return gen_iterator_loop(as<IteratorLoopStmt*>(node));
+    case NodeKind::BreakStmt:
+    case NodeKind::ContinueStmt:
+        return gen_loop_control(as<LoopControlStmt*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -535,6 +538,9 @@ llvm::Value* acorn::IRGenerator::gen_predicate_loop(PredicateLoopStmt* loop) {
     auto ll_end_bb = gen_bblock("loop.end", ll_cur_func);
     auto ll_body_bb = gen_bblock("loop.body", ll_cur_func);
     auto ll_cond_bb = gen_bblock("loop.cond", ll_cur_func);
+
+    loop_break_stack.push_back(ll_end_bb);
+    loop_continue_stack.push_back(ll_cond_bb);
     
     builder.CreateBr(ll_cond_bb);
     builder.SetInsertPoint(ll_cond_bb);
@@ -543,6 +549,9 @@ llvm::Value* acorn::IRGenerator::gen_predicate_loop(PredicateLoopStmt* loop) {
 
     builder.SetInsertPoint(ll_body_bb);
     gen_scope(loop->scope);
+
+    loop_break_stack.pop_back();
+    loop_continue_stack.pop_back();
 
     // End of loop scope, jump back to the condition.
     gen_branch_if_not_term(ll_cond_bb);
@@ -561,6 +570,9 @@ llvm::Value* acorn::IRGenerator::gen_range_loop(RangeLoopStmt* loop) {
     auto ll_cond_bb = gen_bblock("loop.cond", ll_cur_func);
     auto ll_continue_bb = ll_inc_bb ? ll_inc_bb : ll_cond_bb;
 
+    loop_break_stack.push_back(ll_end_bb);
+    loop_continue_stack.push_back(ll_continue_bb);
+
     if (loop->init_node) {
         gen_node(loop->init_node);
     }
@@ -572,6 +584,9 @@ llvm::Value* acorn::IRGenerator::gen_range_loop(RangeLoopStmt* loop) {
 
     builder.SetInsertPoint(ll_body_bb);
     gen_scope(loop->scope);
+
+    loop_break_stack.pop_back();
+    loop_continue_stack.pop_back();
 
     // End of loop scope, jump back to condition or increment.
     gen_branch_if_not_term(ll_continue_bb);
@@ -594,6 +609,9 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
     auto ll_body_bb = gen_bblock("loop.body", ll_cur_func);
     auto ll_cond_bb = gen_bblock("loop.cond", ll_cur_func);
     auto ll_inc_bb = gen_bblock("loop.inc", ll_cur_func);
+
+    loop_break_stack.push_back(ll_end_bb);
+    loop_continue_stack.push_back(ll_inc_bb);
 
     if (loop->container->type->is_array()) {
 
@@ -651,6 +669,9 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
 
     gen_scope(loop->scope);
 
+    loop_break_stack.pop_back();
+    loop_continue_stack.pop_back();
+
     // End of loop scope, jump back to increment.
     gen_branch_if_not_term(ll_inc_bb);
 
@@ -663,6 +684,17 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
 void acorn::IRGenerator::gen_cond_branch_for_loop(Expr* cond, llvm::BasicBlock* ll_body_bb, llvm::BasicBlock* ll_end_bb) {
     auto ll_cond = cond ? gen_condition(cond) : builder.getTrue();
     builder.CreateCondBr(ll_cond, ll_body_bb, ll_end_bb);
+}
+
+llvm::Value* acorn::IRGenerator::gen_loop_control(LoopControlStmt* loop_control) {
+    auto& target_stack = loop_control->is(NodeKind::BreakStmt) ? loop_break_stack : loop_continue_stack;
+
+    size_t index = target_stack.size() - loop_control->loop_count;
+
+    llvm::BasicBlock* target_bb = target_stack[index];
+    builder.CreateBr(target_bb);
+
+    return nullptr;
 }
 
 llvm::Value* acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
