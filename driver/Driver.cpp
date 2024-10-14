@@ -46,7 +46,11 @@ Options:
         do not exist.
 
     -run
-        Runs the program after it is compiled.
+        Runs the program after it is compiled and linked.
+
+    -run-seperate, -run-seperate-window
+        Runs the program after it is compiled and linked within
+        a seperate terminal (Only supported on windows currently).
 
     -r, -rel, -release
         Compile in release mode.
@@ -82,6 +86,7 @@ int main(int argc, char* argv[]) {
     processor.add_flag("show-error-codes", &acorn::AcornLang::set_should_show_error_codes);
     processor.add_flag("nshow-wrote-to-msg", &acorn::AcornLang::set_dont_show_wrote_to_msg);
     processor.add_flag("run", &acorn::AcornLang::set_run_program);
+    processor.add_flag("run-seperate", { "run-seperate-window"}, &acorn::AcornLang::set_run_program_seperate_window);
     processor.add_flag("output-name", { "out-name", "o" }, [&acorn, &wconverter](char* rest[]) {
         acorn.set_output_name(wconverter.from_bytes(rest[0]));
     }).req_value("Missing output program name");

@@ -159,14 +159,17 @@ void acorn::AcornLang::show_time_table() {
 }
 
 int acorn::AcornLang::run_program() {
-    if (!should_run_program) return 0;
+    if (!(should_run_program || should_run_seperate_window)) return 0;
 
-    if (!dont_show_wrote_to_msg) {
+    if (!dont_show_wrote_to_msg && !should_run_seperate_window) {
         std::cout << "\n";
     }
     
     int exit_code;
-    exe_process(absolute_exe_path.data(), absolute_output_directory.data(), false, exit_code);
+    exe_process(absolute_exe_path.data(), 
+                absolute_output_directory.data(),
+                should_run_seperate_window, 
+                exit_code);
     return exit_code;
 }
 

@@ -36,13 +36,14 @@ namespace acorn {
 
         int run(SourceVector& sources);
 
-        void set_released_build()          { release_build = true;                  }
-        void set_should_show_times()       { should_show_times = true;              }
-        void set_should_show_llvm_ir()     { should_show_llvm_ir = true;            }
-        void set_should_show_error_codes() { context.set_should_show_error_codes(); }
-        void set_dont_show_wrote_to_msg()  { dont_show_wrote_to_msg = true;         }
-        void set_stand_alone()             { stand_alone = true;                    }
-        void set_run_program()             { should_run_program = true;             }
+        void set_released_build()              { release_build = true;                  }
+        void set_should_show_times()           { should_show_times = true;              }
+        void set_should_show_llvm_ir()         { should_show_llvm_ir = true;            }
+        void set_should_show_error_codes()     { context.set_should_show_error_codes(); }
+        void set_dont_show_wrote_to_msg()      { dont_show_wrote_to_msg = true;         }
+        void set_stand_alone()                 { stand_alone = true;                    }
+        void set_run_program()                 { should_run_program = true;             }
+        void set_run_program_seperate_window() { should_run_seperate_window = true;     }
 
         void set_output_name(std::wstring output_name);
         void set_output_directory(std::wstring output_directory);
@@ -69,12 +70,13 @@ namespace acorn {
         std::wstring absolute_exe_path;
         std::wstring absolute_obj_path;
 
-        bool release_build          = false;
-        bool should_show_times      = false;
-        bool should_show_llvm_ir    = false;
-        bool dont_show_wrote_to_msg = false;
-        bool stand_alone            = false;
-        bool should_run_program     = false;
+        bool release_build              = false;
+        bool should_show_times          = false;
+        bool should_show_llvm_ir        = false;
+        bool dont_show_wrote_to_msg     = false;
+        bool stand_alone                = false;
+        bool should_run_program         = false;
+        bool should_run_seperate_window = false;
         std::function<void(ErrCode, std::string, int)> error_code_interceptor;
 
         // Timers to keep track of how different
