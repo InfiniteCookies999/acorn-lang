@@ -504,6 +504,12 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("HHHHH");
         });
+        test("Infinite loop", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test10.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("aaaaa");
+        });
         test("Predicate loop break statement", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

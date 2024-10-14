@@ -252,7 +252,7 @@ namespace acorn {
         PredicateLoopStmt() : Node(NodeKind::PredicateLoopStmt) {
         }
 
-        Expr*      cond;
+        Expr*      cond = nullptr;
         ScopeStmt* scope;
     };
 

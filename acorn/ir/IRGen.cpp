@@ -551,7 +551,11 @@ llvm::Value* acorn::IRGenerator::gen_predicate_loop(PredicateLoopStmt* loop) {
     builder.CreateBr(ll_cond_bb);
     builder.SetInsertPoint(ll_cond_bb);
 
-    gen_cond_branch_for_loop(loop->cond, ll_body_bb, ll_end_bb);
+    if (loop->cond) {
+        gen_cond_branch_for_loop(loop->cond, ll_body_bb, ll_end_bb);
+    } else {
+        builder.CreateBr(ll_body_bb);
+    }
 
     builder.SetInsertPoint(ll_body_bb);
     gen_scope(loop->scope);

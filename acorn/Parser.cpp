@@ -523,7 +523,9 @@ acorn::Node* acorn::Parser::parse_loop() {
 acorn::PredicateLoopStmt* acorn::Parser::parse_predicate_loop(Token loop_token) {
     auto loop = new_node<PredicateLoopStmt>(loop_token);
 
-    loop->cond = parse_expr();
+    if (cur_token.is_not('{')) {
+        loop->cond = parse_expr();
+    }
     loop->scope = parse_scope();
 
     return loop;

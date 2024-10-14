@@ -562,9 +562,11 @@ void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
 }
 
 void acorn::Sema::check_predicate_loop(PredicateLoopStmt* loop) {
-    check_node(loop->cond);
-    if (loop->cond->type) {
-        check_condition(loop->cond);
+    if (loop->cond) {
+        check_node(loop->cond);
+        if (loop->cond->type) {
+            check_condition(loop->cond);
+        }
     }
 
     SemScope sem_scope = push_scope();
