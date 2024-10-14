@@ -167,6 +167,7 @@ acorn::Node* acorn::Parser::parse_statement() {
         expect(';');
         return stmt;
     }
+    case Token::KwSwitch: return parse_switch();
     case ModifierTokens:
         modifiers = parse_modifiers();
         [[fallthrough]];
@@ -599,6 +600,48 @@ acorn::LoopControlStmt* acorn::Parser::parse_loop_control() {
     }
 
     return loop_control;
+}
+
+acorn::SwitchStmt* acorn::Parser::parse_switch() {
+    auto switchn = new_node<SwitchStmt>(cur_token);
+    next_token();
+
+    switchn->on = parse_expr();
+
+    expect('{');
+
+    while (cur_token.is(Token::KwCase)) {
+        Token case_token = cur_token;
+        next_token();
+        
+        Expr* cond = nullptr;
+        if (cur_token.is_not(':')) {
+            // Default case is when there is no condition.
+            cond = parse_expr();
+        }
+
+        expect(':');
+
+        ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
+        while (cur_token.is_not('}') && cur_token.is_not(Token::KwCase) && cur_token.is_not(Token::EOB)) {
+            if (Node* stmt = parse_statement()) {
+                scope->push_back(stmt);
+            }
+        }
+
+        if (cond) {
+            switchn->cases.emplace_back(cond, scope);
+        } else if (switchn->default_scope) {
+            error(case_token, "Duplicate default case for switch")
+                .end_error(ErrCode::ParseDuplicateDefaultCaseForSwitch);
+        } else {
+            switchn->default_scope = scope;
+        }
+    }
+
+    expect('}', "for switch");
+
+    return switchn;
 }
 
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {

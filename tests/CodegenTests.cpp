@@ -570,5 +570,17 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("True1True2True3True4");
         });
+        test("Switch takes value case", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"switches/switches1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("case 5");
+        });
+        test("Switch takes default case", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"switches/switches2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("default case");
+        });
     });
 }

@@ -41,6 +41,7 @@ namespace acorn {
         IteratorLoopStmt,
         ContinueStmt,
         BreakStmt,
+        SwitchStmt,
 
         ExprStart,
         InvalidExpr,
@@ -281,6 +282,21 @@ namespace acorn {
         // How many loops to break/continue from.
         int     loop_count = 1;
         Number* loop_count_expr = nullptr;
+    };
+
+    struct SwitchCase {
+        Expr*      cond;
+        ScopeStmt* scope;
+    };
+
+    struct SwitchStmt : Node {
+        SwitchStmt() : Node(NodeKind::SwitchStmt) {
+        }
+
+        bool       all_conds_foldable = true;
+        Expr*      on = nullptr;
+        ScopeStmt* default_scope = nullptr;
+        llvm::SmallVector<SwitchCase, 16> cases;
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {

@@ -72,6 +72,7 @@ namespace acorn {
         RangeLoopStmt*     parse_range_loop(Token loop_token, Node* init_node);
         IteratorLoopStmt*  parse_iterator_loop(Token loop_token, Var* var);
         LoopControlStmt*   parse_loop_control();
+        SwitchStmt*        parse_switch();
 
         ScopeStmt* parse_scope(const char* closing_for = nullptr);
 

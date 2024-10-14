@@ -11,7 +11,7 @@
 /* Utility for returning from check functions if an error occures */
 #define nvalid(n) !(n->type)
 #define yield_if(n) if (nvalid(n)) return;
-#define check(n) check_node(n); yield_if(n)
+#define check_and_verify_type(n) check_node(n); yield_if(n)
 
 acorn::Sema::Sema(Context& context, SourceFile* file, Logger& logger)
     : context(context), modl(file->modl), file(file), logger(logger), type_table(context.type_table) {
@@ -277,6 +277,8 @@ void acorn::Sema::check_node(Node* node) {
     case NodeKind::BreakStmt:
     case NodeKind::ContinueStmt:
         return check_loop_control(as<LoopControlStmt*>(node));
+    case NodeKind::SwitchStmt:
+        return check_switch(as<SwitchStmt*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -419,7 +421,7 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
 
     bool is_assignable;
     if (ret->value) {
-        check(ret->value);
+        check_and_verify_type(ret->value);
         is_assignable = is_assignable_to(cur_func->return_type, ret->value);
 
         if (cur_func->return_type->is_array() && ret->value->is(NodeKind::IdentRef)) {
@@ -521,7 +523,7 @@ void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
     }
     
     Expr* cond = as<Expr*>(ifs->cond);
-    check(cond);
+    check_and_verify_type(cond);
     if (!check_condition(cond)) {
         return;
     }
@@ -621,10 +623,10 @@ void acorn::Sema::check_loop_control(LoopControlStmt* loop_control) {
     if (loop_depth == 0) {
         if (loop_control->is(NodeKind::BreakStmt)) {
             error(loop_control, "break statements may only be used in loops")
-                .end_error(ErrCode::LoopControlOnlyInLoops);
+                .end_error(ErrCode::SemaLoopControlOnlyInLoops);
         } else {
             error(loop_control, "continue statements may only be used in loops")
-                .end_error(ErrCode::LoopControlOnlyInLoops);
+                .end_error(ErrCode::SemaLoopControlOnlyInLoops);
         }
         return;
     }
@@ -634,10 +636,10 @@ void acorn::Sema::check_loop_control(LoopControlStmt* loop_control) {
                                                          : static_cast<Node*>(loop_control);
         if (loop_control->is(NodeKind::BreakStmt)) {
             error(error_node, "number of requested breaks exceeds the loop nesting depth")
-                .end_error(ErrCode::LoopControlLoopCountExceedsLoopDepth);
+                .end_error(ErrCode::SemaLoopControlLoopCountExceedsLoopDepth);
         } else {
             error(error_node, "number of requested continues exceeds the loop nesting depth")
-                .end_error(ErrCode::LoopControlLoopCountExceedsLoopDepth);
+                .end_error(ErrCode::SemaLoopControlLoopCountExceedsLoopDepth);
         }
     }
 }
@@ -648,6 +650,47 @@ void acorn::Sema::check_loop_scope(ScopeStmt* scope, SemScope* sem_scope) {
     --loop_depth;
     cur_scope->all_paths_return = sem_scope->all_paths_return;
     cur_scope->found_terminal = sem_scope->found_terminal;
+}
+
+void acorn::Sema::check_switch(SwitchStmt* switchn) {
+    check_and_verify_type(switchn->on);
+
+    if (!is_lvalue(switchn->on)) {
+        error(expand(switchn->on), "value switched on is expected to have an address")
+            .end_error(ErrCode::SemaSwitchOnExpectedLValue);
+    }
+
+    bool all_paths_return = true;
+    auto check_case_scope = [this, switchn, &all_paths_return](ScopeStmt* scope) finline {
+        SemScope sem_scope = push_scope();
+        check_scope(scope, &sem_scope);
+        all_paths_return &= sem_scope.all_paths_return;
+        pop_scope();
+    };
+
+    if (switchn->default_scope) {
+        check_case_scope(switchn->default_scope);
+    } else {
+        all_paths_return = false;
+    }
+
+    for (SwitchCase scase : switchn->cases) {
+        check_node(scase.cond);
+        if (scase.cond->type) {
+            if (!switchn->on->type->is_ignore_const(scase.cond->type)) {
+                error(expand(scase.cond), "Cannot compare case type '%s' to type '%s'",
+                      scase.cond->type, switchn->on->type)
+                    .end_error(ErrCode::SemaCannotCompareCaseType);
+            }
+        }
+        if (!scase.cond->is_foldable) {
+            switchn->all_conds_foldable = false;
+        }
+        check_case_scope(scase.scope);
+    }
+
+    cur_scope->all_paths_return = all_paths_return;
+    cur_scope->found_terminal = all_paths_return;
 }
 
 acorn::Sema::SemScope acorn::Sema::push_scope() {
@@ -690,6 +733,7 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
         case NodeKind::IteratorLoopStmt:
         case NodeKind::BreakStmt:
         case NodeKind::ContinueStmt:
+        case NodeKind::SwitchStmt:
             break;
         case NodeKind::BinOp: {
             BinOp* bin_op = as<BinOp*>(stmt);
@@ -912,8 +956,8 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         return nullptr;
     };
 
-    check(lhs);
-    check(rhs);
+    check_and_verify_type(lhs);
+    check_and_verify_type(rhs);
 
     if (!lhs->is_foldable || !rhs->is_foldable) {
         bin_op->is_foldable = false;
@@ -1061,7 +1105,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
 
 void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
     Expr* expr = unary_op->expr;
-    check(expr);
+    check_and_verify_type(expr);
 
     auto error_no_applies = [this, unary_op, expr]() finline -> void {
         error(expand(unary_op), "Operator %s cannot apply to type '%s'",
@@ -1249,7 +1293,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             return;
         }
     } else {
-        check(dot->site);
+        check_and_verify_type(dot->site);
         dot->is_foldable = dot->site->is_foldable;
     }
 
@@ -1294,7 +1338,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
             is_callable = false;
         }
     } else {
-        check(call->site);
+        check_and_verify_type(call->site);
         // TODO: Deal with
         is_callable = false;
     }
@@ -1518,7 +1562,7 @@ void acorn::Sema::display_call_mismatch_info(const Func* canidate,
 void acorn::Sema::check_cast(Cast* cast) {
     cast->type = cast->explicit_cast_type;
     
-    check(cast->value);
+    check_and_verify_type(cast->value);
     if (!is_castable_to(cast->explicit_cast_type, cast->value)) {
         error(expand(cast), "Cannot cast to type '%s' from '%s'",
               cast->explicit_cast_type, cast->value->type)
@@ -1583,7 +1627,7 @@ void acorn::Sema::check_array(Array* arr) {
 }
 
 void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
-    check(mem_access->site);
+    check_and_verify_type(mem_access->site);
 
     mem_access->is_foldable = false;
 
@@ -1596,7 +1640,7 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
         mem_access->type = ctr_type->get_elm_type();
     }
 
-    check(mem_access->index);
+    check_and_verify_type(mem_access->index);
 
     if (!mem_access->index->type->is_integer()) {
         error(expand(mem_access->index), "Expected index of memory access to be an integer")

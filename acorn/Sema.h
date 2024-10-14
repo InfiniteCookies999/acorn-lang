@@ -87,6 +87,7 @@ namespace acorn {
         void check_iterator_loop(IteratorLoopStmt* loop);
         void check_loop_control(LoopControlStmt* loop_control);
         void check_loop_scope(ScopeStmt* scope, SemScope* sem_scope);
+        void check_switch(SwitchStmt* switchn);
 
         SemScope push_scope();
         void pop_scope();

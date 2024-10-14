@@ -76,6 +76,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
     case NodeKind::BreakStmt:
     case NodeKind::ContinueStmt:
         return gen_loop_control(as<LoopControlStmt*>(node));
+    case NodeKind::SwitchStmt:
+        return gen_switch(as<SwitchStmt*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -695,6 +697,46 @@ llvm::Value* acorn::IRGenerator::gen_loop_control(LoopControlStmt* loop_control)
 
     llvm::BasicBlock* target_bb = target_stack[index];
     builder.CreateBr(target_bb);
+
+    return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_switch(SwitchStmt* switchn) {
+    
+    // TODO: deal with cases being non-foldable.
+
+    auto ll_end_bb = gen_bblock("sw.end", ll_cur_func);
+
+    size_t num_cases = switchn->cases.size() + switchn->default_scope ? 1 : 0;
+    auto ll_default_bb = switchn->default_scope ? gen_bblock("sw.default", ll_cur_func) : ll_end_bb;
+    auto ll_switch = builder.CreateSwitch(gen_rvalue(switchn->on), ll_default_bb, num_cases);
+    
+    auto gen_case_scope = [this, ll_end_bb](llvm::BasicBlock* ll_case_bb, ScopeStmt* scope) finline {
+        builder.SetInsertPoint(ll_case_bb);
+        gen_scope(scope);
+        gen_branch_if_not_term(ll_end_bb);
+    };
+
+    for (SwitchCase scase : switchn->cases) {
+
+        auto ll_case_bb = gen_bblock("sw.case", ll_cur_func);
+
+        auto ll_case_value = llvm::cast< llvm::ConstantInt>(gen_rvalue(scase.cond));
+        ll_switch->addCase(ll_case_value, ll_case_bb);
+
+        gen_case_scope(ll_case_bb, scase.scope);
+
+    }
+
+    if (switchn->default_scope) {
+        gen_case_scope(ll_default_bb, switchn->default_scope);
+    }
+
+    // Need to check for terminator here because it is possible
+    // all the branches terminate.
+    gen_branch_if_not_term(ll_end_bb);
+    
+    builder.SetInsertPoint(ll_end_bb);
 
     return nullptr;
 }
