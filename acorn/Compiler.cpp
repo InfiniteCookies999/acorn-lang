@@ -386,7 +386,20 @@ void acorn::Compiler::link() {
 #endif
 
     int exit_code;
-    exe_process(cmd.data(), nullptr, false, exit_code);
+    if (!exe_process(cmd.data(), nullptr, false, exit_code)) {
+        const char* error_msg_line1 = "Failed to link with %s linker";
+        const char* error_msg_line2 = "Make sure you have %s linker installed on your machine";
+
+#ifdef _WIN32
+        const char* linker_tried = "msvc";
+#elif UNIX_OS
+        const char* linker_tried = "clang";
+#endif
+
+        Logger::global_error(context, error_msg_line1, linker_tried)
+            .add_line(error_msg_line2, linker_tried)
+            .end_error(ErrCode::GlobalFailedToFindLinker);
+    }
 
     std::error_code ec;
     fs::remove(absolute_obj_path, ec);

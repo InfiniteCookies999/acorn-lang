@@ -59,7 +59,7 @@ namespace acorn {
 }
 #endif
 
-void acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::string& std_out, int& exit_code) {
+bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::string& std_out, int& exit_code) {
 #if WIN_OS
     HANDLE write_handle_in, write_handle;
 
@@ -103,7 +103,7 @@ void acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
                      &process_info)) {
         CloseHandle(write_handle);
         CloseHandle(write_handle_in);
-        acorn_fatal("Failed to create process");
+        return false;
     }
 
     bool is_running = true;
@@ -234,9 +234,11 @@ void acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
     }
 
 #endif
+
+    return true;
 }
 
-void acorn::exe_process(wchar_t* process, wchar_t* process_dir, bool seperate_window, int& exit_code) {
+bool acorn::exe_process(wchar_t* process, wchar_t* process_dir, bool seperate_window, int& exit_code) {
 #if WIN_OS
     // No need to use inherited handles since this does not capture
     // the program's output.
@@ -273,7 +275,7 @@ void acorn::exe_process(wchar_t* process, wchar_t* process_dir, bool seperate_wi
 #endif
                      &startup_info,
                      &process_info)) {
-        acorn_fatal("Failed to create process");
+        return false;
     }
     WaitForSingleObject(process_info.hProcess, INFINITE);
 
@@ -320,4 +322,6 @@ void acorn::exe_process(wchar_t* process, wchar_t* process_dir, bool seperate_wi
     }
 
 #endif
+
+    return true;
 }
