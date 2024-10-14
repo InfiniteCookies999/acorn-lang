@@ -26,13 +26,13 @@ namespace acorn {
         llvm::StringRef mod_name;
     };
 
-    class AcornLang {
+    class Compiler {
     public:
         using SourceVector = llvm::SmallVector<Source>;
 
-        ~AcornLang();
+        ~Compiler();
 
-        AcornLang(PageAllocator& allocator);
+        Compiler(PageAllocator& allocator);
 
         int run(SourceVector& sources);
 

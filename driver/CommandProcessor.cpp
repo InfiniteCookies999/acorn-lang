@@ -2,8 +2,8 @@
 
 #include "Logger.h"
 
-CommandLineProcessor::CommandLineProcessor(acorn::AcornLang& acorn, int argc)
-    : acorn(acorn), argc(argc) {
+CommandLineProcessor::CommandLineProcessor(acorn::Compiler& compiler, int argc)
+    : compiler(compiler), argc(argc) {
 }
 
 void CommandLineProcessor::add_flag(llvm::StringRef flag_name, AcornSetterCallback setter) {
@@ -50,10 +50,10 @@ bool CommandLineProcessor::process(llvm::StringRef flag_name, char* rest[], int 
         }
 
         if (flag.acorn_setter) {
-            (acorn.*flag.acorn_setter)();
+            (compiler.*flag.acorn_setter)();
         } else {
             if (flag.requires_value && idx + 1 == argc) {
-                acorn::Logger::global_error(*acorn.get_context(), "%s for flag -%s", flag.value_error_msg, flag_name)
+                acorn::Logger::global_error(*compiler.get_context(), "%s for flag -%s", flag.value_error_msg, flag_name)
                     .end_error(acorn::ErrCode::GlobalMissingArgumentForFlag);
                 return false;
             }
@@ -63,7 +63,7 @@ bool CommandLineProcessor::process(llvm::StringRef flag_name, char* rest[], int 
         }
         return false;
     }
-    acorn::Logger::global_error(*acorn.get_context(), "Unknown flag: -%s", flag_name)
+    acorn::Logger::global_error(*compiler.get_context(), "Unknown flag: -%s", flag_name)
         .end_error(acorn::ErrCode::GlobalUnknownCompilerFlag);
     return false;
 }

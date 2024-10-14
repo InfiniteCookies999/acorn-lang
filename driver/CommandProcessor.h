@@ -3,11 +3,12 @@
 
 #include <llvm/ADT/SmallVector.h>
 #include <functional>
-#include <Acorn.h>
+
+#include "Compiler.h"
 
 class CommandLineProcessor {
 private:
-    using AcornSetterCallback = void(acorn::AcornLang::*)();
+    using AcornSetterCallback = void(acorn::Compiler::*)();
     using Callback = std::function<void(char* [])>;
     using AliasList = llvm::SmallVector<llvm::StringRef>;
 public:
@@ -27,7 +28,7 @@ public:
         }
     };
 
-    CommandLineProcessor(acorn::AcornLang& acorn, int argc);
+    CommandLineProcessor(acorn::Compiler& compiler, int argc);
 
     void add_flag(llvm::StringRef flag_name, AcornSetterCallback setter);
     void add_flag(llvm::StringRef flag_name, AliasList aliases, AcornSetterCallback setter);
@@ -43,7 +44,7 @@ public:
 
 private:
     llvm::SmallVector<Flag> flags;
-    acorn::AcornLang& acorn;
+    acorn::Compiler& compiler;
     int argc;
 };
 

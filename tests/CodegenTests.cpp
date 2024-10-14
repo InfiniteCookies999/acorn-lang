@@ -20,7 +20,7 @@
 #include "Context.h"
 #include "PageAllocator.h"
 #include "Module.h"
-#include "Acorn.h"
+#include "Compiler.h"
 #include "Process.h"
 #include "Util.h"
 
@@ -76,7 +76,7 @@ std::wstring get_executable_path() {
 
 static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file) {
     
-    AcornLang::SourceVector sources;
+    Compiler::SourceVector sources;
     sources.push_back(Source{ file, "" });
 
     if (!std::filesystem::exists(file)) {
@@ -89,22 +89,22 @@ static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file
     bool has_errors = false;
     Context* context;
     
-    AcornLang* acorn = mock_acorn_instance(allocator);
+    Compiler* compiler = mock_compiler_instance(allocator);
     if (!executable_path.empty()) {
         // We will use the executable directory for the program executable
         // created because if the user tries running the tests from a different
         // directory than the tests directory it makes sense that the executable
         // still ends up in the tests directory.
-        acorn->set_output_directory(executable_path);
+        compiler->set_output_directory(executable_path);
     }
-    acorn->set_dont_show_wrote_to_msg();
-    acorn->set_stand_alone();
+    compiler->set_dont_show_wrote_to_msg();
+    compiler->set_stand_alone();
     // acorn->set_should_show_llvm_ir();
 
-    acorn->run(sources);
-    context = acorn->get_context();
-    has_errors = acorn->has_errors();
-    delete acorn;
+    compiler->run(sources);
+    context = compiler->get_context();
+    has_errors = compiler->has_errors();
+    delete compiler;
 
     using acorn::Context;
     context->~Context();

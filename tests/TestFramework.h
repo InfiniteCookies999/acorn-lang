@@ -8,7 +8,7 @@
 #include <concepts>
 #include <sstream>
 
-#include "Acorn.h"
+#include "Compiler.h"
 #include "Logger.h"
 
 class TestCase;
@@ -193,8 +193,8 @@ inline void force_fail_impl(std::string fail_msg, const char* cpp_file, int line
 }
 #define force_fail(fail_msg) force_fail_impl(fail_msg, __FILE__, __LINE__)
 
-acorn::AcornLang* mock_acorn_instance(acorn::PageAllocator& allocator);
-acorn::Logger&    mock_logger(acorn::Logger& logger);
+acorn::Compiler* mock_compiler_instance(acorn::PageAllocator& allocator);
+acorn::Logger&   mock_logger(acorn::Logger& logger);
 
 void run_tests();
 

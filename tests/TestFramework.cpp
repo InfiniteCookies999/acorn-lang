@@ -110,11 +110,11 @@ void error_interceptor(acorn::ErrCode error_code, std::string file, int line_num
     intercepted_error_codes.push_back({ error_code, std::move(file), line_number });
 }
 
-acorn::AcornLang* mock_acorn_instance(acorn::PageAllocator& allocator) {
+acorn::Compiler* mock_compiler_instance(acorn::PageAllocator& allocator) {
     acorn::Identifier::clear_cache();
-    auto acorn_instance = new acorn::AcornLang(allocator);
-    acorn_instance->set_error_code_interceptor(error_interceptor);
-    return acorn_instance;
+    auto compiler_instance = new acorn::Compiler(allocator);
+    compiler_instance->set_error_code_interceptor(error_interceptor);
+    return compiler_instance;
 }
 
 acorn::Logger& mock_logger(acorn::Logger& logger) {

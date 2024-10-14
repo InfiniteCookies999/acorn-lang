@@ -1,4 +1,4 @@
-#include "Acorn.h"
+#include "Compiler.h"
 
 #include <llvm/IR/Verifier.h>
 #include <codecvt>
@@ -23,13 +23,13 @@ namespace fs = std::filesystem;
 
 static const char* StdLibEnvironmentVariable = "acorn_std_lib";
 
-llvm::TargetMachine* acorn::AcornLang::ll_target_machine = nullptr;
+llvm::TargetMachine* acorn::Compiler::ll_target_machine = nullptr;
 
 static const char* get_std_lib_path() {
     return std::getenv(StdLibEnvironmentVariable);
 }
 
-acorn::AcornLang::~AcornLang() {
+acorn::Compiler::~Compiler() {
     delete ll_module;
 }
 
@@ -41,7 +41,7 @@ namespace acorn {
     }
 }
 
-acorn::AcornLang::AcornLang(PageAllocator& allocator)
+acorn::Compiler::Compiler(PageAllocator& allocator)
     : allocator(allocator),
     // NOTE: cannot use the allocator because it needs it's memory deleted.
     ll_module(new llvm::Module("AcornModule", ll_context)),
@@ -49,7 +49,7 @@ acorn::AcornLang::AcornLang(PageAllocator& allocator)
     set_output_name(L"program");
 }
 
-int acorn::AcornLang::run(SourceVector& sources) {
+int acorn::Compiler::run(SourceVector& sources) {
 #define go(f) { f; if (context.has_errors()) return 1; }
 
     total_timer.start();
@@ -73,7 +73,7 @@ int acorn::AcornLang::run(SourceVector& sources) {
 #undef go
 }
 
-void acorn::AcornLang::set_output_name(std::wstring output_name) {
+void acorn::Compiler::set_output_name(std::wstring output_name) {
 #if WIN_OS
     exe_name = output_name.ends_with(L".exe") ? output_name : output_name + L".exe";
 #elif UNIX_OS
@@ -84,7 +84,7 @@ void acorn::AcornLang::set_output_name(std::wstring output_name) {
     this->output_name = std::move(output_name);
 }
 
-void acorn::AcornLang::set_output_directory(std::wstring output_directory) {
+void acorn::Compiler::set_output_directory(std::wstring output_directory) {
     this->output_directory = output_directory;
 }
 
@@ -117,7 +117,7 @@ static int count_digits(int number) {
     return digits;
 }
 
-void acorn::AcornLang::show_time_table() {
+void acorn::Compiler::show_time_table() {
     if (!should_show_times) return;
 
     std::cout << "\n\n";
@@ -158,7 +158,7 @@ void acorn::AcornLang::show_time_table() {
 
 }
 
-int acorn::AcornLang::run_program() {
+int acorn::Compiler::run_program() {
     if (!(should_run_program || should_run_seperate_window)) return 0;
 
     if (!dont_show_wrote_to_msg && !should_run_seperate_window) {
@@ -173,7 +173,7 @@ int acorn::AcornLang::run_program() {
     return exit_code;
 }
 
-void acorn::AcornLang::initialize_codegen() {
+void acorn::Compiler::initialize_codegen() {
     codegen_timer.start();
     
     std::error_code ec;
@@ -218,7 +218,7 @@ void acorn::AcornLang::initialize_codegen() {
     codegen_timer.stop();
 }
 
-void acorn::AcornLang::sema_and_irgen() {
+void acorn::Compiler::sema_and_irgen() {
 
     for (auto& entry : context.get_modules()) {
         Sema::check_nodes_wrong_scopes(*entry.second);
@@ -315,7 +315,7 @@ void acorn::AcornLang::sema_and_irgen() {
     }
 }
 
-void acorn::AcornLang::codegen() {
+void acorn::Compiler::codegen() {
     codegen_timer.start();
     write_obj_file(context, "__acorn_tmp_object.o", *ll_module, ll_target_machine);
     std::error_code ec;
@@ -328,7 +328,7 @@ void acorn::AcornLang::codegen() {
     codegen_timer.stop();
 }
 
-void acorn::AcornLang::link() {
+void acorn::Compiler::link() {
     link_timer.start();
 
 #ifdef _WIN32
@@ -412,7 +412,7 @@ void acorn::AcornLang::link() {
     link_timer.stop();
 }
 
-bool acorn::AcornLang::validate_sources(const SourceVector& sources) {
+bool acorn::Compiler::validate_sources(const SourceVector& sources) {
     
     bool failed_to_find_source = false;
     for (const auto& source : sources) {
@@ -435,7 +435,7 @@ bool acorn::AcornLang::validate_sources(const SourceVector& sources) {
     return !failed_to_find_source;
 }
 
-void acorn::AcornLang::parse_files(SourceVector& sources) {
+void acorn::Compiler::parse_files(SourceVector& sources) {
     parse_timer.start();
 
     if (sources.empty()) {
@@ -497,7 +497,7 @@ void acorn::AcornLang::parse_files(SourceVector& sources) {
 
 }
 
-void acorn::AcornLang::parse_directory(Module& modl, const fs::path& dir_path) {
+void acorn::Compiler::parse_directory(Module& modl, const fs::path& dir_path) {
     auto root_dir_path = dir_path.parent_path();
     for (const auto& entry : fs::recursive_directory_iterator(dir_path)) {
         if (entry.is_regular_file() && entry.path().extension() == L".ac") {
@@ -507,7 +507,7 @@ void acorn::AcornLang::parse_directory(Module& modl, const fs::path& dir_path) {
     }
 }
 
-acorn::Buffer acorn::AcornLang::read_file_to_buffer(const std::filesystem::path& path) {
+acorn::Buffer acorn::Compiler::read_file_to_buffer(const std::filesystem::path& path) {
     
     Buffer buffer;
     if (!read_entire_file(path, buffer.content, buffer.length, allocator)) {
@@ -520,7 +520,7 @@ acorn::Buffer acorn::AcornLang::read_file_to_buffer(const std::filesystem::path&
     return buffer;
 }
 
-void acorn::AcornLang::parse_file(Module& modl, 
+void acorn::Compiler::parse_file(Module& modl, 
                                   const fs::path& path, 
                                   const fs::path& root_path) {
     auto buffer = read_file_to_buffer(path);
