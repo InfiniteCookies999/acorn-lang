@@ -546,5 +546,29 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("abbccddeef");
         });
+        test("Logical and bin op", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("True");
+        });
+        test("Logical or bin op", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("True1True2True3True4");
+        });
+        test("Logical and bin op with var", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops3.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("True");
+        });
+        test("Logical or bin op with var", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops4.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("True1True2True3True4");
+        });
     });
 }

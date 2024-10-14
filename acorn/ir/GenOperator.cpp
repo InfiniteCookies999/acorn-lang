@@ -8,7 +8,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     
     auto apply_op_eq = [this, bin_op, lhs, rhs](tokkind op) finline {
         auto ll_address = gen_node(lhs);
-        auto ll_value = gen_binary_numeric_op(op,
+        auto ll_value = gen_numeric_binary_op(op,
                                               bin_op,
                                               builder.CreateLoad(gen_type(lhs->type), ll_address),
                                               gen_rvalue(rhs));
@@ -33,8 +33,99 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     case Token::TildeEq: return apply_op_eq('~');
     case Token::LtLtEq:  return apply_op_eq(Token::LtLt);
     case Token::GtGtEq:  return apply_op_eq(Token::GtGt);
+    case Token::AndAnd: {
+        if (bin_op->is_foldable) {
+            auto ll_lhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->lhs));
+            auto ll_rhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->rhs));
+            if (ll_lhs->isOne() && ll_rhs->isOne()) {
+                return llvm::ConstantInt::getTrue(ll_context);
+            } else {
+                return llvm::ConstantInt::getFalse(ll_context);
+            }
+        }
+
+        // See: https://github.com/llvm/llvm-project/blob/839ac62c5085d895d3165bc5024db623a7a78813/clang/lib/CodeGen/CGExprScalar.cpp
+        // VisitBinLAnd
+
+        auto ll_end_bb      = gen_bblock("and.end", ll_cur_func);
+        auto ll_lhs_true_bb = gen_bblock("and.lhs.true", ll_cur_func);
+
+        // Generate children
+        gen_branch_on_condition(bin_op->lhs, ll_lhs_true_bb, ll_end_bb);
+        
+        auto ll_result = llvm::PHINode::Create(
+            llvm::Type::getInt1Ty(ll_context), // Incoming values are booleans.
+            2,                                 // At least 2 blocks but could be more.
+            "cond.res",
+            ll_end_bb                          // Insert the phi node into the block after the condition blocks.
+        );
+        // Generating false for the phi node if the block comes from
+        // a false block which is any block other than ll_lhs_true_bb.
+        for (auto itr = llvm::pred_begin(ll_end_bb), end = llvm::pred_end(ll_end_bb);
+             itr != end;
+             ++itr) {
+            ll_result->addIncoming(llvm::ConstantInt::getFalse(ll_context), *itr);
+        }
+
+        // Have to deal with the final block.
+        builder.SetInsertPoint(ll_lhs_true_bb);
+        auto ll_cond = gen_condition(bin_op->rhs);
+        // Add the final condition that will determine if the entire
+        // chain was true.
+        ll_result->addIncoming(ll_cond, ll_lhs_true_bb);
+
+        // Continuing generating code in the end block after all the blocks.
+        builder.CreateBr(ll_end_bb);
+        builder.SetInsertPoint(ll_end_bb);
+
+        return ll_result;
+    }
+    case Token::OrOr: {
+        if (bin_op->is_foldable) {
+            auto ll_lhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->lhs));
+            auto ll_rhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->rhs));
+            if (ll_lhs->isOne() || ll_rhs->isOne()) {
+                return llvm::ConstantInt::getTrue(ll_context);
+            } else {
+                return llvm::ConstantInt::getFalse(ll_context);
+            }
+        }
+
+        auto ll_end_bb = gen_bblock("or.end", ll_cur_func);
+        auto ll_lhs_false_bb = gen_bblock("or.lhs.false", ll_cur_func);
+
+        // Generate children
+        gen_branch_on_condition(bin_op->lhs, ll_end_bb, ll_lhs_false_bb);
+
+        auto ll_result = llvm::PHINode::Create(
+            llvm::Type::getInt1Ty(ll_context), // Incoming values are booleans.
+            2,                                 // At least 2 blocks but could be more.
+            "cond.res",
+            ll_end_bb                          // Insert the phi node into the block after the condition blocks.
+        );
+        // Generating true for the phi node if the block comes from
+        // a true block which is any block other than ll_lhs_false_bb.
+        for (auto itr = llvm::pred_begin(ll_end_bb), end = llvm::pred_end(ll_end_bb);
+             itr != end;
+             ++itr) {
+            ll_result->addIncoming(llvm::ConstantInt::getTrue(ll_context), *itr);
+        }
+
+        // Have to deal with the final block.
+        builder.SetInsertPoint(ll_lhs_false_bb);
+        auto ll_cond = gen_condition(bin_op->rhs);
+        // Add the final condition as a last chance at the expression
+        // being true.
+        ll_result->addIncoming(ll_cond, ll_lhs_false_bb);
+
+        // Continuing generating code in the end block after all the blocks.
+        builder.CreateBr(ll_end_bb);
+        builder.SetInsertPoint(ll_end_bb);
+
+        return ll_result;
+    }
     default:
-        return gen_binary_numeric_op(bin_op->op, bin_op,
+        return gen_numeric_binary_op(bin_op->op, bin_op,
                                      gen_rvalue(lhs), gen_rvalue(rhs));
     }
 }
@@ -52,7 +143,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 // valid memory is considered undefined behavior and it allows LLVM to
 // perform better optimizations.
 
-llvm::Value* acorn::IRGenerator::gen_binary_numeric_op(tokkind op, BinOp* bin_op,
+llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op,
                                                        llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
     
     auto is_ptr_or_arr = [](Type* type) finline {

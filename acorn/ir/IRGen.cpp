@@ -486,15 +486,17 @@ llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs) {
         return ll_value;
     };
 
-    llvm::Value* ll_cond = ifs->cond->is(NodeKind::Var) ? load_variable_cond(as<Var*>(ifs->cond))
-                                                        : gen_condition(as<Expr*>(ifs->cond));
-
     auto ll_then_bb = gen_bblock("if.then", ll_cur_func);
     auto ll_end_bb  = gen_bblock("if.end" , ll_cur_func);
     auto ll_else_bb = ifs->elseif ? gen_bblock("if.else", ll_cur_func) : ll_end_bb;
 
     // Jump to either the then or else block depending on the condition.
-    builder.CreateCondBr(ll_cond, ll_then_bb, ll_else_bb);
+    if (ifs->cond->is(NodeKind::Var)) {
+        auto ll_cond = load_variable_cond(as<Var*>(ifs->cond));
+        builder.CreateCondBr(ll_cond, ll_then_bb, ll_else_bb);
+    } else {
+        gen_branch_on_condition(as<Expr*>(ifs->cond), ll_then_bb, ll_else_bb);
+    }
 
     builder.SetInsertPoint(ll_then_bb);
     gen_scope(ifs->scope);
@@ -1134,6 +1136,70 @@ llvm::BasicBlock* acorn::IRGenerator::gen_bblock(const char* name, llvm::Functio
 llvm::Value* acorn::IRGenerator::gen_isize(uint64_t v) {
     auto ll_type = gen_ptrsize_int_type();
     return llvm::ConstantInt::get(ll_type, v, true);
+}
+
+void acorn::IRGenerator::gen_branch_on_condition(Expr* cond, llvm::BasicBlock* ll_true_bb, llvm::BasicBlock* ll_false_bb) {
+    // See: https://github.com/llvm/llvm-project/blob/839ac62c5085d895d3165bc5024db623a7a78813/clang/lib/CodeGen/CodeGenFunction.cpp
+    // EmitBranchOnBoolExpr
+
+    if (cond->is(NodeKind::BinOp)) {
+        auto bin_op = as<BinOp*>(cond);
+
+        // Binary operators in the form:  a && b
+        if (bin_op->op == Token::AndAnd) {
+            // Check for case where it is foldable and can just unconditionally branch.
+            if (bin_op->is_foldable) {
+                auto ll_lhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->lhs));
+                auto ll_rhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->rhs));
+                if (ll_lhs->isOne() && ll_rhs->isOne()) {
+                    builder.CreateBr(ll_true_bb);
+                } else {
+                    builder.CreateBr(ll_false_bb);
+                }
+                return;
+            }
+
+            // Create the true block that will be taken if the lhs is true.
+            auto ll_lhs_true_bb = gen_bblock("and.lhs.true", ll_cur_func);
+            // Generate the code for branching to the true block if the lhs is
+            // true.
+            gen_branch_on_condition(bin_op->lhs, ll_lhs_true_bb, ll_false_bb);
+
+            // Continue by determining if the rhs is true when the lhs is true.
+            builder.SetInsertPoint(ll_lhs_true_bb);
+            gen_branch_on_condition(bin_op->rhs, ll_true_bb, ll_false_bb);
+            return;
+        }
+        // Binary operators in the form:  a || b
+        else if (bin_op->op == Token::OrOr) {
+            // Check for case where it is foldable and can just unconditionally branch.
+            if (bin_op->is_foldable) {
+                auto ll_lhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->lhs));
+                auto ll_rhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->rhs));
+                if (ll_lhs->isOne() || ll_rhs->isOne()) {
+                    builder.CreateBr(ll_true_bb);
+                } else {
+                    builder.CreateBr(ll_false_bb);
+                }
+                return;
+            }
+
+            // Create the false block that will be taken if the lhs is false.
+            auto ll_lhs_false_bb = gen_bblock("or.lhs.false", ll_cur_func);
+            // Generate the code for branching to the false block if the lhs is
+            // false.
+            gen_branch_on_condition(bin_op->lhs, ll_true_bb, ll_lhs_false_bb);
+
+            // Continue by determining if the statement still might be true even
+            // though the lhs was false.
+            builder.SetInsertPoint(ll_lhs_false_bb);
+            gen_branch_on_condition(bin_op->rhs, ll_true_bb, ll_false_bb);
+            return;
+        }
+    }
+
+    auto ll_cond = gen_condition(cond);
+    builder.CreateCondBr(ll_cond, ll_true_bb, ll_false_bb);
 }
 
 void acorn::IRGenerator::gen_branch_if_not_term(llvm::BasicBlock* ll_bb) {

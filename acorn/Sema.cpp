@@ -1040,6 +1040,19 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         bin_op->type = context.bool_type;
         break;
     }
+    case Token::AndAnd: case Token::OrOr: {
+        if (!is_condition(lhs->type)) {
+            error_cannot_apply(lhs);
+            return;
+        }
+        if (!is_condition(rhs->type)) {
+            error_cannot_apply(rhs);
+            return;
+        }
+        
+        bin_op->type = context.bool_type;
+        break;
+    }
     default:
         acorn_fatal("check_binary_op(): Failed to implement case");
         break;

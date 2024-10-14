@@ -99,12 +99,32 @@ case c1:                                        \
     two_tok('=', '=', Token::EqEq);
     two_tok('*', '=', Token::MulEq);
     two_tok('%', '=', Token::ModEq);
-    two_tok('&', '=', Token::AndEq);
     two_tok('^', '=', Token::CaretEq);
-    two_tok('|', '=', Token::OrEq);
     two_tok('~', '=', Token::TildeEq);
     two_tok('!', '=', Token::ExEq);
 
+    case '&': {
+        ++ptr;
+        if (*ptr == '=') {
+            ++ptr;
+            return new_token(ptr - 2, 2, Token::AndEq);
+        } else if (*ptr == '&') {
+            ++ptr;
+            return new_token(ptr - 2, 2, Token::AndAnd);
+        }
+        return new_token(ptr - 1, 1, '&');
+    }
+    case '|': {
+        ++ptr;
+        if (*ptr == '=') {
+            ++ptr;
+            return new_token(ptr - 2, 2, Token::OrEq);
+        } else if (*ptr == '|') {
+            ++ptr;
+            return new_token(ptr - 2, 2, Token::OrOr);
+        }
+        return new_token(ptr - 1, 1, '|');
+    }
     case '+': {
         ++ptr;
         if (*ptr == '=') {

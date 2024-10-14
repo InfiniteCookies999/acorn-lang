@@ -122,6 +122,9 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { '^', 3 },
           { '|', 2 },
 
+          { Token::AndAnd, 1 }, // &&
+          { Token::OrOr  , 1 }, // ||
+
       })
 {
     for (auto ptr = keyword_mapping.begin(), end = keyword_mapping.end();

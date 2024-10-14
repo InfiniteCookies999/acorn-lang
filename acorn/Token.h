@@ -90,6 +90,8 @@ namespace acorn {
             GtGtEq,
             AddAdd,
             SubSub,
+            AndAnd,
+            OrOr,
             // While technically these are not tokens
             // they are used to distinguish pre vs. post
             // incrementing.

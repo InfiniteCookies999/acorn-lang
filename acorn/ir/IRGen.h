@@ -87,7 +87,7 @@ namespace acorn {
         llvm::Value* gen_number(Number* number);
         llvm::Value* gen_ident_reference(IdentRef* ref);
         llvm::Value* gen_binary_op(BinOp* bin_op);
-        llvm::Value* gen_binary_numeric_op(tokkind op, BinOp* bin_op,
+        llvm::Value* gen_numeric_binary_op(tokkind op, BinOp* bin_op,
                                            llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
         llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_address);
@@ -111,6 +111,8 @@ namespace acorn {
         llvm::BasicBlock* gen_bblock(const char* name, llvm::Function* ll_func = nullptr);
 
         llvm::Value* gen_isize(uint64_t v);
+
+        void gen_branch_on_condition(Expr* cond, llvm::BasicBlock* ll_true_bb, llvm::BasicBlock* ll_false_bb);
 
         // This will only unconditionally branch to the given block as long as
         // the current block does not already end in a branch (terminal).
