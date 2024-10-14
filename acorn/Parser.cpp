@@ -570,6 +570,33 @@ acorn::LoopControlStmt* acorn::Parser::parse_loop_control() {
     loop_control->kind = cur_token.is(Token::KwContinue) ? NodeKind::ContinueStmt : NodeKind::BreakStmt;
 
     next_token();
+    
+    if (cur_token.is('[')) {
+        next_token();
+
+        if (cur_token.is_not(Token::IntLiteral)) {
+            if (loop_control->is(NodeKind::BreakStmt)) {
+                error("Expected integer literal for break loop count")
+                    .end_error(ErrCode::ParseLoopControlCountNotInt);
+            } else {
+                error("Expected integer literal for continue loop count")
+                    .end_error(ErrCode::ParseLoopControlCountNotInt);
+            }
+        } else {
+            if (cur_token.text()[0] == '-') {
+                error("Loop count cannot be negative")
+                    .end_error(ErrCode::ParseLoopControlCountNeg);
+            }
+            
+            auto number = parse_int_literal();
+            loop_control->loop_count = number->value_u64 + 1;
+            loop_control->loop_count_expr = number;
+        }
+
+        const char* for_msg = loop_control->is(NodeKind::BreakStmt) ? "for break statement"
+                                                                    : "for continue statement";
+        expect(']', for_msg);
+    }
 
     return loop_control;
 }
@@ -1275,7 +1302,7 @@ acorn::Expr* acorn::Parser::parse_term() {
     }
 }
 
-acorn::Expr* acorn::Parser::parse_int_literal() {
+acorn::Number* acorn::Parser::parse_int_literal() {
     static uint64_t void_table[256];
     const auto text = cur_token.text();
     return parse_number_literal<10, void_table, false>(text.data(), text.end());
@@ -1292,18 +1319,18 @@ static constinit uint64_t hex_table[256] = {
     // The rest are zeroed out
 };
 
-acorn::Expr* acorn::Parser::parse_hex_literal() {
+acorn::Number* acorn::Parser::parse_hex_literal() {
     const auto text = cur_token.text();
     return parse_number_literal<16, hex_table>(text.data() + 2, text.end());
 }
 
-acorn::Expr* acorn::Parser::parse_bin_literal() {
+acorn::Number* acorn::Parser::parse_bin_literal() {
     static uint64_t void_table[256];
     const auto text = cur_token.text();
     return parse_number_literal<2, void_table, false>(text.data() + 2, text.end());
 }
 
-acorn::Expr* acorn::Parser::parse_oct_literal() {
+acorn::Number* acorn::Parser::parse_oct_literal() {
     static uint64_t void_table[256];
     const auto text = cur_token.text();
     return parse_number_literal<8, void_table, false>(text.data() + 1, text.end());
@@ -1453,7 +1480,7 @@ acorn::Expr* acorn::Parser::parse_char_literal() {
 }
 
 template<uint32_t radix, uint64_t convert_table[256], bool use_table>
-acorn::Expr* acorn::Parser::parse_number_literal(const char* start, const char* end) {
+acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char* end) {
 
     const char* ptr = start;
     bool neg_sign = *ptr == '-';

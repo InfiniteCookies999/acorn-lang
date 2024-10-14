@@ -19,6 +19,7 @@ namespace acorn {
     struct Expr;
     struct Func;
     struct ScopeStmt;
+    struct Number;
     class SourceFile;
     class Logger;
 
@@ -278,7 +279,8 @@ namespace acorn {
         }
 
         // How many loops to break/continue from.
-        int loop_count = 1;
+        int     loop_count = 1;
+        Number* loop_count_expr = nullptr;
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {

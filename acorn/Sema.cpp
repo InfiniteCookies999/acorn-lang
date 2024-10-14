@@ -630,11 +630,13 @@ void acorn::Sema::check_loop_control(LoopControlStmt* loop_control) {
     }
 
     if (loop_control->loop_count > loop_depth) {
+        Node* error_node = loop_control->loop_count_expr ? static_cast<Node*>(loop_control->loop_count_expr)
+                                                         : static_cast<Node*>(loop_control);
         if (loop_control->is(NodeKind::BreakStmt)) {
-            error(loop_control, "number of requested breaks exceeds the loop depth")
+            error(error_node, "number of requested breaks exceeds the loop nesting depth")
                 .end_error(ErrCode::LoopControlLoopCountExceedsLoopDepth);
         } else {
-            error(loop_control, "number of requested continues exceeds the loop depth")
+            error(error_node, "number of requested continues exceeds the loop nesting depth")
                 .end_error(ErrCode::LoopControlLoopCountExceedsLoopDepth);
         }
     }

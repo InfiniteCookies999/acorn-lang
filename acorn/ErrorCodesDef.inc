@@ -30,6 +30,8 @@ X(ParseTooManyArgsForComptimeFile          , 20022)
 X(ParseNoArgsForComptimeFile               , 20023)
 X(ParseExpectedAccessValueForComptimeFile  , 20024)
 X(ParseUknownArgNameForComptimeFile        , 20025)
+X(ParseLoopControlCountNotInt              , 20026)
+X(ParseLoopControlCountNeg                 , 20027)
 
 X(SemaNotAllFuncPathReturn                 , 30000)
 X(SemaVariableCannotHaveVoidType           , 30001)

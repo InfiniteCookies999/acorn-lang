@@ -98,17 +98,17 @@ namespace acorn {
         Expr* parse_memory_access(Expr* site);
         Expr* parse_term();
 
-        Expr* parse_int_literal();
-        Expr* parse_hex_literal();
-        Expr* parse_bin_literal();
-        Expr* parse_oct_literal();
+        Number* parse_int_literal();
+        Number* parse_hex_literal();
+        Number* parse_bin_literal();
+        Number* parse_oct_literal();
         Expr* parse_string8bit_literal();
         Expr* parse_string16bit_literal();
         Expr* parse_string32bit_literal();
         Expr* parse_char_literal();
 
         template<uint32_t radix, uint64_t convert_table[256], bool use_table = true>
-        Expr* parse_number_literal(const char* start, const char* end);
+        Number* parse_number_literal(const char* start, const char* end);
 
         Expr* parse_array();
 
