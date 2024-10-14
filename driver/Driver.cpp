@@ -9,6 +9,62 @@
 
 #include "CommandProcessor.h"
 
+const char* HelpMessage =
+R"(
+Usage: acorn <options> <sources>
+
+Common options (for more options use -more-options):
+ 
+    -o <name>
+        Sets the name of the executable.
+
+    -more-options
+        Show more options that can be ran with acorn.
+
+Sources:
+    Sources may either be a path to a file or a directory
+    in which case all .acorn files within the directory and
+    sub-directories will be included.
+
+Examples:
+    acorn .        # Compile files in the current directory
+    acorn dir      # Compile all the filder under dir
+    acorn main.ac  # Compile the file main.ac
+)";
+
+const char* ExtendedHelpMessage =
+R"(
+Usage: acorn <options> <sources>
+Options:
+
+    -o, -out-name, -output-name <name>
+        Sets the name of the executable.
+    
+    -d, -directory, -out-directory, -output-directory <dir>
+        Sets the directory to place the output files such as
+        the executable. Will create the director(ies) if they
+        do not exist.
+
+    -r, -rel, -release
+        Compile in release mode.
+
+    -show-times
+        Display how long different stages took.
+
+    -show-llvm-ir
+        Displays the LLVM IR generated from source code.
+        !! Warning !! This can generate a huge amount of
+        output depending on what is compiled.
+
+     -show-error-codes
+        When an error occures it also displays the error code.
+
+     -nshow-wrote-to-msg
+        Stops showing the message about where the compiled
+        program was written to.
+
+)";
+
 int main(int argc, char* argv[]) {
 
     acorn::PageAllocator allocator(acorn::get_system_page_size());
@@ -33,7 +89,17 @@ int main(int argc, char* argv[]) {
     acorn::AcornLang::SourceVector sources;
     for (int i = 1; i < argc; ++i) {
         if (argv[i][0] == '-') {
-            if (processor.process(argv[i] + 1, argv + i + 1, i)) {
+            auto flag_name = llvm::StringRef(argv[i] + 1);
+            if (flag_name == "help" || flag_name == "-help") {
+                llvm::outs() << HelpMessage;
+                return 0;
+            }
+            if (flag_name == "more-options") {
+                llvm::outs() << ExtendedHelpMessage;
+                return 0;
+            }
+
+            if (processor.process(flag_name, argv + i + 1, i)) {
                 ++i;
             }
         } else {

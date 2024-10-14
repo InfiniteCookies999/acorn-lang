@@ -483,7 +483,7 @@ void acorn::AcornLang::parse_files(SourceVector& sources) {
 void acorn::AcornLang::parse_directory(Module& modl, const fs::path& dir_path) {
     auto root_dir_path = dir_path.parent_path();
     for (const auto& entry : fs::recursive_directory_iterator(dir_path)) {
-        if (entry.is_regular_file()) {
+        if (entry.is_regular_file() && entry.path().extension() == L".ac") {
             const auto& path = entry.path().generic_wstring();
             parse_file(modl, path, root_dir_path);
         }
