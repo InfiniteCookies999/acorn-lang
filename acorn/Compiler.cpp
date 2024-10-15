@@ -368,10 +368,7 @@ void acorn::Compiler::link() {
     auto get_libs = [this] {
         std::wstring libs = L"libcmt.lib msvcrt.lib kernel32.lib";
         for (const std::wstring& lib : libraries) {
-            if (lib == libraries.back()) {
-                libs += L" ";
-            }
-            libs += lib.ends_with(L".lib") ? lib : lib + L".lib";
+            libs += lib.ends_with(L".lib") ? lib : lib + L".lib ";
         }
         return libs;
     };
@@ -386,8 +383,26 @@ void acorn::Compiler::link() {
     
 #elif UNIX_OS
     
+    auto get_lib_paths = [this] {
+        std::wstring lib_paths;
+        for (const std::wstring& lib_path : library_paths) {
+            lib_paths += std::format(L"-L\"{}\" ", lib_path);
+        }
+        return lib_paths;
+    };
+
+    auto get_libs = [this] {
+        std::wstring libs = L"";
+        for (const std::wstring& lib : libraries) {
+            libs += std::format(L"-l{} ", lib);
+        }
+        return libs;
+    };
+
     // TODO: Fix this so it doesn't change assume we are using clang.
-    std::wstring cmd = std::format(L"clang {} -o {}",
+    std::wstring cmd = std::format(L"clang {} {} {} -o {}",
+                                   get_lib_paths(),
+                                   get_libs(),
                                    absolute_obj_path,
                                    absolute_exe_path);
 
