@@ -36,15 +36,16 @@ namespace acorn {
 
         int run(SourceVector& sources);
 
-        void set_released_build()              { release_build = true;                  }
-        void set_should_show_times()           { should_show_times = true;              }
-        void set_should_show_llvm_ir()         { should_show_llvm_ir = true;            }
-        void set_should_show_error_codes()     { context.set_should_show_error_codes(); }
-        void set_dont_show_wrote_to_msg()      { dont_show_wrote_to_msg = true;         }
-        void set_stand_alone()                 { stand_alone = true;                    }
-        void set_run_program()                 { should_run_program = true;             }
-        void set_run_program_seperate_window() { should_run_seperate_window = true;     }
-        void set_show_linker_command()         { show_linker_command = true;            }
+        void set_released_build()                { release_build = true;                    }
+        void set_should_show_times()             { should_show_times = true;                }
+        void set_should_show_llvm_ir()           { should_show_llvm_ir = true;              }
+        void set_should_show_error_codes()       { context.set_should_show_error_codes();   }
+        void set_dont_show_wrote_to_msg()        { dont_show_wrote_to_msg = true;           }
+        void set_stand_alone()                   { stand_alone = true;                      }
+        void set_run_program()                   { should_run_program = true;               }
+        void set_run_program_seperate_window()   { should_run_seperate_window = true;       }
+        void set_show_linker_command()           { show_linker_command = true;              }
+        void set_max_error_count(int max_errors) { context.set_max_error_count(max_errors); }
 
         void set_output_name(std::wstring output_name);
         void set_output_directory(std::wstring output_directory);

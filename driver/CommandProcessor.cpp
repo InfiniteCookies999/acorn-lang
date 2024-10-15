@@ -4,8 +4,7 @@
 
 void CommandConsumer::next(const std::function<void(std::wstring)>& then, const char* missing_error_msg) {
     if (offset == argc) {
-        acorn::Logger::global_error(*compiler.get_context(), "%s for flag -%s", missing_error_msg, flag_name)
-            .end_error(acorn::ErrCode::GlobalMissingArgumentForFlag);
+        report_error_missing_arg(missing_error_msg);
         return;
     }
 
@@ -16,6 +15,67 @@ void CommandConsumer::next(const std::function<void(std::wstring)>& then, const 
 void CommandConsumer::next(void(acorn::Compiler::*then)(std::wstring), const char* missing_error_msg) {
     auto bound_then = std::bind(then, std::ref(compiler), std::placeholders::_1);
     next(bound_then, missing_error_msg);
+}
+
+void CommandConsumer::next_eql_pair(const std::function<void(std::wstring)>& then, const char* missing_error_msg) {
+    auto itr = flag_name.find('=');
+    if (itr == std::wstring::npos) {
+        acorn::Logger::global_error(*compiler.get_context(), "Expected '=' for flag -%s", flag_name)
+            .end_error(acorn::ErrCode::GlobalArgumentFlagFailedToParse);
+        return;
+    }
+
+    auto value = flag_name.substr(itr + 1);
+    if (value.empty()) {
+        report_error_missing_arg(missing_error_msg);
+        return;
+    }
+    then(value);
+}
+
+void CommandConsumer::next_eql_pair(void(acorn::Compiler::* then)(std::wstring), const char* missing_error_msg) {
+    auto bound_then = std::bind(then, std::ref(compiler), std::placeholders::_1);
+    next_eql_pair(bound_then, missing_error_msg);
+}
+
+CommandConsumer& CommandConsumer::next_eql_pair(const char* missing_error_msg) {
+    parsed_value = L"";
+    next_eql_pair([this](std::wstring value) {
+        parsed_value = value;
+    }, missing_error_msg);
+    return *this;
+}
+
+void CommandConsumer::parse_int(const std::function<void(int)>& then) {
+    if (parsed_value.empty()) return;
+
+    int value = 0, prev_value;
+    for (wchar_t c : parsed_value) {
+        if (c < 48 || c > 57) {
+            acorn::Logger::global_error(*compiler.get_context(),
+                                        "Unexpected character when parsing integer for flag %s", flag_name)
+                .end_error(acorn::ErrCode::GlobalArgumentFlagFailedToParse);
+            return;
+        }
+
+        prev_value = value;
+        value = value * 10;
+        value += ((int)c - '0');
+    
+        if (value / 10 < prev_value) {
+            acorn::Logger::global_error(*compiler.get_context(),
+                                        "Integer overflow when parsing integer for flag %s", flag_name)
+                .end_error(acorn::ErrCode::GlobalArgumentFlagFailedToParse);
+            return;
+        }
+    }
+
+    then(value);
+}
+
+void CommandConsumer::report_error_missing_arg(const char* missing_error_msg) {
+    acorn::Logger::global_error(*compiler.get_context(), "%s for flag -%s", missing_error_msg, flag_name)
+        .end_error(acorn::ErrCode::GlobalMissingArgumentForFlag);
 }
 
 CommandLineProcessor::CommandLineProcessor(acorn::Compiler& compiler, int argc, char* argv[])
@@ -50,11 +110,13 @@ CommandLineProcessor::Flag& CommandLineProcessor::add_flag(llvm::StringRef flag_
 
 CommandLineProcessor::Flag& CommandLineProcessor::add_flag(llvm::StringRef flag_name,
                                                            AliasList aliases,
-                                                           const Callback& callback) {
+                                                           const Callback& callback,
+                                                           bool only_starts_with) {
     flags.push_back({
         .flag_name = flag_name,
         .aliases = std::move(aliases),
-        .callback = callback
+        .callback = callback,
+        .only_starts_with = only_starts_with
     });
     return flags.back();
 }
@@ -69,12 +131,15 @@ int CommandLineProcessor::process(llvm::StringRef flag_name, int idx) {
 
     for (Flag& flag : flags) {
         if (flag.only_starts_with) {
-            if (!flag_name.starts_with(flag.flag_name)) {
+            if (!flag_name.starts_with(flag.flag_name) &&
+                std::ranges::find_if(flag.aliases, [flag_name, &flag](llvm::StringRef alias) {
+                    return alias.starts_with(flag.flag_name);
+                }) == flag.aliases.end()) {
                 continue;
             }
         } else if (!(flag.flag_name == flag_name ||
-            std::ranges::find(flag.aliases, flag_name) != flag.aliases.end()
-            )) {
+            std::ranges::find(flag.aliases, flag_name) != flag.aliases.end())
+            ) {
             continue;
         }
 

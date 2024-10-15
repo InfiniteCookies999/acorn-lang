@@ -12,9 +12,20 @@ class CommandLineProcessor;
 class CommandConsumer {
 public:
 
-    void next(const std::function<void(std::wstring)>& then, const char* missing_error_msg);
+    enum class Parse {
+        Str,
+        Int
+    };
 
+    void next(const std::function<void(std::wstring)>& then, const char* missing_error_msg);
     void next(void(acorn::Compiler::*then)(std::wstring), const char* missing_error_msg);
+
+    void next_eql_pair(const std::function<void(std::wstring)>& then, const char* missing_error_msg);
+    void next_eql_pair(void(acorn::Compiler::* then)(std::wstring), const char* missing_error_msg);
+
+    [[nodiscard]] CommandConsumer& next_eql_pair(const char* missing_error_msg);
+
+    void parse_int(const std::function<void(int)>& then);
 
     std::wstring get_flag_name() const { return flag_name; }
 
@@ -25,12 +36,16 @@ private:
         compiler(compiler), argc(argc), argv(argv) {
     }
     
+    void report_error_missing_arg(const char* missing_error_msg);
+
     std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
     
     acorn::Compiler& compiler;
 
     // The current flag being processed.
     std::wstring flag_name;
+
+    std::wstring parsed_value;
     
     // Offset into the consumed arguments.
     int    offset;
@@ -65,7 +80,8 @@ public:
 
     Flag& add_flag(llvm::StringRef flag_name,
                    AliasList aliases,
-                   const Callback& callback);
+                   const Callback& callback,
+                   bool only_starts_with = false);
 
     // Returns true if the next argv value should be skipped.
     int process(llvm::StringRef flag_name, int idx);

@@ -37,10 +37,10 @@ R"(
 Usage: acorn <options> <sources>
 Options:
 
-    -o, -out-name, -output-name <name>
+    -o, -out-name, -output-name=<name>
         Sets the name of the executable.
     
-    -d, -directory, -out-directory, -output-directory <dir>
+    -d, -directory, -out-directory, -output-directory=<dir>
         Sets the directory to place the output files such as
         the executable. Will create the director(ies) if they
         do not exist.
@@ -79,6 +79,11 @@ Options:
      -show-linker-command, -show-linker-cmd
         Shows the command that is ran to perform linking.
 
+    -max-errors=<count>
+        Sets how many errors will be encountered before
+        giving up and exiting compilation.
+
+
 )";
 #include <iostream>
 
@@ -99,11 +104,16 @@ int main(int argc, char* argv[]) {
     processor.add_flag("show-linker-command", { "show-linker-cmd" }, &acorn::Compiler::set_show_linker_command);
     
     processor.add_flag("output-name", { "out-name", "o" }, [](CommandConsumer& consumer) {
-        consumer.next(&acorn::Compiler::set_output_name, "Missing output program name");
-    });
+        consumer.next_eql_pair(&acorn::Compiler::set_output_name, "Missing output program name");
+    }, true);
     processor.add_flag("output-directory", { "out-directory", "d", "directory" }, [](CommandConsumer& consumer) {
-        consumer.next(&acorn::Compiler::set_output_directory, "Missing directory");
-    });
+        consumer.next_eql_pair(&acorn::Compiler::set_output_directory, "Missing directory");
+    }, true);
+
+    processor.add_flag("max-errors", [&compiler](CommandConsumer& consumer) {
+        consumer.next_eql_pair("Missing max errors")
+            .parse_int([&compiler](int max_errors) { compiler.set_max_error_count(max_errors); });
+    }, true);
 
     processor.add_flag("L", [&compiler](CommandConsumer& consumer) {
         std::wstring value = consumer.get_flag_name().substr(1);
