@@ -44,9 +44,18 @@ namespace acorn {
         void set_stand_alone()                 { stand_alone = true;                    }
         void set_run_program()                 { should_run_program = true;             }
         void set_run_program_seperate_window() { should_run_seperate_window = true;     }
+        void set_show_linker_command()         { show_linker_command = true;            }
 
         void set_output_name(std::wstring output_name);
         void set_output_directory(std::wstring output_directory);
+
+        void add_library_path(std::wstring library_path) {
+            library_paths.push_back(library_path);
+        }
+
+        void add_library(std::wstring library) {
+            libraries.push_back(library);
+        }
 
         Context* get_context() const { return &context; }
 
@@ -70,6 +79,9 @@ namespace acorn {
         std::wstring absolute_exe_path;
         std::wstring absolute_obj_path;
 
+        llvm::SmallVector<std::wstring> library_paths;
+        llvm::SmallVector<std::wstring> libraries;
+
         bool release_build              = false;
         bool should_show_times          = false;
         bool should_show_llvm_ir        = false;
@@ -77,6 +89,7 @@ namespace acorn {
         bool stand_alone                = false;
         bool should_run_program         = false;
         bool should_run_seperate_window = false;
+        bool show_linker_command        = false;
         std::function<void(ErrCode, std::string, int)> error_code_interceptor;
 
         // Timers to keep track of how different

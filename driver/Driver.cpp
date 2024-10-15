@@ -70,16 +70,25 @@ Options:
         Stops showing the message about where the compiled
         program was written to.
 
+     -L<library path>
+        Add a search path for libraries.
+
+     -l<library name>
+        Add a library.
+
+     -show-linker-command, -show-linker-cmd
+        Shows the command that is ran to perform linking.
+
 )";
+#include <iostream>
 
 int main(int argc, char* argv[]) {
 
     acorn::PageAllocator allocator(acorn::get_system_page_size());
     acorn::Compiler compiler(allocator);
 
-    CommandLineProcessor processor(compiler, argc);
+    CommandLineProcessor processor(compiler, argc, argv);
     
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
     processor.add_flag("release", { "r", "rel" }, &acorn::Compiler::set_released_build);
     processor.add_flag("show-times", &acorn::Compiler::set_should_show_times);
     processor.add_flag("show-llvm-ir", &acorn::Compiler::set_should_show_llvm_ir);
@@ -87,16 +96,37 @@ int main(int argc, char* argv[]) {
     processor.add_flag("nshow-wrote-to-msg", &acorn::Compiler::set_dont_show_wrote_to_msg);
     processor.add_flag("run", &acorn::Compiler::set_run_program);
     processor.add_flag("run-seperate", { "run-seperate-window"}, &acorn::Compiler::set_run_program_seperate_window);
-    processor.add_flag("output-name", { "out-name", "o" }, [&compiler, &wconverter](char* rest[]) {
-        compiler.set_output_name(wconverter.from_bytes(rest[0]));
-    }).req_value("Missing output program name");
-    processor.add_flag("output-directory", { "out-directory", "d", "directory" }, [&compiler, &wconverter](char* rest[]) {
-        compiler.set_output_directory(wconverter.from_bytes(rest[0]));
-    }).req_value("Missing directory");
+    processor.add_flag("show-linker-command", { "show-linker-cmd" }, &acorn::Compiler::set_show_linker_command);
+    
+    processor.add_flag("output-name", { "out-name", "o" }, [](CommandConsumer& consumer) {
+        consumer.next(&acorn::Compiler::set_output_name, "Missing output program name");
+    });
+    processor.add_flag("output-directory", { "out-directory", "d", "directory" }, [](CommandConsumer& consumer) {
+        consumer.next(&acorn::Compiler::set_output_directory, "Missing directory");
+    });
 
+    processor.add_flag("L", [&compiler](CommandConsumer& consumer) {
+        std::wstring value = consumer.get_flag_name().substr(1);
+        if (!value.empty()) {
+            compiler.add_library_path(value);
+            return;
+        }
 
+        consumer.next(&acorn::Compiler::add_library_path, "Missing library path");
+    }, true);
+    processor.add_flag("l", [&compiler](CommandConsumer& consumer) {    
+        std::wstring value = consumer.get_flag_name().substr(1);
+        if (!value.empty()) {
+            compiler.add_library(value);
+            return;
+        }
+
+        consumer.next(&acorn::Compiler::add_library, "Missing library");
+    }, true);
+
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
     acorn::Compiler::SourceVector sources;
-    for (int i = 1; i < argc; ++i) {
+    for (int i = 1; i < argc;) {
         if (argv[i][0] == '-') {
             auto flag_name = llvm::StringRef(argv[i] + 1);
             if (flag_name == "help" || flag_name == "-help") {
@@ -108,11 +138,11 @@ int main(int argc, char* argv[]) {
                 return 0;
             }
 
-            if (processor.process(flag_name, argv + i + 1, i)) {
-                ++i;
-            }
+            i = processor.process(flag_name, i);
+
         } else {
             sources.push_back(acorn::Source{ wconverter.from_bytes(argv[i]), "" });
+            ++i;
         }
     }
 

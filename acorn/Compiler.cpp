@@ -352,20 +352,28 @@ void acorn::Compiler::link() {
     //   /PDB        creates a PDB file
     //   /SUBSYSTEM  tells which subsystem to use
     //   /VERBOSE    prints state info
-    //   
-    llvm::SmallVector<const wchar_t*, 16> library_paths;
-    library_paths.push_back(msvc_lib_path.c_str());
-    library_paths.push_back(winkit_lib_um_path.c_str());
-    library_paths.push_back(winkit_lib_ucrt_path.c_str());
+    //
+    library_paths.push_back(msvc_lib_path);
+    library_paths.push_back(winkit_lib_um_path);
+    library_paths.push_back(winkit_lib_ucrt_path);
 
-    llvm::SmallVector<const wchar_t*, 16> libraries;
-    
-    auto get_lib_paths = [&library_paths]() {
+    auto get_lib_paths = [this] {
         std::wstring lib_paths;
-        for (const wchar_t* lib_path : library_paths) {
+        for (const std::wstring& lib_path : library_paths) {
             lib_paths += std::format(L"/LIBPATH:\"{}\" ", lib_path);
         }
         return lib_paths;
+    };
+
+    auto get_libs = [this] {
+        std::wstring libs = L"libcmt.lib msvcrt.lib kernel32.lib";
+        for (const std::wstring& lib : libraries) {
+            if (lib == libraries.back()) {
+                libs += L" ";
+            }
+            libs += lib.ends_with(L".lib") ? lib : lib + L".lib";
+        }
+        return libs;
     };
 
     std::wstring cmd = std::format(L"\"{}\" /NOLOGO /OUT:{} {} {} {}",
@@ -373,7 +381,7 @@ void acorn::Compiler::link() {
                                    absolute_exe_path,
                                    absolute_obj_path,
                                    get_lib_paths(),
-                                   L"libcmt.lib msvcrt.lib kernel32.lib");
+                                   get_libs());
 
     
 #elif UNIX_OS
@@ -384,6 +392,11 @@ void acorn::Compiler::link() {
                                    absolute_exe_path);
 
 #endif
+
+    if (show_linker_command) {
+        Logger::info("Executing linker cmd: %s", cmd);
+        std::cout << "\n";
+    }
 
     int exit_code;
     if (!exe_process(cmd.data(), nullptr, false, exit_code)) {
