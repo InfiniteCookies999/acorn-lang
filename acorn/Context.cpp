@@ -54,6 +54,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       main_identifier(Identifier::get("main")),
       length_identifier(Identifier::get("length")),
       access_identifier(Identifier::get("access")),
+      namespace_identifier(Identifier::get("namespace")),
 
       keyword_mapping({
           { "void"     , Token::KwVoid      },
@@ -154,18 +155,19 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
 }
 
 acorn::Module* acorn::Context::get_or_create_modl(llvm::StringRef mod_name) {
-    auto itr = modls.find(mod_name);
+    auto name = Identifier::get(mod_name);
+    auto itr = modls.find(name);
     if (itr != modls.end()) {
         return itr->second;
     }
     Module* modl = allocator.alloc_type<Module>();
     new (modl) Module();
-    modls.insert({ mod_name, modl });
+    modls.insert({ name, modl });
     return modl;
 }
 
-acorn::Module* acorn::Context::find_module(llvm::StringRef location_path) {
-    auto itr = modls.find(location_path);
+acorn::Module* acorn::Context::find_module(Identifier name) {
+    auto itr = modls.find(name);
     return itr == modls.end() ? nullptr : itr->second;
 }
 

@@ -111,6 +111,11 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
     importn->file = file;
     next_token(); // Consuming 'import' token.
 
+    if (cur_token.is('.')) {
+        next_token();
+        importn->within_same_modl = true;
+    }
+
     Token start_token = cur_token;
     
     bool more_to_import = false;
@@ -125,20 +130,16 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
         Token ident_token = cur_token;
         next_token(); // Consuming the identifier.
 
+        importn->key.push_back(Identifier::get(ident_token.text()));
+
         more_to_import = cur_token.is('.');
         if (more_to_import) {
             next_token();
-        } else {
-            importn->import_key = Identifier::get(ident_token.text());
         }
     } while (more_to_import);
 
-    Token end_token = prev_token;
+    expect(';');
 
-    const char* start = start_token.loc.ptr;
-    const char* end = end_token.loc.ptr + end_token.loc.length;
-    importn->location_key = llvm::StringRef(start, end - start);
-    
     return importn;
 }
 
@@ -674,6 +675,7 @@ void acorn::Parser::parse_comptime_file_info() {
     if (cur_token.is_not(')')) {
         bool more_args = false;
         int count = 0;
+        bool already_set_access = false, already_set_namespace = false;
         do {
             Token ident_token = cur_token;
             Identifier identifier = expect_identifier("for named argument of #file statement");
@@ -688,6 +690,12 @@ void acorn::Parser::parse_comptime_file_info() {
             }
 
             if (identifier == context.access_identifier) {
+                if (already_set_access) {
+                    error(ident_token, "Already set access")
+                        .end_error(ErrCode::ParseAlreadySetAccessForComptimefile);
+                }
+                
+                already_set_access = true;
                 if (cur_token.is(Token::KwPub)) {
                     next_token();
                     file->set_default_access(Modifier::Public);
@@ -695,8 +703,25 @@ void acorn::Parser::parse_comptime_file_info() {
                     next_token();
                     file->set_default_access(Modifier::Private);
                 } else {
-                    error(cur_token, "Expected access modifier")
+                    error(prev_token, "Expected access modifier")
                         .end_error(ErrCode::ParseExpectedAccessValueForComptimeFile);
+                    skip_recovery(false);
+                }
+            } else if (identifier == context.namespace_identifier) {
+                if (already_set_namespace) {
+                    error(ident_token, "Already set namespace")
+                        .end_error(ErrCode::ParseAlreadySetNamespaceForComptimeFile);
+                }
+
+                already_set_namespace = true;
+                if (cur_token.is(Token::Identifier)) {
+                    Identifier name = Identifier::get(cur_token.text());
+                    auto nspace = modl.get_or_create_namespace(context, name);
+                    file->set_namespace(nspace);
+                    next_token();
+                } else {
+                    error(prev_token, "Expected identifier for namespace")
+                        .end_error(ErrCode::ParseExpectNamespaceIdentForComptimeFile);
                     skip_recovery(false);
                 }
             } else {

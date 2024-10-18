@@ -65,14 +65,15 @@ namespace acorn {
         Identifier main_identifier;
         Identifier length_identifier;
         Identifier access_identifier;
+        Identifier namespace_identifier;
 
         llvm::LLVMContext& get_ll_context() const { return ll_context; }
 
         llvm::Module& get_ll_module() const { return ll_module; }
 
         Module* get_or_create_modl(llvm::StringRef mod_name);
-        llvm::StringMap<Module*>& get_modules() { return modls; }
-        Module* find_module(llvm::StringRef location_path);
+        llvm::DenseMap<Identifier, Module*>& get_modules() { return modls; }
+        Module* find_module(Identifier name);
 
         void queue_gen(Decl* decl);
         void add_unchecked_decl(Decl* decl) {
@@ -146,7 +147,7 @@ namespace acorn {
     private:
         PageAllocator& allocator;
         
-        llvm::StringMap<acorn::Module*> modls;
+        llvm::DenseMap<Identifier, acorn::Module*> modls;
 
         std::mutex main_function_mtx;
         llvm::SmallVector<Func*> canidate_main_funcs;

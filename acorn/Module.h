@@ -31,11 +31,15 @@ namespace acorn {
         ImportStmt* find_import(Identifier import_key);
         llvm::DenseMap<Identifier, ImportStmt*>& get_imports() { return imports; }
 
+        Namespace* find_namespace(Identifier name);
+
         void add_duplicate_variable(Var* var, Var* prev_var);
 
         void add_global_comptime_control_flow(Node* control_flow);
 
         void mark_bad_scope(BadScopeLocation location, Node* node, Logger& logger);
+
+        Namespace* get_or_create_namespace(Context& context, Identifier ident);
 
         void add_source_file(SourceFile* file) {
             source_files.push_back(file);
@@ -55,6 +59,7 @@ namespace acorn {
 
     private:
         llvm::SmallVector<SourceFile*> source_files;
+        llvm::DenseMap<Identifier, Namespace*> namespaces;
 
         llvm::DenseMap<Identifier, ImportStmt*> imports;
 

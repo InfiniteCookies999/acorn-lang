@@ -14,7 +14,12 @@
 #define check_and_verify_type(n) check_node(n); yield_if(n)
 
 acorn::Sema::Sema(Context& context, SourceFile* file, Logger& logger)
-    : context(context), modl(file->modl), file(file), logger(logger), type_table(context.type_table) {
+    : context(context), 
+      modl(file->modl), 
+      file(file), 
+      nspace(file->get_namespace()),
+      logger(logger),
+      type_table(context.type_table) {
 }
 
 void acorn::Sema::resolve_global_comptime(Context& context, Module& modl) {
@@ -218,17 +223,55 @@ void acorn::Sema::resolve_imports(Context& context, Module& modl) {
 }
 
 void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
-    if (auto modl = context.find_module(importn->location_key)) {
-        importn->set_imported_module(modl);
-    } else {
-        auto& logger = importn->file->logger;
-        SourceLoc error_loc = {
-            .ptr    = importn->location_key.data(),
-            .length = as<uint16_t>(importn->location_key.size())
-        };
-        logger.begin_error(error_loc, "Could not find module '%s'", importn->location_key)
-            .end_error(ErrCode::SemaCouldNotResolveImport);
+    auto& key = importn->key;
+    auto& logger = importn->file->logger;
+
+    auto find_module = [importn, &logger, &context](Identifier ident) finline -> Module* {
+        if (auto modl = context.find_module(ident)) {
+            return modl;
+        } else {
+            logger.begin_error(importn->loc, "Could not find module '%s'", ident)
+                .end_error(ErrCode::SemaCouldNotResolveImport);
+            return nullptr;
+        }
+    };
+
+    auto find_namespace = [importn, &logger](Module* modl, Identifier ident) finline -> Namespace* {
+        if (auto nspace = modl->find_namespace(ident)) {
+            return nspace;
+        } else {
+            logger.begin_error(importn->loc, "Could not find namespace '%s'", ident)
+                .end_error(ErrCode::SemaCouldNotResolveNamespace);
+            return nullptr;
+        }
+    };
+    
+    if (key.size() == 1 && importn->within_same_modl) {
+        if (auto nspace = find_namespace(&importn->file->modl, key[0])) {
+            importn->set_imported_namespace(nspace);
+        }
+        return;
     }
+    
+    if (key.size() == 1) {
+        if (auto modl = find_module(key[0])) {
+            importn->set_imported_namespace(modl);
+        }
+        return;
+    }
+
+    if (key.size() == 2) {
+        if (auto modl = find_module(key[0])) {
+            if (auto nspace = find_namespace(modl, key[1])) {
+                importn->set_imported_namespace(nspace);
+            }
+        }
+        return;
+    }
+
+    // TODO: better error description.
+    logger.begin_error(importn->loc, "Invalid import")
+        .end_error(ErrCode::SemaInvalidImport);
 }
 
 void acorn::Sema::check_node(Node* node) {
@@ -236,7 +279,7 @@ void acorn::Sema::check_node(Node* node) {
     case NodeKind::Var:
         return check_variable(as<Var*>(node));
     case NodeKind::IdentRef:
-        return check_ident_ref(as<IdentRef*>(node), &modl, false);
+        return check_ident_ref(as<IdentRef*>(node), nspace, false);
     case NodeKind::DotOperator:
         return check_dot_operator(as<DotOperator*>(node), false);
     case NodeKind::ReturnStmt:
@@ -1207,19 +1250,19 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
     }
 }
 
-void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_for_call) {
+void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call) {
     
-    bool same_modl = search_modl == &modl;
+    bool same_nspace = search_nspace == nspace;
 
     auto find_function = [=, this]() finline {
-        if (same_modl) {
+        if (same_nspace) {
             if (auto* funcs = file->find_functions(ref->ident)) {
                 ref->set_funcs_ref(funcs);
                 return;
             }
         }
 
-        if (auto* funcs = search_modl->find_functions(ref->ident)) {
+        if (auto* funcs = search_nspace->find_functions(ref->ident)) {
             ref->set_funcs_ref(funcs);
         }
     };
@@ -1231,14 +1274,14 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_fo
                 return;
             }
         }
-        if (same_modl) {
+        if (same_nspace) {
             if (auto* var = file->find_variable(ref->ident)) {
                 ref->set_var_ref(var);
                 return;
             }
         }
 
-        if (auto* var = search_modl->find_variable(ref->ident)) {
+        if (auto* var = search_nspace->find_variable(ref->ident)) {
             ref->set_var_ref(var);
             return;
         }
@@ -1260,7 +1303,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_fo
     }
 
     // If still not found let us try and search for an imported module.
-    if (!ref->found_ref() && same_modl) {
+    if (!ref->found_ref() && same_nspace) {
         if (auto importn = modl.find_import(ref->ident)) {
             ref->set_import(importn);
         }
@@ -1306,12 +1349,12 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Module* search_modl, bool is_fo
 void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
     if (dot->site->is(NodeKind::IdentRef)) {
         IdentRef* site = as<IdentRef*>(dot->site);
-        check_ident_ref(site, &modl, false);
+        check_ident_ref(site, nspace, false);
         dot->is_foldable = site->is_foldable;
         if (site->type == context.module_ref_type) {
             auto importn = site->import_ref;
             // Special case in which we search in a given module.
-            check_ident_ref(dot, importn->imported_modl, is_for_call);
+            check_ident_ref(dot, importn->imported_nspace, is_for_call);
             return;
         } else if (!site->type) {
             return;
@@ -1343,7 +1386,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     if (call->site->is(NodeKind::IdentRef)) {
         
         IdentRef* ref = as<IdentRef*>(call->site);
-        check_ident_ref(ref, &modl, true);
+        check_ident_ref(ref, nspace, true);
         yield_if(ref);
 
         if (ref->found_kind != IdentRef::FuncsKind) {

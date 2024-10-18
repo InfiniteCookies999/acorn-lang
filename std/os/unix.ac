@@ -1,0 +1,7 @@
+#file(access=pub, namespace=unix)
+
+#if OS_GROUP_UNIX
+
+native isize write(int32 fd, const void* buf, usize count);
+
+#endif

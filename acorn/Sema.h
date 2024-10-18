@@ -42,6 +42,7 @@ namespace acorn {
         Context&    context;
         Logger&     logger;
         Module&     modl;
+        Namespace*  nspace;
         SourceFile* file;
         TypeTable&  type_table;
 
@@ -100,7 +101,7 @@ namespace acorn {
 
         void check_binary_op(BinOp* bin_op);
         void check_unary_op(UnaryOp* unary_op);
-        void check_ident_ref(IdentRef* ref, Module* search_modl, bool is_for_call);
+        void check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call);
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
         Func* find_best_call_canidate(FuncList& canidates,

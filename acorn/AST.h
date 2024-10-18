@@ -21,6 +21,7 @@ namespace acorn {
     struct ScopeStmt;
     struct Number;
     class SourceFile;
+    class Namespace;
     class Logger;
 
     const size_t MAX_FUNC_PARAMS = 64;
@@ -199,25 +200,25 @@ namespace acorn {
 
         SourceFile* file;
 
-        llvm::StringRef location_key; // Full path for resolving the import.
-        Identifier      import_key;   // What gets referenced in the code by
-                                      // the user when they want to use a
-                                      // namespace.
+        bool within_same_modl = false;
+        // Last element is the thing imported. All other elements
+        // are the path to that imported value.
+        llvm::SmallVector<Identifier, 4> key;
 
         // Discriminated union.
         enum {
-            ModuleKind
+            NamespaceKind
         } imported_kind;
 
         union {
-            Module* imported_modl;
+            Namespace* imported_nspace;
         };
 
-        bool is_imported_module() const { return imported_kind == ModuleKind; }
+        bool is_imported_namespace() const { return imported_kind == NamespaceKind; }
 
-        void set_imported_module(Module* modl) {
-            imported_kind = ModuleKind;
-            imported_modl = modl;
+        void set_imported_namespace(Namespace* nspace) {
+            imported_kind = NamespaceKind;
+            imported_nspace = nspace;
         }
     };
 

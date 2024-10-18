@@ -1,20 +1,7 @@
 #file(access=pub)
 
-#if OS_GROUP_WINDOWS
-
-native dllimport void* GetStdHandle(uint32 nStdHandle);
-
-native dllimport int32 WriteFile(void*       hFile,
-                                 const void* lpBuffer,
-                                 uint32      nNumberOfBytesToWrite,
-                                 uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped);
-
-#elif OS_GROUP_UNIX
-
-native isize write(int32 fd, const void* buf, usize count);
-
-#endif
+import .win32;
+import .unix;
 
 int strlen(const char* s) {
     if !s  return 0;
@@ -24,11 +11,11 @@ prv native("strlen") isize istrlen(const char* s);
 
 void print(const char* s, int length) {
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
+    void* handle = win32.GetStdHandle(-11);
     uint32 num_written;
-    WriteFile(handle, s, as(uint32) length, &num_written, null);
+    win32.WriteFile(handle, s, as(uint32) length, &num_written, null);
 #elif OS_GROUP_UNIX
-    write(1, s, as(usize) length);
+    unix.write(1, s, as(usize) length);
 #endif
 }
 

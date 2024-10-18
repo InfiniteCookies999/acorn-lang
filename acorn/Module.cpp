@@ -1,7 +1,14 @@
 #include "Module.h"
 
+#include "Context.h"
+
+acorn::Namespace* acorn::Module::find_namespace(Identifier name) {
+    auto itr = namespaces.find(name);
+    return itr == namespaces.end() ? nullptr : itr->second;
+}
+
 acorn::ImportStmt* acorn::Module::try_add_import(ImportStmt* importn) {
-    auto [itr, success] = imports.try_emplace(importn->import_key, importn);
+    auto [itr, success] = imports.try_emplace(importn->key.back(), importn);
     return success ? nullptr : itr->second;
 }
 
@@ -27,4 +34,15 @@ void acorn::Module::add_global_comptime_control_flow(Node* control_flow) {
 
 void acorn::Module::mark_bad_scope(BadScopeLocation location, Node* node, Logger& logger) {
     bad_scope_nodes.push_back({ location, node, logger });
+}
+
+acorn::Namespace* acorn::Module::get_or_create_namespace(Context& context, Identifier ident) {
+    auto itr = namespaces.find(ident);
+    if (itr != namespaces.end()) {
+        return itr->second;
+    }
+
+    auto nspace = context.get_allocator().alloc_type<Namespace>();
+    namespaces.insert({ ident, nspace });
+    return nspace;
 }
