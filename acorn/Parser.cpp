@@ -1657,7 +1657,57 @@ acorn::Expr* acorn::Parser::parse_array() {
     bool more_values = false;
     do {
 
-        arr->elms.push_back(parse_expr());
+        bool uses_assigned_index = false;
+        if (cur_token.is('[')) {
+            switch (peek_token(0).kind) {
+            case Token::IntLiteral:
+            case Token::BinLiteral:
+            case Token::HexLiteral:
+            case Token::OctLiteral:
+            case Token::CharLiteral:
+                if (peek_token(1).is(']') && peek_token(2).is('=')) {
+                    uses_assigned_index = true;
+
+                    next_token(); // Consume [
+                    
+                    Token number_token = cur_token;
+                    
+                    auto number = as<Number*>(parse_expr());
+
+                    next_token(); // Consume ]
+                    next_token(); // Consume =
+                    auto expr = parse_expr();
+
+                    if (number_token.text()[0] != '-') {
+                        
+                        // TODO: deal with value possibly being larger.
+                        uint32_t index = number->value_u32;
+
+                        if (index < arr->elms.size()) {
+                            if (arr->elms[index]) {
+                                error(number_token, "Array index %s already assigned", index)
+                                    .end_error(ErrCode::ParseArrayIndexAlreadyAssigned);
+                            } else {
+                                arr->elms[index] = expr;
+                            }
+                        } else {
+                            for (uint32_t i = arr->elms.size(); i < index; i++) {
+                                arr->elms.push_back(nullptr);
+                            }
+                            arr->elms.push_back(expr);
+                        }
+                    } else {
+                        error("Array index cannot be negative")
+                            .end_error(ErrCode::ParseArrayIndexCannotBeNeg);
+                    }
+                }
+                break;
+            }
+        }
+
+        if (!uses_assigned_index) {
+            arr->elms.push_back(parse_expr());
+        }
 
         more_values = cur_token.is(',');
         if (more_values) {
@@ -1675,7 +1725,9 @@ acorn::Expr* acorn::Parser::parse_array() {
 void acorn::Parser::next_token() {
     prev_token = cur_token;
     if (peeked_size > 0) {
-        cur_token = peeked_tokens[--peeked_size];
+        cur_token = peeked_tokens[0];
+        std::rotate(peeked_tokens, peeked_tokens + 1, peeked_tokens + peeked_size);
+        --peeked_size;
     } else {
         cur_token = lex.next_token();
     }

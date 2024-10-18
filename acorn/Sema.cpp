@@ -1651,32 +1651,33 @@ void acorn::Sema::check_array(Array* arr) {
     Type* elm_type = nullptr;
     Expr* value_for_elm_type;
     bool values_have_errors = false;
-    for (Expr* value : arr->elms) {
+    for (Expr* elm : arr->elms) {
+        if (!elm) continue;
 
-        check_node(value);
+        check_node(elm);
 
-        if (!value->type) {
+        if (!elm->type) {
             values_have_errors = true;
             continue;
         }
 
-        if (!value->is_foldable) {
+        if (!elm->is_foldable) {
             arr->is_foldable = false;
         }
 
         if (!elm_type) {
-            elm_type = value->type;
-            value_for_elm_type = value;
-        } else if (elm_type->is_not(value->type)) {
-            if (!is_assignable_to(elm_type, value)) {
+            elm_type = elm->type;
+            value_for_elm_type = elm;
+        } else if (elm_type->is_not(elm->type)) {
+            if (!is_assignable_to(elm_type, elm)) {
                 // Check the reverse case.
-                if (!is_assignable_to(value->type, value_for_elm_type)) {
-                    error(expand(value), "Incompatible element types. First found '%s' but now '%s'",
-                          elm_type, value->type)
+                if (!is_assignable_to(elm->type, value_for_elm_type)) {
+                    error(expand(elm), "Incompatible element types. First found '%s' but now '%s'",
+                          elm_type, elm->type)
                         .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
                 } else {
-                    elm_type = value->type;
-                    value_for_elm_type = value;
+                    elm_type = elm->type;
+                    value_for_elm_type = elm;
                 }
             }
         }
@@ -1687,7 +1688,9 @@ void acorn::Sema::check_array(Array* arr) {
     }
     
     for (Expr* value : arr->elms) {
-        create_cast(value, elm_type);
+        if (value) {
+            create_cast(value, elm_type);
+        }
     }
 
     arr->type = type_table.get_arr_type(elm_type, arr->elms.size());

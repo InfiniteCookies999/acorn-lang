@@ -450,6 +450,30 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("Lets go!");
         });
+        test("Array assigned indexes", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test20.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("Array assigned index skip first 2", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test21.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("Array assigned index skip surounded values", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test22.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
+        test("Array assigned index skip last", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test23.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
         test("Predicate loop", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

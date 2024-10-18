@@ -36,6 +36,8 @@ X(ParseDuplicateDefaultCaseForSwitch       , 20028)
 X(ParseExpectNamespaceIdentForComptimeFile , 20029)
 X(ParseAlreadySetAccessForComptimefile     , 20030)
 X(ParseAlreadySetNamespaceForComptimeFile  , 20031)
+X(ParseArrayIndexCannotBeNeg               , 20032)
+X(ParseArrayIndexAlreadyAssigned           , 20033)
 
 X(SemaNotAllFuncPathReturn                 , 30000)
 X(SemaVariableCannotHaveVoidType           , 30001)

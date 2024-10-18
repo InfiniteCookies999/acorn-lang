@@ -508,7 +508,7 @@ namespace acorn {
         Array() : Expr(NodeKind::Array) {
         }
 
-        llvm::SmallVector<Expr*> elms;
+        llvm::SmallVector<Expr*, 8> elms;
     };
 }
 

@@ -1024,8 +1024,15 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
 
     bool elms_are_arrays = arr_type->get_elm_type()->is_array();
     for (uint32_t i = 0; i < arr->elms.size(); i++) {
+        
+        Expr* elm = arr->elms[i];
         auto ll_elm_addr = gen_gep_index(i);
-        gen_assignment(ll_elm_addr, arr_type->get_elm_type(), arr->elms[i]);
+
+        if (elm) {
+            gen_assignment(ll_elm_addr, arr_type->get_elm_type(), elm);
+        } else {
+            builder.CreateStore(gen_zero(arr_type->get_elm_type()), ll_elm_addr);
+        }
     }
     // Zero fill the rest.
     for (uint32_t i = arr->elms.size(); i < ll_arr_type->getNumElements(); ++i) {
@@ -1055,7 +1062,11 @@ llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, ArrayType* ar
     };
 
     for (Expr* elm : arr->elms) {
-        ll_values.push_back(get_element(elm));
+        if (elm) {
+            ll_values.push_back(get_element(elm));
+        } else {
+            ll_values.push_back(gen_zero(arr_type->get_elm_type()));
+        }
     }
     // Zero fill the rest.
     for (uint32_t i = arr->elms.size(); i < ll_arr_type->getNumElements(); ++i) {
