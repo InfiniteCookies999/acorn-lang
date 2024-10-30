@@ -109,5 +109,17 @@ void test_sema() {
 
             expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
         });
+        test("assign det arr expected arr assign", [&] {
+            mock_sema(R"(int[] a = 4;)");
+            expect_none().to_produce_error(ErrCode::SemaAssignDetArrTypeReqsArrAssignment);
+        });
+        test("assign det arr wrong dimensions", [&] {
+            mock_sema(R"(int[][] a = [4];)");
+            expect_none().to_produce_error(ErrCode::SemaAssignDetArrWrongDimensions);
+        });
+        test("assign det arr wrong dimensions 2", [&] {
+            mock_sema(R"(int[] a = [[4]];)");
+            expect_none().to_produce_error(ErrCode::SemaAssignDetArrWrongDimensions);
+        });
     });
 }

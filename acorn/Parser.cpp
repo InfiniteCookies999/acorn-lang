@@ -89,7 +89,6 @@ void acorn::Parser::parse() {
             modl.mark_bad_scope(BadScopeLocation::Global, node, logger);
         }
     }
-
 }
 
 // Statement parsing
@@ -760,15 +759,45 @@ acorn::Type* acorn::Parser::parse_type() {
     llvm::SmallVector<Expr*, 8> arr_lengths;
     while (cur_token.is('[')) {
         next_token();
-        
-        arr_lengths.push_back(parse_expr());
 
+        arr_lengths.push_back(cur_token.is_not(']') ? parse_expr()
+                                                    : nullptr);
+        
         expect(']');
     }
 
+    bool encountered_assign_det_arr_type = false, reported_error_about_elm_must_have_length = false;
     for (auto itr = arr_lengths.rbegin(); itr != arr_lengths.rend(); ++itr) {
         Expr* length_expr = *itr;
+        if (length_expr == nullptr) {
+            type = type_table.get_assigned_det_arr_type(type);
+            
+            encountered_assign_det_arr_type = true;
+            continue;
+        }
 
+        if (encountered_assign_det_arr_type && !reported_error_about_elm_must_have_length) {
+            auto loc_ptr = expand(length_expr).ptr;
+
+            while (*loc_ptr != ']' && *loc_ptr != '\0') {
+                ++loc_ptr;
+            }
+            while (*loc_ptr != '[' && *loc_ptr != '\0') {
+                ++loc_ptr;
+            }
+
+            acorn_assert(*loc_ptr != '\0', "Failed to find [ character");
+
+            SourceLoc error_loc = {
+                .ptr = loc_ptr,
+                .length = 1
+            };
+            error(error_loc, "Element type must have length")
+                .end_error(ErrCode::ParseElmTypeMustHaveArrLen);
+
+            reported_error_about_elm_must_have_length = true;
+        }
+        
         bool resolvable = length_expr->is(NodeKind::Number);
         Number* number;
         if (resolvable) {

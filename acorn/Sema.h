@@ -76,6 +76,8 @@ namespace acorn {
         void check_node(Node* node);
 
         Type* fixup_type(Type* type);
+        Type* fixup_unresolved_arr_type(Type* type);
+        Type* fixup_assign_det_arr_type(Type* type, Var* var);
 
         // Statement checking
         //--------------------------------------

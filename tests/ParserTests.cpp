@@ -513,5 +513,9 @@ void test_parser() {
             expect(as<Number*>(nodes[3])->value_u64, to_string<uint64_t>).to_be(0x62Ab0DD7);
 
         });
+        test("elm type of array must have element", [&] {
+            mock_parser("int[4][] a;");
+            expect_none().to_produce_error(ErrCode::ParseElmTypeMustHaveArrLen);
+        });
     });
 }

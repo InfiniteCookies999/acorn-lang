@@ -39,7 +39,8 @@ namespace acorn {
         Array,
         UnresolvedArrayType, // Length could not be resolved during parsing.
         Null,
-        EmptyArrayType
+        EmptyArrayType,
+        AssignDeterminedArray,
 
     };
     
@@ -174,6 +175,21 @@ namespace acorn {
         }
 
         uint32_t length;
+    };
+
+    class AssignDeterminedArrayType : public ContainerType {
+    public:
+
+        static Type* create(PageAllocator& allocator, 
+                            Type* elm_type, 
+                            bool is_const = false);
+
+        std::string to_string() const;
+
+    protected:
+        AssignDeterminedArrayType(bool vconst, Type* elm_type)
+            : ContainerType(TypeKind::AssignDeterminedArray, vconst, elm_type) {
+        }
     };
 }
 

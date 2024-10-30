@@ -87,64 +87,125 @@ bool acorn::Sema::find_main_function(Context& context) {
 }
 
 acorn::Type* acorn::Sema::fixup_type(Type* type) {
-    // TODO: This will eventually need to take into account that a type
-    // may contain an unsolved type in which case it needs to descend
-    // the type and resolve any contained types.
-    
-    if (type->get_kind() == (TypeKind::UnresolvedArrayType)) {
+    if (type->get_kind() == TypeKind::UnresolvedArrayType) {
+        return fixup_unresolved_arr_type(type);
+    }
+    return type;
+}
 
-        auto unarr_type = as<UnresolvedArrayType*>(type);
-        Expr* length_expr = unarr_type->get_length_expr();
+acorn::Type* acorn::Sema::fixup_unresolved_arr_type(Type* type) {
+    auto unarr_type = as<UnresolvedArrayType*>(type);
+    Expr* length_expr = unarr_type->get_length_expr();
 
-        check_node(length_expr);
-        if (!length_expr->type) {
-            // Failed to check the length expression so returning early.
-            return nullptr;
-        }
+    check_node(length_expr);
+    if (!length_expr->type) {
+        // Failed to check the length expression so returning early.
+        return nullptr;
+    }
         
-        if (!length_expr->type->is_integer()) {
-            error(expand(length_expr), "Array length must be an integer type")
-                .end_error(ErrCode::SemaArrayLengthNotInteger);
-            return nullptr;
-        }
-
-        if (length_expr->type->get_number_of_bits() > 32) {
-            error(expand(length_expr), "Array length must be less than or equal a 32 bit integer")
-                .end_error(ErrCode::SemaArrayLengthTooLargeType);
-            return nullptr;
-        }
-
-        if (!length_expr->is_foldable) {
-            error(expand(length_expr), "Array length must be able to be determined at compile time")
-                .end_error(ErrCode::SemaArrayLengthNotComptime);
-            return nullptr;
-        }
-
-        if (auto ll_length = gen_constant(expand(length_expr), length_expr)) {
-            auto ll_int_length = llvm::cast<llvm::ConstantInt>(ll_length);
-            uint32_t length = static_cast<uint32_t>(ll_int_length->getZExtValue());
-
-            if (length == 0) {
-                error(expand(length_expr), "Array length cannot be zero")
-                    .end_error(ErrCode::SemaArrayLengthZero);
-                return nullptr;
-            }
-
-            if (length_expr->type->is_signed() && static_cast<int32_t>(length) < 0) {
-                error(expand(length_expr), "Array length cannot be negative")
-                    .end_error(ErrCode::SemaArrayLengthNegative);
-                return nullptr;
-            }
-
-            // Everything is okay we can create a new array out of it!
-            return type_table.get_arr_type(unarr_type->get_elm_type(), length);
-
-        } else {
-            return nullptr;
-        }
+    if (!length_expr->type->is_integer()) {
+        error(expand(length_expr), "Array length must be an integer type")
+            .end_error(ErrCode::SemaArrayLengthNotInteger);
+        return nullptr;
     }
 
-    return type;
+    if (length_expr->type->get_number_of_bits() > 32) {
+        error(expand(length_expr), "Array length must be less than or equal a 32 bit integer")
+            .end_error(ErrCode::SemaArrayLengthTooLargeType);
+        return nullptr;
+    }
+
+    if (!length_expr->is_foldable) {
+        error(expand(length_expr), "Array length must be able to be determined at compile time")
+            .end_error(ErrCode::SemaArrayLengthNotComptime);
+        return nullptr;
+    }
+
+    if (auto ll_length = gen_constant(expand(length_expr), length_expr)) {
+        auto ll_int_length = llvm::cast<llvm::ConstantInt>(ll_length);
+        uint32_t length = static_cast<uint32_t>(ll_int_length->getZExtValue());
+
+        if (length == 0) {
+            error(expand(length_expr), "Array length cannot be zero")
+                .end_error(ErrCode::SemaArrayLengthZero);
+            return nullptr;
+        }
+
+        if (length_expr->type->is_signed() && static_cast<int32_t>(length) < 0) {
+            error(expand(length_expr), "Array length cannot be negative")
+                .end_error(ErrCode::SemaArrayLengthNegative);
+            return nullptr;
+        }
+
+        Type* fixed_elm_type = fixup_type(unarr_type->get_elm_type());
+        if (!fixed_elm_type) {
+            return nullptr;
+        }
+
+        // Everything is okay we can create a new array out of it!
+        return type_table.get_arr_type(fixed_elm_type, length);
+    }
+
+    return nullptr;
+}
+
+acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
+
+    auto from_type = var->assignment->type;
+    auto assign_det_arr_type = as<AssignDeterminedArrayType*>(type);
+
+    if (from_type->get_kind() != TypeKind::Array) {
+        error(expand(var), "Expected array type for '%s', but found '%s'", 
+              type, from_type)
+            .end_error(ErrCode::SemaAssignDetArrTypeReqsArrAssignment);
+        return nullptr;
+    }
+
+    auto arr_type = as<ArrayType*>(from_type);
+
+    auto elm_type = assign_det_arr_type->get_elm_type();
+    auto from_elm_type = arr_type->get_elm_type();
+
+    llvm::SmallVector<uint32_t, 8> arr_lengths;
+    arr_lengths.push_back(arr_type->get_length());
+
+    auto report_dimensions_error = [this, var, type, from_type]() finline {
+        error(expand(var), "Wrong array dimensions for '%s', but found '%s'",
+              type, from_type)
+           .end_error(ErrCode::SemaAssignDetArrWrongDimensions);
+    };
+
+    while (elm_type->get_kind() == TypeKind::AssignDeterminedArray) {
+        if (from_elm_type->get_kind() != TypeKind::Array) {
+            report_dimensions_error();
+            return nullptr;
+        }
+
+        assign_det_arr_type = as<AssignDeterminedArrayType*>(elm_type);
+        elm_type = assign_det_arr_type->get_elm_type();
+        
+        arr_type = as<ArrayType*>(from_elm_type);
+        from_elm_type = arr_type->get_elm_type();
+
+        arr_lengths.push_back(arr_type->get_length());
+    }
+
+    if (from_elm_type->get_kind() == TypeKind::Array) {
+        report_dimensions_error();
+        return nullptr;
+    }
+
+    Type* fixed_type = fixup_type(elm_type);
+    if (!fixed_type) {
+        return nullptr;
+    }
+    
+    for (auto itr = arr_lengths.rbegin(); itr != arr_lengths.rend(); ++itr) {
+        uint32_t arr_length = *itr;
+        fixed_type = type_table.get_arr_type(fixed_type, arr_length);
+    }
+
+   return fixed_type;
 }
 
 // Statement checking
@@ -334,6 +395,12 @@ void acorn::Sema::check_function(Func* func) {
 
     check_modifier_incompatibilities(func);
 
+    if (func->return_type->get_kind() == TypeKind::AssignDeterminedArray) {
+        error(func, "Functions cannot have return type '%s'", func->return_type)
+            .end_error(ErrCode::SemaFuncsCannotHaveAssignDetArrType);
+        return;
+    }
+
     func->return_type = fixup_type(func->return_type);
     if (!func->return_type) {
         // Failed to fixup return type so returning early.
@@ -412,10 +479,24 @@ void acorn::Sema::check_variable(Var* var) {
         }
     }
 
-    var->type = fixup_type(var->type);
+    if (var->type->get_kind() == TypeKind::AssignDeterminedArray && !var->assignment) {
+        error(var, "Must have assignment to determine array type's length")
+            .end_error(ErrCode::SemaVarRequiresAssignForDetArrType);
+        return cleanup();
+    }
+
+    if (var->type->get_kind() == TypeKind::AssignDeterminedArray) {
+        // We have to handle this case as if it is speciial because
+        // in no other instance other than variable assignments is the
+        // applicable.
+        var->type = fixup_assign_det_arr_type(var->type, var);
+    } else {
+        var->type = fixup_type(var->type);
+    }
+
     if (!var->type) {
         // Failed to fixup the type so returning early.
-        return;
+        return cleanup();
     }
 
     var->is_foldable = (var->type->is_integer() || var->type->is_bool()) &&

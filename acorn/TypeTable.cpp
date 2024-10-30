@@ -109,3 +109,7 @@ acorn::Type* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length) {
 
     return arr_type;
 }
+
+acorn::Type* acorn::TypeTable::get_assigned_det_arr_type(Type* elm_type) {
+    return AssignDeterminedArrayType::create(allocator, elm_type);
+}

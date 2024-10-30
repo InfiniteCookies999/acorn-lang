@@ -66,6 +66,8 @@ std::string acorn::Type::to_string() const {
     case TypeKind::USize:     return str("usize");
     case TypeKind::Pointer:   return as<const PointerType*>(this)->to_string();
     case TypeKind::Array:     return as<const ArrayType*>(this)->to_string();
+    case TypeKind::AssignDeterminedArray:
+                              return as<const AssignDeterminedArrayType*>(this)->to_string();
     default:
         acorn_fatal("Type::to_string() missing to_string case");
         return "";
@@ -121,4 +123,16 @@ uint64_t acorn::ArrayType::get_total_linear_length() const {
 
 std::string acorn::ArrayType::to_string() const {
     return elm_type->to_string() + "[" + std::to_string(length) + "]";
+}
+
+acorn::Type* acorn::AssignDeterminedArrayType::create(PageAllocator& allocator, 
+                                                      Type* elm_type,
+                                                      bool is_const) {
+    auto arr_type = allocator.alloc_type<AssignDeterminedArrayType>();
+    arr_type->contains_const = is_const;
+    return new (arr_type) AssignDeterminedArrayType(is_const, elm_type);
+}
+
+std::string acorn::AssignDeterminedArrayType::to_string() const {
+    return elm_type->to_string() + "[]";
 }

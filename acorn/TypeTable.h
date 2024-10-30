@@ -21,6 +21,8 @@ namespace acorn {
 
         Type* get_arr_type(Type* elm_type, uint32_t length);
 
+        Type* get_assigned_det_arr_type(Type* elm_type);
+
     private:
         PageAllocator& allocator;
 
