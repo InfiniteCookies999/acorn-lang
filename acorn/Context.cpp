@@ -20,7 +20,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
     : allocator(allocator),
       ll_context(ll_context),
       ll_module(ll_module),
-      type_table(allocator),
+      type_table(allocator, *this),
 
       invalid_type(Type::create(allocator, TypeKind::Invalid)),
       void_type(Type::create(allocator, TypeKind::Void)),
@@ -50,6 +50,20 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       void_ptr_type(type_table.get_ptr_type(void_type)),
       const_void_type(type_table.get_const_type(void_type)),
       empty_array_type(Type::create(allocator, TypeKind::EmptyArrayType)),
+      int_range_type(RangeType::create(allocator, int_type)),
+      int8_range_type(RangeType::create(allocator, int8_type)),
+      int16_range_type(RangeType::create(allocator, int16_type)),
+      int32_range_type(RangeType::create(allocator, int32_type)),
+      int64_range_type(RangeType::create(allocator, int64_type)),
+      uint8_range_type(RangeType::create(allocator, uint8_type)),
+      uint16_range_type(RangeType::create(allocator, uint16_type)),
+      uint32_range_type(RangeType::create(allocator, uint32_type)),
+      uint64_range_type(RangeType::create(allocator, uint64_type)),
+      isize_range_type(RangeType::create(allocator, isize_type)),
+      usize_range_type(RangeType::create(allocator, usize_type)),
+      char_range_type(RangeType::create(allocator, char_type)),
+      char16_range_type(RangeType::create(allocator, char16_type)),
+      char32_range_type(RangeType::create(allocator, char32_type)),
       
       main_identifier(Identifier::get("main")),
       length_identifier(Identifier::get("length")),
@@ -103,16 +117,19 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
 
       precedence({
 
-          { '*', 9 },
-          { '/', 9 },
-          { '%', 9 },
+          { '*', 10 },
+          { '/', 10 },
+          { '%', 10 },
           
-          { '+', 8 },
-          { '-', 8 },
+          { '+', 9 },
+          { '-', 9 },
           
-          { Token::LtLt, 7 }, // <<
-          { Token::GtGt, 7 }, // >>
-          
+          { Token::LtLt, 8 }, // <<
+          { Token::GtGt, 8 }, // >>
+
+          { Token::RangeEq, 5 }, // ..=
+          { Token::RangeLt, 5 }, // ..<
+
           { '<', 6 },
           { '>', 6 },
           { Token::LtEq, 6 }, // <=

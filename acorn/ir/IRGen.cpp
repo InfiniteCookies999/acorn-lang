@@ -679,6 +679,55 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
 
         builder.CreateStore(ll_index_value, loop->var->ll_address);
 
+    } else if (loop->container->type->is_range()) {
+
+        auto range_type = as<RangeType*>(loop->container->type);
+        auto value_type = range_type->get_value_type();
+        auto range = as<BinOp*>(loop->container);
+
+        auto ll_one = gen_one(value_type);
+
+        // Storing the beginning index of the range.
+        // 
+        builder.CreateStore(gen_rvalue(range->lhs), loop->var->ll_address);
+
+        // Calculating the end index. Adding one to the index if checking
+        // when equal since it is possible the range starts past the end
+        // so we want to compare less than in all cases. Otherwise it is
+        // possible to end up in an infinite loop.
+        //
+        llvm::Value* ll_compare_index = gen_rvalue(range->rhs);
+        if (range->op == Token::RangeEq) {
+            ll_compare_index = builder.CreateNSWAdd(ll_compare_index, ll_one);
+        }
+
+        // Branch into the condition block and determine when to stop
+        // iterating.
+        //
+        builder.CreateBr(ll_cond_bb);
+        builder.SetInsertPoint(ll_cond_bb);
+
+        llvm::Type*  ll_index_type = gen_type(value_type);
+        llvm::Value* ll_index      = builder.CreateLoad(ll_index_type, loop->var->ll_address);
+
+        auto ll_cond = value_type->is_signed() ? builder.CreateICmpSLT(ll_index, ll_compare_index)
+                                               : builder.CreateICmpULT(ll_index, ll_compare_index);
+        builder.CreateCondBr(ll_cond, ll_body_bb, ll_end_bb);
+
+        // Generate code for incrementing the index.
+        //
+        builder.SetInsertPoint(ll_inc_bb);
+
+        ll_index = builder.CreateLoad(ll_index_type, loop->var->ll_address);
+        ll_index = builder.CreateNSWAdd(ll_index, ll_one);
+        builder.CreateStore(ll_index, loop->var->ll_address);
+
+        builder.CreateBr(ll_cond_bb);
+
+        builder.SetInsertPoint(ll_body_bb);
+
+    } else {
+        acorn_fatal("unreachable iteration type");
     }
 
     gen_scope(loop->scope);

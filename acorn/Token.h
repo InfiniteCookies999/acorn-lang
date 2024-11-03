@@ -99,6 +99,8 @@ namespace acorn {
             // incrementing.
             PostAddAdd,
             PostSubSub,
+            RangeEq,
+            RangeLt,
 
             IntLiteral,
             HexLiteral,

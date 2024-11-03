@@ -546,6 +546,18 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("aaaaa");
         });
+        test("Iterator loop range equal", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test11.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("012345");
+        });
+        test("Iterator loop range less than", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test12.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("01234");
+        });
         test("Predicate loop break statement", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

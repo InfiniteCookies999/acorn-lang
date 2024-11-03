@@ -723,8 +723,8 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
     check_node(loop->var);
     check_node(loop->container);
 
-    if (loop->container->type) {
-        if (loop->container->type->is_array() && loop->var->type) {
+    if (loop->container->type && loop->var->type) {
+        if (loop->container->type->is_array()) {
             auto arr_type = as<ArrayType*>(loop->container->type);
             auto elm_type = arr_type->get_elm_type();
 
@@ -738,6 +738,12 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
             if (!types_match) {
                 error(loop->container, "Cannot assign type '%s' to variable type '%s'",
                       elm_type, loop->var->type)
+                    .end_error(ErrCode::SemaCannotAssignIteratorElmTypeToVar);
+            }
+        } else if (loop->container->type->is_range()) {
+            auto range_type = as<RangeType*>(loop->container->type);
+            if (loop->var->type->is_not(range_type->get_value_type())) {
+                error(loop->var, "Expected type '%s' for variable", range_type->get_value_type())
                     .end_error(ErrCode::SemaCannotAssignIteratorElmTypeToVar);
             }
         } else {
@@ -1243,6 +1249,24 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         }
         
         bin_op->type = context.bool_type;
+        break;
+    }
+    case Token::RangeEq: case Token::RangeLt: {
+        if (!lhs->type->is_integer()) {
+            error_cannot_apply(lhs);
+            return;
+        }
+        if (!rhs->type->is_integer()) {
+            error_cannot_apply(rhs);
+            return;
+        }
+        
+        if (!lhs->type->is(rhs->type)) {
+            error_mismatched();
+            return;
+        }
+
+        bin_op->type = type_table.get_range_type(lhs->type);
         break;
     }
     default:

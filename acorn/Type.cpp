@@ -64,6 +64,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Null:      return str("null");
     case TypeKind::ISize:     return str("isize");
     case TypeKind::USize:     return str("usize");
+    case TypeKind::Range:     return as<const RangeType*>(this)->to_string();
     case TypeKind::Pointer:   return as<const PointerType*>(this)->to_string();
     case TypeKind::Array:     return as<const ArrayType*>(this)->to_string();
     case TypeKind::AssignDeterminedArray:
@@ -136,3 +137,16 @@ acorn::Type* acorn::AssignDeterminedArrayType::create(PageAllocator& allocator,
 std::string acorn::AssignDeterminedArrayType::to_string() const {
     return elm_type->to_string() + "[]";
 }
+
+acorn::Type* acorn::RangeType::create(PageAllocator& allocator, 
+                                      Type* value_type, 
+                                      bool is_const) {
+    auto range_type = allocator.alloc_type<RangeType>();
+    range_type->contains_const = is_const;
+    return new (range_type) RangeType(is_const, value_type);
+}
+
+std::string acorn::RangeType::to_string() const {
+    return "range";
+}
+

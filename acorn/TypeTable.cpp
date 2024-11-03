@@ -1,9 +1,11 @@
 #include "TypeTable.h"
 
 #include "PageAllocator.h"
+#include "Context.h"
+#include "Logger.h"
 
-acorn::TypeTable::TypeTable(PageAllocator& allocator)
-    : allocator(allocator) {
+acorn::TypeTable::TypeTable(PageAllocator& allocator, Context& context)
+    : allocator(allocator), context(context) {
 }
 
 acorn::Type* acorn::TypeTable::get_const_type(Type* type) {
@@ -112,4 +114,26 @@ acorn::Type* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length) {
 
 acorn::Type* acorn::TypeTable::get_assigned_det_arr_type(Type* elm_type) {
     return AssignDeterminedArrayType::create(allocator, elm_type);
+}
+
+acorn::Type* acorn::TypeTable::get_range_type(Type* value_type) {
+    switch (value_type->get_kind()) {
+    case TypeKind::Int: return context.int_range_type;
+    case TypeKind::Int8: return context.int8_range_type;
+    case TypeKind::Int16: return context.int16_range_type;
+    case TypeKind::Int32: return context.int32_range_type;
+    case TypeKind::Int64: return context.int64_range_type;
+    case TypeKind::UInt8: return context.uint8_range_type;
+    case TypeKind::UInt16: return context.uint16_range_type;
+    case TypeKind::UInt32: return context.uint32_range_type;
+    case TypeKind::UInt64: return context.uint64_range_type;
+    case TypeKind::ISize: return context.isize_range_type;
+    case TypeKind::USize: return context.usize_range_type;
+    case TypeKind::Char: return context.char_range_type;
+    case TypeKind::Char16: return context.char16_range_type;
+    case TypeKind::Char32: return context.char32_range_type;
+    default:
+        acorn_fatal("Tried to create a range type from an invalid value type");
+        return nullptr;
+    }
 }

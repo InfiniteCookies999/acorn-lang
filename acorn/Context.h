@@ -59,6 +59,20 @@ namespace acorn {
         Type* void_ptr_type;
         Type* const_void_type;
         Type* empty_array_type;
+        Type* int_range_type;
+        Type* int8_range_type;
+        Type* int16_range_type;
+        Type* int32_range_type;
+        Type* int64_range_type;
+        Type* uint8_range_type;
+        Type* uint16_range_type;
+        Type* uint32_range_type;
+        Type* uint64_range_type;
+        Type* isize_range_type;
+        Type* usize_range_type;
+        Type* char_range_type;
+        Type* char16_range_type;
+        Type* char32_range_type;
 
         // Used to identifier the entry point of
         // the program.

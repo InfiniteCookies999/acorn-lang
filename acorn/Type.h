@@ -9,6 +9,7 @@ namespace acorn {
     class PageAllocator;
     class TypeTable;
     struct Expr;
+    class Context;
 
     enum class TypeKind {
         Invalid,
@@ -42,6 +43,8 @@ namespace acorn {
         EmptyArrayType,
         AssignDeterminedArray,
 
+        Range,
+        
     };
     
     class Type {
@@ -84,8 +87,9 @@ namespace acorn {
         bool is_container() const { return is_pointer() || is_array(); }
         bool is_pointer() const   { return kind == TypeKind::Pointer;  }
         bool is_array() const     { return kind == TypeKind::Array;    }
-        bool is_aggregate() const { return is_array(); }
+        bool is_aggregate() const { return is_array();                 }
         bool is_bool() const      { return kind == TypeKind::Bool;     }
+        bool is_range() const     { return kind == TypeKind::Range;    }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
@@ -190,6 +194,25 @@ namespace acorn {
         AssignDeterminedArrayType(bool vconst, Type* elm_type)
             : ContainerType(TypeKind::AssignDeterminedArray, vconst, elm_type) {
         }
+    };
+
+    class RangeType : public Type {
+    public:
+
+        static Type* create(PageAllocator& allocator, 
+                            Type* value_type, 
+                            bool is_const = false);
+
+        Type* get_value_type() const { return value_type; }
+
+        std::string to_string() const;
+
+    protected:
+        RangeType(bool vconst, Type* value_type)
+            : Type(TypeKind::Range, vconst), value_type(value_type) {
+        }
+
+        Type* value_type;
     };
 }
 

@@ -181,6 +181,17 @@ case c1:                                        \
         }
         return new_token(ptr - 1, 1, '<');
     }
+    case '.': {
+        ++ptr;
+        if (*ptr == '.' && *(ptr + 1) == '=') {
+            ptr += 2;
+            return new_token(ptr - 3, 3, Token::RangeEq);
+        } else if (*ptr == '.' && *(ptr + 1) == '<') {
+            ptr += 2;
+            return new_token(ptr - 3, 3, Token::RangeLt);
+        }
+        return new_token(ptr - 1, 1, '.');
+    }
     case '#':
         return next_comptime();
     case '(':
@@ -197,8 +208,6 @@ case c1:                                        \
         return new_token_and_eat('}');
     case ';':
         return new_token_and_eat(';');
-    case '.':
-        return new_token_and_eat('.');
     case ':':
         return new_token_and_eat(':');
 
