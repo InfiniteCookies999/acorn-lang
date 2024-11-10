@@ -781,8 +781,29 @@ static ParseData parse_float_data(PageAllocator& allocator, llvm::StringRef text
             ++idx;
         }
 
-        // TODO: exponent limit checks
-        exp += exp_sign * exp_value;
+        // Want to do exponent overflow checks here since just adding
+        // the value when it overflows could cause the later stages to
+        // not know that there was an overflow when the number overflows.
+        int64_t exp_limit = 324 + small_digits_count + big_digits_count + trailing_zero_count;
+        if (exp_value > exp_limit) {
+            if (exp_sign == 1 && exp < 0 && (exp_value + exp < exp_limit)) {
+                exp += exp_value;
+            } else {
+                if (exp_sign == 1) {
+                    return ParseData{
+                        FloatParseError::Overflow
+                    };
+                } else {
+                    return ParseData{
+                        FloatParseError::Underflow
+                    };
+                }
+            }
+        } else {
+            // Will not overflow. Although could still overflow
+            // later when taking into account the digits.
+            exp += exp_sign * exp_value;
+        }
     }
 
     return ParseData {
