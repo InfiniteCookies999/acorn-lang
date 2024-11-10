@@ -288,36 +288,80 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
         if (*ptr == 'x') {
             // Lexing hexidecimal
             ++ptr;
-            while (is_hexidecimal(*ptr) || *ptr == number_seperator) {
+            while (is_hexidecimal(*ptr) || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
             return finish_mumber(Token::HexLiteral, start);
         } else if (*ptr == 'b') {
             // Lexing binary
             ++ptr;
-            while (*ptr == '0' || *ptr == '1' || *ptr == number_seperator) {
+            while (*ptr == '0' || *ptr == '1' || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
             return finish_mumber(Token::BinLiteral, start);
         } else if (is_octal(*ptr)) {
             // Parsing octal number
-            while (is_octal(*ptr) || *ptr == number_seperator) {
+            while (is_octal(*ptr) || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
             return finish_mumber(Token::OctLiteral, start);
         }
     }
     
-    // Parsing decimal
-    while (is_digit(*ptr) || *ptr == number_seperator) {
+    // Parsing leading whole digits.
+    tokkind kind = Token::IntLiteral;
+    while (is_digit(*ptr) || *ptr == NUMBER_SEPERATOR) {
         ++ptr;
     }
-    return finish_mumber(Token::IntLiteral, start);
+
+    if ((*ptr == '.' && *(ptr+1) != '.') ||
+        *ptr == 'E' || *ptr == 'e') {
+        
+        kind = Token::FloatLiteral;
+
+        if (*ptr == '.') {
+            ++ptr;
+            // Parsing fractional digits.
+            while (is_digit(*ptr) || *ptr == NUMBER_SEPERATOR) {
+                ++ptr;
+            }
+        }
+
+        if (*ptr == 'E' || *ptr == 'e') {
+            ++ptr;
+
+            // Possible exponent sign.
+            if (*ptr == '+' || *ptr == '-') {
+                ++ptr;
+            }
+
+            // Parsing exponent digits.
+            bool encountered_exp_digits = false;
+            while (is_digit(*ptr) || *ptr == NUMBER_SEPERATOR) {
+                if (*ptr == NUMBER_SEPERATOR) {
+                    error("Numberic seperators cannot go in the exponent")
+                        .end_error(ErrCode::LexNumberSeperateInExp);
+                    kind = Token::InvalidNumberLiteral;
+                } else {
+                    encountered_exp_digits = true;
+                }
+                ++ptr;
+            }
+
+            if (!encountered_exp_digits) {
+                error("Expected digits for exponent")
+                    .end_error(ErrCode::LexExpectedDigitsForExp);
+                kind = Token::InvalidNumberLiteral;
+            }
+        }
+    }
+
+    return finish_mumber(kind, start);
 }
 
 acorn::Token acorn::Lexer::finish_mumber(tokkind kind, const char* start) {
     
-    if (*(ptr - 1) == number_seperator) {
+    if (*(ptr - 1) == NUMBER_SEPERATOR) {
         auto error_loc = SourceLoc{ start, static_cast<uint16_t>(ptr - start) };
         logger.begin_error(error_loc, "Numbers cannot end with _")
               .end_error(ErrCode::LexNumberCannotEndUnderscore);

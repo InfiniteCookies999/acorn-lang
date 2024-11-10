@@ -106,6 +106,7 @@ namespace acorn {
             HexLiteral,
             BinLiteral,
             OctLiteral,
+            FloatLiteral,
             Identifier,
             String8BitLiteral,
             String16BitLiteral,

@@ -7,8 +7,6 @@
 #include "SemaTests.h"
 #include "CodegenTests.h"
 
-#include "Process.h"
-
 int main() {
 
     test_lexer();

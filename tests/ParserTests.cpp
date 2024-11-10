@@ -518,4 +518,184 @@ void test_parser() {
             expect_none().to_produce_error(ErrCode::ParseElmTypeMustHaveArrLen);
         });
     });
+
+    /*
+        Code used for testing floating point numbers. It would be unreasonable
+        to test the floating point numbers every time so this is left here commented
+        out.
+    
+        acorn::PageAllocator allocator(1024);
+
+        int total_overflow_or_underflows = 0;
+
+        template<typename F>
+        static void test(std::string text, F &&parse_function) {
+            auto [value, error] = parse_function(allocator, text.c_str());
+            if (error != acorn::FloatParseError::None) {
+                ++total_overflow_or_underflows;
+                if (error == acorn::FloatParseError::Overflow) {
+                    value = std::numeric_limits<decltype(value)>::infinity();
+                    // Have to check for negative here because the parsing does not
+                    // make a distinguishing error for overflowing when negative.
+                    if (text[0] == '-') {
+                        value = -value;
+                    }
+                } else {
+                    value = 0.0;
+                }
+            }
+
+            decltype(value) correct_value;
+            std::from_chars(text.c_str(), text.c_str() + text.size(), correct_value);
+
+            if (value != correct_value) {
+                std::cout << "Value mismatch for: " << text << "\n";
+                exit(1);
+            }
+        }
+
+        template<typename F>
+        static void test_random_floats(int max_whole_digits,
+                                       int min_exp_value, 
+                                       int max_exp_value, 
+                                       double exp_dist_mean,
+                                       double exp_dist_std_dev,
+                                       F&& parse_function) {
+            std::random_device dev;
+            std::mt19937 generator(dev());
+
+            std::uniform_int_distribution<int> whole_digit_count_dist(1, max_whole_digits);
+            std::uniform_int_distribution<int> fraction_digit_count_dist(1, 40);
+            std::uniform_int_distribution<int> digit_dist(0, 9);
+            std::uniform_int_distribution<int> has_decimal_dist(0, 100);
+            std::uniform_int_distribution<int> has_exponent_dist(0, 2);
+            std::normal_distribution<> exponent_value_dist(exp_dist_mean, exp_dist_std_dev);
+            std::uniform_int_distribution<int> is_negative_dist(0, 6);
+    
+            const int total = 10'000'000;
+            for (int i = 0; i < total; i++) {
+                std::string text = "";
+                int negative_chance = is_negative_dist(generator);
+                if (negative_chance == 0) {
+                    text = "-";
+                }
+    
+                int whole_digits = whole_digit_count_dist(generator);
+                for (int j = 0; j < whole_digits; j++) {
+                    text += digit_dist(generator) + '0';
+                }
+                int decimal_chance = has_decimal_dist(generator);
+                if (decimal_chance != 1) {
+                    text += ".";
+                    int fraction_digits = fraction_digit_count_dist(generator);
+                    for (int j = 0; j < fraction_digits; j++) {
+                        text += digit_dist(generator) + '0';
+                    }
+                }
+                int exponent_chance = has_exponent_dist(generator);
+                if (exponent_chance == 1) {
+                    text += "E";
+                    int exp_value = static_cast<int>(exponent_value_dist(generator));
+                    exp_value = std::max(min_exp_value, std::min(max_exp_value, exp_value));
+                    text += std::to_string(exp_value);
+                }
+    
+                std::cout << "testing: " << text << "\n";
+                test(text, parse_function);
+            }
+            std::cout << "\n";
+            std::cout << "successfully parsed: " << total << "\n";
+            double under_over_percent = (total_overflow_or_underflows / (double)total) * 100;
+            std::cout << "over/under flow: " << std::fixed << std::setprecision(2) << under_over_percent << "%\n";
+        }
+
+        static void test_32_bit_floats() {
+
+            auto test_32bit = [](std::string text) {
+                test(text, &acorn::parse_float32_bits);
+            };
+
+            // Edge cases:
+            test_32bit("0.0");
+            test_32bit("-0.0");
+            test_32bit("1.17549435E-38"); // smallest normalized.
+            test_32bit("1.40129846E-45"); // smallest subnormal.
+            test_32bit("3.40282347E38");  // largest normalized.
+            test_32bit("1.7014117E-38");  // largest denormalized.
+            test_32bit("3.40282348E38");  // slightly above maximum but still shouldn't overflow due to rounding down.
+            test_32bit("3.40282347E+39"); // should overflow.
+            test_32bit("1.0000001");
+            test_32bit("1.9999999");
+            test_32bit("1.1754944E-38"); // just above smallest normalized number.
+            test_32bit("1.1754941E-38"); // just below smallest normalized, expected subnormal.
+            test_32bit("1E-50");
+            test_32bit("-1E-50");
+            test_32bit("1E-300");
+            test_32bit("1.0E+300");
+    
+            // Values that gave issues at one point or another.
+            test_32bit("58939.23392128");
+            test_32bit("379018.7048317439011206813390");
+            test_32bit("93706.114487064");
+            test_32bit("93706.114487064");
+            test_32bit("7588557.7262");
+            test_32bit("7661612.0445606E20");
+            test_32bit("-861.1876523230203");
+            test_32bit("-8581454.1968874340633539076258593948992E33");
+
+            int max_whole_digits = 8;
+            int min_exp_value = -45;
+            int max_exp_value = 38;
+            double exp_dist_mean = 6.0;
+            double exp_dist_std_dev = 10.0;
+            test_random_floats(max_whole_digits, 
+                               min_exp_value, 
+                               max_exp_value, 
+                               exp_dist_mean, 
+                               exp_dist_std_dev,
+                               &acorn::parse_float32_bits);
+        }
+
+        static void test_64_bit_floats() {
+
+            auto test_64bit = [](std::string text) {
+                test(text, &acorn::parse_float64_bits);
+            };
+
+            // Edge cases:
+            test_64bit("0.0");
+            test_64bit("-0.0");
+            test_64bit("2.225E-308"); // smallest normalized.
+            test_64bit("4.94E-324"); // smallest subnormal.
+            test_64bit("1.7976931348623157E308");  // largest normalized.
+            test_64bit("2.2250738585072014E-308");  // largest denormalized.
+            test_64bit("1.0000001");
+            test_64bit("1.9999999");
+            test_64bit("1E-50");
+            test_64bit("-1E-400");
+            test_64bit("1E-800");
+            test_64bit("1.0E+500");
+
+            int max_whole_digits = 16;
+            int min_exp_value = -324;
+            int max_exp_value = 308;
+            double exp_dist_mean = 50.0;
+            double exp_dist_std_dev = 95.0;
+            test_random_floats(max_whole_digits,
+                               min_exp_value, 
+                               max_exp_value, 
+                               exp_dist_mean, 
+                               exp_dist_std_dev,
+                               &acorn::parse_float64_bits);
+        }
+
+        int main() {
+
+            acorn::initialize_float_parsing(allocator);
+            //test_32_bit_floats();
+            test_64_bit_floats();
+
+            return 0;
+        }
+    */
 }

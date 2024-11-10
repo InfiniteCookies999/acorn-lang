@@ -103,6 +103,7 @@ namespace acorn {
         Number* parse_hex_literal();
         Number* parse_bin_literal();
         Number* parse_oct_literal();
+        Number* parse_float_literal();
         Expr* parse_string8bit_literal();
         Expr* parse_string16bit_literal();
         Expr* parse_string32bit_literal();

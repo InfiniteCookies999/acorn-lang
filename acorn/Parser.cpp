@@ -1279,6 +1279,7 @@ acorn::Expr* acorn::Parser::parse_term() {
     case Token::HexLiteral:           return parse_hex_literal();
     case Token::BinLiteral:           return parse_bin_literal();
     case Token::OctLiteral:           return parse_oct_literal();
+    case Token::FloatLiteral:         return parse_float_literal();
     case Token::String8BitLiteral:    return parse_string8bit_literal();
     case Token::String16BitLiteral:   return parse_string16bit_literal();
     case Token::String32BitLiteral:   return parse_string32bit_literal();
@@ -1433,6 +1434,10 @@ acorn::Number* acorn::Parser::parse_oct_literal() {
     static uint64_t void_table[256];
     const auto text = cur_token.text();
     return parse_number_literal<8, void_table, false>(text.data() + 1, text.end());
+}
+
+acorn::Number* acorn::Parser::parse_float_literal() {
+    return nullptr;
 }
 
 namespace acorn {
@@ -1592,7 +1597,7 @@ acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char
     while (ptr != end) {
         char c = *ptr;
 
-        if (c == number_seperator) {
+        if (c == NUMBER_SEPERATOR) {
             continue;
         } else if (c == '\'') {
             break;

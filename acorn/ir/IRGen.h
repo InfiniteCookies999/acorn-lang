@@ -79,7 +79,6 @@ namespace acorn {
         llvm::Value* gen_predicate_loop(PredicateLoopStmt* loop);
         llvm::Value* gen_range_loop(RangeLoopStmt* loop);
         llvm::Value* gen_iterator_loop(IteratorLoopStmt* loop);
-        void gen_array_iterator_loop(IteratorLoopStmt* loop);
         void gen_cond_branch_for_loop(Expr* cond, llvm::BasicBlock* ll_body_bb, llvm::BasicBlock* ll_end_bb);
         llvm::Value* gen_loop_control(LoopControlStmt* loop_control);
         llvm::Value* gen_switch(SwitchStmt* switchn);

@@ -6,7 +6,7 @@
 
 namespace acorn {
 
-    const char number_seperator = '_';
+    const char NUMBER_SEPERATOR = '_';
 
     class Context;
 
