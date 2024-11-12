@@ -915,7 +915,8 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         gen_function_decl(called_func);
         uses_aggr_param = called_func->uses_aggr_param;
     } else {
-        uses_aggr_param = false;
+        auto func_type = as<FunctionType*>(call->site->type);
+        uses_aggr_param = func_type->get_return_type()->is_aggregate();
     }
 
     auto gen_function_call_arg = [this](Expr* arg) finline -> llvm::Value* {
@@ -991,10 +992,14 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         auto func_type    = as<FunctionType*>(call->site->type);
         auto& param_types = func_type->get_param_types();
 
-        auto ll_ret_type = gen_type(func_type->get_return_type());
+        auto ll_ret_type = !uses_aggr_param ? gen_type(func_type->get_return_type())
+                                            : llvm::Type::getVoidTy(ll_context);
         
         llvm::SmallVector<llvm::Type*> ll_param_types;
-        ll_param_types.reserve(param_types.size());
+        ll_param_types.reserve(ll_num_args);
+        if (uses_aggr_param) {
+            ll_param_types.push_back(llvm::PointerType::get(ll_context, 0));
+        }
         for (Type* type : param_types) {
             ll_param_types.push_back(gen_type(type));
         }
