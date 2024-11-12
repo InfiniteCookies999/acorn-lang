@@ -138,7 +138,7 @@ namespace acorn {
             return error_count != 0;
         }
 
-        size_t get_max_error_count() {
+        size_t get_max_error_count() const {
             return max_error_count;
         }
 

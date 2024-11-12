@@ -118,7 +118,7 @@ static int count_digits(int number) {
 }
 
 void acorn::Compiler::show_time_table() {
-    if (!should_show_times) return;
+    if (!should_show_times || context.has_errors()) return;
 
     std::cout << "\n\n";
 
@@ -366,7 +366,12 @@ void acorn::Compiler::link() {
     };
 
     auto get_libs = [this] {
-        std::wstring libs = L"libcmt.lib msvcrt.lib kernel32.lib";
+        // ucrt.lib     -- dll standard C lib
+        // libucrt.lib  -- static standard C lib
+
+        // libcmt.lib  -- static CRT startup
+        // msvcrt.lib  -- static CRT to work with dll ucrt and vcruntime.
+        std::wstring libs = L"msvcrt.lib ucrt.lib kernel32.lib user32.lib shell32.lib gdi32.lib ";
         for (const std::wstring& lib : libraries) {
             libs += lib.ends_with(L".lib") ? lib : lib + L".lib ";
         }
@@ -438,6 +443,10 @@ void acorn::Compiler::link() {
         return;
     }
     
+    if (exit_code != 0) {
+        context.inc_error_count();
+    }
+
     if (exit_code == 0 && !dont_show_wrote_to_msg) {
         bool is_wide = std::ranges::any_of(absolute_exe_path, [](wchar_t c) {
             return c > 0x7F;

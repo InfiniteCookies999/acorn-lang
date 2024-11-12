@@ -871,6 +871,13 @@ llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_number(Number* number) {
+    auto type_kind = number->type->get_kind();
+    if (type_kind == TypeKind::Float64) {
+        return llvm::ConstantFP::get(ll_context, llvm::APFloat(number->value_f64));
+    } else if (type_kind == TypeKind::Float32) {
+        return llvm::ConstantFP::get(ll_context, llvm::APFloat(number->value_f32));
+    }
+
     auto int_bit_size = number->type->get_number_of_bits();
     return llvm::ConstantInt::get(ll_context, llvm::APInt(int_bit_size, number->value_u64, true));
 }
@@ -937,6 +944,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         }
     }
 
+    // -- Debug
     // std::string debug_info = "Calling function with name: " + called_func->name.reduce().str() + "\n";
     // debug_info += "         LLVM Types passed to function:  [";
     // for (auto ll_arg : ll_args) {
