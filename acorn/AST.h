@@ -26,7 +26,7 @@ namespace acorn {
 
     const size_t MAX_FUNC_PARAMS = 64;
 
-    using FuncList = llvm::SmallVector<Func*, 256>;
+    using FuncList = llvm::SmallVector<Func*>;
 
     enum class NodeKind {
         
