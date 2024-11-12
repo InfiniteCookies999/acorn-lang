@@ -894,6 +894,11 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
         return ref->var_ref->ll_address;
     } else if (ref->is_universal_ref()) {
         return gen_rvalue(ref->universal_ref);
+    } else if (ref->is_funcs_ref()) {
+        auto func = (*ref->funcs_ref)[0];
+        gen_function_decl(func);
+
+        return func->ll_func;
     }
 
     acorn_fatal("unreachable: gen_ident_reference()");
@@ -902,8 +907,16 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
 
 llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* ll_dest_address) {
     
-    Func* called_func = call->called_func;
-    gen_function_decl(called_func);
+    bool call_func_type = call->site->type->is_function_type();
+
+    bool uses_aggr_param;
+    if (!call_func_type) {
+        Func* called_func = call->called_func;
+        gen_function_decl(called_func);
+        uses_aggr_param = called_func->uses_aggr_param;
+    } else {
+        uses_aggr_param = false;
+    }
 
     auto gen_function_call_arg = [this](Expr* arg) finline -> llvm::Value* {
         if (arg->is(NodeKind::IdentRef)) {
@@ -923,13 +936,13 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
     size_t ll_num_args = call->args.size();
     size_t arg_offset = 0;
     
-    if (called_func->uses_aggr_param) {
+    if (uses_aggr_param) {
         ++ll_num_args;
     }
     ll_args.resize(ll_num_args);
 
     // Pass the return address as an argument.
-    if (called_func->uses_aggr_param) {
+    if (uses_aggr_param) {
         ll_args[arg_offset++] = ll_dest_address;
     }
 
@@ -945,32 +958,55 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
     }
 
     // -- Debug
-    // std::string debug_info = "Calling function with name: " + called_func->name.reduce().str() + "\n";
-    // debug_info += "         LLVM Types passed to function:  [";
-    // for (auto ll_arg : ll_args) {
-    //     debug_info += to_string(ll_arg->getType());
-    //     if (ll_arg != ll_args.back()) {
-    //         debug_info += ", ";
+    // if (!call->site->type->is_function_type()) {
+    //     Func* called_func = call->called_func;
+    //     std::string debug_info = "Calling function with name: " + called_func->name.reduce().str() + "\n";
+    //     debug_info += "         LLVM Types passed to function:  [";
+    //     for (auto ll_arg : ll_args) {
+    //         debug_info += to_string(ll_arg->getType());
+    //         if (ll_arg != ll_args.back()) {
+    //             debug_info += ", ";
+    //         }
     //     }
-    // }
-    // debug_info += "]\n";
-    // debug_info += "         Types expected by the function: [";
-    // for (size_t count = 0; llvm::Argument & ll_arg : called_func->ll_func->args()) {
-    //     debug_info += to_string(ll_arg.getType());
-    //     if (count + 1 != called_func->ll_func->arg_size()) {
-    //         debug_info += ", ";
+    //     debug_info += "]\n";
+    //     debug_info += "         Types expected by the function: [";
+    //     for (size_t count = 0; llvm::Argument & ll_arg : called_func->ll_func->args()) {
+    //         debug_info += to_string(ll_arg.getType());
+    //         if (count + 1 != called_func->ll_func->arg_size()) {
+    //             debug_info += ", ";
+    //         }
+    //         ++count;
     //     }
-    //     ++count;
+    //     debug_info += "]\n";
+    //     Logger::debug(debug_info.c_str());
     // }
-    // debug_info += "]\n";
-    // Logger::debug(debug_info.c_str());
 
-    auto ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
+    llvm::Value* ll_ret;
+    if (!call_func_type) {
+        Func* called_func = call->called_func;
+        ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
+    } else {
+        auto ll_site = gen_rvalue(call->site);
+        
+        auto func_type    = as<FunctionType*>(call->site->type);
+        auto& param_types = func_type->get_param_types();
+
+        auto ll_ret_type = gen_type(func_type->get_return_type());
+        
+        llvm::SmallVector<llvm::Type*> ll_param_types;
+        ll_param_types.reserve(param_types.size());
+        for (Type* type : param_types) {
+            ll_param_types.push_back(gen_type(type));
+        }
+
+        auto ll_func_type = llvm::FunctionType::get(ll_ret_type, ll_param_types, false);
+        ll_ret = builder.CreateCall(ll_func_type, ll_site, ll_args);
+    }
     if (!ll_ret->getType()->isVoidTy()) {
         ll_ret->setName("call.ret");
     }
 
-    if (ll_dest_address && !called_func->uses_aggr_param) {
+    if (ll_dest_address && !uses_aggr_param) {
         builder.CreateStore(ll_ret, ll_dest_address);
     }
 
@@ -1220,6 +1256,7 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
     case TypeKind::USize:
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), 0, false);
     case TypeKind::Pointer:
+    case TypeKind::Function:
         return llvm::Constant::getNullValue(llvm::PointerType::get(ll_context, 0));
     case TypeKind::Array:
         return llvm::ConstantAggregateZero::get(gen_type(type));
@@ -1308,6 +1345,13 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
                 return builder.CreateUIToFP(ll_value, gen_type(to_type), "cast");
             }
         }
+        goto NoCastFound;
+    }
+    case TypeKind::Function: {
+        if (from_type->get_kind() == TypeKind::FuncsRef) {
+            return ll_value;
+        }
+
         goto NoCastFound;
     }
     default:

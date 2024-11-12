@@ -14,6 +14,7 @@ namespace acorn {
     class Module;
     class TypeTable;
     class SourceFile;
+    class FunctionType;
 
     class Sema {
     public:
@@ -106,6 +107,7 @@ namespace acorn {
         void check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call);
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
+        void check_function_type_call(FuncCall* call, FunctionType* func_type);
         Func* find_best_call_canidate(FuncList& canidates,
                                       llvm::SmallVector<Expr*, 8>& args);
         // Tells weather or not the function is callable and gathers information
@@ -120,9 +122,11 @@ namespace acorn {
                                         const FuncList& canidates,
                                         const llvm::SmallVector<Expr*, 8>& args) const;
         // Displays information for why trying to call a function failed.
-        void display_call_mismatch_info(const Func* canidate,
+        template<typename F>
+        void display_call_mismatch_info(const F* canidate,
                                         const llvm::SmallVector<Expr*, 8>& args,
                                         bool indent) const;
+
         void check_cast(Cast* cast);
         void check_named_value(NamedValue* named_value);
         void check_array(Array* arr);
@@ -150,6 +154,7 @@ namespace acorn {
         
         std::string get_type_mismatch_error(Type* to_type, Expr* expr) const;
         std::string get_type_mismatch_error(Type* to_type, Type* from_type) const;
+
         template<typename... TArgs>
         [[nodiscard]] Logger& error(PointSourceLoc loc, const char* fmt, TArgs... args) {
             return logger.begin_error(loc, fmt, std::forward<TArgs>(args)...);

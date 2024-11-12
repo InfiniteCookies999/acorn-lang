@@ -648,5 +648,29 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("case > 5");
         });
+        test("Call function type no args", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("called callback!");
+        });
+        test("Call function type with args", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ABC");
+        });
+        test("Call function type returns value", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls3.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("msg from callback!");
+        });
+        test("Call function type from func param pass", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls4.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("called callback!");
+        });
     });
 }

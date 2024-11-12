@@ -26,6 +26,8 @@ namespace acorn {
 
         Type* get_range_type(Type* value_type);
 
+        Type* get_function_type(Type* return_type, llvm::SmallVector<Type*> param_types);
+
     private:
         PageAllocator& allocator;
         Context&       context;
@@ -38,6 +40,9 @@ namespace acorn {
         
         std::mutex arr_types_mtx;
         llvm::DenseMap<std::pair<Type*, uint32_t>, Type*> arr_types;
+
+        std::mutex func_types_mtx;
+        llvm::DenseMap<FunctionTypeKey*, Type*> func_types;
     };
 }
 

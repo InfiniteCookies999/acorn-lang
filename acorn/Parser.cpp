@@ -818,6 +818,27 @@ acorn::Type* acorn::Parser::parse_type() {
         }
     }
 
+    if (cur_token.is('!') && peek_token(0).is('(')) {
+        next_token();
+        next_token();
+        llvm::SmallVector<Type*> param_types;
+        if (cur_token.is_not(')')) {
+            bool more_param_types = true;
+            while (more_param_types) {
+
+                param_types.push_back(parse_type());
+
+                more_param_types = cur_token.is(',');
+                if (more_param_types) {
+                    next_token();
+                }
+            }
+        }
+        expect(')', "for function type");
+    
+        type = type_table.get_function_type(type, param_types);
+    }
+
     if (type->is(context.const_void_type)) {
         SourceLoc error_loc = {
             .ptr = first_token.loc.ptr,

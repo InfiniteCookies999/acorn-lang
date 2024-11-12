@@ -4,6 +4,10 @@
 #include <string>
 #include <cstdint>
 
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/Hashing.h>
+#include <llvm/ADT/DenseMapInfo.h>
+
 namespace acorn {
     
     class PageAllocator;
@@ -45,6 +49,7 @@ namespace acorn {
         Null,
         EmptyArrayType,
         AssignDeterminedArray,
+        Function,
 
         Range,
         
@@ -98,6 +103,7 @@ namespace acorn {
         bool is_aggregate() const { return is_array();                 }
         bool is_bool() const      { return kind == TypeKind::Bool;     }
         bool is_range() const     { return kind == TypeKind::Range;    }
+        bool is_function_type() const { return kind == TypeKind::Function; }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
@@ -110,8 +116,8 @@ namespace acorn {
 
 
     protected:
-        Type(TypeKind kind, bool vconst)
-            : kind(kind), vconst(vconst) {
+        Type(TypeKind kind, bool is_const)
+            : kind(kind), vconst(is_const) {
         }
 
         // We store a version of this type except with all of it's
@@ -133,8 +139,8 @@ namespace acorn {
         Type* get_base_type() const;
 
     protected:
-        ContainerType(TypeKind kind, bool vconst, Type* elm_type)
-            : Type(kind, vconst), elm_type(elm_type) {
+        ContainerType(TypeKind kind, bool is_const, Type* elm_type)
+            : Type(kind, is_const), elm_type(elm_type) {
         }
 
         Type* elm_type;
@@ -148,8 +154,8 @@ namespace acorn {
         std::string to_string() const;
 
     protected:
-        PointerType(bool vconst, Type* elm_type) 
-            : ContainerType(TypeKind::Pointer, vconst, elm_type) {
+        PointerType(bool is_const, Type* elm_type)
+            : ContainerType(TypeKind::Pointer, is_const, elm_type) {
         }
     };
 
@@ -162,8 +168,8 @@ namespace acorn {
         Expr* get_length_expr() const { return length_expr; }
 
     private:
-        UnresolvedArrayType(bool vconst, Expr* length_expr, Type* elm_type) :
-            ContainerType(TypeKind::UnresolvedArrayType, vconst, elm_type) {
+        UnresolvedArrayType(bool is_const, Expr* length_expr, Type* elm_type) :
+            ContainerType(TypeKind::UnresolvedArrayType, is_const, elm_type) {
         }
         
         Expr* length_expr;
@@ -182,8 +188,8 @@ namespace acorn {
         std::string to_string() const;
 
     protected:
-        ArrayType(bool vconst, Type* elm_type, uint32_t length)
-            : ContainerType(TypeKind::Array, vconst, elm_type), length(length) {
+        ArrayType(bool is_const, Type* elm_type, uint32_t length)
+            : ContainerType(TypeKind::Array, is_const, elm_type), length(length) {
         }
 
         uint32_t length;
@@ -199,8 +205,8 @@ namespace acorn {
         std::string to_string() const;
 
     protected:
-        AssignDeterminedArrayType(bool vconst, Type* elm_type)
-            : ContainerType(TypeKind::AssignDeterminedArray, vconst, elm_type) {
+        AssignDeterminedArrayType(bool is_const, Type* elm_type)
+            : ContainerType(TypeKind::AssignDeterminedArray, is_const, elm_type) {
         }
     };
 
@@ -216,12 +222,93 @@ namespace acorn {
         std::string to_string() const;
 
     protected:
-        RangeType(bool vconst, Type* value_type)
-            : Type(TypeKind::Range, vconst), value_type(value_type) {
+        RangeType(bool is_const, Type* value_type)
+            : Type(TypeKind::Range, is_const), value_type(value_type) {
         }
 
         Type* value_type;
     };
+
+    struct FunctionTypeKey {
+        Type*                    return_type;
+        llvm::SmallVector<Type*> param_types;
+    
+        FunctionTypeKey(Type* return_type, llvm::SmallVector<Type*> param_types)
+            : return_type(return_type), param_types(std::move(param_types)) {
+        }
+    };
+
+    class FunctionType : public Type {
+    public:
+
+        static Type* create(PageAllocator& allocator,
+                            FunctionTypeKey* key,
+                            bool is_const = false);
+
+        Type* get_return_type() const {
+            return key->return_type;
+        }
+
+        const llvm::SmallVector<Type*>& get_param_types() const {
+            return key->param_types;
+        }
+
+        std::string to_string() const;
+
+    protected:
+        FunctionType(bool is_const, FunctionTypeKey* key)
+            : Type(TypeKind::Function, is_const),
+              key(key) {
+        }
+
+        FunctionTypeKey* key;
+    };
+}
+
+// Hashing for FunctionTypeKey.
+namespace llvm {
+template<>
+struct DenseMapInfo<acorn::FunctionTypeKey*> {
+    
+    static acorn::FunctionTypeKey* getEmptyKey() {
+        return reinterpret_cast<acorn::FunctionTypeKey*>(-1);
+    }
+
+    static acorn::FunctionTypeKey* getTombstoneKey() {
+        return reinterpret_cast<acorn::FunctionTypeKey*>(-2);
+    }
+
+    static unsigned getHashValue(const acorn::FunctionTypeKey* key) {
+        return hash_combine(key->return_type, 
+                            hash_combine_range(key->param_types.begin(), key->param_types.end()));
+    }
+
+    static bool isEqual(const acorn::FunctionTypeKey* lhs, 
+                        const acorn::FunctionTypeKey* rhs) {
+        if (lhs == getEmptyKey() || rhs == getEmptyKey()) {
+            return lhs == rhs;
+        }
+        if (lhs == getTombstoneKey() || rhs == getTombstoneKey()) {
+            return lhs == rhs;
+        }
+
+        if (lhs->return_type->is_not(rhs->return_type)) {
+            return false;
+        }
+        if (lhs->param_types.size() != rhs->param_types.size()) {
+            return false;
+        }
+
+        for (size_t i = 0; i < lhs->param_types.size(); i++) {
+            if (lhs->param_types[i]->is_not(rhs->param_types[i])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+};
+
 }
 
 #endif // TYPE_H

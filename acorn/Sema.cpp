@@ -1,5 +1,7 @@
 #include "Sema.h"
 
+#include <ranges>
+
 #include "Util.h"
 #include "Context.h"
 #include "Type.h"
@@ -1510,7 +1512,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
     if (args_have_errors) return;
 
-    bool is_callable = true;
+    bool is_funcs_ref = true;
     if (call->site->is(NodeKind::IdentRef)) {
         
         IdentRef* ref = as<IdentRef*>(call->site);
@@ -1518,7 +1520,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         yield_if(ref);
 
         if (ref->found_kind != IdentRef::FuncsKind) {
-            is_callable = false;
+            is_funcs_ref = false;
         }
     } else if (call->site->is(NodeKind::DotOperator)) {
         // This is very similar to check to IdentRef but it is too much
@@ -1530,15 +1532,20 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         yield_if(ref);
 
         if (ref->found_kind != IdentRef::FuncsKind) {
-            is_callable = false;
+            is_funcs_ref = false;
         }
     } else {
         check_and_verify_type(call->site);
-        // TODO: Deal with
-        is_callable = false;
+        
+        is_funcs_ref = false;
     }
 
-    if (!is_callable) {
+    if (call->site->type->is_function_type()) {
+        check_function_type_call(call, as<FunctionType*>(call->site->type));
+        return;
+    }
+    
+    if (!is_funcs_ref) {
         error(expand(call->site), "Type '%s' is not callable", call->site->type)
             .end_error(ErrCode::SemaTypeNoCallable);
         return;
@@ -1572,6 +1579,35 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     call->type = called_func->return_type;
     context.queue_gen(call->called_func);
 
+}
+
+void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_type) {
+    auto& param_types = func_type->get_param_types();
+
+    auto display_error = [this, call, func_type]() finline {
+        // TODO: generate function type string.
+        logger.begin_error(expand(call), "Invalid call to function type: %s", 44);
+        logger.add_empty_line();
+        display_call_mismatch_info(func_type, call->args, false);
+        logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
+    };
+
+    if (call->args.size() != param_types.size()) {
+        display_error();
+        return;
+    }
+
+    for (size_t i = 0; i < call->args.size(); i++) {
+        Expr* arg        = call->args[i];
+        Type* param_type = param_types[i];
+
+        if (!is_assignable_to(param_type, arg)) {
+            display_error();
+            return;
+        }
+    }
+
+    call->type = func_type->get_return_type();
 }
 
 acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
@@ -1696,58 +1732,84 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
     }
 }
 
-void acorn::Sema::display_call_mismatch_info(const Func* canidate,
+template<typename F>
+void acorn::Sema::display_call_mismatch_info(const F* canidate,
                                              const llvm::SmallVector<Expr*, 8>& args,
                                              bool indent) const {
     
-    auto& params = canidate->params;
-    
 #define err_line(fmt, ...) logger.add_line(("%s- " fmt), indent ? "  " : "", __VA_ARGS__)
 
-    if (canidate->params.size() != args.size()) {
+    constexpr bool is_func_expr = std::is_same_v<std::remove_const_t<F>, Func>;
+
+    auto get_num_params = [canidate]() constexpr -> size_t {
+        if constexpr (is_func_expr) {
+            return canidate->params.size();
+        } else {
+            return canidate->get_param_types().size();
+        }
+    };
+
+    size_t num_params = get_num_params();
+
+    if (num_params != args.size()) {
         err_line("Incorrect number of args. Expected %s but found %s",
-            params.size(), args.size());
+                 num_params, args.size());
         return;
     }
 
+    auto get_param_type = [canidate](Var* param, size_t arg_idx) constexpr -> Type* {
+        if constexpr (is_func_expr) {
+            return param->type;
+        } else {
+            return canidate->get_param_types()[arg_idx];
+        }
+    };
+
     bool named_args_out_of_order = false;
     uint32_t named_arg_high_idx = 0;
-    for (size_t i = 0; i < params.size(); i++) {
+    for (size_t i = 0; i < num_params; i++) {
         
         Expr* arg_value = args[i];
         Var* param;
 
         if (arg_value->is(NodeKind::NamedValue)) {
             
-            auto named_arg = as<NamedValue*>(arg_value);
-            arg_value = named_arg->assignment;
-            param = canidate->find_parameter(named_arg->name);
+            if constexpr (is_func_expr) {
+                auto named_arg = as<NamedValue*>(arg_value);
+                arg_value = named_arg->assignment;
+                param = canidate->find_parameter(named_arg->name);
             
-            if (!param) {
-                err_line("Could not find param '%s' for named arg", named_arg->name);
-                return;
-            }
+                if (!param) {
+                    err_line("Could not find param '%s' for named arg", named_arg->name);
+                    return;
+                }
 
-            named_arg_high_idx = std::max(param->param_idx, named_arg_high_idx);
-            if (param->param_idx != i) {
-                named_args_out_of_order = true;
+                named_arg_high_idx = std::max(param->param_idx, named_arg_high_idx);
+                if (param->param_idx != i) {
+                    named_args_out_of_order = true;
+                }
+            } else {
+                // TODO: report that named arguments cannot be used in function type calls.
             }
         } else {
-            param = canidate->params[i];
+            if constexpr (is_func_expr) {
+                param = canidate->params[i];
 
-            if (named_args_out_of_order || named_arg_high_idx > i) {
-                // Do not continue reporting errors because the arguments
-                // being disordered would mean the error messages would not
-                // make any sense.
-                err_line("Arg %s causes the arguments to be out of order", i + 1);
-                logger.add_line("  Order named arguments or place before named arguments");
-                return;
+                if (named_args_out_of_order || named_arg_high_idx > i) {
+                    // Do not continue reporting errors because the arguments
+                    // being disordered would mean the error messages would not
+                    // make any sense.
+                    err_line("Arg %s causes the arguments to be out of order", i + 1);
+                    logger.add_line("  Order named arguments or place before named arguments");
+                    return;
+                }
             }
         }
-        
-        if (!is_assignable_to(param->type, arg_value)) {
+
+        auto param_type = get_param_type(param, i);
+        if (!is_assignable_to(param_type, arg_value)) {
             err_line("Wrong type for arg %s. Expected '%s' but found '%s'",
-                     i + 1, param->type, arg_value->type);
+                     i + 1, param_type, arg_value->type);
         }
     }
 
@@ -1971,6 +2033,33 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             // Allow for zero filling the remainder.
             return true;
         }
+        return to_type->is(from_type);
+    }
+    case TypeKind::Function: {
+        if (from_type->get_kind() == TypeKind::FuncsRef) {
+            auto to_func_type = as<FunctionType*>(to_type);
+            
+            // TODO: in the future we want to allow selection of the
+            //       specific function they ask for.
+            auto ref = as<IdentRef*>(expr);
+            auto func = (*ref->funcs_ref)[0];
+            if (func->return_type->is_not(to_func_type->get_return_type())) {
+                return false;
+            }
+            auto& param_types = to_func_type->get_param_types();
+            if (func->params.size() != param_types.size()) {
+                return false;
+            }
+            for (size_t i = 0; i < param_types.size(); i++) {
+                if (param_types[i]->is_not(func->params[i]->type)) {
+                    return false;
+                }
+            }
+
+            context.queue_gen(func);
+            return true;
+        }
+
         return to_type->is(from_type);
     }
     default:
@@ -2220,8 +2309,18 @@ llvm::Constant* acorn::Sema::gen_constant(PointSourceLoc error_loc, Expr* expr) 
 std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) const {
     if (to_type->is_integer() && to_type->is_not(context.char_type) &&
         expr->is(NodeKind::Number) && expr->is_foldable && expr->type->is_integer()) {
-        
+   
         return get_error_msg_for_value_not_fit_type(as<Number*>(expr));
+    } else if (to_type->is_function_type() && expr->type->get_kind() == TypeKind::FuncsRef) {
+        
+        auto ref = as<IdentRef*>(expr);
+        auto func = (*ref->funcs_ref)[0];
+        
+        auto types = func->params | std::views::transform([](Var* param) { return param->type; })
+                                  | std::ranges::to<llvm::SmallVector<Type*>>();
+
+        auto from_type = type_table.get_function_type(func->return_type, types);
+        return get_type_mismatch_error(to_type, from_type);
     } else {
         return get_type_mismatch_error(to_type, expr->type);
     }

@@ -71,6 +71,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Range:     return as<const RangeType*>(this)->to_string();
     case TypeKind::Pointer:   return as<const PointerType*>(this)->to_string();
     case TypeKind::Array:     return as<const ArrayType*>(this)->to_string();
+    case TypeKind::Function:  return as<const FunctionType*>(this)->to_string();
     case TypeKind::AssignDeterminedArray:
                               return as<const AssignDeterminedArrayType*>(this)->to_string();
     default:
@@ -154,3 +155,23 @@ std::string acorn::RangeType::to_string() const {
     return "range";
 }
 
+acorn::Type* acorn::FunctionType::create(PageAllocator& allocator,
+                                         FunctionTypeKey* key,
+                                         bool is_const) {
+    auto function_type = allocator.alloc_type<FunctionType>();
+    function_type->contains_const = is_const;
+    return new (function_type) FunctionType(is_const, key);
+}
+
+std::string acorn::FunctionType::to_string() const {
+    std::string str = key->return_type->to_string() + "!";
+    str += "(";
+    for (Type* type : key->param_types) {
+        str += type->to_string();
+        if (type != key->param_types.back()) {
+            str += ", ";
+        }
+    }
+    str += ")";
+    return str;
+}

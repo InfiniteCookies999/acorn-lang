@@ -14,7 +14,9 @@ std::string acorn::to_string(llvm::Type* type) {
 
 llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Module& ll_module) {
     switch (type->get_kind()) {
-    case TypeKind::Pointer: return llvm::PointerType::get(ll_context, 0);
+    case TypeKind::Pointer:
+    case TypeKind::Function:
+        return llvm::PointerType::get(ll_context, 0);
 
     case TypeKind::Void: return llvm::Type::getVoidTy(ll_context);
 
