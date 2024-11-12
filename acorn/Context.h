@@ -45,6 +45,8 @@ namespace acorn {
         Type* uint64_type;
         Type* isize_type;
         Type* usize_type;
+        Type* float32_type;
+        Type* float64_type;
         Type* bool_type;
         Type* char_type;
         Type* char16_type;

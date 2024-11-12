@@ -991,6 +991,29 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     };
 
     auto get_number_type = [=](bool enforce_lhs) finline -> Type* {
+        // TODO: If one of the types is a float and the other an integer
+        //       we may want the bitwidth to be less than or equal to the
+        //       size of the float for the integer.
+        
+        if (lhs->type->is_float()) {
+            if (rhs->type->is_float() && 
+                rhs->type->get_number_of_bits() != lhs->type->get_number_of_bits()) {
+                return nullptr;
+            } else if (!rhs->type->is_integer()) {
+                return nullptr;
+            }
+
+            return lhs->type->remove_all_const();
+        } else if (rhs->type->is_float()) {
+            if (lhs->type->is_float() &&
+                lhs->type->get_number_of_bits() != rhs->type->get_number_of_bits()) {
+                return nullptr;
+            } else if (!lhs->type->is_integer()) {
+                return nullptr;
+            }
+            
+            return rhs->type->remove_all_const();
+        }
         return get_integer_type(enforce_lhs);
     };
 

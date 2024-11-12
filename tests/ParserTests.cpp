@@ -47,6 +47,8 @@ void test_parser() {
     context = allocator.alloc_type<Context>();
     new (context) Context(ll_context, *ll_test_model, allocator);
     context->set_max_error_count(999999);
+
+    acorn::initialize_float_parsing(allocator);
     
     auto mock_parser = [&](const char* program) {
         Buffer buffer = {
@@ -516,6 +518,66 @@ void test_parser() {
         test("elm type of array must have element", [&] {
             mock_parser("int[4][] a;");
             expect_none().to_produce_error(ErrCode::ParseElmTypeMustHaveArrLen);
+        });
+        test("float 64 arithmetic", [&] {
+            const char* program = R"(
+                5421.743166 + 314.781;
+                412.712 - 521.341 / 6.3;
+                125.624 * 412.721 / 4.542156 + 63.213;
+            )";
+
+            const double value1 = 5421.743166 + 314.781;
+            const double value2 = 412.712 - 521.341 / 6.3;
+            const double value3 = 125.624 * 412.721 / 4.542156 + 63.213;
+            Module& modl = mock_parser(program)->modl;
+
+            auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
+                                               get_bad_scope_node);
+
+            expect(nodes.size(), to_string<size_t>).to_be(3);
+            
+            expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->float64_type);
+            expect(std::bit_cast<uint64_t>(as<Number*>(nodes[0])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value1));
+
+            expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->float64_type);
+            expect(std::bit_cast<uint64_t>(as<Number*>(nodes[1])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value2));
+
+            expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->float64_type);
+            expect(std::bit_cast<uint64_t>(as<Number*>(nodes[2])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value3));
+
+        });
+        test("float 32 arithmetic", [&] {
+            const char* program = R"(
+                5421.743166f + 314.781f;
+                412.712f - 521.341f / 6.3f;
+                125.624f * 412.721f / 4.542156f + 63.213f;
+            )";
+
+            const float value1 = 5421.743166f + 314.781f;
+            const float value2 = 412.712f - 521.341 / 6.3f;
+            const float value3 = 125.624f * 412.721f / 4.542156f + 63.213f;
+            Module& modl = mock_parser(program)->modl;
+
+            auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
+                                               get_bad_scope_node);
+
+            expect(nodes.size(), to_string<size_t>).to_be(3);
+            
+            expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->float32_type);
+            expect(std::bit_cast<uint32_t>(as<Number*>(nodes[0])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value1));
+
+            expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->float32_type);
+            expect(std::bit_cast<uint32_t>(as<Number*>(nodes[1])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value2));
+
+            expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->float32_type);
+            expect(std::bit_cast<uint32_t>(as<Number*>(nodes[2])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value3));
+
         });
     });
 

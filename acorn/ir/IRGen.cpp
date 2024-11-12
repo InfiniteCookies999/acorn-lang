@@ -783,7 +783,6 @@ llvm::Value* acorn::IRGenerator::gen_switch_non_foldable(SwitchStmt* switchn) {
             // It is an operation that results in a boolean so branch on that condition.
             gen_branch_on_condition(as<Expr*>(scase.cond), ll_then_bb, ll_else_bb);
         } else {
-            // It is is simply
             auto ll_cond = gen_equal(gen_rvalue(switchn->on), gen_rvalue(scase.cond));
             builder.CreateCondBr(ll_cond, ll_then_bb, ll_else_bb);
         }
@@ -1202,6 +1201,10 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
         return builder.getInt32(0);
     case TypeKind::Int64: case TypeKind::UInt64:
         return builder.getInt64(0);
+    case TypeKind::Float32:
+        return llvm::ConstantFP::get(ll_context, llvm::APFloat((float)0.0F));
+    case TypeKind::Float64:
+        return llvm::ConstantFP::get(ll_context, llvm::APFloat((double)0.0));
     case TypeKind::Bool:
         return builder.getInt1(0);
     case TypeKind::ISize:
@@ -1272,6 +1275,30 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
             return builder.CreateIntCast(ll_value, gen_type(to_type), to_type->is_signed(), "cast");
         } else if (from_type->is_real_pointer()) {
             return builder.CreateIntToPtr(ll_value, gen_type(to_type), "cast");
+        } else if (from_type->is_float()) {
+            if (to_type->is_signed()) {
+                return builder.CreateFPToSI(ll_value, gen_type(to_type), "cast");
+            } else {
+                return builder.CreateFPToUI(ll_value, gen_type(to_type), "cast");
+            }
+        }
+        goto NoCastFound;
+    }
+    case TypeKind::Float32: {
+        if (from_type->is_float()) {
+            if (to_type->get_number_of_bits() > from_type->get_number_of_bits()) {
+                // Upcasting float.
+                return builder.CreateFPExt(ll_value, gen_type(to_type), "cast");
+            } else {
+                // Downcastinf float.
+                return builder.CreateFPTrunc(ll_value, gen_type(to_type), "cast");
+            }
+        } else if (from_type->is_integer()) {
+            if (from_type->is_signed()) {
+                return builder.CreateSIToFP(ll_value, gen_type(to_type), "cast");
+            } else {
+                return builder.CreateUIToFP(ll_value, gen_type(to_type), "cast");
+            }
         }
         goto NoCastFound;
     }

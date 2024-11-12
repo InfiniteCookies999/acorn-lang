@@ -30,7 +30,8 @@ namespace acorn {
         Token next_word();
 
         Token next_number(const char* start);
-        Token finish_mumber(tokkind kind, const char* start);
+        Token finish_int_number(tokkind kind, const char* start);
+        Token finish_float_number(const char* start);
 
         bool skip_unicode_seq_digits(size_t n);
         Token next_string();

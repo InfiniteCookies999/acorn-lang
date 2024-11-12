@@ -14,6 +14,7 @@
 class TestCase;
 
 extern TestCase* current_test;
+extern TestCase* single_run_case;
 struct IError {
     acorn::ErrCode code;
     std::string    file;
@@ -69,7 +70,7 @@ private:
 };
 
 void section(const char* name, const std::function<void()>& cb);
-void test(const char* name, const std::function<void()>& cb);
+void test(const char* name, const std::function<void()>& cb, bool run_only_this = false);
 
 template<typename T>
 struct Expector {

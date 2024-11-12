@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <format>
 #include <stack>
+#include <cfenv>
 
 #include "Type.h"
 #include "Module.h"
@@ -10,23 +11,25 @@
 #include "SourceExpansion.h"
 #include "SourceFile.h"
 
-#define TypeTokens    \
-     Token::KwVoid:   \
-case Token::KwInt:    \
-case Token::KwInt8:   \
-case Token::KwInt16:  \
-case Token::KwInt32:  \
-case Token::KwInt64:  \
-case Token::KwUInt8:  \
-case Token::KwUInt16: \
-case Token::KwUInt32: \
-case Token::KwUInt64: \
-case Token::KwConst:  \
-case Token::KwChar:   \
-case Token::KwChar16: \
-case Token::KwChar32: \
-case Token::KwUSize:  \
-case Token::KwISize:  \
+#define TypeTokens     \
+     Token::KwVoid:    \
+case Token::KwInt:     \
+case Token::KwInt8:    \
+case Token::KwInt16:   \
+case Token::KwInt32:   \
+case Token::KwInt64:   \
+case Token::KwUInt8:   \
+case Token::KwUInt16:  \
+case Token::KwUInt32:  \
+case Token::KwUInt64:  \
+case Token::KwFloat32: \
+case Token::KwFloat64: \
+case Token::KwConst:   \
+case Token::KwChar:    \
+case Token::KwChar16:  \
+case Token::KwChar32:  \
+case Token::KwUSize:   \
+case Token::KwISize:   \
 case Token::KwBool
 
 #define ModifierTokens   \
@@ -843,22 +846,24 @@ ty_const(t);    \
 return t; }
 
     switch (cur_token.kind) {
-    case Token::KwVoid:   ty(context.void_type);
-    case Token::KwInt:    ty(context.int_type);
-    case Token::KwInt8:   ty(context.int8_type);
-    case Token::KwInt16:  ty(context.int16_type);
-    case Token::KwInt32:  ty(context.int32_type);
-    case Token::KwInt64:  ty(context.int64_type);
-    case Token::KwUInt8:  ty(context.uint8_type);
-    case Token::KwUInt16: ty(context.uint16_type);
-    case Token::KwUInt32: ty(context.uint32_type);
-    case Token::KwUInt64: ty(context.uint64_type);
-    case Token::KwBool:   ty(context.bool_type);
-    case Token::KwChar:   ty(context.char_type);
-    case Token::KwChar16: ty(context.char16_type);
-    case Token::KwChar32: ty(context.char32_type);
-    case Token::KwISize:  ty(context.isize_type);
-    case Token::KwUSize:  ty(context.usize_type);
+    case Token::KwVoid:    ty(context.void_type);
+    case Token::KwInt:     ty(context.int_type);
+    case Token::KwInt8:    ty(context.int8_type);
+    case Token::KwInt16:   ty(context.int16_type);
+    case Token::KwInt32:   ty(context.int32_type);
+    case Token::KwInt64:   ty(context.int64_type);
+    case Token::KwUInt8:   ty(context.uint8_type);
+    case Token::KwUInt16:  ty(context.uint16_type);
+    case Token::KwUInt32:  ty(context.uint32_type);
+    case Token::KwUInt64:  ty(context.uint64_type);
+    case Token::KwBool:    ty(context.bool_type);
+    case Token::KwChar:    ty(context.char_type);
+    case Token::KwChar16:  ty(context.char16_type);
+    case Token::KwChar32:  ty(context.char32_type);
+    case Token::KwISize:   ty(context.isize_type);
+    case Token::KwUSize:   ty(context.usize_type);
+    case Token::KwFloat32: ty(context.float32_type);
+    case Token::KwFloat64: ty(context.float64_type);
     default: {
         error("Expected type").end_error(ErrCode::ParseInvalidType);
         return context.invalid_type;
@@ -986,14 +991,15 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
     T rval = static_cast<T>(is_signed ? rhs->value_s64 : rhs->value_u64);
 
     auto calc = [op, lhs, rhs, to_type](T result) finline {
+        // Going to treat the lhs as the result of the evaluation since
+        // it is already a number and can just be reused.
+        
         if constexpr (is_signed) {
             lhs->value_s64 = result;
         } else {
             rhs->value_u64 = result;
         }
 
-        // Going to treat the lhs as the result of the evaluation since
-        // it is already a number and can just be reused.
         lhs->type = to_type;
 
         // Need to expand the source location because if an error occures
@@ -1012,22 +1018,6 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         return lhs;
     };
 
-    auto report_overflow = [this, op, to_type, lhs, rhs]() finline {
-        auto loc_op = new_binary_op(op, lhs, rhs);
-        logger.begin_error(expand(loc_op), "Operator '%s' numeric overflow. Cannot fit for type '%s'",
-              token_kind_to_string(context, op.kind), to_type)
-            .end_error(ErrCode::NumericOverflow);
-        return new_node<InvalidExpr>(op.loc);
-    };
-
-    auto report_underflow = [this, op, to_type, lhs, rhs]() finline {
-        auto loc_op = new_binary_op(op, lhs, rhs);
-        logger.begin_error(expand(loc_op), "Operator '%s' numeric underflow. Cannot fit into type '%s'",
-              token_kind_to_string(context, op.kind), to_type)
-            .end_error(ErrCode::NumericUnderflow);
-        return new_node<InvalidExpr>(op.loc);
-    };
-
     switch (op.kind) {
     case '+': {
         // Note: Even if one of the values is a signed negative value for the unsigned
@@ -1036,12 +1026,12 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         //       actually then caught as overflow.
 
         if (rval > 0 && lval > std::numeric_limits<T>::max() - rval) {
-            return report_overflow();
+            return report_overflow(op, lhs, rhs, to_type);
         }
         
         if constexpr (is_signed) {
             if (rval < 0 && lval < std::numeric_limits<T>::min() - rval) {
-                return report_underflow();
+                return report_underflow(op, lhs, rhs, to_type);
             }
         }
         return calc(lval + rval);
@@ -1049,14 +1039,14 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
     case '-': {
         if constexpr (!is_signed) { // unsigned
             if (lval < rval) {
-                return report_underflow();
+                return report_underflow(op, lhs, rhs, to_type);
             }
         } else {
             if (rval < 0 && lval > std::numeric_limits<T>::max() + rval) {
-                return report_overflow();
+                return report_overflow(op, lhs, rhs, to_type);
             }
             if (rval > 0 && lval < std::numeric_limits<T>::min() + rval) {
-                return report_underflow();
+                return report_underflow(op, lhs, rhs, to_type);
             }
         }
         return calc(lval - rval);
@@ -1064,15 +1054,15 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
     case '*': {
         if constexpr (!is_signed) { // unsigned
             if (lval != 0 && rval > std::numeric_limits<T>::max() / lval) {
-                return report_overflow();
+                return report_overflow(op, lhs, rhs, to_type);
             }
         } else {
             if (lhs != 0 && rhs != 0) {
                 if (lval > std::numeric_limits<T>::max() / rval) {
-                    return report_overflow();
+                    return report_overflow(op, lhs, rhs, to_type);
                 }
                 if (lval < std::numeric_limits<T>::min() / rval) {
-                    return report_underflow();
+                    return report_underflow(op, lhs, rhs, to_type);
                 }
             }
         }
@@ -1121,9 +1111,96 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
     }
 }
 
+template<typename T>
+acorn::Expr* acorn::Parser::fold_float(Token op, Number* lhs, Number* rhs, Type* to_type, T lval, T rval) {
+
+    auto calc = [this, op, to_type, lhs, rhs](T result) finline {
+        // Going to treat the lhs as the result of the evaluation since
+        // it is already a number and can just be reused.
+        
+        if (to_type == context.float32_type) {
+            lhs->value_f32 = result;
+        } else {
+            lhs->value_f64 = result;
+        }
+
+        // Need to expand the source location because if an error occures
+        // later and it needs to display the full error location.
+        lhs->type = to_type;
+
+        auto s = lhs->uses_expanded_loc ? lhs->expanded_loc.ptr : lhs->loc.ptr;;
+        auto e = rhs->uses_expanded_loc ? (rhs->expanded_loc.ptr + rhs->expanded_loc.length)
+                                        : (rhs->loc.ptr + rhs->loc.length);
+
+        lhs->uses_expanded_loc = true;
+        lhs->expanded_loc = PointSourceLoc{
+            s,
+            as<uint16_t>(e - s),
+            op.loc.ptr,
+            op.loc.length
+        };
+        return lhs;
+    };
+    
+
+    // We use feclearexcept and fetestexcept because when floating point arithmetic
+    // overflow and underflow occure they cause a CPU trap which is handled by the
+    // OS.
+    //
+    // TODO: FE_UNDERFLOW is implementation defined and I am not sure what the best
+    // approach to detecting overflow and underflow are so leaving this problem for
+    // later.
+
+    switch (op.kind) {
+    case '+': {
+        //std::feclearexcept(FE_ALL_EXCEPT);
+
+        /*if (std::fetestexcept(FE_OVERFLOW)) {
+            return report_overflow(op, lhs, rhs, to_type);
+        }*/
+
+        return calc(lval + rval);
+    }
+    case '-': return calc(lval - rval);
+    case '*': return calc(lval * rval);
+    case '/': {
+        if (rval == 0) {
+            // Let sema complain about division by zero.
+            return new_binary_op(op, lhs, rhs);
+        }
+        
+        return calc(lval / rval);
+    }
+    case '<': return calc(lval < rval);
+    case '>': return calc(lval > rval);
+    case Token::LtEq: return calc(lval <= rval);
+    case Token::GtEq: return calc(lval >= rval);
+    default:
+        // Handled during sema.
+        return new_binary_op(op, lhs, rhs);
+    }
+
+}
+
+acorn::Expr* acorn::Parser::report_overflow(Token op, Expr* lhs, Expr* rhs, Type* to_type) {
+    auto loc_op = new_binary_op(op, lhs, rhs);
+    logger.begin_error(expand(loc_op), "Operator '%s' numeric overflow. Cannot fit for type '%s'",
+            token_kind_to_string(context, op.kind), to_type)
+        .end_error(ErrCode::NumericOverflow);
+    return new_node<InvalidExpr>(op.loc);
+}
+
+acorn::Expr* acorn::Parser::report_underflow(Token op, Expr* lhs, Expr* rhs, Type* to_type) {
+    auto loc_op = new_binary_op(op, lhs, rhs);
+    logger.begin_error(expand(loc_op), "Operator '%s' numeric underflow. Cannot fit into type '%s'",
+            token_kind_to_string(context, op.kind), to_type)
+        .end_error(ErrCode::NumericUnderflow);
+    return new_node<InvalidExpr>(op.loc);
+}
+
 acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
 
-    auto fold_by_side = [op, this, lhs, rhs](Expr* side) -> Expr* finline {
+    auto fold_int_by_side = [op, this, lhs, rhs](Expr* side) -> Expr* finline {
         Number* lnum = as<Number*>(lhs);
         Number* rnum = as<Number*>(rhs);
         Type* to_type = side->type;
@@ -1151,22 +1228,64 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
             // Shift cases are special because we assume that the left hand side
             // always has preference since it is the value worked on.
             if (lhs->type->is(context.int_type) || lhs->type->is(rhs->type)) {
-                return fold_by_side(lhs);
+                return fold_int_by_side(lhs);
             } else {
                 // Just let it complain during sema that the types are incompatible.
                 return new_binary_op(op, lhs, rhs);
             }
         } else {
             if (lhs->type->is(context.int_type)) { // rhs explicity type takes preference.
-                return fold_by_side(rhs);
+                return fold_int_by_side(rhs);
             } else if (rhs->type->is(context.int_type)) { // lhs explicity type takes preference.
-                return fold_by_side(lhs);
+                return fold_int_by_side(lhs);
             } else if (lhs->type->is(rhs->type)) {
-                return fold_by_side(lhs);
+                return fold_int_by_side(lhs);
             } else {
                 // Just let it complain during sema that the types are incompatible.
                 return new_binary_op(op, lhs, rhs);
             }
+        }
+    } else if (lhs->type->is_float()) {
+        Number* lnum = as<Number*>(lhs);
+        Number* rnum = as<Number*>(rhs);
+        if (lhs->type == rhs->type) {
+            if (lhs->type == context.float32_type) {
+                return fold_float<float>(op, lnum, rnum, lhs->type, lnum->value_f32, rnum->value_f32);
+            } else {
+                return fold_float<double>(op, lnum, rnum, lhs->type, lnum->value_f64, rnum->value_f64);
+            }
+        } else if (rhs->type->is_integer()) {
+            if (lhs->type == context.float32_type) {
+                float rval = static_cast<float>(rhs->type->is_signed() ? rnum->value_s64 : rnum->value_u64);
+                return fold_float<float>(op, lnum, rnum, lhs->type, lnum->value_f32, rval);
+            } else {
+                double rval = static_cast<double>(rhs->type->is_signed() ? rnum->value_s64 : rnum->value_u64);
+                return fold_float<double>(op, lnum, rnum, lhs->type, lnum->value_f64, rval);
+            }
+        } else {
+            // Just let it complain during sema that the types are incompatible.
+            return new_binary_op(op, lhs, rhs);
+        }
+    } else if (rhs->type->is_float()) {
+        Number* lnum = as<Number*>(lhs);
+        Number* rnum = as<Number*>(rhs);
+        if (lhs->type == rhs->type) {
+            if (lhs->type == context.float32_type) {
+                return fold_float<float>(op, lnum, rnum, lhs->type, lnum->value_f32, rnum->value_f32);
+            } else {
+                return fold_float<double>(op, lnum, rnum, lhs->type, lnum->value_f64, rnum->value_f64);
+            }
+        } else if (rhs->type->is_integer()) {
+            if (rhs->type == context.float32_type) {
+                float lval = static_cast<float>(lhs->type->is_signed() ? lnum->value_s64 : lnum->value_u64);
+                return fold_float<float>(op, lnum, rnum, lhs->type, lval, rnum->value_f32);
+            } else {
+                double lval = static_cast<double>(lhs->type->is_signed() ? lnum->value_s64 : lnum->value_u64);
+                return fold_float<double>(op, lnum, rnum, lhs->type, lval, rnum->value_f64);
+            }
+        } else {
+            // Just let it complain during sema that the types are incompatible.
+            return new_binary_op(op, lhs, rhs);
         }
     } else {
         acorn_fatal("unreachable");
@@ -1279,7 +1398,8 @@ acorn::Expr* acorn::Parser::parse_term() {
     case Token::HexLiteral:           return parse_hex_literal();
     case Token::BinLiteral:           return parse_bin_literal();
     case Token::OctLiteral:           return parse_oct_literal();
-    case Token::FloatLiteral:         return parse_float_literal();
+    case Token::Float32Literal:       return parse_float32_literal();
+    case Token::Float64Literal:       return parse_float64_literal();
     case Token::String8BitLiteral:    return parse_string8bit_literal();
     case Token::String16BitLiteral:   return parse_string16bit_literal();
     case Token::String32BitLiteral:   return parse_string32bit_literal();
@@ -1326,6 +1446,8 @@ acorn::Expr* acorn::Parser::parse_term() {
                 num->value_s32 = -num->value_s32; break;
             case TypeKind::Int16:  num->value_s16 = -num->value_s16; break;
             case TypeKind::Int8:   num->value_s8  = -num->value_s8;  break;
+            case TypeKind::Float32: num->value_f32 = -num->value_f32; break;
+            case TypeKind::Float64: num->value_f64 = -num->value_f64; break;
             }
 
             return expr;
@@ -1436,8 +1558,46 @@ acorn::Number* acorn::Parser::parse_oct_literal() {
     return parse_number_literal<8, void_table, false>(text.data() + 1, text.end());
 }
 
-acorn::Number* acorn::Parser::parse_float_literal() {
-    return nullptr;
+acorn::Number* acorn::Parser::parse_float32_literal() {
+    
+    auto [value, parse_error] = parse_float32_bits(context.get_allocator(), cur_token.text());
+
+    Number* number = new_node<Number>(cur_token);
+    number->value_f32 = value;
+    number->type = context.float32_type;
+    
+    if (parse_error != FloatParseError::None) {
+        report_float_error(parse_error);
+    }
+
+    next_token();
+    return number;
+}
+
+acorn::Number* acorn::Parser::parse_float64_literal() {
+    
+    auto [value, parse_error] = parse_float64_bits(context.get_allocator(), cur_token.text());
+
+    Number* number = new_node<Number>(cur_token);
+    number->value_f64 = value;
+    number->type = context.float64_type;
+
+    if (parse_error != FloatParseError::None) {
+        report_float_error(parse_error);
+    }
+
+    next_token();
+    return number;
+}
+
+void acorn::Parser::report_float_error(FloatParseError parse_error) {
+    if (parse_error == FloatParseError::Overflow) {
+        error(cur_token, "Float value too large")
+            .end_error(ErrCode::NumericOverflow);
+    } else {
+        error(cur_token, "Float value too small")
+            .end_error(ErrCode::NumericUnderflow);
+    }
 }
 
 namespace acorn {
@@ -1640,7 +1800,7 @@ acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char
             if (!already_errored && !fits_in_range<T>(neg_sign ? number->value_s64 : number->value_s64)) {
                 auto err_msg = get_error_msg_for_value_not_fit_type(number);
                 logger.begin_error(number->loc, "%s", err_msg)
-                      .end_error(ErrCode::ParseIntegerValueNotFitType);
+                    .end_error(ErrCode::ParseIntegerValueNotFitType);
             }
         };
 
@@ -1653,15 +1813,21 @@ acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char
                 check_range_fit((uint8_t)0);
             }
         } else if (*ptr == '1') {
-            if (is_signed) number->type = context.int16_type , check_range_fit((int16_t)0);
+            if (is_signed) number->type = context.int16_type, check_range_fit((int16_t)0);
             else           number->type = context.uint16_type, check_range_fit((uint16_t)0);
         } else if (*ptr == '3') {
-            if (is_signed) number->type = context.int32_type , check_range_fit((int32_t)0);
+            if (is_signed) number->type = context.int32_type, check_range_fit((int32_t)0);
             else           number->type = context.uint32_type, check_range_fit((uint32_t)0);
         } else {
             if (is_signed) number->type = context.int64_type, check_range_fit((int64_t)0);
             else           number->type = context.uint64_type;
         }
+    } else if (*ptr == 'f') {
+        // TODO: should check if fits?
+        number->type = context.float32_type;
+    } else if (*ptr == 'd') {
+        // TODO: should check if fits?
+        number->type = context.float64_type;
     } else {
         auto fit_range = [this, number]<typename V>(V value) finline {
             if (fits_in_range<int32_t>(value)) {

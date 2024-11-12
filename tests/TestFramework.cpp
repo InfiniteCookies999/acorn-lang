@@ -6,6 +6,7 @@
 // Forward declaring.
 TestCase* current_test = nullptr;
 llvm::SmallVector<IError> intercepted_error_codes;
+TestCase* single_run_case = nullptr;
 
 static TestSection*                    current_section = nullptr;
 static uint32_t                        current_depth   = 0;
@@ -102,8 +103,11 @@ void section(const char* name, const std::function<void()>& cb) {
     current_section = prev_section;
 }
 
-void test(const char* name, const std::function<void()>& cb) {
+void test(const char* name, const std::function<void()>& cb, bool only_run_this) {
     current_section->add_test_case(name, cb);
+    if (only_run_this) {
+        single_run_case = new TestCase(name, 0, cb);
+    }
 }
 
 void error_interceptor(acorn::ErrCode error_code, std::string file, int line_number) {
@@ -123,6 +127,12 @@ acorn::Logger& mock_logger(acorn::Logger& logger) {
 }
 
 void run_tests() {
+    if (single_run_case) {
+        current_test = single_run_case;
+        single_run_case->run();
+        return;
+    }
+    
     for (TestSection* section : sections) {
         section->run();
     }

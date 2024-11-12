@@ -1039,6 +1039,7 @@ static T correct_value(T value, ParseData parse_data) {
 
         // Not an exact match but may be less than the allowed error.
         BigIntFD rhs_cmp = BigIntFD::from_pow5(y5).left_shift(cmp_rhs2);
+        // rhs_cmp.print_blocks();
         compare_result = difference.compare(rhs_cmp);
         if (compare_result < 0) {
             // The difference is less than 1/2

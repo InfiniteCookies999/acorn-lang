@@ -32,6 +32,9 @@ namespace acorn {
         Char16,
         Char32,
 
+        Float32,
+        Float64,
+
         Void,
         Bool,
         FuncsRef,   // A reference to an identifier to overloaded functions.
@@ -68,7 +71,7 @@ namespace acorn {
         }
 
         bool is_number() const {
-            return is_integer();
+            return kind >= TypeKind::Int && kind <= TypeKind::Float64;
         }
 
         bool is_integer() const {
@@ -76,7 +79,12 @@ namespace acorn {
         }
 
         bool is_signed() const {
-            return kind >= TypeKind::Int && kind <= TypeKind::ISize;
+            return (kind >= TypeKind::Int && kind <= TypeKind::ISize) ||
+                    kind == TypeKind::Float32 || kind == TypeKind::Float64;
+        }
+
+        bool is_float() const { 
+            return kind == TypeKind::Float32 || kind == TypeKind::Float64; 
         }
         
         bool is_unsigned() const {

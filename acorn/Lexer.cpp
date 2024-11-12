@@ -291,20 +291,20 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
             while (is_hexidecimal(*ptr) || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
-            return finish_mumber(Token::HexLiteral, start);
+            return finish_int_number(Token::HexLiteral, start);
         } else if (*ptr == 'b') {
             // Lexing binary
             ++ptr;
             while (*ptr == '0' || *ptr == '1' || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
-            return finish_mumber(Token::BinLiteral, start);
+            return finish_int_number(Token::BinLiteral, start);
         } else if (is_octal(*ptr)) {
             // Parsing octal number
             while (is_octal(*ptr) || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
-            return finish_mumber(Token::OctLiteral, start);
+            return finish_int_number(Token::OctLiteral, start);
         }
     }
     
@@ -316,8 +316,6 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
 
     if ((*ptr == '.' && *(ptr+1) != '.') ||
         *ptr == 'E' || *ptr == 'e') {
-        
-        kind = Token::FloatLiteral;
 
         if (*ptr == '.') {
             ++ptr;
@@ -354,12 +352,14 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
                 kind = Token::InvalidNumberLiteral;
             }
         }
+
+        return finish_float_number(start);
     }
 
-    return finish_mumber(kind, start);
+    return finish_int_number(kind, start);
 }
 
-acorn::Token acorn::Lexer::finish_mumber(tokkind kind, const char* start) {
+acorn::Token acorn::Lexer::finish_int_number(tokkind kind, const char* start) {
     
     if (*(ptr - 1) == NUMBER_SEPERATOR) {
         auto error_loc = SourceLoc{ start, static_cast<uint16_t>(ptr - start) };
@@ -403,6 +403,21 @@ acorn::Token acorn::Lexer::finish_mumber(tokkind kind, const char* start) {
             return new_token(kind, start);
         }
         return invalid_type_spec();
+    } else if (*ptr == 'f' || *ptr == 'd') {   // Integer will be treated as a 32/64 bit float.
+        ++ptr;
+    }
+
+    return new_token(kind, start);
+}
+
+acorn::Token acorn::Lexer::finish_float_number(const char* start) {
+    tokkind kind = Token::Float64Literal;;
+
+    if (*ptr == 'f') {
+        ++ptr;
+        kind = Token::Float32Literal;
+    } else if (*ptr == 'd') {
+        ++ptr;
     }
 
     return new_token(kind, start);

@@ -169,7 +169,9 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
 
             return builder.CreateInBoundsGEP(gen_type(mem_type), ll_mem, { gen_isize(0), ll_off }, "arr.add");
         } else {
-            if (bin_op->type->is_signed())
+            if (bin_op->type->is_float())
+                return builder.CreateFAdd(ll_lhs, ll_rhs, "add");
+            else if (bin_op->type->is_signed())
                 return builder.CreateNSWAdd(ll_lhs, ll_rhs, "add");
             else return builder.CreateAdd(ll_lhs, ll_rhs, "add");
         }
@@ -199,15 +201,21 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
 
             return builder.CreateInBoundsGEP(gen_type(mem_type), ll_mem, { gen_isize(0), ll_neg }, "arr.sub");
         } else {
+            if (bin_op->type->is_float())
+                return builder.CreateFSub(ll_lhs, ll_rhs, "sub");
             if (bin_op->type->is_signed())
                 return builder.CreateNSWSub(ll_lhs, ll_rhs, "sub");
             else return builder.CreateSub(ll_lhs, ll_rhs, "sub");
         }
     }
     case '*':
-        return builder.CreateMul(ll_lhs, ll_rhs, "mul");
+        if (bin_op->type->is_integer())
+            return builder.CreateMul(ll_lhs, ll_rhs, "mul");
+        else return builder.CreateFMul(ll_lhs, ll_rhs, "mul");
     case '/':
-        return builder.CreateSDiv(ll_lhs, ll_rhs, "div");
+        if (bin_op->type->is_integer())
+            return builder.CreateSDiv(ll_lhs, ll_rhs, "div");
+        else return builder.CreateFDiv(ll_lhs, ll_rhs, "div");
     case '%':
         return builder.CreateSRem(ll_lhs, ll_rhs, "rem");
     // Bitwise Operators
@@ -227,25 +235,35 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
     // Comparisons Operators
     // -------------------------------------------
     case '>':
+        if (bin_op->type->is_float())
+            return builder.CreateFCmpOGT(ll_lhs, ll_rhs, "gt");
         if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
             return builder.CreateICmpSGT(ll_lhs, ll_rhs, "gt");
         else return builder.CreateICmpUGT(ll_lhs, ll_rhs, "gt");
     case '<':
+        if (bin_op->type->is_float())
+            return builder.CreateFCmpOLT(ll_lhs, ll_rhs, "gt");
         if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
             return builder.CreateICmpSLT(ll_lhs, ll_rhs, "lt");
         else return builder.CreateICmpULT(ll_lhs, ll_rhs, "lt");
     case Token::GtEq:
+        if (bin_op->type->is_float())
+            return builder.CreateFCmpOGE(ll_lhs, ll_rhs, "gt");
         if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
             return builder.CreateICmpSGE(ll_lhs, ll_rhs, "gte");
         else return builder.CreateICmpUGE(ll_lhs, ll_rhs, "gte");
     case Token::LtEq:
+        if (bin_op->type->is_float())
+            return builder.CreateFCmpOLE(ll_lhs, ll_rhs, "gt");
         if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
             return builder.CreateICmpSLE(ll_lhs, ll_rhs, "lte");
         else return builder.CreateICmpULE(ll_lhs, ll_rhs, "lte");
     case Token::EqEq:
         return gen_equal(ll_lhs, ll_rhs);
     case Token::ExEq:
-        return builder.CreateICmpNE(ll_lhs, ll_rhs, "neq");
+        if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
+            return builder.CreateFCmpUNE(ll_lhs, ll_rhs, "neq");
+        else return builder.CreateICmpNE(ll_lhs, ll_rhs, "neq");
     default:
         acorn_fatal("gen_binary_op(): failed to implement case");
         return nullptr;
@@ -254,6 +272,8 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
 }
 
 llvm::Value* acorn::IRGenerator::gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
+    if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
+        return builder.CreateFCmpOEQ(ll_lhs, ll_rhs, "eq");    
     return builder.CreateICmpEQ(ll_lhs, ll_rhs, "eq");
 }
 
@@ -295,6 +315,9 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         return gen_rvalue(expr);
     case '-': {
         auto ll_value = gen_rvalue(expr);
+        if (unary_op->type->is_float())
+            return builder.CreateFNeg(ll_value, "neg");
+
         auto ll_zero = gen_zero(unary_op->type);
 
         if (unary_op->type->is_signed()) {

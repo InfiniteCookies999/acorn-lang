@@ -21,20 +21,22 @@ bool acorn::Type::is_comparable() const {
 
 uint32_t acorn::Type::get_number_of_bits() const {
     switch (kind) {
-    case TypeKind::Void:   return 0;
-    case TypeKind::Int:    return 32;
-    case TypeKind::Int8:   return 8;
-    case TypeKind::Int16:  return 16;
-    case TypeKind::Int32:  return 32;
-    case TypeKind::Int64:  return 64;
-    case TypeKind::UInt8:  return 8;
-    case TypeKind::UInt16: return 16;
-    case TypeKind::UInt32: return 32;
-    case TypeKind::UInt64: return 64;
-    case TypeKind::Bool:   return 8;
-    case TypeKind::Char:   return 8;
-    case TypeKind::Char16: return 16;
-    case TypeKind::Char32: return 32;
+    case TypeKind::Void:    return 0;
+    case TypeKind::Int:     return 32;
+    case TypeKind::Int8:    return 8;
+    case TypeKind::Int16:   return 16;
+    case TypeKind::Int32:   return 32;
+    case TypeKind::Int64:   return 64;
+    case TypeKind::UInt8:   return 8;
+    case TypeKind::UInt16:  return 16;
+    case TypeKind::UInt32:  return 32;
+    case TypeKind::UInt64:  return 64;
+    case TypeKind::Bool:    return 8;
+    case TypeKind::Char:    return 8;
+    case TypeKind::Char16:  return 16;
+    case TypeKind::Char32:  return 32;
+    case TypeKind::Float32: return 32;
+    case TypeKind::Float64: return 64;
     default:
         acorn_fatal("unimplemented case");
         return 0;
@@ -64,6 +66,8 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Null:      return str("null");
     case TypeKind::ISize:     return str("isize");
     case TypeKind::USize:     return str("usize");
+    case TypeKind::Float32:   return str("float32");
+    case TypeKind::Float64:   return str("float64");
     case TypeKind::Range:     return as<const RangeType*>(this)->to_string();
     case TypeKind::Pointer:   return as<const PointerType*>(this)->to_string();
     case TypeKind::Array:     return as<const ArrayType*>(this)->to_string();

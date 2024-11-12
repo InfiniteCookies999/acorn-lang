@@ -5,6 +5,7 @@
 #include "Context.h"
 #include "Lexer.h"
 #include "AST.h"
+#include "FloatParsing.h"
 
 namespace acorn {
 
@@ -92,6 +93,10 @@ namespace acorn {
         Expr* fold_number(Token op, Expr* lhs, Expr* rhs);
         template<typename T>
         Expr* fold_int(Token op, Number* lhs, Number* rhs, Type* to_type);
+        template<typename T>
+        Expr* fold_float(Token op, Number* lhs, Number* rhs, Type* to_type, T lval, T rval);
+        Expr* report_overflow(Token op, Expr* lhs, Expr* rhs, Type* to_type);
+        Expr* report_underflow(Token op, Expr* lhs, Expr* rhs, Type* to_type);
         Expr* parse_postfix();
         Expr* parse_postfix(Expr* term);
         FuncCall* parse_function_call(Expr* site);
@@ -103,7 +108,9 @@ namespace acorn {
         Number* parse_hex_literal();
         Number* parse_bin_literal();
         Number* parse_oct_literal();
-        Number* parse_float_literal();
+        Number* parse_float32_literal();
+        Number* parse_float64_literal();
+        void report_float_error(FloatParseError parse_error);
         Expr* parse_string8bit_literal();
         Expr* parse_string16bit_literal();
         Expr* parse_string32bit_literal();
