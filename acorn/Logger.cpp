@@ -141,7 +141,7 @@ void acorn::GlobalLogger::end_error(ErrCode error_code) {
     fmt_print("[%serror%s]", BrightRed, White), facing_length += 7;
     if (context.should_show_error_codes()) {
         fmt_print("%s[%s%s%s]", White, BrightBlue, static_cast<unsigned>(error_code), White);
-        facing_length += 2 + count_digits(static_cast<unsigned>(error_code));
+        facing_length += 2 + static_cast<int>(count_digits(static_cast<unsigned>(error_code)));
     }
     fmt_print("%s -> ", BrightWhite), facing_length += 4;
     set_color(stream, White);

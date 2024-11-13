@@ -32,3 +32,21 @@ bool acorn::SourceFile::has_public_access(Decl* decl) const {
     return decl->has_modifier(Modifier::Public) ||
           (!decl->has_modifier(Modifier::Private) && default_access == Modifier::Public);
 }
+
+acorn::FuncList* acorn::SourceFile::find_static_import_functions(Identifier name) {
+    for (Namespace* nspace : static_imports) {
+        if (auto funcs = nspace->find_functions(name)) {
+            return funcs;
+        }
+    }
+    return nullptr;
+}
+
+acorn::Var* acorn::SourceFile::find_static_import_variable(Identifier name) {
+    for (Namespace* nspace : static_imports) {
+        if (auto var = nspace->find_variable(name)) {
+            return var;
+        }
+    }
+    return nullptr;
+}

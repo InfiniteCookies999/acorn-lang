@@ -41,8 +41,8 @@ namespace acorn {
 
         Void,
         Bool,
-        FuncsRef,   // A reference to an identifier to overloaded functions.
-        ModuleRef,  // A reference to an identifier to a module.
+        FuncsRef,      // A reference to an identifier to overloaded functions.
+        NamespaceRef,  // A reference to an identifier to a namespace.
         Pointer,
         Array,
         UnresolvedArrayType, // Length could not be resolved during parsing.

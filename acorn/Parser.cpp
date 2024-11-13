@@ -140,6 +140,11 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
         }
     } while (more_to_import);
 
+    if (cur_token.is(Token::KwStatic)) {
+        next_token();
+        importn->is_static = true;
+    }
+
     expect(';');
 
     return importn;
@@ -595,7 +600,7 @@ acorn::LoopControlStmt* acorn::Parser::parse_loop_control() {
             }
             
             auto number = parse_int_literal();
-            loop_control->loop_count = number->value_u64 + 1;
+            loop_control->loop_count = number->value_s32 + 1;
             loop_control->loop_count_expr = number;
         }
 

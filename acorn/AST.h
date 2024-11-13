@@ -200,6 +200,7 @@ namespace acorn {
 
         SourceFile* file;
 
+        bool is_static = false;
         bool within_same_modl = false;
         // Last element is the thing imported. All other elements
         // are the path to that imported value.

@@ -87,7 +87,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
 llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
     auto ll_value = gen_node(node);
 
-    if (node->kind == NodeKind::IdentRef) {
+    if (node->kind == NodeKind::IdentRef ||
+        node->kind == NodeKind::DotOperator) {
         IdentRef* ref = as<IdentRef*>(node);
         if (ref->is_var_ref() &&
             !ref->is_foldable &&   // If the reference is foldable then no memory address is provided for storage to load.
@@ -1205,8 +1206,9 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
     if (dot->is_array_length) {
         auto arr_type = as<ArrayType*>(dot->site->type);
         return builder.getInt32(arr_type->get_length());
+    } else {
+        return gen_ident_reference(dot);
     }
-    return nullptr;
 }
 
 void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Type* to_type, Expr* value) {

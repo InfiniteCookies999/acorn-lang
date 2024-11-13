@@ -104,6 +104,7 @@ X(SemaFuncsCannotHaveAssignDetArrType      , 30058)
 X(SemaVarRequiresAssignForDetArrType       , 30059)
 X(SemaAssignDetArrTypeReqsArrAssignment    , 30060)
 X(SemaAssignDetArrWrongDimensions          , 30061)
+X(SemaCannotRefStaticImport                , 30062)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

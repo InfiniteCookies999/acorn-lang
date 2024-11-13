@@ -308,17 +308,25 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
             return nullptr;
         }
     };
+
+    auto add_namespace = [importn](Namespace* nspace) finline {
+        if (importn->is_static) {
+            importn->file->add_static_import(nspace);
+        } else {
+            importn->set_imported_namespace(nspace);
+        }
+    };
     
     if (key.size() == 1 && importn->within_same_modl) {
         if (auto nspace = find_namespace(&importn->file->modl, key[0])) {
-            importn->set_imported_namespace(nspace);
+            add_namespace(nspace);
         }
         return;
     }
     
     if (key.size() == 1) {
         if (auto modl = find_module(key[0])) {
-            importn->set_imported_namespace(modl);
+            add_namespace(modl);
         }
         return;
     }
@@ -326,7 +334,7 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
     if (key.size() == 2) {
         if (auto modl = find_module(key[0])) {
             if (auto nspace = find_namespace(modl, key[1])) {
-                importn->set_imported_namespace(nspace);
+                add_namespace(nspace);
             }
         }
         return;
@@ -1390,6 +1398,11 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
                 ref->set_funcs_ref(funcs);
                 return;
             }
+
+            if (auto* funcs = file->find_static_import_functions(ref->ident)) {
+                ref->set_funcs_ref(funcs);
+                return;
+            }
         }
 
         if (auto* funcs = search_nspace->find_functions(ref->ident)) {
@@ -1406,6 +1419,11 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         }
         if (same_nspace) {
             if (auto* var = file->find_variable(ref->ident)) {
+                ref->set_var_ref(var);
+                return;
+            }
+
+            if (auto* var = file->find_static_import_variable(ref->ident)) {
                 ref->set_var_ref(var);
                 return;
             }
@@ -1465,7 +1483,12 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         break;
     }
     case IdentRef::ImportKind : {
-        ref->type = context.module_ref_type;
+        if (ref->import_ref->is_static) {
+            error(expand(ref), "Cannot reference a static import")
+                .end_error(ErrCode::SemaCannotRefStaticImport);
+        } else {
+            ref->type = context.namespace_ref_type;
+        }
         break;
     }
     case IdentRef::NoneKind: {
@@ -1481,7 +1504,10 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         IdentRef* site = as<IdentRef*>(dot->site);
         check_ident_ref(site, nspace, false);
         dot->is_foldable = site->is_foldable;
-        if (site->type == context.module_ref_type) {
+
+        yield_if(dot->site);
+
+        if (site->type == context.namespace_ref_type) {
             auto importn = site->import_ref;
             // Special case in which we search in a given module.
             check_ident_ref(dot, importn->imported_nspace, is_for_call);

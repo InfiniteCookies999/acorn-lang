@@ -56,7 +56,7 @@ namespace acorn {
         Type* const_char32_ptr_type;
         Type* const_char_ptr_ptr_type;
         Type* funcs_ref_type;
-        Type* module_ref_type;
+        Type* namespace_ref_type;
         Type* null_type;
         Type* void_ptr_type;
         Type* const_void_type;

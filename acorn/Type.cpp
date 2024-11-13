@@ -58,7 +58,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::UInt64:    return str("uint64");
     case TypeKind::Invalid:   return str("invalid");
     case TypeKind::FuncsRef:  return str("function reference");
-    case TypeKind::ModuleRef: return str("module reference");
+    case TypeKind::NamespaceRef: return str("module reference");
     case TypeKind::Bool:      return str("bool");
     case TypeKind::Char:      return str("char");
     case TypeKind::Char16:    return str("char16");

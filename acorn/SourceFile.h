@@ -39,6 +39,13 @@ namespace acorn {
             return default_access;
         }
 
+        void add_static_import(Namespace* nspace) {
+            static_imports.push_back(nspace);
+        }
+
+        FuncList* find_static_import_functions(Identifier name);
+        Var* find_static_import_variable(Identifier name);
+
         SourceFile(Context& context, std::wstring path, Buffer buffer, Module& modl);
 
     private:
@@ -48,6 +55,8 @@ namespace acorn {
         // Defaults to the namespace of the module, the default
         // namespace.
         Namespace* nspace;
+
+        llvm::SmallVector<Namespace*> static_imports;
     
         bool has_public_access(Decl* decl) const;
 
