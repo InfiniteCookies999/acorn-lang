@@ -41,7 +41,7 @@ case Token::KwPrv
 acorn::Parser::Parser(Context& context, Module& modl, SourceFile* file)
     : context(context),
       modl(modl),
-      context_allocator(context.get_allocator()),
+      allocator(context.get_allocator()),
       file(file),
       logger(file->logger),
       lex(context, file->buffer, logger),
@@ -86,10 +86,16 @@ void acorn::Parser::parse() {
             if (var->name != Identifier::Invalid) {
                 file->add_variable(var);
             }
+        } else if (node->is(NodeKind::Struct)) {
+
+            auto nstruct = as<Struct*>(node);
+            if (nstruct->name != Identifier::Invalid) {
+                file->add_struct(nstruct);
+            }
         } else if (node->is(NodeKind::ComptimeIfStmt)) {
             modl.add_global_comptime_control_flow(node);
         } else {
-            modl.mark_bad_scope(BadScopeLocation::Global, node, logger);
+            modl.mark_bad_scope(ScopeLocation::Global, node, logger);
         }
     }
 }
@@ -176,40 +182,20 @@ acorn::Node* acorn::Parser::parse_statement() {
         return stmt;
     }
     case Token::KwSwitch: return parse_switch();
+    case Token::Identifier:
+        return parse_ident_decl_or_expr();
     case ModifierTokens:
         modifiers = parse_modifiers();
+        if (cur_token.is(Token::KwStruct)) {
+            auto name = expect_identifier("for struct");
+            return parse_struct(modifiers, name);
+        }
         [[fallthrough]];
     case TypeTokens: {
-        Type* type = parse_type();
-        if (cur_token.is(Token::Identifier)) {
-            if (peek_token(0).is('(')) {
-                return parse_function(modifiers, type);
-            } else {
-                auto stmt = parse_variable(modifiers, type);
-                expect(';');
-                return stmt;
-            }
-        } else {
-            expect_identifier("for declaration");
-            if (cur_token.is('=')) {
-                auto stmt = parse_variable(modifiers, type, Identifier());
-                expect(';');
-                return stmt;
-            } else if (cur_token.is('(')) {
-                return parse_function(modifiers, type, Identifier());
-            } else if (cur_token.is_keyword() && peek_token(0).is('=')) {
-                next_token(); // Consuming the extra keyword.
-                auto stmt = parse_variable(modifiers, type, Identifier());
-                expect(';');
-                return stmt;
-            } else if (cur_token.is_keyword() && peek_token(0).is('(')) {
-                next_token(); // Consuming the extra keyword.
-                return parse_function(modifiers, type, Identifier());
-            } else {
-                skip_recovery();
-            }
-            return nullptr;
-        }
+        return parse_decl(modifiers, parse_type());
+    }
+    case Token::KwStruct: {
+        return parse_struct();
     }
     case '{':
         return parse_scope();
@@ -234,6 +220,101 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
 }
 
+acorn::Node* acorn::Parser::parse_ident_decl_or_expr() {
+
+    Token peek1 = peek_token(0);
+    Token peek2 = peek_token(1);
+    Token peek3 = peek_token(2);
+
+    if (
+        (peek1.is(Token::Identifier))    ||         // ident ident
+        (peek1.is('*') && peek2.is('*')) ||         // ident** ident
+        (peek1.is('*') && peek2.is(Token::Identifier) &&
+                (peek3.is('=') || peek3.is(';')))   // ident* ident =   or   ident* ident;
+        ) {
+        return parse_decl(0, parse_type());
+    } else if (peek1.is('[')) {
+        
+        Token name_token = cur_token;
+        next_token();
+
+        bool encountered_null_index = false;
+        
+        llvm::SmallVector<Expr*, 8> indexes;
+        llvm::SmallVector<Token> bracket_tokens;
+        while (cur_token.is('[')) {
+            bracket_tokens.push_back(cur_token);
+            next_token();
+            if (cur_token.is_not(']')) {
+                indexes.push_back(parse_expr());
+            } else {
+                indexes.push_back(nullptr);
+                encountered_null_index = true;
+            }
+            expect(']');
+        }
+
+        if (cur_token.is(Token::Identifier) || encountered_null_index) {
+            // Variable declarations.
+            auto type = construct_type_from_identifier(name_token);
+            type = construct_array_type(type, indexes);
+            type = parse_optional_function_type(type);
+            return parse_decl(0, type);
+        } else {
+            // Memory accessing.
+            IdentRef* ref = new_node<IdentRef>(name_token);
+            auto name = Identifier::get(name_token.text());
+            ref->ident = name;
+
+            Expr* site = ref;
+            for (size_t i = 0; i < indexes.size(); i++) {
+                auto mem_access = new_node<MemoryAccess>(bracket_tokens[i]);
+                mem_access->site = site;
+                mem_access->index = indexes[i];
+                site = mem_access;
+            }
+
+            return parse_assignment_and_expr(site);
+        }
+    }
+
+    auto stmt = parse_assignment_and_expr();;
+    expect(';');
+    return stmt;
+}
+
+acorn::Decl* acorn::Parser::parse_decl(uint32_t modifiers, Type* type) {
+    if (cur_token.is(Token::Identifier)) {
+        if (peek_token(0).is('(')) {
+            return parse_function(modifiers, type);
+        } else {
+            auto stmt = parse_variable(modifiers, type);
+            expect(';');
+            return stmt;
+        }
+    } else {
+        expect_identifier("for declaration");
+        if (cur_token.is('=')) {
+            auto stmt = parse_variable(modifiers, type, Identifier());
+            expect(';');
+            return stmt;
+        } else if (cur_token.is('(')) {
+            return parse_function(modifiers, type, Identifier());
+        } else if (cur_token.is_keyword() && peek_token(0).is('=')) {
+            next_token(); // Consuming the extra keyword.
+            auto stmt = parse_variable(modifiers, type, Identifier());
+            expect(';');
+            return stmt;
+        } else if (cur_token.is_keyword() && peek_token(0).is('(')) {
+            next_token(); // Consuming the extra keyword.
+            return parse_function(modifiers, type, Identifier());
+        } else {
+            skip_recovery();
+        }
+        return nullptr;
+    }
+}
+
 template<typename D, bool uses_linkname>
 D* acorn::Parser::new_declaration(uint32_t modifiers, Identifier name, Token loc_token) {
     D* decl = new_node<D>(loc_token);
@@ -242,7 +323,7 @@ D* acorn::Parser::new_declaration(uint32_t modifiers, Identifier name, Token loc
     decl->name      = name;
     if constexpr (uses_linkname) {
         decl->linkname = linkname;
-    }
+    } // TODO: if it does not use the link name but the linkname is set an error should be reported
     linkname = "";
     return decl;
 }
@@ -337,6 +418,40 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
     }
 
     return var;
+}
+
+acorn::Struct* acorn::Parser::parse_struct() {
+    next_token(); // Consuming 'struct' token.
+    auto name = expect_identifier("for struct");
+    return parse_struct(0, name);
+}
+
+acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) {
+
+    auto nstruct = new_declaration<Struct, false>(modifiers, name, prev_token);
+    nstruct->nspace = allocator.alloc_type<Namespace>();
+    new (nstruct->nspace) Namespace(modl, ScopeLocation::Struct);
+    nstruct->struct_type = StructType::create(allocator, nstruct);
+
+    uint32_t field_count = 0;
+    expect('{');
+    while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
+        auto node = parse_statement();
+        if (node->is(NodeKind::Var)) {
+            auto var = as<Var*>(node);
+            if (var->name != Identifier::Invalid) {
+                var->field_idx = field_count++;
+                nstruct->nspace->add_variable(var);
+            }
+        } else {
+            modl.mark_bad_scope(ScopeLocation::Struct, node, logger);
+        }
+    }
+    expect('}', "for struct body");
+
+    context.add_unchecked_decl(nstruct);
+
+    return nstruct;
 }
 
 uint32_t acorn::Parser::parse_modifiers() {
@@ -466,7 +581,7 @@ acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
     auto add_statement = [this](ScopeStmt* stmts, Node* stmt) finline{
         if (!cur_func &&
             !(stmt->is(NodeKind::Func) || stmt->is(NodeKind::Var))) {
-            modl.mark_bad_scope(BadScopeLocation::Global, stmt, logger);
+            modl.mark_bad_scope(ScopeLocation::Global, stmt, logger);
         }
         stmts->push_back(stmt);
     };
@@ -774,75 +889,11 @@ acorn::Type* acorn::Parser::parse_type() {
         expect(']');
     }
 
-    bool encountered_assign_det_arr_type = false, reported_error_about_elm_must_have_length = false;
-    for (auto itr = arr_lengths.rbegin(); itr != arr_lengths.rend(); ++itr) {
-        Expr* length_expr = *itr;
-        if (length_expr == nullptr) {
-            type = type_table.get_assigned_det_arr_type(type);
-            
-            encountered_assign_det_arr_type = true;
-            continue;
-        }
-
-        if (encountered_assign_det_arr_type && !reported_error_about_elm_must_have_length) {
-            auto loc_ptr = expand(length_expr).ptr;
-
-            while (*loc_ptr != ']' && *loc_ptr != '\0') {
-                ++loc_ptr;
-            }
-            while (*loc_ptr != '[' && *loc_ptr != '\0') {
-                ++loc_ptr;
-            }
-
-            acorn_assert(*loc_ptr != '\0', "Failed to find [ character");
-
-            SourceLoc error_loc = {
-                .ptr = loc_ptr,
-                .length = 1
-            };
-            error(error_loc, "Element type must have length")
-                .end_error(ErrCode::ParseElmTypeMustHaveArrLen);
-
-            reported_error_about_elm_must_have_length = true;
-        }
-        
-        bool resolvable = length_expr->is(NodeKind::Number);
-        Number* number;
-        if (resolvable) {
-            number = as<Number*>(length_expr);
-            resolvable &= number->type->is_integer() && number->type->get_number_of_bits() <= 32 &&
-                          number->value_s32 > 0;
-        }
-
-        if (resolvable) {
-            // handle common cases first in which it can resolve the length
-            // immediately.
-            type = type_table.get_arr_type(type, number->value_s32);
-        } else {
-            type = UnresolvedArrayType::create(context.get_allocator(), type, length_expr);
-        }
+    if (!arr_lengths.empty()) {
+        type = construct_array_type(type, arr_lengths);
     }
 
-    if (cur_token.is('!') && peek_token(0).is('(')) {
-        next_token();
-        next_token();
-        llvm::SmallVector<Type*> param_types;
-        if (cur_token.is_not(')')) {
-            bool more_param_types = true;
-            while (more_param_types) {
-
-                param_types.push_back(parse_type());
-
-                more_param_types = cur_token.is(',');
-                if (more_param_types) {
-                    next_token();
-                }
-            }
-        }
-        expect(')', "for function type");
-    
-        type = type_table.get_function_type(type, param_types);
-    }
+    type = parse_optional_function_type(type);
 
     if (type->is(context.const_void_type)) {
         SourceLoc error_loc = {
@@ -890,6 +941,11 @@ return t; }
     case Token::KwUSize:   ty(context.usize_type);
     case Token::KwFloat32: ty(context.float32_type);
     case Token::KwFloat64: ty(context.float64_type);
+    case Token::Identifier: {
+        Token name_token = cur_token;
+        next_token();
+        return construct_type_from_identifier(name_token);
+    }
     default: {
         error("Expected type").end_error(ErrCode::ParseInvalidType);
         return context.invalid_type;
@@ -900,8 +956,103 @@ return t; }
 #undef ty
 }
 
+acorn::Type* acorn::Parser::construct_type_from_identifier(Token name_token) {
+    auto name = Identifier::get(name_token.text());
+    return UnresolvedStructType::create(allocator, name, name_token.loc);
+}
+
+acorn::Type* acorn::Parser::construct_array_type(Type* base_type,
+                                                 const llvm::SmallVector<Expr*, 8>& arr_lengths) {
+    
+    Type* type = base_type;
+
+    bool encountered_assign_det_arr_type = false, reported_error_about_elm_must_have_length = false;
+    for (auto itr = arr_lengths.rbegin(); itr != arr_lengths.rend(); ++itr) {
+        Expr* length_expr = *itr;
+        if (length_expr == nullptr) {
+            type = type_table.get_assigned_det_arr_type(type);
+            
+            encountered_assign_det_arr_type = true;
+            continue;
+        }
+
+        if (encountered_assign_det_arr_type && !reported_error_about_elm_must_have_length) {
+            auto loc_ptr = expand(length_expr).ptr;
+
+            while (*loc_ptr != ']' && *loc_ptr != '\0') {
+                ++loc_ptr;
+            }
+            while (*loc_ptr != '[' && *loc_ptr != '\0') {
+                ++loc_ptr;
+            }
+
+            acorn_assert(*loc_ptr != '\0', "Failed to find [ character");
+
+            SourceLoc error_loc = {
+                .ptr = loc_ptr,
+                .length = 1
+            };
+            error(error_loc, "Element type must have length")
+                .end_error(ErrCode::ParseElmTypeMustHaveArrLen);
+
+            reported_error_about_elm_must_have_length = true;
+        }
+        
+        bool resolvable = length_expr->is(NodeKind::Number);
+        Number* number;
+        if (resolvable) {
+            number = as<Number*>(length_expr);
+            resolvable &= number->type->is_integer() && number->type->get_number_of_bits() <= 32 &&
+                          number->value_s32 > 0;
+        }
+
+        if (resolvable) {
+            // handle common cases first in which it can resolve the length
+            // immediately.
+            type = type_table.get_arr_type(type, number->value_s32);
+        } else {
+            type = UnresolvedArrayType::create(allocator, type, length_expr);
+        }
+    }
+
+    return type;
+}
+
+acorn::Type* acorn::Parser::parse_optional_function_type(Type* base_type) {
+    if (cur_token.is('!') && peek_token(0).is('(')) {
+        next_token();
+        next_token();
+        llvm::SmallVector<Type*> param_types;
+        if (cur_token.is_not(')')) {
+            bool more_param_types = true;
+            // TODO: check to make sure the type is not void!
+            while (more_param_types) {
+
+                param_types.push_back(parse_type());
+
+                // Allow for an optional name in the parameter type.
+                if (cur_token.is(Token::Identifier)) {
+                    next_token();
+                }
+
+                more_param_types = cur_token.is(',');
+                if (more_param_types) {
+                    next_token();
+                }
+            }
+        }
+        expect(')', "for function type");
+    
+        return type_table.get_function_type(base_type, param_types);
+    }
+    return base_type;
+}
+
 acorn::Expr* acorn::Parser::parse_assignment_and_expr() {
-    Expr* lhs = parse_expr();
+    return parse_assignment_and_expr(parse_expr());
+}
+
+acorn::Expr* acorn::Parser::parse_assignment_and_expr(Expr* lhs) {
     switch (cur_token.kind) {
     case '=':
     case Token::AddEq:
@@ -1586,7 +1737,7 @@ acorn::Number* acorn::Parser::parse_oct_literal() {
 
 acorn::Number* acorn::Parser::parse_float32_literal() {
     
-    auto [value, parse_error] = parse_float32_bits(context.get_allocator(), cur_token.text());
+    auto [value, parse_error] = parse_float32_bits(allocator, cur_token.text());
 
     Number* number = new_node<Number>(cur_token);
     number->value_f32 = value;
@@ -1602,7 +1753,7 @@ acorn::Number* acorn::Parser::parse_float32_literal() {
 
 acorn::Number* acorn::Parser::parse_float64_literal() {
     
-    auto [value, parse_error] = parse_float64_bits(context.get_allocator(), cur_token.text());
+    auto [value, parse_error] = parse_float64_bits(allocator, cur_token.text());
 
     Number* number = new_node<Number>(cur_token);
     number->value_f64 = value;

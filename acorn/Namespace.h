@@ -9,17 +9,25 @@ namespace acorn {
 
     class Module;
 
+    enum class ScopeLocation {
+        Global,
+        Struct
+    };
+
     class Namespace {
     public:
 
-        Namespace(Module& modl) : modl(modl) {
+        Namespace(Module& modl, ScopeLocation scope_location = ScopeLocation::Global) :
+            modl(modl), scope_location(scope_location) {
         }
 
         void add_function(Func* func);
         void add_variable(Var* var);
+        void add_struct(Struct* nstruct);
 
         FuncList* find_functions(Identifier name);
-        Var* find_variable(Identifier name);
+        Var*      find_variable(Identifier name);
+        Struct*   find_struct(Identifier name);
 
         const llvm::DenseMap<Identifier, Var*>& get_variables() const {
             return variables;
@@ -29,11 +37,17 @@ namespace acorn {
             return functions;
         }
 
+        const llvm::DenseMap<Identifier, Struct*>& get_structs() const {
+            return structs;
+        }
+
     private:
-        Module& modl;
+        Module&       modl;
+        ScopeLocation scope_location;
 
         llvm::DenseMap<Identifier, FuncList> functions;
         llvm::DenseMap<Identifier, Var*>     variables;
+        llvm::DenseMap<Identifier, Struct*>  structs;
     };
 }
 

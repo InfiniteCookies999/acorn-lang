@@ -4,6 +4,8 @@
 #include <llvm/IR/Module.h>
 
 #include "../Logger.h"
+#include "../AST.h"
+#include "Namespace.h"
 
 std::string acorn::to_string(llvm::Type* type) {
     std::string ll_str;
@@ -39,6 +41,31 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Mod
         auto arr_type = as<ArrayType*>(type);
         auto ll_elm_type = gen_type(arr_type->get_elm_type(), ll_context, ll_module);
         return llvm::ArrayType::get(ll_elm_type, arr_type->get_length());
+    }
+    case TypeKind::Struct: {
+        auto struct_type = as<StructType*>(type);
+        auto ll_struct_type = struct_type->get_ll_struct_type();
+        if (ll_struct_type) {
+            return ll_struct_type;
+        }
+        
+        auto nstruct = struct_type->get_struct();
+        
+
+        ll_struct_type = llvm::StructType::create(ll_context);
+
+        llvm::SmallVector<llvm::Type*> ll_field_types;
+
+        for (auto [_, field] : nstruct->nspace->get_variables()) {
+            auto ll_field_type = gen_type(field->type, ll_context, ll_module);
+            ll_field_types.push_back(ll_field_type);
+        }
+
+        ll_struct_type->setBody(ll_field_types);
+        ll_struct_type->setName(nstruct->name.reduce());
+
+        struct_type->set_ll_struct_type(ll_struct_type);
+        return ll_struct_type;
     }
     default:
         acorn_fatal("gen_type: Unknown type");

@@ -105,6 +105,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "switch"   , Token::KwSwitch    },
           { "case"     , Token::KwCase      },
           { "static"   , Token::KwStatic    },
+          { "struct"   , Token::KwStruct    },
 
           { "native"   , Token::KwNative    },
           { "dllimport", Token::KwDllimport },

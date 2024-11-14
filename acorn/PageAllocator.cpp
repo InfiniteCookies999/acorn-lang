@@ -23,11 +23,8 @@ void* acorn::PageAllocator::allocate(size_t size) {
     size_t aligned_size = align_up(size);
 
     std::lock_guard<std::mutex> lock(mtx);
-    if (aligned_size > page_size) {
-        // Large memory allocation case.
+    if (aligned_size + offset > cur_page_size) {
         alloc_new_page(next_multiple(size, page_size));
-    } else if (aligned_size + offset > page_size) {
-        alloc_new_page(page_size);
     }
 
     void* new_alloc = static_cast<char*>(cur_page) + offset;
@@ -60,6 +57,7 @@ void acorn::PageAllocator::alloc_new_page(size_t new_page_size) {
         throw std::bad_alloc();
     }
 
+    cur_page_size = new_page_size;
     offset = 0;
     pages.push_back(cur_page);
 }

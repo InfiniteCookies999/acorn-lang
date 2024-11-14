@@ -55,8 +55,7 @@ void test_sema() {
         }
 
         for (auto& entry : context->get_modules()) {
-            Sema::check_for_duplicate_functions(*entry.second);
-            Sema::check_for_duplicate_variables(*entry.second);
+            Sema::check_for_duplicate_declarations(*entry.second);
         }
 
         if (context->has_errors()) {

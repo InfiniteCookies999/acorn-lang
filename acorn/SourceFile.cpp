@@ -4,12 +4,12 @@
 
 acorn::SourceFile::SourceFile(Context& context, std::wstring path, Buffer buffer, Module& modl)
     : logger(context, *this),
-    path(std::move(path)),
-    line_table(buffer.content, buffer.length),
-    buffer(buffer),
-    modl(modl),
-    nspace(&modl),
-    Namespace(modl) {
+      path(std::move(path)),
+      line_table(buffer.content, buffer.length),
+      buffer(buffer),
+      modl(modl),
+      nspace(&modl),
+      Namespace(modl) {
 }
 
 void acorn::SourceFile::add_function(Func* func) {
@@ -25,6 +25,14 @@ void acorn::SourceFile::add_variable(Var* var) {
         nspace->add_variable(var);
     } else {
         Namespace::add_variable(var);
+    }
+}
+
+void acorn::SourceFile::add_struct(Struct* nstruct) {
+    if (has_public_access(nstruct)) {
+        nspace->add_struct(nstruct);
+    } else {
+        Namespace::add_struct(nstruct);
     }
 }
 

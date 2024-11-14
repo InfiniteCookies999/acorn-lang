@@ -91,7 +91,12 @@ bool acorn::Sema::find_main_function(Context& context) {
 acorn::Type* acorn::Sema::fixup_type(Type* type) {
     if (type->get_kind() == TypeKind::UnresolvedArrayType) {
         return fixup_unresolved_arr_type(type);
+    } else if (type->get_kind() == TypeKind::UnresolvedStructType) {
+        return fixup_unresolved_struct_type(type);
     }
+
+    // TODO: need to fixup function types since they can contain arrays or
+    // other non-fixedup types.
     return type;
 }
 
@@ -210,11 +215,73 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
    return fixed_type;
 }
 
+acorn::Type* acorn::Sema::fixup_unresolved_struct_type(Type* type) {
+    
+    auto unresolved_struct_type = as<UnresolvedStructType*>(type);
+
+    auto name = unresolved_struct_type->get_struct_name();
+    auto found_struct = file->find_struct(name);
+
+    if (!found_struct) {
+        error(unresolved_struct_type->get_error_location(),
+              "Could not find struct type '%s'", name)
+            .end_error(ErrCode::SemaCouldNotFindStructType);
+        return nullptr;
+    }
+
+    // TODO: make sure the struct is checked!
+
+    return found_struct->struct_type;
+}
+
 // Statement checking
 //--------------------------------------
 
-void acorn::Sema::check_for_duplicate_functions(Module& modl) {
-    for (const auto& [_, funcs] : modl.get_functions()) {
+void acorn::Sema::check_for_duplicate_declarations(Module& modl) {
+    // Report function duplicates.
+    check_for_duplicate_functions(&modl);
+    for (auto [_, nstruct] : modl.get_structs()) {
+        check_for_duplicate_functions(nstruct);
+    }
+
+    // Reporting all other duplcates.
+    auto get_duplicate_kind_str = [](Decl* decl) finline {
+        if (decl->is(NodeKind::Var)) {
+            return "variable";
+        } else if (decl->is(NodeKind::Struct)) {
+            return "struct";
+        } else {
+            acorn_fatal("unreachable");
+            return "";
+        }
+    };
+    auto get_duplcate_err_code = [](Decl* decl) finline {
+        if (decl->is(NodeKind::Var)) {
+            return ErrCode::SemaDuplicateGlobalVar;
+        } else if (decl->is(NodeKind::Struct)) {
+            return ErrCode::SemaDuplicateGlobalStruct;
+        } else {
+            acorn_fatal("unreachable");
+            return ErrCode::SemaDuplicateGlobalVar;
+        }
+    };
+    for (auto [location, decl1, decl2] : modl.get_declaration_duplicates()) {
+        report_redeclaration(decl1, 
+                             decl2, 
+                             get_duplicate_kind_str(decl1),
+                             get_duplcate_err_code(decl1));
+    }
+}
+
+void acorn::Sema::check_for_duplicate_functions(Struct* nstruct) {
+    check_for_duplicate_functions(nstruct->nspace);
+    for (auto [_, nstruct] : nstruct->nspace->get_structs()) {
+        check_for_duplicate_functions(nstruct);
+    }
+}
+
+void acorn::Sema::check_for_duplicate_functions(Namespace* nspace) {
+    for (const auto& [_, funcs] : nspace->get_functions()) {
         for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
             for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
                 if (check_for_duplicate_match(*itr, *itr2)) {
@@ -239,12 +306,6 @@ bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2
     return true;
 }
 
-void acorn::Sema::check_for_duplicate_variables(Module& modl) {
-    for (auto [var1, var2] : modl.get_redecl_global_variables()) {
-        report_redeclaration(var1, var2, "variable", ErrCode::SemaDuplicateGlobalVar);
-    }
-}
-
 void acorn::Sema::report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code) {
     // Make sure that we report the declaration that comes second within a given file.
     if (decl1->loc.ptr < decl2->loc.ptr) {
@@ -259,22 +320,27 @@ void acorn::Sema::check_nodes_wrong_scopes(Module& modl) {
 
     auto report = []<typename T>(Logger& logger,
                                  T loc,
-                                 BadScopeLocation location,
+                                 ScopeLocation location,
                                  auto expr_or_stmt_str) finline {
-        const char* scope_str = "global"; // TODO: Once there are more kinds of scopes to report this will need to change.
+        const char* scope_str;
+        if (location == ScopeLocation::Global) {
+            scope_str = "global";
+        } else if (location == ScopeLocation::Struct) {
+            scope_str = "struct";
+        } else {
+            acorn_fatal("unreachable");
+        }
         logger.begin_error(loc, "%s does not belong at %s scope",
                            expr_or_stmt_str, scope_str)
             .end_error(ErrCode::SemaNodeAtWrongScope);
     };
 
     for (auto [location, node, logger] : modl.get_bad_scope_nodes()) {
-        if (location == BadScopeLocation::Global) {
-            if (node->is_expression()) {
-                Expr* expr = as<Expr*>(node);
-                report(logger, expand(expr), location, "Expression");
-            } else {
-                report(logger, node->loc, location, "Statement");
-            }
+        if (node->is_expression()) {
+            Expr* expr = as<Expr*>(node);
+            report(logger, expand(expr), location, "Expression");
+        } else {
+            report(logger, node->loc, location, "Statement");
         }
     }
 }
@@ -549,6 +615,12 @@ void acorn::Sema::check_variable(Var* var) {
     }
 
     return cleanup();
+}
+
+void acorn::Sema::check_struct(Struct* nstruct) {
+    for (auto [_, var] : nstruct->nspace->get_variables()) {
+        check_variable(var);
+    }
 }
 
 void acorn::Sema::check_return(ReturnStmt* ret) {
@@ -1523,6 +1595,10 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
     if (dot->ident == context.length_identifier && dot->site->type->is_array()) {
         dot->is_array_length = true;
         dot->type = context.int_type;
+    } else if (dot->site->type->is_struct_type()) {
+        auto struct_type = as<StructType*>(dot->site->type);
+        auto nstruct = struct_type->get_struct();
+        check_ident_ref(dot, nstruct->nspace, is_for_call);
     } else {
         error(expand(dot), "Cannot access field '%s' of type '%s'", dot->ident, dot->site->type)
             .end_error(ErrCode::SemaDotOperatorCannotAccessType);
@@ -2221,8 +2297,12 @@ void acorn::Sema::check_modifiable(Expr* expr) {
 }
 
 bool acorn::Sema::is_lvalue(Expr* expr) {
-    if (expr->is(NodeKind::IdentRef) || expr->is(NodeKind::MemoryAccess)) {
+    if (expr->is(NodeKind::MemoryAccess)) {
         return true;
+    }
+    if (expr->is(NodeKind::IdentRef) || expr->is(NodeKind::DotOperator)) {
+        auto ref = as<IdentRef*>(expr);
+        return ref->is_var_ref();
     }
 
     if (expr->is(NodeKind::UnaryOp)) {

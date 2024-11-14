@@ -17,22 +17,11 @@ acorn::ImportStmt* acorn::Module::find_import(Identifier import_key) {
     return itr == imports.end() ? nullptr : itr->second;
 }
 
-void acorn::Module::add_duplicate_variable(Var* var, Var* prev_var) {
-    auto itr = std::ranges::find_if(redecl_global_variables, [var, prev_var](auto pair) {
-        const auto [var1, var2] = pair;
-        return (var == var1 && prev_var == var2) ||
-                (var == var2 && prev_var == var1);
-    });
-    if (itr == redecl_global_variables.end()) {
-        redecl_global_variables.push_back({ var, prev_var });
-    }
-}
-
 void acorn::Module::add_global_comptime_control_flow(Node* control_flow) {
     comptime_control_flows.push_back(control_flow);
 }
 
-void acorn::Module::mark_bad_scope(BadScopeLocation location, Node* node, Logger& logger) {
+void acorn::Module::mark_bad_scope(ScopeLocation location, Node* node, Logger& logger) {
     bad_scope_nodes.push_back({ location, node, logger });
 }
 
@@ -45,4 +34,16 @@ acorn::Namespace* acorn::Module::get_or_create_namespace(Context& context, Ident
     auto nspace = context.get_allocator().alloc_type<Namespace>();
     namespaces.insert({ ident, nspace });
     return nspace;
+}
+
+void acorn::Module::add_duplicate_decl(Decl* decl, Decl* prev_decl, 
+                                       ScopeLocation scope_location) {
+    auto itr = std::ranges::find_if(redecls, [decl, prev_decl](auto tup) {
+        const auto [_, decl1, decl2] = tup;
+        return (decl == decl1 && prev_decl == decl2) ||
+                (decl == decl2 && prev_decl == decl1);
+    });
+    if (itr == redecls.end()) {
+        redecls.push_back({ scope_location, decl, prev_decl });
+    }
 }

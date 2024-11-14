@@ -72,6 +72,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Pointer:   return as<const PointerType*>(this)->to_string();
     case TypeKind::Array:     return as<const ArrayType*>(this)->to_string();
     case TypeKind::Function:  return as<const FunctionType*>(this)->to_string();
+    case TypeKind::Struct:    return as<const StructType*>(this)->to_string();
     case TypeKind::AssignDeterminedArray:
                               return as<const AssignDeterminedArrayType*>(this)->to_string();
     default:
@@ -174,4 +175,25 @@ std::string acorn::FunctionType::to_string() const {
     }
     str += ")";
     return str;
+}
+
+acorn::Type* acorn::UnresolvedStructType::create(PageAllocator& allocator,
+                                                 Identifier name,
+                                                 SourceLoc name_location,
+                                                 bool is_const) {
+    auto struct_type = allocator.alloc_type<UnresolvedStructType>();
+    struct_type->contains_const = is_const;
+    return new (struct_type) UnresolvedStructType(is_const, name, name_location);
+}
+
+acorn::StructType* acorn::StructType::create(PageAllocator& allocator,
+                                             Struct* nstruct,
+                                             bool is_const) {
+    auto struct_type = allocator.alloc_type<StructType>();
+    struct_type->contains_const = is_const;
+    return new (struct_type)  StructType(is_const, nstruct);
+}
+
+std::string acorn::StructType::to_string() const {
+    return nstruct->name.reduce().str();
 }

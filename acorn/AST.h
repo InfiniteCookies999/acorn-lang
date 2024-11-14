@@ -23,6 +23,7 @@ namespace acorn {
     class SourceFile;
     class Namespace;
     class Logger;
+    class StructType;
 
     const size_t MAX_FUNC_PARAMS = 64;
 
@@ -32,6 +33,8 @@ namespace acorn {
         
         Func,
         Var,
+        Struct,
+
         ReturnStmt,
         IfStmt,
         ComptimeIfStmt,
@@ -174,6 +177,7 @@ namespace acorn {
 
     struct Var : Decl {
         static const uint32_t NotParam = static_cast<uint32_t>(-1);
+        static const uint32_t NotField = static_cast<uint32_t>(-1);
 
         Var() : Decl(NodeKind::Var) {
         }
@@ -181,6 +185,7 @@ namespace acorn {
         llvm::StringRef linkname;
         
         uint32_t param_idx = NotParam;
+        uint32_t field_idx = NotField;
         bool     is_global = false;
 
         Type* type;
@@ -192,6 +197,17 @@ namespace acorn {
 
         bool is_param() const { return param_idx != NotParam; }
 
+    };
+
+    struct Struct : Decl {
+        Struct() : Decl(NodeKind::Struct) {
+        }
+
+        StructType* struct_type;
+
+        Namespace* nspace;
+
+        Var* find_field(Identifier name) const;
     };
 
     struct ImportStmt : Node {

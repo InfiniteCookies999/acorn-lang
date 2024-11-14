@@ -18,6 +18,7 @@
 #include "link/Linking.h"
 #include "Process.h"
 #include "SourceFile.h"
+#include "FloatParsing.h"
 
 namespace fs = std::filesystem;
 
@@ -249,8 +250,7 @@ void acorn::Compiler::sema_and_irgen() {
     context.queue_gen(context.get_main_function());
 
     for (auto& entry : context.get_modules()) {
-        Sema::check_for_duplicate_functions(*entry.second);
-        Sema::check_for_duplicate_variables(*entry.second);
+        Sema::check_for_duplicate_declarations(*entry.second);
     }
 
     if (context.has_errors()) {
@@ -265,6 +265,8 @@ void acorn::Compiler::sema_and_irgen() {
             sema.check_function(as<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {
             sema.check_variable(as<Var*>(decl));
+        } else if (decl->is(NodeKind::Struct)) {
+            sema.check_struct(as<Struct*>(decl));
         } else {
             acorn_fatal("Unreachable: Missing check case");
         }
@@ -487,6 +489,8 @@ bool acorn::Compiler::validate_sources(const SourceVector& sources) {
 
 void acorn::Compiler::parse_files(SourceVector& sources) {
     parse_timer.start();
+
+    acorn::initialize_float_parsing(allocator);
 
     if (sources.empty()) {
         Logger::global_error(context, "No sources provided")

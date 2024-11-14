@@ -8,12 +8,20 @@
 #include <llvm/ADT/Hashing.h>
 #include <llvm/ADT/DenseMapInfo.h>
 
+#include "Identifier.h"
+#include "Source.h"
+
+namespace llvm {
+    class StructType;
+}
+
 namespace acorn {
     
     class PageAllocator;
     class TypeTable;
     struct Expr;
     class Context;
+    struct Struct;
 
     enum class TypeKind {
         Invalid,
@@ -50,6 +58,8 @@ namespace acorn {
         EmptyArrayType,
         AssignDeterminedArray,
         Function,
+        UnresolvedStructType,
+        Struct,
 
         Range,
         
@@ -104,6 +114,7 @@ namespace acorn {
         bool is_bool() const      { return kind == TypeKind::Bool;     }
         bool is_range() const     { return kind == TypeKind::Range;    }
         bool is_function_type() const { return kind == TypeKind::Function; }
+        bool is_struct_type() const { return kind == TypeKind::Struct; }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
@@ -262,6 +273,63 @@ namespace acorn {
         }
 
         FunctionTypeKey* key;
+    };
+
+    struct UnresolvedStructType : public Type {
+    public:
+
+        static Type* create(PageAllocator& allocator,
+                            Identifier name,
+                            SourceLoc  name_location,
+                            bool is_const = false);
+
+        Identifier get_struct_name() const {
+            return name;
+        }
+
+        SourceLoc get_error_location() const {
+            return error_location;
+        }
+
+    protected:
+        UnresolvedStructType(bool is_const, Identifier name, SourceLoc error_location)
+            : Type(TypeKind::UnresolvedStructType, is_const),
+              name(name),
+              error_location(error_location) {
+        }
+
+        SourceLoc  error_location;
+        Identifier name;
+    };
+
+    struct StructType : public Type {
+    public:
+
+        static StructType* create(PageAllocator& allocator,
+                                  Struct* nstruct,
+                                  bool is_const = false);
+
+        std::string to_string() const;
+
+        Struct* get_struct() const {
+            return nstruct;
+        }
+
+        void set_ll_struct_type(llvm::StructType* ll_type) {
+            ll_struct_type = ll_type;
+        }
+
+        llvm::StructType* get_ll_struct_type() const {
+            return ll_struct_type;
+        }
+
+    protected:
+        StructType(bool is_const, Struct* nstruct)
+            : Type(TypeKind::Struct, is_const), nstruct(nstruct) {
+        }
+
+        llvm::StructType* ll_struct_type = nullptr;
+        Struct*           nstruct;
     };
 }
 

@@ -44,6 +44,7 @@ namespace acorn {
         size_t alignment;
         size_t offset;
         void*  cur_page;
+        size_t cur_page_size;
 
         std::mutex mtx;
         

@@ -26,9 +26,10 @@ namespace acorn {
         static bool is_potential_main_function(Context& context, const Func* canidate);
         static bool find_main_function(Context& context);
 
-        static void check_for_duplicate_functions(Module& modl);
+        static void check_for_duplicate_declarations(Module& modl);
+        static void check_for_duplicate_functions(Struct* nstruct);
+        static void check_for_duplicate_functions(Namespace* nspace);
         static bool check_for_duplicate_match(const Func* func1, const Func* func2);
-        static void check_for_duplicate_variables(Module& modl);
         static void report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code);
 
         static void check_nodes_wrong_scopes(Module& modl);
@@ -38,6 +39,7 @@ namespace acorn {
 
         void check_function(Func* func);
         void check_variable(Var* var);
+        void check_struct(Struct* nstruct);
 
     private:
         Context&    context;
@@ -79,6 +81,7 @@ namespace acorn {
         Type* fixup_type(Type* type);
         Type* fixup_unresolved_arr_type(Type* type);
         Type* fixup_assign_det_arr_type(Type* type, Var* var);
+        Type* fixup_unresolved_struct_type(Type* type);
 
         // Statement checking
         //--------------------------------------

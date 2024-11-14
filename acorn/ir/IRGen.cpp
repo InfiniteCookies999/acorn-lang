@@ -226,7 +226,7 @@ llvm::Type* acorn::IRGenerator::gen_function_return_type(Func* func, bool is_mai
         if (arr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
             // The array can fit into an integer.
 
-            auto ll_type = llvm::Type::getIntNTy(ll_context, next_pow2(arr_mem_size));
+            auto ll_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(arr_mem_size)));
             func->ll_aggr_int_ret_type = ll_type;
             return ll_type;
         }
@@ -264,7 +264,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     }
 
     // Allocating and storing incoming variables.
-    size_t param_idx = 0;
+    unsigned int param_idx = 0;
     if (func->uses_aggr_param) {
         ll_ret_addr = ll_cur_func->getArg(param_idx++);
     }
@@ -820,7 +820,9 @@ llvm::Value* acorn::IRGenerator::gen_switch_foldable(SwitchStmt* switchn) {
 
     size_t num_cases = switchn->cases.size() + switchn->default_scope ? 1 : 0;
     auto ll_default_bb = switchn->default_scope ? gen_bblock("sw.default", ll_cur_func) : ll_end_bb;
-    auto ll_switch = builder.CreateSwitch(gen_rvalue(switchn->on), ll_default_bb, num_cases);
+    auto ll_switch = builder.CreateSwitch(gen_rvalue(switchn->on), 
+                                          ll_default_bb, 
+                                          static_cast<unsigned int>(num_cases));
     
     auto gen_case_scope = [this, ll_end_bb](llvm::BasicBlock* ll_case_bb, ScopeStmt* scope) finline {
         builder.SetInsertPoint(ll_case_bb);
@@ -1206,6 +1208,11 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
     if (dot->is_array_length) {
         auto arr_type = as<ArrayType*>(dot->site->type);
         return builder.getInt32(arr_type->get_length());
+    } else if (dot->site->type->is_struct_type()) {
+        auto ll_struct_type = gen_type(dot->site->type);
+        auto ll_struct_address = gen_node(dot->site);
+        auto field = dot->var_ref;
+        return builder.CreateStructGEP(ll_struct_type, ll_struct_address, field->field_idx);
     } else {
         return gen_ident_reference(dot);
     }
@@ -1266,6 +1273,7 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
     case TypeKind::Function:
         return llvm::Constant::getNullValue(llvm::PointerType::get(ll_context, 0));
     case TypeKind::Array:
+    case TypeKind::Struct:
         return llvm::ConstantAggregateZero::get(gen_type(type));
     default:
         acorn_fatal("gen_zero(): Missing case");

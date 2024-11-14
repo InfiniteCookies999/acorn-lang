@@ -51,6 +51,7 @@ namespace acorn {
             KwSwitch,
             KwCase,
             KwStatic,
+            KwStruct,
 
             KwNull,
             KwTrue,

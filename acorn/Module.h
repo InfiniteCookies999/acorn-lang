@@ -10,18 +10,15 @@ namespace acorn {
 
     class Logger;
 
-    enum class BadScopeLocation {
-        Global
-    };
-
     class Module : public Namespace {
     public:
         struct BadScopeNode {
-            BadScopeLocation location;
-            Node*            node;
-            Logger&          logger;
+            ScopeLocation location;
+            Node*         node;
+            Logger&       logger;
         };
         using BadScopeList = llvm::SmallVector<BadScopeNode>;
+        using DupDeclList = llvm::SmallVector<std::tuple<ScopeLocation, Decl*, Decl*>>;
 
         Module() : Namespace(*this) {
         }
@@ -33,11 +30,12 @@ namespace acorn {
 
         Namespace* find_namespace(Identifier name);
 
-        void add_duplicate_variable(Var* var, Var* prev_var);
-
         void add_global_comptime_control_flow(Node* control_flow);
 
-        void mark_bad_scope(BadScopeLocation location, Node* node, Logger& logger);
+        void mark_bad_scope(ScopeLocation location, Node* node, Logger& logger);
+
+        void add_duplicate_decl(Decl* decl, Decl* prev_decl, 
+                                ScopeLocation scope_location);
 
         Namespace* get_or_create_namespace(Context& context, Identifier ident);
 
@@ -53,8 +51,8 @@ namespace acorn {
             return comptime_control_flows;
         }
 
-        const llvm::SmallVector<std::pair<Var*, Var*>>& get_redecl_global_variables() const {
-            return redecl_global_variables;
+        const DupDeclList& get_declaration_duplicates() const {
+            return redecls;
         }
 
     private:
@@ -63,17 +61,13 @@ namespace acorn {
 
         llvm::DenseMap<Identifier, ImportStmt*> imports;
 
-        // Global functions
-        llvm::DenseMap<Identifier, FuncList> functions;
         // Global comptime control flow such as #if
         llvm::SmallVector<Node*>             comptime_control_flows;
-        // Global variables
-        llvm::DenseMap<Identifier, Var*>     variables;
         // Nodes that belong in the wrong scope.
         BadScopeList bad_scope_nodes;
-        // Placed in this list if the variable was declared more than once
-        // along with the other declaration.
-        llvm::SmallVector<std::pair<Var*, Var*>> redecl_global_variables;
+
+        // Placed in this list if the declaration was declared more than once.
+        DupDeclList redecls;
     };
 }
 

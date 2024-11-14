@@ -105,6 +105,8 @@ X(SemaVarRequiresAssignForDetArrType       , 30059)
 X(SemaAssignDetArrTypeReqsArrAssignment    , 30060)
 X(SemaAssignDetArrWrongDimensions          , 30061)
 X(SemaCannotRefStaticImport                , 30062)
+X(SemaDuplicateGlobalStruct                , 30063)
+X(SemaCouldNotFindStructType               , 30064)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

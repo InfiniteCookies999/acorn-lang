@@ -27,7 +27,7 @@ namespace acorn {
     private:
         Context&       context;
         Module&        modl;
-        PageAllocator& context_allocator;
+        PageAllocator& allocator;
         SourceFile*    file;
         TypeTable&     type_table;
         
@@ -52,6 +52,8 @@ namespace acorn {
         ImportStmt* parse_import();
 
         Node* parse_statement();
+        Node* parse_ident_decl_or_expr();
+        Decl* parse_decl(uint32_t modifiers, Type*);
 
         template<typename D, bool uses_linkname>
         D* new_declaration(uint32_t modifiers, Identifier name, Token loc_token);
@@ -62,6 +64,9 @@ namespace acorn {
         Var* parse_variable();
         Var* parse_variable(uint32_t modifiers, Type* type);
         Var* parse_variable(uint32_t modifiers, Type* type, Identifier name);
+
+        Struct* parse_struct();
+        Struct* parse_struct(uint32_t modifiers, Identifier name);
 
         uint32_t parse_modifiers();
 
@@ -83,10 +88,14 @@ namespace acorn {
         //--------------------------------------
 
         Type* parse_type();
-
         Type* parse_base_type();
+        Type* construct_type_from_identifier(Token name_token);
+        Type* construct_array_type(Type* base_type, 
+                                   const llvm::SmallVector<Expr*, 8>& arr_lengths);
+        Type* parse_optional_function_type(Type* base_type);
 
         Expr* parse_assignment_and_expr();
+        Expr* parse_assignment_and_expr(Expr* lhs);
         Expr* parse_expr();
         Expr* parse_binary_expr();
         std::pair<Token, Token> split_number_from_sign(Token token);

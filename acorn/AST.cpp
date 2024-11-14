@@ -62,3 +62,7 @@ acorn::Var* acorn::Func::find_parameter(Identifier name) const {
     });
     return itr != params.end() ? *itr : nullptr;
 }
+
+acorn::Var* acorn::Struct::find_field(Identifier name) const {
+    return nspace->find_variable(name);
+}

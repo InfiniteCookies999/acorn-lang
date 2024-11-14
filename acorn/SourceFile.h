@@ -31,6 +31,7 @@ namespace acorn {
 
         void add_function(Func* func);
         void add_variable(Var* var);
+        void add_struct(Struct* nstruct);
 
         void set_default_access(uint32_t default_access) {
             this->default_access = default_access;
