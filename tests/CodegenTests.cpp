@@ -678,6 +678,12 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("Lets go!");
         });
+        test("Function call fixes up type", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls6.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("Lets go!");
+        });
         test("Struct assign and access fields", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"structs/structs1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

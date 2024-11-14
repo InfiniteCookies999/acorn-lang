@@ -82,6 +82,7 @@ namespace acorn {
         Type* fixup_unresolved_arr_type(Type* type);
         Type* fixup_assign_det_arr_type(Type* type, Var* var);
         Type* fixup_unresolved_struct_type(Type* type);
+        Type* fixup_function_type(Type* type);
 
         // Statement checking
         //--------------------------------------

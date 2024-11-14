@@ -93,10 +93,9 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
         return fixup_unresolved_arr_type(type);
     } else if (type->get_kind() == TypeKind::UnresolvedStructType) {
         return fixup_unresolved_struct_type(type);
+    } else if (type->get_kind() == TypeKind::Function) {
+        return fixup_function_type(type);
     }
-
-    // TODO: need to fixup function types since they can contain arrays or
-    // other non-fixedup types.
     return type;
 }
 
@@ -232,6 +231,33 @@ acorn::Type* acorn::Sema::fixup_unresolved_struct_type(Type* type) {
     // TODO: make sure the struct is checked!
 
     return found_struct->struct_type;
+}
+
+acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
+    auto func_type = as<FunctionType*>(type);
+
+    llvm::SmallVector<Type*, 8> fixed_param_types;
+    bool type_needed_fixing = false;
+
+    auto ret_type = func_type->get_return_type();
+    auto fixed_ret_type = fixup_type(ret_type);
+    if (fixed_ret_type != ret_type) {
+        type_needed_fixing = true;
+    }
+
+    for (auto param_type : func_type->get_param_types()) {
+        auto fixed_param_type = fixup_type(param_type);
+        fixed_param_types.push_back(fixed_param_type);
+        if (fixed_param_type != param_type) {
+            type_needed_fixing = true;
+        }
+    }
+
+    if (type_needed_fixing) {
+        return type_table.get_function_type(fixed_ret_type, std::move(fixed_param_types));
+    }
+
+    return type;
 }
 
 // Statement checking

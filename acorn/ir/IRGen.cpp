@@ -1004,7 +1004,12 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
             ll_param_types.push_back(llvm::PointerType::get(ll_context, 0));
         }
         for (Type* type : param_types) {
-            ll_param_types.push_back(gen_type(type));
+            if (type->is_array()) { // Array types need to be decayed.
+                auto ll_param_type = llvm::PointerType::get(ll_context, 0);
+                ll_param_types.push_back(ll_param_type);
+            } else {
+                ll_param_types.push_back(gen_type(type));
+            }
         }
 
         auto ll_func_type = llvm::FunctionType::get(ll_ret_type, ll_param_types, false);
