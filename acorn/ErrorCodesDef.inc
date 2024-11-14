@@ -41,6 +41,7 @@ X(ParseAlreadySetNamespaceForComptimeFile  , 20031)
 X(ParseArrayIndexCannotBeNeg               , 20032)
 X(ParseArrayIndexAlreadyAssigned           , 20033)
 X(ParseElmTypeMustHaveArrLen               , 20034)
+X(ParseFuncParamTypeCannotBeVoid           , 20035)
 
 X(SemaNotAllFuncPathReturn                 , 30000)
 X(SemaVariableCannotHaveVoidType           , 30001)

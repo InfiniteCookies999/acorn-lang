@@ -1025,10 +1025,14 @@ acorn::Type* acorn::Parser::parse_optional_function_type(Type* base_type) {
         llvm::SmallVector<Type*> param_types;
         if (cur_token.is_not(')')) {
             bool more_param_types = true;
-            // TODO: check to make sure the type is not void!
             while (more_param_types) {
 
-                param_types.push_back(parse_type());
+                auto type = parse_type();
+                param_types.push_back(type);
+                if (type == context.void_type) {
+                    error(prev_token, "Parameter type cannot be void")
+                        .end_error(ErrCode::ParseFuncParamTypeCannotBeVoid);
+                }
 
                 // Allow for an optional name in the parameter type.
                 if (cur_token.is(Token::Identifier)) {
