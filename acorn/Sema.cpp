@@ -644,6 +644,8 @@ void acorn::Sema::check_variable(Var* var) {
 }
 
 void acorn::Sema::check_struct(Struct* nstruct) {
+    nstruct->generated = true;
+    
     for (auto [_, var] : nstruct->nspace->get_variables()) {
         check_variable(var);
     }
@@ -1713,8 +1715,7 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
     auto& param_types = func_type->get_param_types();
 
     auto display_error = [this, call, func_type]() finline {
-        // TODO: generate function type string.
-        logger.begin_error(expand(call), "Invalid call to function type: %s", 44);
+        logger.begin_error(expand(call), "Invalid call to function type: %s", func_type);
         logger.add_empty_line();
         display_call_mismatch_info(func_type, call->args, false);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
@@ -1728,6 +1729,11 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
     for (size_t i = 0; i < call->args.size(); i++) {
         Expr* arg        = call->args[i];
         Type* param_type = param_types[i];
+
+        if (arg->is(NodeKind::NamedValue)) {
+            display_error();
+            return;
+        }
 
         if (!is_assignable_to(param_type, arg)) {
             display_error();
@@ -1917,7 +1923,8 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
                     named_args_out_of_order = true;
                 }
             } else {
-                // TODO: report that named arguments cannot be used in function type calls.
+                err_line("Cannot use named arguments when calling based on type");
+                return;
             }
         } else {
             if constexpr (is_func_expr) {
