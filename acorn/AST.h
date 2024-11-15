@@ -58,6 +58,7 @@ namespace acorn {
         MemoryAccess,
         NamedValue,
         FuncCall,
+        StructInitializer,
         String,
         Null,
         Cast,
@@ -211,8 +212,11 @@ namespace acorn {
         StructType* struct_type;
 
         Namespace* nspace;
+        // Ordered list of the fields.
+        llvm::SmallVector<Var*> fields;
 
-        bool has_been_checked = false;
+        bool has_been_checked   = false;
+        bool fields_have_errors = false;
 
         Var* find_field(Identifier name) const;
     };
@@ -431,6 +435,7 @@ namespace acorn {
             FuncsKind,
             UniversalKind,
             ImportKind,
+            StructKind
         } found_kind = NoneKind;
 
         union {
@@ -438,12 +443,14 @@ namespace acorn {
             FuncList*   funcs_ref;
             Expr*       universal_ref;
             ImportStmt* import_ref;
+            Struct*     struct_ref;
         };
 
         bool is_var_ref() const       { return found_kind == VarKind;       }
         bool is_funcs_ref() const     { return found_kind == FuncsKind;     }
         bool is_universal_ref() const { return found_kind == UniversalKind; }
         bool is_import_ref() const    { return found_kind == ImportKind;    }
+        bool is_struct_ref() const    { return found_kind == StructKind;    }
 
         void set_var_ref(Var* var) {
             var_ref    = var;
@@ -455,14 +462,19 @@ namespace acorn {
             found_kind = FuncsKind;
         }
 
-        void set_universal(Expr* universal) {
+        void set_universal_ref(Expr* universal) {
             universal_ref = universal;
             found_kind = UniversalKind;
         }
 
-        void set_import(ImportStmt* importn) {
+        void set_import_ref(ImportStmt* importn) {
             import_ref = importn;
             found_kind = ImportKind;
+        }
+
+        void set_struct(Struct* structn) {
+            struct_ref = structn;
+            found_kind = StructKind;
         }
     };
 
@@ -500,6 +512,15 @@ namespace acorn {
 
         llvm::SmallVector<Expr*, 8> args;
 
+    };
+
+    struct StructInitializer : Expr {
+        StructInitializer() : Expr(NodeKind::StructInitializer) {
+        }
+
+        Struct* structn;
+        IdentRef* ref;
+        llvm::SmallVector<Expr*, 8> values;
     };
 
     struct String : Expr {

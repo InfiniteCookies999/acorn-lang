@@ -90,9 +90,9 @@ void acorn::Parser::parse() {
             }
         } else if (node->is(NodeKind::Struct)) {
 
-            auto nstruct = as<Struct*>(node);
-            if (nstruct->name != Identifier::Invalid) {
-                file->add_struct(nstruct);
+            auto structn = as<Struct*>(node);
+            if (structn->name != Identifier::Invalid) {
+                file->add_struct(structn);
             }
         } else if (node->is(NodeKind::ComptimeIfStmt)) {
             modl.add_global_comptime_control_flow(node);
@@ -109,7 +109,7 @@ void acorn::Parser::parse_import_top() {
     auto importn = parse_import();
     if (!importn) return;
 
-    if (auto prev_import = modl.try_add_import(importn)) {
+    if (auto prev_import = file->try_add_import(importn)) {
         error(importn->loc, "Duplicate import")
             .end_error(ErrCode::ParseDuplicateImport);
     }
@@ -201,7 +201,7 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
     case '{':
         return parse_scope();
-    case ')': case '}': {
+    case ')': case '}': case ',': {
         // Handling these cases as if it is special because the skip recovery.
         // will treat them as recovery points.
         error("Expected an expression")
@@ -425,10 +425,10 @@ acorn::Struct* acorn::Parser::parse_struct() {
 
 acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) {
 
-    auto nstruct = new_declaration<Struct, false>(modifiers, name, prev_token);
-    nstruct->nspace = allocator.alloc_type<Namespace>();
-    new (nstruct->nspace) Namespace(modl, ScopeLocation::Struct);
-    nstruct->struct_type = StructType::create(allocator, nstruct);
+    auto structn = new_declaration<Struct, false>(modifiers, name, prev_token);
+    structn->nspace = allocator.alloc_type<Namespace>();
+    new (structn->nspace) Namespace(modl, ScopeLocation::Struct);
+    structn->struct_type = StructType::create(allocator, structn);
 
     uint32_t field_count = 0;
     expect('{');
@@ -438,7 +438,8 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
             auto var = as<Var*>(node);
             if (var->name != Identifier::Invalid) {
                 var->field_idx = field_count++;
-                nstruct->nspace->add_variable(var);
+                structn->nspace->add_variable(var);
+                structn->fields.push_back(var);
             }
         } else {
             modl.mark_bad_scope(ScopeLocation::Struct, node, logger);
@@ -446,9 +447,9 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
     }
     expect('}', "for struct body");
 
-    context.add_unchecked_decl(nstruct);
+    context.add_unchecked_decl(structn);
 
-    return nstruct;
+    return structn;
 }
 
 uint32_t acorn::Parser::parse_modifiers() {
@@ -541,6 +542,8 @@ acorn::IfStmt* acorn::Parser::parse_if() {
     // Note: If an error occures when trying to parse the expression
     //       the parser can simply recover at the next statement that
     //       represents the body of the if statement.
+
+    // TODO: Need to check for cases where the type involves a struct type.
     switch (cur_token.kind) {
     case TypeTokens:
         ifs->cond = parse_variable();
@@ -550,12 +553,14 @@ acorn::IfStmt* acorn::Parser::parse_if() {
         }
         break;
     default:
+        allow_struct_initializer = false;
         ifs->cond = parse_expr();
+        allow_struct_initializer = true;
         break;
     }
 
     ifs->scope = parse_scope("for if");
-
+    
     if (cur_token.is(Token::KwElIf)) {
         ifs->elseif = parse_if();
     } else if (cur_token.is(Token::KwElse)) {
@@ -644,7 +649,9 @@ acorn::PredicateLoopStmt* acorn::Parser::parse_predicate_loop(Token loop_token) 
     auto loop = new_node<PredicateLoopStmt>(loop_token);
 
     if (cur_token.is_not('{')) {
+        allow_struct_initializer = false;
         loop->cond = parse_expr();
+        allow_struct_initializer = true;
     }
     loop->scope = parse_scope();
 
@@ -682,7 +689,11 @@ acorn::IteratorLoopStmt* acorn::Parser::parse_iterator_loop(Token loop_token, Va
     expect(':');
 
     loop->var = var;
+
+    allow_struct_initializer = false;
     loop->container = parse_expr();
+    allow_struct_initializer = true;
+
     loop->scope = parse_scope("for loop");
 
     return loop;
@@ -728,7 +739,9 @@ acorn::SwitchStmt* acorn::Parser::parse_switch() {
     auto switchn = new_node<SwitchStmt>(cur_token);
     next_token();
 
+    allow_struct_initializer = false;
     switchn->on = parse_expr();
+    allow_struct_initializer = true;
 
     expect('{');
 
@@ -1594,6 +1607,29 @@ acorn::Expr* acorn::Parser::parse_term() {
         ref->ident = Identifier::get(cur_token.text());
 
         next_token(); // Consuming the identifier.
+        
+        if (allow_struct_initializer && cur_token.is('{')) {
+            auto initializer = new_node<StructInitializer>(cur_token);
+            initializer->ref = ref;
+
+            next_token();
+
+            bool more_values = cur_token.is_not('}');
+            while (more_values) {
+
+                initializer->values.push_back(parse_expr());
+
+                more_values = cur_token.is(',');
+                if (more_values) {
+                    next_token();
+                }
+            }
+
+            expect('}', "for struct initializer");
+            
+            return initializer;
+        }
+        
         return ref;
     }
     case '+': case '-': case '~': case '!':

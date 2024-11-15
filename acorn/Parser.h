@@ -45,6 +45,8 @@ namespace acorn {
         // Linkage name set by the native modifier.
         llvm::StringRef linkname;
 
+        bool allow_struct_initializer = true;
+
         // Statement parsing
         //--------------------------------------
 

@@ -708,6 +708,18 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("i"); 
         });
+        test("Struct initializer, initialize values", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs5.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ABC");
+        });
+        test("Struct initializer, initialize some values", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs6.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ABC");
+        });
         test("Default params all default", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

@@ -23,11 +23,6 @@ namespace acorn {
         Module() : Namespace(*this) {
         }
 
-        // If it fails it returns the previous import.
-        ImportStmt* try_add_import(ImportStmt* importn);
-        ImportStmt* find_import(Identifier import_key);
-        llvm::DenseMap<Identifier, ImportStmt*>& get_imports() { return imports; }
-
         Namespace* find_namespace(Identifier name);
 
         void add_global_comptime_control_flow(Node* control_flow);
@@ -62,8 +57,6 @@ namespace acorn {
     private:
         llvm::SmallVector<SourceFile*> source_files;
         llvm::DenseMap<Identifier, Namespace*> namespaces;
-
-        llvm::DenseMap<Identifier, ImportStmt*> imports;
 
         // Global comptime control flow such as #if
         llvm::SmallVector<Node*>             comptime_control_flows;

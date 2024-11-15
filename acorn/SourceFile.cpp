@@ -12,6 +12,7 @@ acorn::SourceFile::SourceFile(Context& context, std::wstring path, Buffer buffer
       Namespace(modl) {
 }
 
+
 void acorn::SourceFile::add_function(Func* func) {
     if (has_public_access(func)) {
         nspace->add_function(func);
@@ -28,17 +29,27 @@ void acorn::SourceFile::add_variable(Var* var) {
     }
 }
 
-void acorn::SourceFile::add_struct(Struct* nstruct) {
-    if (has_public_access(nstruct)) {
-        nspace->add_struct(nstruct);
+void acorn::SourceFile::add_struct(Struct* structn) {
+    if (has_public_access(structn)) {
+        nspace->add_struct(structn);
     } else {
-        Namespace::add_struct(nstruct);
+        Namespace::add_struct(structn);
     }
 }
 
 bool acorn::SourceFile::has_public_access(Decl* decl) const {
     return decl->has_modifier(Modifier::Public) ||
           (!decl->has_modifier(Modifier::Private) && default_access == Modifier::Public);
+}
+
+acorn::ImportStmt* acorn::SourceFile::try_add_import(ImportStmt* importn) {
+    auto [itr, success] = imports.try_emplace(importn->key.back(), importn);
+    return success ? nullptr : itr->second;
+}
+
+acorn::ImportStmt* acorn::SourceFile::find_import(Identifier import_key) {
+    auto itr = imports.find(import_key);
+    return itr == imports.end() ? nullptr : itr->second;
 }
 
 acorn::FuncList* acorn::SourceFile::find_static_import_functions(Identifier name) {

@@ -31,7 +31,7 @@ namespace acorn {
 
         void add_function(Func* func);
         void add_variable(Var* var);
-        void add_struct(Struct* nstruct);
+        void add_struct(Struct* structn);
 
         void set_default_access(uint32_t default_access) {
             this->default_access = default_access;
@@ -39,6 +39,11 @@ namespace acorn {
         uint32_t get_default_access() const {
             return default_access;
         }
+
+        // If it fails it returns the previous import.
+        ImportStmt* try_add_import(ImportStmt* importn);
+        ImportStmt* find_import(Identifier import_key);
+        llvm::DenseMap<Identifier, ImportStmt*>& get_imports() { return imports; }
 
         void add_static_import(Namespace* nspace) {
             static_imports.push_back(nspace);
@@ -57,6 +62,7 @@ namespace acorn {
         // namespace.
         Namespace* nspace;
 
+        llvm::DenseMap<Identifier, ImportStmt*> imports;
         llvm::SmallVector<Namespace*> static_imports;
     
         bool has_public_access(Decl* decl) const;

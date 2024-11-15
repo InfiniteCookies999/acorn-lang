@@ -26,7 +26,7 @@ namespace acorn {
         static bool is_potential_main_function(Context& context, const Func* canidate);
         static bool find_main_function(Context& context);
 
-        static void check_for_duplicate_functions(Struct* nstruct, Context& context);
+        static void check_for_duplicate_functions(Struct* structn, Context& context);
         static void check_for_duplicate_functions(Namespace* nspace, Context& context);
         static bool check_for_duplicate_match(const Func* func1, const Func* func2);
         static void check_all_other_duplicates(Module& modl, Context& context);
@@ -34,12 +34,12 @@ namespace acorn {
 
         static void check_nodes_wrong_scopes(Module& modl);
         
-        static void resolve_imports(Context& context, Module& modl);
+        static void resolve_imports(Context& context, SourceFile* file);
         static void resolve_import(Context& context, ImportStmt* importn);
 
         void check_function(Func* func);
         void check_variable(Var* var);
-        void check_struct(Struct* nstruct);
+        void check_struct(Struct* structn);
 
     private:
         Context&    context;
@@ -98,6 +98,7 @@ namespace acorn {
         void check_loop_control(LoopControlStmt* loop_control);
         void check_loop_scope(ScopeStmt* scope, SemScope* sem_scope);
         void check_switch(SwitchStmt* switchn);
+        void check_struct_initializer(StructInitializer* initializer);
 
         SemScope push_scope();
         void pop_scope();
@@ -141,7 +142,8 @@ namespace acorn {
         void check_array(Array* arr);
         void check_memory_access(MemoryAccess* mem_access);
 
-        void check_global_variable(SourceLoc error_loc, Var* var);
+        void ensure_global_variable_checked(SourceLoc error_loc, Var* var);
+        bool ensure_struct_checked(SourceLoc error_loc, Struct* structn);
 
         // Utility functions
         //--------------------------------------

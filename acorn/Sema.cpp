@@ -228,21 +228,12 @@ acorn::Type* acorn::Sema::fixup_unresolved_struct_type(Type* type) {
         return nullptr;
     }
 
-    if (found_struct->is_being_checked) {
-        logger.begin_error(unresolved_struct_type->get_error_location(),
-                               "Circular dependency while checking struct declaration '%s'",
-                               found_struct->name);
-        logger.add_line([found_struct](Logger& logger) {
-            logger.print("Struct declared at: ");
-            found_struct->show_location_msg(logger);
-        });
-        logger.end_error(ErrCode::SemaCircularStructDeclDependency);
-        return nullptr;
-
+    if (!ensure_struct_checked(unresolved_struct_type->get_error_location(), found_struct)) {
         return nullptr;
     }
-    if (!found_struct->has_been_checked) {
-        check_struct(found_struct);
+
+    if (found_struct->fields_have_errors) {
+        return nullptr;
     }
 
     return found_struct->struct_type;
@@ -278,10 +269,10 @@ acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
 // Statement checking
 //--------------------------------------
 
-void acorn::Sema::check_for_duplicate_functions(Struct* nstruct, Context& context) {
-    check_for_duplicate_functions(nstruct->nspace, context);
-    for (auto [_, nstruct] : nstruct->nspace->get_structs()) {
-        check_for_duplicate_functions(nstruct, context);
+void acorn::Sema::check_for_duplicate_functions(Struct* structn, Context& context) {
+    check_for_duplicate_functions(structn->nspace, context);
+    for (auto [_, structn] : structn->nspace->get_structs()) {
+        check_for_duplicate_functions(structn, context);
     }
 }
 
@@ -386,8 +377,8 @@ void acorn::Sema::check_nodes_wrong_scopes(Module& modl) {
     }
 }
 
-void acorn::Sema::resolve_imports(Context& context, Module& modl) {
-    for (auto& entry : modl.get_imports()) {
+void acorn::Sema::resolve_imports(Context& context, SourceFile* file) {
+    for (auto& entry : file->get_imports()) {
         resolve_import(context, entry.second);
     }
 }
@@ -576,6 +567,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_loop_control(as<LoopControlStmt*>(node));
     case NodeKind::SwitchStmt:
         return check_switch(as<SwitchStmt*>(node));
+    case NodeKind::StructInitializer:
+        return check_struct_initializer(as<StructInitializer*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -720,17 +713,20 @@ void acorn::Sema::check_variable(Var* var) {
     return cleanup();
 }
 
-void acorn::Sema::check_struct(Struct* nstruct) {
-    nstruct->generated = true;
+void acorn::Sema::check_struct(Struct* structn) {
+    structn->generated = true;
     
-    nstruct->is_being_checked = true;
-    nstruct->has_been_checked = true;
+    structn->is_being_checked = true;
+    structn->has_been_checked = true;
 
-    for (auto [_, var] : nstruct->nspace->get_variables()) {
-        check_variable(var);
+    for (Var* field : structn->fields) {
+        check_variable(field);
+        if (!field->type) {
+            structn->fields_have_errors = true;
+        }
     }
 
-    nstruct->is_being_checked = false;
+    structn->is_being_checked = false;
 }
 
 void acorn::Sema::check_return(ReturnStmt* ret) {
@@ -1037,6 +1033,50 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
 
     cur_scope->all_paths_return = all_paths_return;
     cur_scope->found_terminal = all_paths_return;
+}
+
+void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
+
+    // TODO: search imports instead!
+    auto structn = file->find_struct(initializer->ref->ident);
+    if (!structn) {
+        error(initializer->ref, "Failed to find struct type '%s'", 
+              initializer->ref->ident)
+            .end_error(ErrCode::SemaStructInitFailedToFindStruct);
+        return;
+    }
+
+    if (!ensure_struct_checked(initializer->ref->loc, structn)) {
+        return;
+    }
+
+    if (structn->fields_have_errors) {
+        return;
+    }
+    
+    auto& values = initializer->values;
+    if (values.size() > structn->fields.size()) {
+        error(initializer, "More values than struct fields")
+            .end_error(ErrCode::SemaStructTooManyFields);
+        return;
+    }
+
+    initializer->structn = structn;
+
+    for (size_t i = 0; i < values.size(); i++) {
+        Expr* value = values[i];
+        Var* field = structn->fields[i];
+    
+        if (!is_assignable_to(field->type, value)) {
+            error(expand(value), "Field '%s'. %s", 
+                  field->name,
+                  get_type_mismatch_error(field->type, value).c_str())
+                .end_error(ErrCode::SemaFieldInitTypeMismatch);
+        }
+    }
+
+    initializer->is_foldable = false;
+    initializer->type = structn->struct_type;
 }
 
 acorn::Sema::SemScope acorn::Sema::push_scope() {
@@ -1593,13 +1633,14 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
     };
 
     auto find_variable = [=, this]() finline {
-        if (cur_scope) {
-            if (auto* var = cur_scope->find_variable(ref->ident)) {
-                ref->set_var_ref(var);
-                return;
-            }
-        }
         if (same_nspace) {
+            if (cur_scope) {
+                if (auto* var = cur_scope->find_variable(ref->ident)) {
+                    ref->set_var_ref(var);
+                    return;
+                }
+            }
+
             if (auto* var = file->find_variable(ref->ident)) {
                 ref->set_var_ref(var);
                 return;
@@ -1616,7 +1657,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
             return;
         }
         if (auto* universal = context.get_universal_constant(ref->ident)) {
-            ref->set_universal(universal);
+            ref->set_universal_ref(universal);
         }
     };
 
@@ -1634,8 +1675,8 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
 
     // If still not found let us try and search for an imported module.
     if (!ref->found_ref() && same_nspace) {
-        if (auto importn = modl.find_import(ref->ident)) {
-            ref->set_import(importn);
+        if (auto importn = file->find_import(ref->ident)) {
+            ref->set_import_ref(importn);
         }
     }
     
@@ -1644,7 +1685,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         
         Var* var_ref = ref->var_ref;
         if (!var_ref->generated && var_ref->is_global) {
-            check_global_variable(ref->loc, ref->var_ref);
+            ensure_global_variable_checked(ref->loc, ref->var_ref);
         }
         
         if (var_ref->type->is_integer() && var_ref->type->is_const()) {
@@ -1707,8 +1748,8 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         dot->type = context.int_type;
     } else if (dot->site->type->is_struct_type()) {
         auto struct_type = as<StructType*>(dot->site->type);
-        auto nstruct = struct_type->get_struct();
-        check_ident_ref(dot, nstruct->nspace, is_for_call);
+        auto structn = struct_type->get_struct();
+        check_ident_ref(dot, structn->nspace, is_for_call);
     } else {
         error(expand(dot), "Cannot access field '%s' of type '%s'", dot->ident, dot->site->type)
             .end_error(ErrCode::SemaDotOperatorCannotAccessType);
@@ -2036,7 +2077,7 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
         }  
     };
 
-    if (check_correct_number_of_args()) {
+    if (!check_correct_number_of_args()) {
         err_line("Incorrect number of args. Expected %s but found %s",
                  num_params, args.size());
         return;
@@ -2196,7 +2237,7 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
     }
 }
 
-void acorn::Sema::check_global_variable(SourceLoc error_loc, Var* var) {
+void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) {
     if (cur_global_var) {
         cur_global_var->dependency = var;
         
@@ -2212,6 +2253,24 @@ void acorn::Sema::check_global_variable(SourceLoc error_loc, Var* var) {
         Sema sema(context, var->file, var->get_logger());
         sema.check_variable(var);
     }
+}
+
+bool acorn::Sema::ensure_struct_checked(SourceLoc error_loc, Struct* structn) {
+    if (structn->is_being_checked) {
+        logger.begin_error(error_loc,
+                           "Circular dependency while checking struct declaration '%s'",
+                           structn->name);
+        logger.add_line([structn](Logger& logger) {
+            logger.print("Struct declared at: ");
+            structn->show_location_msg(logger);
+        });
+        logger.end_error(ErrCode::SemaCircularStructDeclDependency);
+        return false;
+    }
+    if (!structn->has_been_checked) {
+        check_struct(structn);
+    }
+    return true;
 }
 
 // Utility functions

@@ -7,16 +7,6 @@ acorn::Namespace* acorn::Module::find_namespace(Identifier name) {
     return itr == namespaces.end() ? nullptr : itr->second;
 }
 
-acorn::ImportStmt* acorn::Module::try_add_import(ImportStmt* importn) {
-    auto [itr, success] = imports.try_emplace(importn->key.back(), importn);
-    return success ? nullptr : itr->second;
-}
-
-acorn::ImportStmt* acorn::Module::find_import(Identifier import_key) {
-    auto itr = imports.find(import_key);
-    return itr == imports.end() ? nullptr : itr->second;
-}
-
 void acorn::Module::add_global_comptime_control_flow(Node* control_flow) {
     comptime_control_flows.push_back(control_flow);
 }

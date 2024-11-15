@@ -49,20 +49,19 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Mod
             return ll_struct_type;
         }
         
-        auto nstruct = struct_type->get_struct();
-        
+        auto structn = struct_type->get_struct();
 
         ll_struct_type = llvm::StructType::create(ll_context);
 
         llvm::SmallVector<llvm::Type*> ll_field_types;
 
-        for (auto [_, field] : nstruct->nspace->get_variables()) {
+        for (Var* field : structn->fields) {
             auto ll_field_type = gen_type(field->type, ll_context, ll_module);
             ll_field_types.push_back(ll_field_type);
         }
 
         ll_struct_type->setBody(ll_field_types);
-        ll_struct_type->setName(nstruct->name.reduce());
+        ll_struct_type->setName(structn->name.reduce());
 
         struct_type->set_ll_struct_type(ll_struct_type);
         return ll_struct_type;

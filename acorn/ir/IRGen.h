@@ -84,6 +84,7 @@ namespace acorn {
         llvm::Value* gen_switch(SwitchStmt* switchn);
         llvm::Value* gen_switch_non_foldable(SwitchStmt* switchn);
         llvm::Value* gen_switch_foldable(SwitchStmt* switchn);
+        llvm::Value* gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr);
         llvm::Value* gen_scope(ScopeStmt* scope);
 
         llvm::Value* gen_variable(Var* var);
@@ -94,7 +95,7 @@ namespace acorn {
                                            llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
-        llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_address);
+        llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr);
         llvm::Value* gen_bool(Bool* b);
         llvm::Value* gen_string(String* string);
         llvm::Value* gen_null();

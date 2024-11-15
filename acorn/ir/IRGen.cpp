@@ -78,6 +78,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_loop_control(as<LoopControlStmt*>(node));
     case NodeKind::SwitchStmt:
         return gen_switch(as<SwitchStmt*>(node));
+    case NodeKind::StructInitializer:
+        return gen_struct_initializer(as<StructInitializer*>(node), nullptr);
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -854,6 +856,34 @@ llvm::Value* acorn::IRGenerator::gen_switch_foldable(SwitchStmt* switchn) {
     return nullptr;
 }
 
+llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr) {
+    
+    auto ll_struct_type = gen_type(initializer->type);
+    if (!ll_dest_addr) {
+        ll_dest_addr = gen_unseen_alloca(ll_struct_type, "tmp.struct");
+    }
+    
+    auto structn = initializer->structn;
+
+    unsigned field_idx = 0;
+    for (Expr* value : initializer->values) {
+        Var* field = structn->fields[field_idx];
+        auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field_idx);
+        gen_assignment(ll_field_addr, field->type, value);
+        ++field_idx;
+    }
+
+    // TODO: If the field has an assignment use that instead.
+    // Filling in the rest of the values which were not assigned.
+    for (; field_idx < structn->fields.size(); field_idx++) {
+        Var* field = structn->fields[field_idx];
+        auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field_idx);
+        gen_default_value(ll_field_addr, field->type);
+    }
+
+    return ll_dest_addr;
+}
+
 llvm::Value* acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
     for (Node* stmt : *scope) {
         gen_node(stmt);
@@ -908,7 +938,7 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
     return nullptr;
 }
 
-llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* ll_dest_address) {
+llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr) {
     
     bool call_func_type = call->site->type->is_function_type();
 
@@ -948,7 +978,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
 
     // Pass the return address as an argument.
     if (uses_aggr_param) {
-        ll_args[arg_offset++] = ll_dest_address;
+        ll_args[arg_offset++] = ll_dest_addr;
     }
 
     bool uses_default_param_values = call->called_func && call->called_func->default_params_offset != -1;
@@ -1045,8 +1075,8 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         ll_ret->setName("call.ret");
     }
 
-    if (ll_dest_address && !uses_aggr_param) {
-        builder.CreateStore(ll_ret, ll_dest_address);
+    if (ll_dest_addr && !uses_aggr_param) {
+        builder.CreateStore(ll_ret, ll_dest_addr);
     }
 
     return ll_ret;
@@ -1270,6 +1300,9 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Type* to_type, 
             ll_array, ll_alignment,
             total_linear_length * sizeof_type_in_bytes(ll_base_type)
         );
+    } else if (value->is(NodeKind::StructInitializer)) {
+        auto initializer = as<StructInitializer*>(value);
+        gen_struct_initializer(initializer, ll_address);
     } else {
         auto ll_assignment = gen_rvalue(value);
         builder.CreateStore(ll_assignment, ll_address);

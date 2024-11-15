@@ -53,7 +53,9 @@ void test_sema() {
         }
 
         for (auto& entry : context->get_modules()) {
-            Sema::resolve_imports(*context, *entry.second);
+            for (auto source_file : entry.second->get_source_files()) {
+                Sema::resolve_imports(*context, source_file);
+            }
         }
 
         for (auto& entry : context->get_modules()) {
