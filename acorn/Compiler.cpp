@@ -250,7 +250,15 @@ void acorn::Compiler::sema_and_irgen() {
     context.queue_gen(context.get_main_function());
 
     for (auto& entry : context.get_modules()) {
-        Sema::check_for_duplicate_declarations(*entry.second);
+        for (auto source_file : entry.second->get_source_files()) {
+            auto nspace = source_file->get_namespace();
+            if (nspace->have_duplicates_been_checked()) {
+                continue;
+            }
+            Sema::check_for_duplicate_functions(nspace, context);
+            Sema::check_for_duplicate_functions(source_file, context);
+        }
+        Sema::check_all_other_duplicates(*entry.second, context);
     }
 
     if (context.has_errors()) {

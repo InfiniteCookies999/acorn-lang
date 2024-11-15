@@ -172,7 +172,7 @@ namespace acorn {
 
         bool cannot_use_aggr_ret_var = false;
         bool has_checked_declaration = false;
-        bool declaration_has_errors  = true;
+        bool is_checking_declaration = false;
         Var* aggr_ret_var = nullptr;
 
         Var* find_parameter(Identifier name) const;

@@ -31,7 +31,9 @@ void test_sema() {
         
         acorn::Identifier::clear_cache();
         Module* mock_modl = new Module();
+        context->get_modules().insert({ Identifier::get("sema_modl"), mock_modl});
         SourceFile* mock_file = new SourceFile(*context, L"", buffer, *mock_modl);
+        mock_modl->add_source_file(mock_file);
         mock_logger(mock_file->logger);
         Parser* parser = new Parser(*context, *mock_modl, mock_file);
         parser->parse();
@@ -55,7 +57,15 @@ void test_sema() {
         }
 
         for (auto& entry : context->get_modules()) {
-            Sema::check_for_duplicate_declarations(*entry.second);
+            for (auto source_file : entry.second->get_source_files()) {
+                auto nspace = source_file->get_namespace();
+                if (nspace->have_duplicates_been_checked()) {
+                    continue;
+                }
+                Sema::check_for_duplicate_functions(nspace, *context);
+                Sema::check_for_duplicate_functions(source_file, *context);
+            }
+            Sema::check_all_other_duplicates(*entry.second, *context);
         }
 
         if (context->has_errors()) {
@@ -75,7 +85,7 @@ void test_sema() {
     };
 
     section("sema", [&] {
-        test("no find param, named args", [&] {
+        test("No find param, named args", [&] {
             mock_sema(R"(
                 void foo(int a) {}
 
@@ -86,7 +96,7 @@ void test_sema() {
 
             expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
         });
-        test("params no order, named args 1", [&] {
+        test("Params no order, named args 1", [&] {
             mock_sema(R"(
                 void foo(int a, int b) {}
 
@@ -97,7 +107,7 @@ void test_sema() {
 
             expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
         });
-        test("params no order, named args 2", [&] {
+        test("Params no order, named args 2", [&] {
             mock_sema(R"(
                 void foo(int a, int b, int c) {}
 
@@ -108,21 +118,37 @@ void test_sema() {
 
             expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
         });
-        test("assign det arr expected arr assign", [&] {
+        test("Assign det arr expected arr assign", [&] {
             mock_sema(R"(int[] a = 4;)");
             expect_none().to_produce_error(ErrCode::SemaAssignDetArrTypeReqsArrAssignment);
         });
-        test("assign det arr wrong dimensions", [&] {
+        test("Assign det arr wrong dimensions", [&] {
             mock_sema(R"(int[][] a = [4];)");
             expect_none().to_produce_error(ErrCode::SemaAssignDetArrWrongDimensions);
         });
-        test("assign det arr wrong dimensions 2", [&] {
+        test("Assign det arr wrong dimensions 2", [&] {
             mock_sema(R"(int[] a = [[4]];)");
             expect_none().to_produce_error(ErrCode::SemaAssignDetArrWrongDimensions);
         });
-        test("duplicate parameter", [&] {
+        test("Duplicate parameter", [&] {
             mock_sema(R"(void foo(int a, int b, int a) {})");
             expect_none().to_produce_error(ErrCode::SemaDuplicateParamVariableDecl);
+        });
+        test("Circular function declaration", [&] {
+            mock_sema(R"(
+                int q = foo();
+
+                void foo(int a = 44 + q) {}
+            )");
+            expect_none().to_produce_error(ErrCode::SemaCircularFuncDeclDependency);
+        });
+        test("Circular global declaration", [&] {
+             mock_sema(R"(
+                int a = b;
+                int b = c;
+                int c = a;
+            )");
+            expect_none().to_produce_error(ErrCode::SemaGlobalCircularDependency);
         });
     });
 }

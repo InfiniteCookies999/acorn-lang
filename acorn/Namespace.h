@@ -41,9 +41,18 @@ namespace acorn {
             return structs;
         }
 
+        void set_duplicates_checked() {
+            duplicates_checked = true;
+        }
+
+        bool have_duplicates_been_checked() const {
+            return duplicates_checked;
+        }
+
     private:
         Module&       modl;
         ScopeLocation scope_location;
+        bool          duplicates_checked = false;
 
         llvm::DenseMap<Identifier, FuncList> functions;
         llvm::DenseMap<Identifier, Var*>     variables;

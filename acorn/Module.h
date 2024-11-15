@@ -43,6 +43,10 @@ namespace acorn {
             source_files.push_back(file);
         }
 
+        llvm::SmallVector<SourceFile*>& get_source_files() {
+            return source_files;
+        }
+
         const BadScopeList& get_bad_scope_nodes() const {
             return bad_scope_nodes;
         }

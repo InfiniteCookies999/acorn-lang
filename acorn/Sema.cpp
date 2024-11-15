@@ -263,17 +263,32 @@ acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
 // Statement checking
 //--------------------------------------
 
-void acorn::Sema::check_for_duplicate_declarations(Module& modl) {
-    // TODO: Checking for duplicate functions before the declaration has
-    // been fixed means checking we are not checking against the correct
-    // types.
-
-    // Report function duplicates.
-    check_for_duplicate_functions(&modl);
-    for (auto [_, nstruct] : modl.get_structs()) {
-        check_for_duplicate_functions(nstruct);
+void acorn::Sema::check_for_duplicate_functions(Struct* nstruct, Context& context) {
+    check_for_duplicate_functions(nstruct->nspace, context);
+    for (auto [_, nstruct] : nstruct->nspace->get_structs()) {
+        check_for_duplicate_functions(nstruct, context);
     }
+}
 
+void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& context) {
+    nspace->set_duplicates_checked();
+    for (const auto& [_, funcs] : nspace->get_functions()) {
+        for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
+            
+            Func* func = *itr;
+            Sema analyzer(context, func->file, func->get_logger());
+            analyzer.check_function_decl(func);
+
+            for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
+                if (check_for_duplicate_match(*itr, *itr2)) {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
     // Reporting all other duplcates.
     auto get_duplicate_kind_str = [](Decl* decl) finline {
         if (decl->is(NodeKind::Var)) {
@@ -300,25 +315,6 @@ void acorn::Sema::check_for_duplicate_declarations(Module& modl) {
                              decl2, 
                              get_duplicate_kind_str(decl1),
                              get_duplcate_err_code(decl1));
-    }
-}
-
-void acorn::Sema::check_for_duplicate_functions(Struct* nstruct) {
-    check_for_duplicate_functions(nstruct->nspace);
-    for (auto [_, nstruct] : nstruct->nspace->get_structs()) {
-        check_for_duplicate_functions(nstruct);
-    }
-}
-
-void acorn::Sema::check_for_duplicate_functions(Namespace* nspace) {
-    for (const auto& [_, funcs] : nspace->get_functions()) {
-        for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
-            for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
-                if (check_for_duplicate_match(*itr, *itr2)) {
-                    break;
-                }
-            }
-        }
     }
 }
 
@@ -442,19 +438,29 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
 }
 
 bool acorn::Sema::check_function_decl(Func* func) {
+
+    // TODO: This does not take into account that it is possible a
+    // parameter with a default value calls another function and that
+    // other function's declaration has not been fullfilled yet.
     func->has_checked_declaration = true;
+    func->is_checking_declaration = true;
+
+    // -- debug
+    // Logger::debug("checking function declaration: %s", func->name.reduce());
 
     check_modifier_incompatibilities(func);
 
     if (func->return_type->get_kind() == TypeKind::AssignDeterminedArray) {
         error(func, "Functions cannot have return type '%s'", func->return_type)
             .end_error(ErrCode::SemaFuncsCannotHaveAssignDetArrType);
+        func->is_checking_declaration = false;
         return false;
     }
 
     func->return_type = fixup_type(func->return_type);
     if (!func->return_type) {
         // Failed to fixup return type so returning early.
+        func->is_checking_declaration = false;
         return false;
     }
 
@@ -473,18 +479,21 @@ bool acorn::Sema::check_function_decl(Func* func) {
             if (param->name == func->params[i]->name) {
                 error(param, "Duplicate declaration of parameter '%s'", param->name)
                     .end_error(ErrCode::SemaDuplicateParamVariableDecl);
+                func->is_checking_declaration = false;
                 return false;
             }
         }
         
         check_variable(param);
         if (!param->type) {
+            func->is_checking_declaration = false;
             return false;
         }
 
         if (encountered_param_default_value && !param->assignment) {
             error(expand(last_default_param), "Parameters with default values must come last")
                 .end_error(ErrCode::SemaDefaultParamValueMustComeLast);
+            func->is_checking_declaration = false;
             return false;
         }
 
@@ -500,7 +509,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
         func->default_params_offset = func->params.size() - num_default_params;
     }
 
-    func->declaration_has_errors = false;
+    func->is_checking_declaration = false;
     return true;
 }
 
@@ -558,11 +567,6 @@ void acorn::Sema::check_node(Node* node) {
 }
 
 void acorn::Sema::check_function(Func* func) {
-    if (!func->has_checked_declaration) {
-        if (!check_function_decl(func)) {
-            return;
-        }
-    }
 
     if (func->has_modifier(Modifier::Native)) return;
 
@@ -1740,10 +1744,8 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
 
     IdentRef* ref = as<IdentRef*>(call->site);
-    
-    auto called_func = find_best_call_canidate(*ref->funcs_ref, call->args);
+    auto called_func = check_function_decl_call(call, *ref->funcs_ref);
     if (!called_func) {
-        display_call_mismatch_info(expand(call), *ref->funcs_ref, call->args);
         return;
     }
 
@@ -1802,6 +1804,51 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
     call->type = func_type->get_return_type();
 }
 
+acorn::Func* acorn::Sema::check_function_decl_call(FuncCall* call, FuncList& canidates) {
+
+    for (Func* canidate : canidates) {
+        if (canidate->is_checking_declaration) {
+            logger.begin_error(call->loc, 
+                               "Circular dependency while checking function declaration '%s'",
+                               canidate->name);
+            
+            const char* func_end_ptr = canidate->loc.ptr;
+            func_end_ptr = strchr(func_end_ptr, '(') + 1;
+            int bracket_count = 1;
+            while (bracket_count > 0) {
+                if (*func_end_ptr == '(') {
+                    ++bracket_count;
+                } else if (*func_end_ptr == ')') {
+                    --bracket_count;
+                }
+                ++func_end_ptr;
+            }
+            
+            bool within_func_params = call->loc.ptr >= canidate->loc.ptr && call->loc.ptr <= func_end_ptr;
+            if (!within_func_params) {
+                logger.add_line([canidate](Logger& logger) {
+                    logger.print("Function declared at: ");
+                    canidate->show_location_msg(logger);
+                });
+            }
+            logger.end_error(ErrCode::SemaCircularFuncDeclDependency);
+            return nullptr;
+        }
+        if (!canidate->has_checked_declaration) {
+            if (!check_function_decl(canidate)) {
+                return nullptr;
+            }
+        }
+    }
+
+    auto called_func = find_best_call_canidate(canidates, call->args);
+    if (!called_func) {
+        display_call_mismatch_info(expand(call), canidates, call->args);
+        return nullptr;
+    }
+    return called_func;
+}
+
 acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
                                                   llvm::SmallVector<Expr*, 8>& args) {
     
@@ -1815,12 +1862,6 @@ acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
         best_mimatched_types = mimatched_types;
     };
     for (Func* canidate : canidates) {
-        if (!canidate->has_checked_declaration) {
-            if (!check_function_decl(canidate)) {
-                // We cannot know the best selection is 
-                return nullptr;
-            }
-        }
 
         uint32_t mimatched_types = 0;
         if (!compare_as_call_canidate(canidate, args, mimatched_types)) {
@@ -1911,14 +1952,6 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
                                              const FuncList& canidates, 
                                              const llvm::SmallVector<Expr*, 8>& args) const {
     
-    // if Any of the canidates have errors in their delcarations then
-    // we do not want to report an error.
-    for (Func* canidate : canidates) {
-        if (canidate->declaration_has_errors) {
-            return;
-        }
-    }
-    
     auto function_decl_to_string = [](const Func* canidate) {
         std::string str = canidate->name.reduce().str();
         str += "(";
@@ -1963,16 +1996,10 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
 
 #define err_line(fmt, ...) logger.add_line(("%s- " fmt), indent ? "  " : "", ##__VA_ARGS__)
 
-    constexpr bool is_func_expr = std::is_same_v<std::remove_const_t<F>, Func>;
-
-    if constexpr (is_func_expr) {
-        if (canidate->declaration_has_errors) {
-            return;
-        }
-    }
+    constexpr bool is_func_decl = std::is_same_v<std::remove_const_t<F>, Func>;
         
     auto get_num_params = [canidate]() constexpr -> size_t {
-        if constexpr (is_func_expr) {
+        if constexpr (is_func_decl) {
             return canidate->params.size();
         } else {
             return canidate->get_param_types().size();
@@ -1982,7 +2009,7 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
     size_t num_params = get_num_params();
 
     auto check_correct_number_of_args = [this, canidate, args, num_params]() finline {
-        if constexpr (is_func_expr) {
+        if constexpr (is_func_decl) {
             return has_correct_number_of_args(canidate, args);
         } else {
             return num_params == args.size();
@@ -1996,7 +2023,7 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
     }
 
     auto get_param_type = [canidate](Var* param, size_t arg_idx) constexpr -> Type* {
-        if constexpr (is_func_expr) {
+        if constexpr (is_func_decl) {
             return param->type;
         } else {
             return canidate->get_param_types()[arg_idx];
@@ -2012,7 +2039,7 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
 
         if (arg_value->is(NodeKind::NamedValue)) {
             
-            if constexpr (is_func_expr) {
+            if constexpr (is_func_decl) {
                 auto named_arg = as<NamedValue*>(arg_value);
                 arg_value = named_arg->assignment;
                 param = canidate->find_parameter(named_arg->name);
@@ -2031,7 +2058,7 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
                 return;
             }
         } else {
-            if constexpr (is_func_expr) {
+            if constexpr (is_func_decl) {
                 param = canidate->params[i];
 
                 if (named_args_out_of_order || named_arg_high_idx > i) {
@@ -2156,7 +2183,7 @@ void acorn::Sema::check_global_variable(SourceLoc error_loc, Var* var) {
         if (var->is_being_checked) {
             display_circular_dep_error(error_loc, 
                                        cur_global_var,
-                                       "Global variables form circular dependency", 
+                                       "Global variables form a circular dependency", 
                                        ErrCode::SemaGlobalCircularDependency);
         }
     }

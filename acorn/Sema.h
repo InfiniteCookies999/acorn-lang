@@ -26,10 +26,10 @@ namespace acorn {
         static bool is_potential_main_function(Context& context, const Func* canidate);
         static bool find_main_function(Context& context);
 
-        static void check_for_duplicate_declarations(Module& modl);
-        static void check_for_duplicate_functions(Struct* nstruct);
-        static void check_for_duplicate_functions(Namespace* nspace);
+        static void check_for_duplicate_functions(Struct* nstruct, Context& context);
+        static void check_for_duplicate_functions(Namespace* nspace, Context& context);
         static bool check_for_duplicate_match(const Func* func1, const Func* func2);
+        static void check_all_other_duplicates(Module& modl, Context& context);
         static void report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code);
 
         static void check_nodes_wrong_scopes(Module& modl);
@@ -114,6 +114,7 @@ namespace acorn {
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
         void check_function_type_call(FuncCall* call, FunctionType* func_type);
+        Func* check_function_decl_call(FuncCall* call, FuncList& canidates);
         Func* find_best_call_canidate(FuncList& canidates,
                                       llvm::SmallVector<Expr*, 8>& args);
         // Tells weather or not the function is callable and gathers information
