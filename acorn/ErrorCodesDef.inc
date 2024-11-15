@@ -111,6 +111,7 @@ X(SemaCouldNotFindStructType               , 30064)
 X(SemaDuplicateParamVariableDecl           , 30065)
 X(SemaDefaultParamValueMustComeLast        , 30066)
 X(SemaCircularFuncDeclDependency           , 30067)
+X(SemaCircularStructDeclDependency         , 30068)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

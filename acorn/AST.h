@@ -212,6 +212,8 @@ namespace acorn {
 
         Namespace* nspace;
 
+        bool has_been_checked = false;
+
         Var* find_field(Identifier name) const;
     };
 

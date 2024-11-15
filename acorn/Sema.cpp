@@ -228,7 +228,22 @@ acorn::Type* acorn::Sema::fixup_unresolved_struct_type(Type* type) {
         return nullptr;
     }
 
-    // TODO: make sure the struct is checked!
+    if (found_struct->is_being_checked) {
+        logger.begin_error(unresolved_struct_type->get_error_location(),
+                               "Circular dependency while checking struct declaration '%s'",
+                               found_struct->name);
+        logger.add_line([found_struct](Logger& logger) {
+            logger.print("Struct declared at: ");
+            found_struct->show_location_msg(logger);
+        });
+        logger.end_error(ErrCode::SemaCircularStructDeclDependency);
+        return nullptr;
+
+        return nullptr;
+    }
+    if (!found_struct->has_been_checked) {
+        check_struct(found_struct);
+    }
 
     return found_struct->struct_type;
 }
@@ -708,9 +723,14 @@ void acorn::Sema::check_variable(Var* var) {
 void acorn::Sema::check_struct(Struct* nstruct) {
     nstruct->generated = true;
     
+    nstruct->is_being_checked = true;
+    nstruct->has_been_checked = true;
+
     for (auto [_, var] : nstruct->nspace->get_variables()) {
         check_variable(var);
     }
+
+    nstruct->is_being_checked = false;
 }
 
 void acorn::Sema::check_return(ReturnStmt* ret) {
