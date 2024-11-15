@@ -120,5 +120,9 @@ void test_sema() {
             mock_sema(R"(int[] a = [[4]];)");
             expect_none().to_produce_error(ErrCode::SemaAssignDetArrWrongDimensions);
         });
+        test("duplicate parameter", [&] {
+            mock_sema(R"(void foo(int a, int b, int a) {})");
+            expect_none().to_produce_error(ErrCode::SemaDuplicateParamVariableDecl);
+        });
     });
 }

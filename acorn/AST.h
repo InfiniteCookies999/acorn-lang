@@ -169,6 +169,8 @@ namespace acorn {
         bool uses_aggr_param = false;
 
         bool cannot_use_aggr_ret_var = false;
+        bool has_checked_declaration = false;
+        bool declaration_has_errors  = true;
         Var* aggr_ret_var = nullptr;
 
         Var* find_parameter(Identifier name) const;
@@ -196,6 +198,7 @@ namespace acorn {
         llvm::Value* ll_address;
 
         bool is_param() const { return param_idx != NotParam; }
+        bool is_field() const { return field_idx != NotField; }
 
     };
 

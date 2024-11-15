@@ -437,6 +437,51 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         .end_error(ErrCode::SemaInvalidImport);
 }
 
+bool acorn::Sema::check_function_decl(Func* func) {
+    func->has_checked_declaration = true;
+
+    check_modifier_incompatibilities(func);
+
+    if (func->return_type->get_kind() == TypeKind::AssignDeterminedArray) {
+        error(func, "Functions cannot have return type '%s'", func->return_type)
+            .end_error(ErrCode::SemaFuncsCannotHaveAssignDetArrType);
+        return false;
+    }
+
+    func->return_type = fixup_type(func->return_type);
+    if (!func->return_type) {
+        // Failed to fixup return type so returning early.
+        return false;
+    }
+
+    // If we ever decide to allow nesting functions for some reason then this
+    // will possibly be a problem because it will have overriden the current scope.
+    size_t pcount = 0;
+    for (Var* param : func->params) {
+        // Check for duplicate parameter names.
+        //
+        // Only have to search parameters that were declared before
+        // this variable.
+        for (size_t i = 0; i < pcount; i++) {
+            if (param->name == func->params[i]->name) {
+                error(param, "Duplicate declaration of parameter '%s'", param->name)
+                    .end_error(ErrCode::SemaDuplicateParamVariableDecl);
+                return false;
+            }
+        }
+        
+        check_variable(param);
+        if (!param->type) {
+            return false;
+        }
+
+        ++pcount;
+    }
+
+    func->declaration_has_errors = false;
+    return true;
+}
+
 void acorn::Sema::check_node(Node* node) {
     switch (node->kind) {
     case NodeKind::Var:
@@ -491,33 +536,24 @@ void acorn::Sema::check_node(Node* node) {
 }
 
 void acorn::Sema::check_function(Func* func) {
+    if (!func->has_checked_declaration) {
+        if (!check_function_decl(func)) {
+            return;
+        }
+    }
+
     if (func->has_modifier(Modifier::Native)) return;
 
+    // -- debug
     // Logger::debug("checking function: %s", func->name);
-
-    check_modifier_incompatibilities(func);
-
-    if (func->return_type->get_kind() == TypeKind::AssignDeterminedArray) {
-        error(func, "Functions cannot have return type '%s'", func->return_type)
-            .end_error(ErrCode::SemaFuncsCannotHaveAssignDetArrType);
-        return;
-    }
-
-    func->return_type = fixup_type(func->return_type);
-    if (!func->return_type) {
-        // Failed to fixup return type so returning early.
-        return;
-    }
 
     cur_func = func;
 
-    // If we ever decide to allow nesting functions for some reason then this
-    // will possibly be a problem because it will have overriden the current scope.
     SemScope sem_scope = push_scope();
     for (Var* param : func->params) {
-        check_variable(param);
+        cur_scope->variables.push_back(param);
     }
-    
+
     check_scope(func->scope, &sem_scope);
     pop_scope();
     if (!sem_scope.all_paths_return && func->return_type->is_not(context.void_type)) {
@@ -558,8 +594,8 @@ void acorn::Sema::check_variable(Var* var) {
             }
         }
     }
-
-    if (cur_scope) {
+    
+    if (cur_scope && !var->is_param() && !var->is_field()) {
         if (Var* prev_var = cur_scope->find_variable(var->name)) {
             logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
                   .add_line([prev_var](Logger& l) { prev_var->show_prev_declared_msg(l); })
@@ -606,9 +642,9 @@ void acorn::Sema::check_variable(Var* var) {
                        var->assignment && var->assignment->is_foldable;
 
     if (!var->is_foldable) {
-        // If not a global variable we need to tell the current function to
-       // provide us with stack memory.
-        if (cur_func && !var->is_param() && !var->is_global) {
+        // If the variable is a local variable to a function we need to tell the
+        // function that there will need to be stack allocation for te variable.
+        if (cur_func && !var->is_param() && !var->is_field() && !var->is_global) {
             cur_func->vars_to_alloc.push_back(var);
         } else if (var->is_global) {
             context.queue_gen(var);
@@ -662,7 +698,7 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
         check_and_verify_type(ret->value);
         is_assignable = is_assignable_to(cur_func->return_type, ret->value);
 
-        if (cur_func->return_type->is_array() && ret->value->is(NodeKind::IdentRef)) {
+        if (cur_func->return_type->is_aggregate() && ret->value->is(NodeKind::IdentRef)) {
             auto ref = as<IdentRef*>(ret->value);
             if (ref->is_var_ref()) {
                 if (cur_func->aggr_ret_var &&
@@ -1756,6 +1792,13 @@ acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
         best_mimatched_types = mimatched_types;
     };
     for (Func* canidate : canidates) {
+        if (!canidate->has_checked_declaration) {
+            if (!check_function_decl(canidate)) {
+                // We cannot know the best selection is 
+                return nullptr;
+            }
+        }
+
         uint32_t mimatched_types = 0;
         if (!compare_as_call_canidate(canidate, args, mimatched_types)) {
             continue;
@@ -1829,6 +1872,14 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
                                              const FuncList& canidates, 
                                              const llvm::SmallVector<Expr*, 8>& args) const {
     
+    // if Any of the canidates have errors in their delcarations then
+    // we do not want to report an error.
+    for (Func* canidate : canidates) {
+        if (canidate->declaration_has_errors) {
+            return;
+        }
+    }
+    
     auto function_decl_to_string = [](const Func* canidate) {
         std::string str = canidate->name.reduce().str();
         str += "(";
@@ -1843,7 +1894,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
         str += ")";
         return str;
     };
-    
+
     if (canidates.size() == 1) {
         
         Func* canidate = canidates[0];
@@ -1870,11 +1921,17 @@ template<typename F>
 void acorn::Sema::display_call_mismatch_info(const F* canidate,
                                              const llvm::SmallVector<Expr*, 8>& args,
                                              bool indent) const {
-    
+
 #define err_line(fmt, ...) logger.add_line(("%s- " fmt), indent ? "  " : "", __VA_ARGS__)
 
     constexpr bool is_func_expr = std::is_same_v<std::remove_const_t<F>, Func>;
 
+    if constexpr (is_func_expr) {
+        if (canidate->declaration_has_errors) {
+            return;
+        }
+    }
+        
     auto get_num_params = [canidate]() constexpr -> size_t {
         if constexpr (is_func_expr) {
             return canidate->params.size();

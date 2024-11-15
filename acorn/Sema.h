@@ -76,6 +76,8 @@ namespace acorn {
 
         } * cur_scope = nullptr;
 
+        bool check_function_decl(Func* func);
+
         void check_node(Node* node);
 
         Type* fixup_type(Type* type);

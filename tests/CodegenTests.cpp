@@ -690,5 +690,23 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("I Love Coffee!");
         });
+        test("Struct bg type ret (aggr var)", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ijk"); 
+        });
+        test("Struct bg type rets (aggr var)", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs3.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ijk"); 
+        });
+        test("Struct sm ret val", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs4.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("i"); 
+        });
     });
 }

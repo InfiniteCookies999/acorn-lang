@@ -110,11 +110,14 @@ namespace acorn {
         bool is_container() const { return is_pointer() || is_array(); }
         bool is_pointer() const   { return kind == TypeKind::Pointer;  }
         bool is_array() const     { return kind == TypeKind::Array;    }
-        bool is_aggregate() const { return is_array();                 }
         bool is_bool() const      { return kind == TypeKind::Bool;     }
         bool is_range() const     { return kind == TypeKind::Range;    }
         bool is_function_type() const { return kind == TypeKind::Function; }
         bool is_struct_type() const { return kind == TypeKind::Struct; }
+
+        bool is_aggregate() const {
+            return is_array() || is_struct_type();
+        }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {

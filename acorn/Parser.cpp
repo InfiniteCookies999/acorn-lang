@@ -84,6 +84,8 @@ void acorn::Parser::parse() {
 
             auto var = as<Var*>(node);
             if (var->name != Identifier::Invalid) {
+                var->is_global = true;
+                context.add_unchecked_decl(var);
                 file->add_variable(var);
             }
         } else if (node->is(NodeKind::Struct)) {
@@ -410,11 +412,6 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
     if (cur_token.is('=')) {
         next_token(); // Consume '=' token.
         var->assignment = parse_expr();
-    }
-
-    if (!cur_func) {
-        var->is_global = true;
-        context.add_unchecked_decl(var);
     }
 
     return var;

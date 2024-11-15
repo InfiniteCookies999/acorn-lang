@@ -220,13 +220,13 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
 llvm::Type* acorn::IRGenerator::gen_function_return_type(Func* func, bool is_main) {
     if (is_main) {
         return llvm::Type::getInt32Ty(ll_context);
-    } else if (func->return_type->is_array()) {
-        auto ll_arr_type = gen_type(func->return_type);
-        uint64_t arr_mem_size = sizeof_type_in_bytes(ll_arr_type) * 8;
-        if (arr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
+    } else if (func->return_type->is_aggregate()) {
+        auto ll_aggr_type = gen_type(func->return_type);
+        uint64_t aggr_mem_size = sizeof_type_in_bytes(ll_aggr_type) * 8;
+        if (aggr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
             // The array can fit into an integer.
 
-            auto ll_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(arr_mem_size)));
+            auto ll_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size)));
             func->ll_aggr_int_ret_type = ll_type;
             return ll_type;
         }
@@ -446,18 +446,18 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
     }
     
     if (not_void) {
-        if (cur_func->return_type->is_array()) {
+        if (cur_func->return_type->is_aggregate()) {
             // If there is an aggregate return variable then the value would
             // have already been stored into the address so there is nothing
             // to do.
             if (cur_func->uses_aggr_param && !cur_func->aggr_ret_var) {
                 gen_assignment(ll_ret_addr, cur_func->return_type, ret->value);
             } else if (!cur_func->uses_aggr_param) {
-                llvm::Value* ll_array = gen_node(ret->value);
-                if (!ll_array->getType()->isIntegerTy()) {
-                    ll_array = builder.CreateLoad(cur_func->ll_aggr_int_ret_type, ll_array);
+                llvm::Value* ll_value = gen_node(ret->value);
+                if (!ll_value->getType()->isIntegerTy()) {
+                    ll_value = builder.CreateLoad(cur_func->ll_aggr_int_ret_type, ll_value);
                 }
-                ll_ret_value = ll_array;
+                ll_ret_value = ll_value;
             }
         } else {
             // Return non-aggregate value.
