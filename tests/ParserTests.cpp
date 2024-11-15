@@ -346,7 +346,7 @@ void test_parser() {
             
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[2])->value_u64, to_string<uint64_t>).to_be(-709ull);
+            expect(as<Number*>(nodes[2])->value_s64, to_string<int64_t>).to_be(-709ll);
             
             expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(as<Number*>(nodes[3])->type, type_to_string).to_be(context->int_type);
@@ -398,7 +398,7 @@ void test_parser() {
 
             expect(nodes[14]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(as<Number*>(nodes[14])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[14])->value_u64, to_string<uint64_t>).to_be(-12ull);
+            expect(as<Number*>(nodes[14])->value_s64, to_string<int64_t>).to_be(-12ll);
 
         });
 

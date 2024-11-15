@@ -22,7 +22,7 @@ add_library (acorn   "Logger.h" "Logger.cpp" "Lexer.h" "Lexer.cpp" "Source.h" "T
 # We add these include directories to the target so that targets that use the library also have
 # access to the source files.
 target_include_directories (acorn PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_include_directories (acorn PUBLIC ${LLVM_INCLUDE_DIRS})
+target_include_directories (acorn SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS})
 
 set(LLVM_USED_LIBS
     Analysis

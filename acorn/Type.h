@@ -278,7 +278,7 @@ namespace acorn {
         FunctionTypeKey* key;
     };
 
-    struct UnresolvedStructType : public Type {
+    class UnresolvedStructType : public Type {
     public:
 
         static Type* create(PageAllocator& allocator,
@@ -305,7 +305,7 @@ namespace acorn {
         Identifier name;
     };
 
-    struct StructType : public Type {
+    class StructType : public Type {
     public:
 
         static StructType* create(PageAllocator& allocator,
@@ -350,8 +350,9 @@ struct DenseMapInfo<acorn::FunctionTypeKey*> {
     }
 
     static unsigned getHashValue(const acorn::FunctionTypeKey* key) {
-        return hash_combine(key->return_type, 
-                            hash_combine_range(key->param_types.begin(), key->param_types.end()));
+        return static_cast<unsigned>(
+            hash_combine(key->return_type, 
+                         hash_combine_range(key->param_types.begin(), key->param_types.end())));
     }
 
     static bool isEqual(const acorn::FunctionTypeKey* lhs, 

@@ -1120,7 +1120,7 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
     }
 
     // Indexing all the addresses of the array and assigning a value.
-    auto gen_gep_index = [this, ll_arr_type, ll_dest_addr](uint32_t i) finline {
+    auto gen_gep_index = [this, ll_arr_type, ll_dest_addr](uint64_t i) finline {
         auto ll_index = gen_isize(i);
         return builder.CreateInBoundsGEP(ll_arr_type->getElementType(), 
                                          ll_dest_addr,
@@ -1128,7 +1128,7 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
     };
 
     bool elms_are_arrays = arr_type->get_elm_type()->is_array();
-    for (uint32_t i = 0; i < arr->elms.size(); i++) {
+    for (uint64_t i = 0; i < arr->elms.size(); i++) {
         
         Expr* elm = arr->elms[i];
         auto ll_elm_addr = gen_gep_index(i);
@@ -1140,7 +1140,7 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
         }
     }
     // Zero fill the rest.
-    for (uint32_t i = arr->elms.size(); i < ll_arr_type->getNumElements(); ++i) {
+    for (uint64_t i = arr->elms.size(); i < ll_arr_type->getNumElements(); ++i) {
         auto ll_elm_addr = gen_gep_index(i);
         builder.CreateStore(gen_zero(arr_type->get_elm_type()), ll_elm_addr);
     }
