@@ -1922,7 +1922,7 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
                                              const llvm::SmallVector<Expr*, 8>& args,
                                              bool indent) const {
 
-#define err_line(fmt, ...) logger.add_line(("%s- " fmt), indent ? "  " : "", __VA_ARGS__)
+#define err_line(fmt, ...) logger.add_line(("%s- " fmt), indent ? "  " : "", ##__VA_ARGS__)
 
     constexpr bool is_func_expr = std::is_same_v<std::remove_const_t<F>, Func>;
 

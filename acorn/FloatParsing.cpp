@@ -5,6 +5,7 @@
 #include "Util.h"
 
 #include <iostream>
+#include <cmath>
 
 namespace acorn {
 
@@ -14,26 +15,26 @@ const size_t MAX_SMALL_SINGLE_DIGITS = 8;
 // Used to scale whole values when trailing zeros
 // are encountered.
 const uint64_t POW10_INT64_TABLE[] = {
-    1,
-    10,
-    100,
-    1000,
-    10000,
-    100000,
-    1000000,
-    10000000,
-    100000000,
-    1000000000,
-    10000000000,
-    100000000000,
-    1000000000000,
-    10000000000000,
-    100000000000000,
-    1000000000000000,
-    10000000000000000,
-    100000000000000000,
-    1000000000000000000,
-    10000000000000000000,
+    1u,
+    10u,
+    100u,
+    1000u,
+    10000u,
+    100000u,
+    1000000u,
+    10000000u,
+    100000000u,
+    1000000000u,
+    10000000000u,
+    100000000000u,
+    1000000000000u,
+    10000000000000u,
+    100000000000000u,
+    1000000000000000u,
+    10000000000000000u,
+    100000000000000000u,
+    1000000000000000000u,
+    10000000000000000000u,
 };
 
 const int64_t SINGLE_POW10_TABLE_LIMIT = 10;
@@ -178,7 +179,7 @@ public:
         BigIntFD result;
 
         uint64_t total_digits = small_digits_count + big_digits_count;
-        size_t block_count = std::max((total_digits + 8) / 9, 2ull);
+        size_t block_count = std::max((total_digits + 8) / 9, (uint64_t) 2);
 
         // The small value behaves as the high digits.
         result.blocks = new uint32_t[block_count];
@@ -854,7 +855,7 @@ template<typename T>
 struct CorrectionInfo {
     using IntTy = uint64_t;
     static const IntTy    mantissa_size;
-    static const IntTy    mantissa_size;
+    static const IntTy    mantissa_mask;
     static const int64_t  exp_size;
     static const int64_t  exp_bias;
     static const int64_t  exp_mask;
@@ -917,8 +918,8 @@ static T correct_value(T value, ParseData parse_data) {
     // Powers of 5 portion of the exponent for the exact value. If
     // the exponent of the exact value is negative then it is brought
     // to the denominator of x/y.
-    int64_t y5 = std::max(0ll, -e);
-    int64_t x5 = std::max(0ll, +e);
+    int64_t y5 = std::max((int64_t) 0, -e);
+    int64_t x5 = std::max((int64_t) 0, +e);
 
     // Construct value from the digits before adjusting by exponent.
     BigIntFD exact_value_p5 = BigIntFD::from_digits(parse_data.small_value,
