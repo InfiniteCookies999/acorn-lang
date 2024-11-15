@@ -23,11 +23,6 @@ void print(const char* s) {
     print(s, strlen(s));
 }
 
-void println(const char* s) {
-    print(s);
-    print("\n");
-}
-
 void print(int value) {
     if value < 0 {
         print("-");
@@ -45,4 +40,45 @@ void print(uint64 value) {
     
     int length = as(int) ((buffer + BufferSize) - ptr);
     print(ptr, length);
+}
+
+void print(char c) {
+    print(&c, 1);
+}
+
+void print(bool b) {
+    // TODO: replace with ternary.
+    if b {
+        print("true", 4);
+    } else {
+        print("false", 5);
+    }
+}
+
+// -- println functions
+// 
+
+void println(const char* s) {
+    print(s);
+    print("\n");
+}
+
+void println(int value) {
+    print(value);
+    print("\n");
+}
+
+void println(uint64 value) {
+    print(value);
+    print("\n");
+}
+
+void println(char c) {
+    print(c);
+    print("\n");
+}
+
+void println(bool b) {
+    print(b);
+    print("\n");
 }
