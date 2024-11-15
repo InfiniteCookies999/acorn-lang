@@ -708,5 +708,17 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("i"); 
         });
+        test("Default params all default", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values1.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("abcibcijcijkijkajcabkajk");
+        });
+        test("Default params some default", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values2.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("abcaicaijabcaijaijaicabj");
+        });
     });
 }

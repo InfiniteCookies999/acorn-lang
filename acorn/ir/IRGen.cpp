@@ -937,7 +937,8 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
     };
 
     llvm::SmallVector<llvm::Value*> ll_args;
-    size_t ll_num_args = call->args.size();
+    size_t ll_num_args = call->called_func ? call->called_func->params.size()
+                                           : call->args.size();
     size_t arg_offset = 0;
     
     if (uses_aggr_param) {
@@ -950,6 +951,14 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         ll_args[arg_offset++] = ll_dest_address;
     }
 
+    bool uses_default_param_values = call->called_func && call->called_func->default_params_offset != -1;
+    if (uses_default_param_values) {
+        // Zero initializing the arguments after the start of the default parameter values
+        // then filling them in later if they were not filled by the named parameter.
+        size_t default_params_offset = call->called_func->default_params_offset;
+        std::fill(ll_args.begin() + default_params_offset, ll_args.end(), nullptr);
+    }
+
     for (size_t i = 0; i < call->args.size(); ++i) {
         Expr* arg = call->args[i];
         if (arg->is(NodeKind::NamedValue)) {
@@ -958,6 +967,23 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
             ll_args[arg_idx] = gen_function_call_arg(named_arg->assignment);
         } else {
             ll_args[arg_offset + i] = gen_function_call_arg(arg);
+        }
+    }
+
+    // Fill in slots with default parameter values.
+    if (uses_default_param_values) {
+        auto& params = call->called_func->params;
+        size_t default_params_offset = call->called_func->default_params_offset;
+        size_t start = default_params_offset;
+        if (uses_aggr_param) {
+            ++start;
+        }
+
+        for (size_t i = start; i < ll_num_args; i++) {
+            if (ll_args[i] == nullptr) {
+                Expr* arg = params[i]->assignment;
+                ll_args[i] = gen_function_call_arg(arg);
+            }
         }
     }
 

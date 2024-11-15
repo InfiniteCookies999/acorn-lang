@@ -124,6 +124,8 @@ namespace acorn {
         bool compare_as_call_canidate(Func* canidate,
                                       llvm::SmallVector<Expr*, 8>& args,
                                       uint32_t& mimatched_types);
+        bool has_correct_number_of_args(const Func* canidate, 
+                                        const llvm::SmallVector<Expr*, 8>& args) const;
         void display_call_mismatch_info(PointSourceLoc error_loc,
                                         const FuncList& canidates,
                                         const llvm::SmallVector<Expr*, 8>& args) const;

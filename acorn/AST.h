@@ -157,6 +157,8 @@ namespace acorn {
         uint32_t num_returns = 0;
         llvm::SmallVector<Var*, 16> vars_to_alloc;
         
+        size_t default_params_offset = static_cast<size_t>(-1);
+
         ScopeStmt* scope = nullptr;
 
         // when the function returns an aggregate type such

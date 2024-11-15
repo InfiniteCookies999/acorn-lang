@@ -264,6 +264,10 @@ acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
 //--------------------------------------
 
 void acorn::Sema::check_for_duplicate_declarations(Module& modl) {
+    // TODO: Checking for duplicate functions before the declaration has
+    // been fixed means checking we are not checking against the correct
+    // types.
+
     // Report function duplicates.
     check_for_duplicate_functions(&modl);
     for (auto [_, nstruct] : modl.get_structs()) {
@@ -457,6 +461,9 @@ bool acorn::Sema::check_function_decl(Func* func) {
     // If we ever decide to allow nesting functions for some reason then this
     // will possibly be a problem because it will have overriden the current scope.
     size_t pcount = 0;
+    bool encountered_param_default_value = false;
+    Var* last_default_param;
+    size_t num_default_params = 0;
     for (Var* param : func->params) {
         // Check for duplicate parameter names.
         //
@@ -475,7 +482,22 @@ bool acorn::Sema::check_function_decl(Func* func) {
             return false;
         }
 
+        if (encountered_param_default_value && !param->assignment) {
+            error(expand(last_default_param), "Parameters with default values must come last")
+                .end_error(ErrCode::SemaDefaultParamValueMustComeLast);
+            return false;
+        }
+
+        if (param->assignment) {
+            ++num_default_params;
+            last_default_param = param;
+            encountered_param_default_value = true;
+        }
+
         ++pcount;
+    }
+    if (num_default_params != 0) {
+        func->default_params_offset = func->params.size() - num_default_params;
     }
 
     func->declaration_has_errors = false;
@@ -1785,7 +1807,8 @@ acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
     
     Func* selected = nullptr;
     uint32_t best_mimatched_types = 0;
-    
+    // TODO: select if has fewer default values?
+
     auto select = [&selected, &best_mimatched_types](Func* canidate,
                                                      uint32_t mimatched_types) finline{
         selected = canidate;
@@ -1819,13 +1842,13 @@ acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
 bool acorn::Sema::compare_as_call_canidate(Func* canidate,
                                            llvm::SmallVector<Expr*, 8>& args,
                                            uint32_t& mimatched_types) {
-    if (canidate->params.size() != args.size()) {
+    if (!has_correct_number_of_args(canidate, args)) {
         return false;
     }
 
     bool named_args_out_of_order = false;
     uint32_t named_arg_high_idx = 0;
-    for (size_t i = 0; i < canidate->params.size(); i++) {
+    for (size_t i = 0; i < args.size(); i++) {
         Expr* arg_value = args[i];
         Var* param;
 
@@ -1865,6 +1888,22 @@ bool acorn::Sema::compare_as_call_canidate(Func* canidate,
         }
     }
 
+    return true;
+}
+
+bool acorn::Sema::has_correct_number_of_args(const Func* canidate, const 
+                                             llvm::SmallVector<Expr*, 8>& args) const {
+    if (canidate->default_params_offset == -1) {
+        if (canidate->params.size() != args.size()) {
+            return false;
+        }
+    } else {
+        size_t num_params = canidate->params.size();
+        if (!(args.size() >= canidate->default_params_offset
+             && args.size() <= num_params)) {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -1942,7 +1981,15 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
 
     size_t num_params = get_num_params();
 
-    if (num_params != args.size()) {
+    auto check_correct_number_of_args = [this, canidate, args, num_params]() finline {
+        if constexpr (is_func_expr) {
+            return has_correct_number_of_args(canidate, args);
+        } else {
+            return num_params == args.size();
+        }  
+    };
+
+    if (check_correct_number_of_args()) {
         err_line("Incorrect number of args. Expected %s but found %s",
                  num_params, args.size());
         return;
