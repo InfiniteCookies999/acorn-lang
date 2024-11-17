@@ -1,0 +1,55 @@
+
+#if OS_GROUP_WINDOWS
+
+native dllimport void* GetStdHandle(uint32 nStdHandle);
+
+native dllimport int32 WriteFile(void*       hFile,
+                                 const void* lpBuffer,
+                                 uint32      nNumberOfBytesToWrite,
+                                 uint32*     lpNumberOfBytesWritten,
+                                 void*       lpOverlapped);
+
+#elif OS_GROUP_UNIX
+
+native isize write(int32 fd, const void* buf, usize count);
+
+#endif
+
+void write_val(int val) {
+
+#if OS_GROUP_WINDOWS
+    void* handle = GetStdHandle(-11);
+    uint32 written;
+    char c = as(char) val;
+    WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    char c = as(char) val;
+    write(1, &c, 1);
+#endif
+
+}
+
+struct A {
+    int32 v1;
+    int32 v2;
+    int32 v3;
+    int32 v4;
+    int32 v5;
+    int32 v6;
+}
+
+void main() {
+    int[10] a;
+
+    write_val(a[0] + 65);
+    write_val(a[1] + 66);
+    write_val(a[2] + 67);
+    write_val(a[9] + 68);
+
+    A a1;
+
+    write_val(as(int) a1.v1 + 65);
+    write_val(as(int) a1.v2 + 66);
+    write_val(as(int) a1.v3 + 67);
+    write_val(as(int) a1.v6 + 68);
+}

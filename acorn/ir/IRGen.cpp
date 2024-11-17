@@ -1310,7 +1310,40 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Type* to_type, 
 }
 
 void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) {
-    builder.CreateStore(gen_zero(type), ll_address);
+    // TODO: default structs or arrays of structs should initialize the members
+    // of those types as well.
+    
+    auto type_kind = type->get_kind();
+    if (type_kind == TypeKind::Array) {
+        auto arr_type = as<ArrayType*>(type);
+
+        // TODO: Are we really sure we want to use the alignment of the element type?
+        //       Clang seems use the alignment of the array itself.
+        auto ll_alignment = get_alignment(arr_type->get_elm_type());
+        auto ll_base_type = gen_type(arr_type->get_base_type());
+
+        uint64_t total_linear_length = arr_type->get_total_linear_length();
+
+        builder.CreateMemSet(
+            ll_address,
+            builder.getInt8(0),
+            total_linear_length * sizeof_type_in_bytes(ll_base_type),
+            ll_alignment
+        );
+    } else if (type_kind == TypeKind::Struct) {
+
+        auto ll_type = gen_type(type);
+        auto ll_alignment = get_alignment(ll_type);
+
+        builder.CreateMemSet(
+            ll_address,
+            builder.getInt8(0),
+            sizeof_type_in_bytes(ll_type),
+            ll_alignment
+        );
+    } else {
+        builder.CreateStore(gen_zero(type), ll_address);
+    }
 }
 
 llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
