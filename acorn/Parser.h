@@ -54,7 +54,7 @@ namespace acorn {
         ImportStmt* parse_import();
 
         Node* parse_statement();
-        Node* parse_ident_decl_or_expr();
+        Node* parse_ident_decl_or_expr(bool allow_func_decl, bool expects_semicolon);
         Decl* parse_decl(uint32_t modifiers, Type*);
 
         template<typename D, bool uses_linkname>

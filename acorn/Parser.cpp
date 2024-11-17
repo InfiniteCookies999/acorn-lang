@@ -185,7 +185,7 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
     case Token::KwSwitch: return parse_switch();
     case Token::Identifier:
-        return parse_ident_decl_or_expr();
+        return parse_ident_decl_or_expr(true, true);
     case ModifierTokens:
         modifiers = parse_modifiers();
         if (cur_token.is(Token::KwStruct)) {
@@ -222,19 +222,24 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
 }
 
-acorn::Node* acorn::Parser::parse_ident_decl_or_expr() {
+acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool allow_func_decl, bool expects_semicolon) {
 
     Token peek1 = peek_token(0);
     Token peek2 = peek_token(1);
     Token peek3 = peek_token(2);
 
     if (
-        (peek1.is(Token::Identifier))    ||         // ident ident
-        (peek1.is('*') && peek2.is('*')) ||         // ident** ident
+        (peek1.is(Token::Identifier))    ||                                // ident ident
+        (peek1.is('*') && peek2.is('*') && peek3.is(Token::Identifier)) || // ident** ident
         (peek1.is('*') && peek2.is(Token::Identifier) &&
-                (peek3.is('=') || peek3.is(';')))   // ident* ident =   or   ident* ident;
+                (peek3.is('=') || peek3.is(';') || peek3.is('(')))   // ident* ident =   or   ident* ident;   or ident* ident(
         ) {
-        return parse_decl(0, parse_type());
+
+        if (allow_func_decl) {
+            return parse_decl(0, parse_type());
+        } else {
+            return parse_variable(0, parse_type());
+        }
     } else if (peek1.is('[')) {
         
         Token name_token = cur_token;
@@ -261,7 +266,11 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr() {
             auto type = construct_type_from_identifier(name_token);
             type = construct_array_type(type, indexes);
             type = parse_optional_function_type(type);
-            return parse_decl(0, type);
+            if (allow_func_decl) {
+                return parse_decl(0, type);
+            } else {
+                return parse_variable(0, type);
+            }
         } else {
             // Memory accessing.
             IdentRef* ref = new_node<IdentRef>(name_token);
@@ -280,8 +289,10 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr() {
         }
     }
 
-    auto stmt = parse_assignment_and_expr();;
-    expect(';');
+    auto stmt = parse_assignment_and_expr();
+    if (expects_semicolon) {
+        expect(';');
+    }
     return stmt;
 }
 
@@ -543,15 +554,31 @@ acorn::IfStmt* acorn::Parser::parse_if() {
     //       the parser can simply recover at the next statement that
     //       represents the body of the if statement.
 
-    // TODO: Need to check for cases where the type involves a struct type.
     switch (cur_token.kind) {
     case TypeTokens:
+        allow_struct_initializer = false;
         ifs->cond = parse_variable();
         if (cur_token.is(';')) {
             next_token();
             ifs->post_variable_cond = parse_expr();
         }
+        allow_struct_initializer = true;
         break;
+    case Token::Identifier: {
+        allow_struct_initializer = false;
+        auto node = parse_ident_decl_or_expr(false, false);
+        if (node->is(NodeKind::Var)) {
+            ifs->cond = node;
+            if (cur_token.is(';')) {
+                next_token();
+                ifs->post_variable_cond = parse_expr();
+            }
+        } else {
+            ifs->cond = node;
+        }
+        allow_struct_initializer = true;
+        break;
+    }
     default:
         allow_struct_initializer = false;
         ifs->cond = parse_expr();

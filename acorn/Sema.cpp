@@ -96,6 +96,44 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
     } else if (type->get_kind() == TypeKind::Function) {
         return fixup_function_type(type);
     }
+    auto type_kind = type->get_kind();
+    if (type_kind == TypeKind::Pointer || type_kind == TypeKind::Array) {
+        auto container_type = as<ContainerType*>(type);
+        auto base_type = container_type->get_base_type();
+        auto fixed_base_type = fixup_type(base_type);
+        if (fixed_base_type != base_type) {
+            if (type_kind == TypeKind::Pointer) {
+                Type* fixed_ptr_type = type_table.get_ptr_type(fixed_base_type);
+                Type* elm_type = container_type->get_elm_type();
+                while (elm_type->is_pointer()) {
+                    fixed_ptr_type = type_table.get_ptr_type(fixed_ptr_type);
+                    container_type = as<ContainerType*>(elm_type);
+                    elm_type = container_type->get_elm_type();
+                }
+                return fixed_ptr_type;
+            } else {
+                llvm::SmallVector<uint32_t, 8> arr_lengths;
+                auto arr_type = as<ArrayType*>(container_type);
+                arr_lengths.push_back(arr_type->get_length());
+
+                Type* elm_type = arr_type->get_elm_type();
+                while (elm_type->is_array()) {
+                    arr_type = as<ArrayType*>(elm_type);
+                    arr_lengths.push_back(arr_type->get_length());
+                    elm_type = container_type->get_elm_type();
+                }
+
+                auto fixed_arr_type = type_table.get_arr_type(fixed_base_type, arr_lengths.back());
+                for (auto itr = arr_lengths.rbegin() + 1; itr != arr_lengths.rend(); ++itr) {
+                    uint32_t length = *itr;
+                    fixed_arr_type = type_table.get_arr_type(fixed_arr_type, length);
+                }
+                return fixed_arr_type;
+            }
+        } else {
+            return type;
+        }
+    }
     return type;
 }
 
