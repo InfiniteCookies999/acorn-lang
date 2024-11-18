@@ -8,6 +8,8 @@ void acorn::LineTable::build_table() {
     for (size_t i = 0; i < buf_length; ++i) {
         if (content[i] == '\n') {
             line_offsets.push_back(i + 1);
+        } else if (content[i] == '\r' && i+1 < buf_length && content[i+1] != '\n') {
+            line_offsets.push_back(i + 1);
         }
     }
 }

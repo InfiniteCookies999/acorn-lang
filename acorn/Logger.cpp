@@ -334,7 +334,9 @@ namespace acorn {
                 while (ptr < buffer_end && (*ptr == ' ' || *ptr == '\t')) ++ptr;
             } else {
                 count += whitespace_count;
-                if (count >= CUTOFF_LIMIT) goto CalcEndFinishedLab;
+                if (count >= CUTOFF_LIMIT) {
+                    goto CalcEndFinishedLab;
+                }
             }
             // Eating characters while not whitespace or new lines.
             while (ptr < buffer_end &&
@@ -357,12 +359,27 @@ namespace acorn {
         // later on calculations are done using the end point we calculate
         // here and each line is trailed which can lead to inconsistencies.
         while (*ptr == ' ' || *ptr == '\t' && ptr > start) {
-            if (*ptr == ' ') count -= 1;
-            else             count -= 4;
             --ptr;
         }
+        
+        // If the end of the line is all whitespace then there is no reason
+        // to consider it as having exceeded and include the ... later on
+        // since there are no more characters that are meaningfully relevent
+        // to the line.
+        bool ends_in_whitespace = true;
+        const char* eptr = ptr + 1;
+        while (true) {
+            if (*eptr == ' ' || *eptr == '\t') {
+                ++eptr;
+            } else if (*eptr == '\r' || *eptr == '\n') {
+                break;
+            } else {
+                ends_in_whitespace = false;
+                break;
+            }
+        }
 
-        return {ptr, count >= CUTOFF_LIMIT};
+        return {ptr, count >= CUTOFF_LIMIT && !ends_in_whitespace};
     }
 
     static std::pair<PtrCalcInfo, PtrCalcInfo> get_range_pointers(PointSourceLoc location, Buffer buffer) {
