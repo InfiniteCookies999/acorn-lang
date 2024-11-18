@@ -316,13 +316,17 @@ void acorn::Sema::check_for_duplicate_functions(Struct* structn, Context& contex
 
 void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& context) {
     nspace->set_duplicates_checked();
+
     for (const auto& [_, funcs] : nspace->get_functions()) {
         for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
-            
             Func* func = *itr;
             Sema analyzer(context, func->file, func->get_logger());
             analyzer.check_function_decl(func);
+        }
+    }
 
+    for (const auto& [_, funcs] : nspace->get_functions()) {
+        for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
             for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
                 if (check_for_duplicate_match(*itr, *itr2)) {
                     break;
@@ -363,14 +367,24 @@ void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
 }
 
 bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2) {
-    if (func1->params.size() != func2->params.size()) {
+    auto get_param_count = [](const Func* func) finline {
+        if (func->default_params_offset == -1) {
+            return func->params.size();
+        }
+        return func->default_params_offset;
+    };
+
+    size_t param_count = get_param_count(func1);
+    if (param_count != get_param_count(func2)) {
         return false;
     }
-    if (!std::ranges::equal(func1->params, func2->params,
-                            [](const Var* p1, const Var* p2) {
-                                return p1->type->is(p2->type);
-                            })) {
-        return false;
+
+    for (size_t i = 0; i < param_count; i++) {
+        Var* param1 = func1->params[i];
+        Var* param2 = func2->params[i];
+        if (param1->type->is_not(param2->type)) {
+            return false;
+        }
     }
     report_redeclaration(func1, func2, "function", ErrCode::SemaDuplicateGlobalFunc);
     return true;
