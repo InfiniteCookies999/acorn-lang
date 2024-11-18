@@ -720,6 +720,18 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("ABC");
         });
+        test("Struct initialize field values", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs7.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ABC"); 
+        });
+        test("Struct initializer init field values non-assigned", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs8.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("iBCijCijk"); 
+        });
         test("Default params all default", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

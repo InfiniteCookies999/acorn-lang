@@ -776,6 +776,9 @@ void acorn::Sema::check_struct(Struct* structn) {
         if (!field->type) {
             structn->fields_have_errors = true;
         }
+        if (field->assignment) {
+            structn->fields_have_assignments = true;
+        }
     }
 
     structn->is_being_checked = false;

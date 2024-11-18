@@ -873,12 +873,14 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
         ++field_idx;
     }
 
-    // TODO: If the field has an assignment use that instead.
-    // Filling in the rest of the values which were not assigned.
     for (; field_idx < structn->fields.size(); field_idx++) {
         Var* field = structn->fields[field_idx];
         auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field_idx);
-        gen_default_value(ll_field_addr, field->type);
+        if (field->assignment) {
+            gen_assignment(ll_field_addr, field->type, field->assignment);
+        } else {
+            gen_default_value(ll_field_addr, field->type);
+        }
     }
 
     return ll_dest_addr;
@@ -1332,15 +1334,31 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
         );
     } else if (type_kind == TypeKind::Struct) {
 
-        auto ll_type = gen_type(type);
-        auto ll_alignment = get_alignment(ll_type);
+        auto struct_type = as<StructType*>(type);
+        auto structn = struct_type->get_struct();
 
-        builder.CreateMemSet(
-            ll_address,
-            builder.getInt8(0),
-            sizeof_type_in_bytes(ll_type),
-            ll_alignment
-        );
+        auto ll_struct_type = gen_type(type);
+        auto ll_alignment = get_alignment(ll_struct_type);
+
+        if (!structn->fields_have_assignments) {
+            builder.CreateMemSet(
+                ll_address,
+                builder.getInt8(0),
+                sizeof_type_in_bytes(ll_struct_type),
+                ll_alignment
+            );
+        } else {
+            unsigned field_idx = 0;
+            for (; field_idx < structn->fields.size(); field_idx++) {
+                Var* field = structn->fields[field_idx];
+                auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_address, field_idx);
+                if (field->assignment) {
+                    gen_assignment(ll_field_addr, field->type, field->assignment);
+                } else {
+                    gen_default_value(ll_field_addr, field->type);
+                }
+            }
+        }
     } else {
         builder.CreateStore(gen_zero(type), ll_address);
     }

@@ -217,6 +217,7 @@ namespace acorn {
 
         bool has_been_checked   = false;
         bool fields_have_errors = false;
+        bool fields_have_assignments = false;
 
         Var* find_field(Identifier name) const;
     };
