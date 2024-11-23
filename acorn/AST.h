@@ -198,6 +198,7 @@ namespace acorn {
         Expr* assignment = nullptr;
         bool has_been_checked = false;
         bool is_foldable = false;
+        bool is_aggr_param = false;
 
         llvm::Value* ll_address;
 

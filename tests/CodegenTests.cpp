@@ -744,6 +744,24 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("ABCABCABCABCABCABC"); 
         });
+        test("Struct bg lvalue passed to function", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs11.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ABCD"); 
+        });
+        test("Struct bg struct initializer passed to function", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs12.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ABCD"); 
+        });
+        test("Struct bg struct from call passed to function", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs13.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ABCD"); 
+        });
         test("Default params all default", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

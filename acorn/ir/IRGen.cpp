@@ -156,7 +156,7 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         ll_param_types.push_back(builder.getPtrTy());
     }
 
-    for (const Var* param : func->params) {
+    for (Var* param : func->params) {
         ll_param_types.push_back(gen_function_param_type(param));
     }
 
@@ -272,8 +272,14 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     }
 
     for (Var* param : func->params) {
-        gen_variable_address(param, gen_function_param_type(param));
-        builder.CreateStore(ll_cur_func->getArg(param_idx++), param->ll_address);
+        if (!param->is_aggr_param) {
+            gen_variable_address(param, gen_function_param_type(param));
+            builder.CreateStore(ll_cur_func->getArg(param_idx++), param->ll_address);
+        } else {
+            // There is no reason to store the incoming parameter we can just
+            // point to the incoming parameter value.
+            param->ll_address = ll_cur_func->getArg(param_idx++);
+        }
     }
 
     // Allocating memory for variables declared in the function.
@@ -339,7 +345,7 @@ llvm::AllocaInst* acorn::IRGenerator::gen_alloca(llvm::Type* ll_alloc_type, llvm
     return ll_address;
 }
 
-llvm::Type* acorn::IRGenerator::gen_function_param_type(const Var* param) const {
+llvm::Type* acorn::IRGenerator::gen_function_param_type(Var* param) const {
     if (param->type->is_array()) {
         return llvm::PointerType::get(ll_context, 0);
     } else if (param->type->is_struct_type()) {
@@ -352,7 +358,9 @@ llvm::Type* acorn::IRGenerator::gen_function_param_type(const Var* param) const 
             auto ll_param_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size)));
             return ll_param_type;
         }
+        
         // Will pass a pointer and memcpy over at the call site.
+        param->is_aggr_param = true;
         return llvm::PointerType::get(ll_context, 0);
     }
     return gen_type(param->type);
@@ -1008,17 +1016,36 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         
         if (arg->type->is_struct_type()) {
             auto struct_type = as<StructType*>(arg->type);
-        
+            
             auto ll_aggr_type = gen_type(struct_type);
-            uint64_t aggr_mem_size = sizeof_type_in_bytes(ll_aggr_type) * 8;
-            if (aggr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
+            uint64_t aggr_mem_size_bytes = sizeof_type_in_bytes(ll_aggr_type);
+            uint64_t aggr_mem_size_bits = aggr_mem_size_bytes * 8;
+            if (aggr_mem_size_bits <= ll_module.getDataLayout().getPointerSizeInBits()) {
                 // The struct can fit into an integer.
                 
             }
-            // else we memcpy and pass as a pointer.
-            /*builder.CreateMemCpy(
+            // else it could not fit into an integer.
 
-            );*/
+            // First checking for if it is an rvalue since if it is
+            // then there is no reason to make a copy of the argument
+            // since it is temporary anyway.
+            if (arg->is(NodeKind::FuncCall) ||
+                arg->is(NodeKind::StructInitializer)) {
+                return gen_node(arg);
+            }
+
+            // else we memcpy and pass as a pointer.
+            llvm::Align ll_alignment = get_alignment(ll_aggr_type);
+
+            auto ll_copy_from_addr = gen_node(arg);
+            auto ll_tmp_arg = gen_unseen_alloca(ll_aggr_type, "aggr.arg");
+            builder.CreateMemCpy(
+                ll_tmp_arg, ll_alignment,
+                ll_copy_from_addr, ll_alignment,
+                aggr_mem_size_bytes
+            );
+
+            return ll_tmp_arg;
         }
 
         return gen_rvalue(arg);
@@ -1038,11 +1065,11 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
     if (uses_aggr_param) {
 
         if (!ll_dest_addr) {
-            // The user decided to ignore the return value so we
-            // must create a temporary value to place the return
-            // value into.
+            // The user decided to ignore the return or the value
+            // is a temporary value so we must create a temporary 
+            // value to place the return value into.
             auto ll_ret_type = gen_type(call->type);
-            ll_dest_addr = gen_unseen_alloca(ll_ret_type, "ignore.ret");
+            ll_dest_addr = gen_unseen_alloca(ll_ret_type, "tmp.aggr.ret");
         }
 
         ll_args[arg_offset++] = ll_dest_addr;
@@ -1145,7 +1172,14 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         builder.CreateStore(ll_ret, ll_dest_addr);
     }
 
-    return ll_ret;
+    if (uses_aggr_param) {
+        // If it uses an aggregate parameter value then we need to
+        // return the ll_dest_addr since it is possible that the
+        // address needs to be used in inline code.
+        return ll_dest_addr;
+    } else {
+        return ll_ret;
+    }
 }
 
 llvm::Value* acorn::IRGenerator::gen_bool(Bool* b) {

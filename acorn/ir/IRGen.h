@@ -72,7 +72,7 @@ namespace acorn {
         void gen_function_body(Func* func);
         void gen_variable_address(Var* var, llvm::Type* ll_alloc_type);
         llvm::AllocaInst* gen_alloca(llvm::Type* ll_alloc_type, llvm::Twine ll_name);
-        llvm::Type* gen_function_param_type(const Var* param) const;
+        llvm::Type* gen_function_param_type(Var* param) const;
 
         void gen_global_variable_decl(Var* var);
         void gen_global_variable_body(Var* var);
