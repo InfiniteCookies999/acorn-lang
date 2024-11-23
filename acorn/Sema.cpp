@@ -2141,6 +2141,15 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
     };
 
     if (!check_correct_number_of_args()) {
+        if constexpr (is_func_decl) {
+            if (canidate->default_params_offset != -1) {
+                size_t min_params = canidate->default_params_offset;
+                err_line("Incorrect number of args. Expected between %s-%s but found %s",
+                         min_params, num_params, args.size());
+                return;
+            }
+        }
+
         err_line("Incorrect number of args. Expected %s but found %s",
                  num_params, args.size());
         return;

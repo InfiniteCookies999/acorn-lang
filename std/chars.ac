@@ -1,6 +1,17 @@
 #file(access=pub)
 
-char* uint64_to_chars(uint64 value, char* end_of_buffer) {
+/*
+ * A digit table that takes a digit and returns the corresponding
+ * character within a base-64 range. This table may also work for
+ * bases less than 64 bits.
+ *
+ * This table does not correspond to RFC-4648 because it is designed
+ * designed to support easy conversions of standard base 10 and
+ * base 16 characters.
+ */
+const char* DIGIT_TO_BASE64_TABLE = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz?=";
+
+char* uint64_to_chars(uint64 value, char* end_of_buffer, int base) {
     char* ptr = end_of_buffer;
 
     if value == 0 {
@@ -8,11 +19,12 @@ char* uint64_to_chars(uint64 value, char* end_of_buffer) {
         return ptr;
     }
 
+    uint64 b = as(uint64) base;
     loop value > 0 {
-        uint64 digit = value % 10;
-        value /= 10;
+        uint64 digit = value % b;
+        value /= b;
 
-        *ptr = digit + '0';
+        *ptr = DIGIT_TO_BASE64_TABLE[digit];
         --ptr;
     }
     

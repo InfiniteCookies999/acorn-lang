@@ -1356,7 +1356,7 @@ llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, ArrayType* ar
 llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
     
     auto ll_memory = gen_rvalue(mem_access->site);
-    bool mem_access_ptr = mem_access->type->is_pointer();
+    bool mem_access_ptr = mem_access->site->type->is_pointer();
 
     if (is_decayed_array(mem_access->site)) {
         // We have to load again because gen_rvalue says to always treat

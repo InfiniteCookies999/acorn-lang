@@ -23,20 +23,20 @@ void print(const char* s) {
     print(s, strlen(s));
 }
 
-void print(int value) {
+void print(int value, int base=10) {
     if value < 0 {
         print("-");
         value = -value;
     }
 
-    print(as(uint64) value);
+    print(as(uint64) value, base);
 }
 
-void print(uint64 value) {
+void print(uint64 value, int base=10) {
 
     const int BufferSize = 21;
     char[BufferSize] buffer;
-    char* ptr = uint64_to_chars(value, buffer + BufferSize - 1);
+    char* ptr = uint64_to_chars(value, buffer + BufferSize - 1, base);
     
     int length = as(int) ((buffer + BufferSize) - ptr);
     print(ptr, length);
@@ -63,13 +63,13 @@ void println(const char* s) {
     print("\n");
 }
 
-void println(int value) {
-    print(value);
+void println(int value, int base=10) {
+    print(value, base);
     print("\n");
 }
 
-void println(uint64 value) {
-    print(value);
+void println(uint64 value, int base=10) {
+    print(value, base);
     print("\n");
 }
 
