@@ -760,7 +760,13 @@ void test_codegen() {
             auto [err_msg, result] = run_codegen_test(src(L"aggr_ty_zero_init_test.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-            expect(result, std::identity()).to_be("ABCDABCD"); 
+            expect(result, std::identity()).to_be("ABCDABCD");
+        });
+        test("Ignore aggr return value", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"ignore_aggr_ret_val_test.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be(""); 
         });
     });
 }

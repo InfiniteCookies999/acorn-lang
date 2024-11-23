@@ -1,0 +1,20 @@
+
+struct A {
+    int64 v1;
+    int64 v2;
+    int64 v3;
+    int64 v4;
+}
+
+int[8] foo() {
+    return [1,2,3,4,5,6,7,8];
+}
+
+A bar() {
+    return A{};
+}
+
+void main() {
+    foo();
+    bar();
+}

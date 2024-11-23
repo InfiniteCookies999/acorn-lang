@@ -342,6 +342,18 @@ llvm::AllocaInst* acorn::IRGenerator::gen_alloca(llvm::Type* ll_alloc_type, llvm
 llvm::Type* acorn::IRGenerator::gen_function_param_type(const Var* param) const {
     if (param->type->is_array()) {
         return llvm::PointerType::get(ll_context, 0);
+    } else if (param->type->is_struct_type()) {
+        auto struct_type = as<StructType*>(param->type);
+        
+        auto ll_aggr_type = gen_type(struct_type);
+        uint64_t aggr_mem_size = sizeof_type_in_bytes(ll_aggr_type) * 8;
+        if (aggr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
+            // The struct can fit into an integer.
+            auto ll_param_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size)));
+            return ll_param_type;
+        }
+        // Will pass a pointer and memcpy over at the call site.
+        return llvm::PointerType::get(ll_context, 0);
     }
     return gen_type(param->type);
 }
@@ -993,6 +1005,22 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
                 return builder.CreateLoad(builder.getPtrTy(), gen_node(arg));
             }
         }
+        
+        if (arg->type->is_struct_type()) {
+            auto struct_type = as<StructType*>(arg->type);
+        
+            auto ll_aggr_type = gen_type(struct_type);
+            uint64_t aggr_mem_size = sizeof_type_in_bytes(ll_aggr_type) * 8;
+            if (aggr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
+                // The struct can fit into an integer.
+                
+            }
+            // else we memcpy and pass as a pointer.
+            /*builder.CreateMemCpy(
+
+            );*/
+        }
+
         return gen_rvalue(arg);
     };
 
@@ -1008,6 +1036,15 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
 
     // Pass the return address as an argument.
     if (uses_aggr_param) {
+
+        if (!ll_dest_addr) {
+            // The user decided to ignore the return value so we
+            // must create a temporary value to place the return
+            // value into.
+            auto ll_ret_type = gen_type(call->type);
+            ll_dest_addr = gen_unseen_alloca(ll_ret_type, "ignore.ret");
+        }
+
         ll_args[arg_offset++] = ll_dest_addr;
     }
 
