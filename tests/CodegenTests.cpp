@@ -151,658 +151,678 @@ void test_codegen() {
     }
 
     section("codegen", [&] {
-        test("print test", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"print_test.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
+        section("misc", [&] {
+            test("print test", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"print_test.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
             
-            expect(result, std::identity()).to_be("hello yuki ^-^");
-        });
-        test("arithmetic test", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arithmetic_test.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("EjZQ;-C7 H$");
-        });
-        test("ptr arithmetic test", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ptr_arithmetic_test.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("he!he!heleh");
-        });
-        test("global foldable value", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"globals/global_test1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Hello from global!");
-        });
-        test("global foldable value", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"globals/global_test2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("H");
-        });
-        test("global array fold", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"globals/global_test3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("global array nofold", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"globals/global_test4.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("ptr dereferencing", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ptr_dereferencing.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("hoh");
-        });
-        test("if deduces true and false", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True Case");
-        });
-        test("if with else", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True CaseElse Case");
-        });
-        test("if with elif", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True CaseElif Case");
-        });
-        test("if with elif and else", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test4.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True CaseElif CaseElse Case");
-        });
-        test("if with pointers", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test5.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Ptr Not Null Case1Ptr Not Null Case2Ptr Not Null Case3");
-        });
-        test("if with var assign", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test6.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True Case");
-        });
-        test("if with var and post cond", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test7.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True Case");
-        });
-        test("if with foldable var", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test8.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True Case");
-        });
-        test("named args ordered", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"named_args/named_args_test1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("named args not ordered", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"named_args/named_args_test2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("named args with non-named", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"named_args/named_args_test3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array access fold", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array access nofold", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Multi array access fold", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Multi array access nofold", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test4.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array no parse calc length", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test5.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array func pass", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_decay_test1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Multi array func pass", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_decay_test2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array func pass twice", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_decay_test3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Multi array func pass twice", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_decay_test4.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array bg type ret (aggr var)", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test6.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array bg val rets (aggr var)", [&] {
-            // This case is effectively the same as above except it ensures that even when
-            // there are multiple returns it can still use the address of the variable.
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test7.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array bg val multi rets", [&] {
-            // Similar to above but because the return references different arrays
-            // it cannot simply use the variable's address as the array and must
-            // copy memory to the return address.
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test9.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!Lets go!");
-        });
-        test("Array sm val ret", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test8.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("hi");
-        });
-        test("Memory access inline array", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_inline_test1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Q");
-        });
-        test("Func pass inline array", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_inline_test2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array bg ret inline", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_inline_test3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array sm ret inline", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_inline_test4.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("hi");
-        });
-        test("Array sm ret func call", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test10.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("hi");
-        });
-        test("Array bg ret func call", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test11.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array length", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_length_test.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("&");
-        });
-        test("Array assign one dim", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_assignment1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array assign two dim", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_assignment2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array 0 fill remain one dim fold", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test12.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array 0 fill remain one dim nofold", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test13.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array 0 fill remain inner arr", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test14.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array 0 fill remain inner arr & outer", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test15.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array mixed inner lengths", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test16.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array mixed inner lengths 2", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test17.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array to pointer", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test18.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array ptr arith", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test19.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array assigned indexes", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test20.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array assigned index skip first 2", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test21.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array assigned index skip surounded values", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test22.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array assigned index skip last", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test23.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array assigned determines length", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test24.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Array assigned determines length 2 dims", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test25.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Predicate loop", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("aaaaa");
-        });
-        test("Range loop init, cond, and inc", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("aaaaa");
-        });
-        test("Range loop cond and inc", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("aaaaa");
-        });
-        test("Range loop init and inc", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test4.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("aaaaa");
-        });
-        test("Range loop init and cond", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test5.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("aaaaa");
-        });
-        test("Iterator loop iter over arr", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test6.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ramen");
-        });
-        test("Iterator loop iter over foldable arr", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test7.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ramen");
-        });
-        test("Iterator loop iter over arr decayed", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test8.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ramen");
-        });
-        test("Iterator loop iter and assign", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test9.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("HHHHH");
-        });
-        test("Infinite loop", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test10.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("aaaaa");
-        });
-        test("Iterator loop range equal", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test11.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("012345");
-        });
-        test("Iterator loop range less than", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test12.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("01234");
-        });
-        test("Predicate loop break statement", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("aaaaa");
-        });
-        test("Range loop break statement", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("aaaaa");
-        });
-        test("Iterator loop break statement", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ramen");
-        });
-        test("Predicate loop continue statement", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test4.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("babaa");
-        });
-        test("Range loop continue statement", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test5.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("babaa");
-        });
-        test("Iterator loop continue statement", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test6.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("FaBen");
-        });
-        test("Loop break statement depth 2", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test7.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("abcde");
-        });
-        test("Loop control statement depth 2", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test8.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("abbccddeef");
-        });
-        test("Logical and bin op", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True");
-        });
-        test("Logical or bin op", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True1True2True3True4");
-        });
-        test("Logical and bin op with var", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True");
-        });
-        test("Logical or bin op with var", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops4.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("True1True2True3True4");
-        });
-        test("Switch takes value case", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"switches/switches1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("case 5");
-        });
-        test("Switch takes default case", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"switches/switches2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("default case");
-        });
-        test("Switch non foldable case", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"switches/switches3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("case > 5");
-        });
-        test("Call function type no args", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("called callback!");
-        });
-        test("Call function type with args", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ABC");
-        });
-        test("Call function type returns value", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("msg from callback!");
-        });
-        test("Call function type from func param pass", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls4.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("called callback!");
-        });
-        test("Call function type returns aggregate", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls5.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Function call fixes up type", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls6.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("Lets go!");
-        });
-        test("Struct assign and access fields", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("I Love Coffee!");
-        });
-        test("Struct bg type ret (aggr var)", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ijk"); 
-        });
-        test("Struct bg type rets (aggr var)", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs3.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ijk"); 
-        });
-        test("Struct sm ret val", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs4.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("i"); 
-        });
-        test("Struct initializer, initialize values", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs5.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ABC");
-        });
-        test("Struct initializer, initialize some values", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs6.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ABC");
-        });
-        test("Struct initialize field values", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs7.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ABC"); 
-        });
-        test("Struct initializer init field values non-assigned", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs8.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("iBCijCijk"); 
-        });
-        test("Struct arr initialize field values", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs9.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ABCABCABCABC"); 
-        });
-        test("Struct arr initialize field values 2-dim", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs10.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ABCABCABCABCABCABC"); 
-        });
-        test("Struct bg lvalue passed to function", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs11.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ABCD"); 
-        });
-        test("Struct bg struct initializer passed to function", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs12.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ABCD"); 
-        });
-        test("Struct bg struct from call passed to function", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs13.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ABCD"); 
-        });
-        test("Struct sm lvalue passed to function", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs14.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("AB"); 
-        });
-        test("Struct sm struct initializer passed to function", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs15.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("AB"); 
-        });
-        test("Struct sm struct from call passed to function", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"structs/structs16.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("AB"); 
-        });
-        test("Default params all default", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values1.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("abcibcijcijkijkajcabkajk");
-        });
-        test("Default params some default", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values2.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("abcaicaijabcaijaijaicabj");
-        });
-        test("Aggr type zero initialize", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"aggr_ty_zero_init_test.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be("ABCDABCD");
-        });
-        test("Ignore aggr return value", [&] {
-            auto [err_msg, result] = run_codegen_test(src(L"ignore_aggr_ret_val_test.ac"));
-            if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-            expect(result, std::identity()).to_be(""); 
+                expect(result, std::identity()).to_be("hello yuki ^-^");
+            });
+            test("arithmetic test", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arithmetic_test.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("EjZQ;-C7 H$");
+            });
+            test("ptr arithmetic test", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ptr_arithmetic_test.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("he!he!heleh");
+            });
+            test("ptr dereferencing", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ptr_dereferencing.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("hoh");
+            });
+            test("Default params all default", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("abcibcijcijkijkajcabkajk");
+            });
+            test("Default params some default", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("abcaicaijabcaijaijaicabj");
+            });
+            test("Aggr type zero initialize", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"aggr_ty_zero_init_test.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCDABCD");
+            });
+            test("Ignore aggr return value", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ignore_aggr_ret_val_test.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be(""); 
+            });
+        });
+        section("global variables", [&] {
+            test("global foldable value", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"globals/global_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Hello from global!");
+            });
+            test("global foldable value", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"globals/global_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("H");
+            });
+            test("global array fold", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"globals/global_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("global array nofold", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"globals/global_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+        });
+        section("if statements", [&] {
+            test("if deduces true and false", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True Case");
+            });
+            test("if with else", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True CaseElse Case");
+            });
+            test("if with elif", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True CaseElif Case");
+            });
+            test("if with elif and else", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True CaseElif CaseElse Case");
+            });
+            test("if with pointers", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Ptr Not Null Case1Ptr Not Null Case2Ptr Not Null Case3");
+            });
+            test("if with var assign", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True Case");
+            });
+            test("if with var and post cond", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test7.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True Case");
+            });
+            test("if with foldable var", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"ifs/if_test8.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True Case");
+            });
+        });
+        section("named function args", [&] {
+            test("named args ordered", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"named_args/named_args_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("named args not ordered", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"named_args/named_args_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("named args with non-named", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"named_args/named_args_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });            
+        });
+        section("arrays", [&] {
+            test("Array access fold", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array access nofold", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Multi array access fold", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Multi array access nofold", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array no parse calc length", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array func pass", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_decay_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Multi array func pass", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_decay_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array func pass twice", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_decay_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Multi array func pass twice", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_decay_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array bg type ret (aggr var)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array bg val rets (aggr var)", [&] {
+                // This case is effectively the same as above except it ensures that even when
+                // there are multiple returns it can still use the address of the variable.
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test7.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array bg val multi rets", [&] {
+                // Similar to above but because the return references different arrays
+                // it cannot simply use the variable's address as the array and must
+                // copy memory to the return address.
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test9.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!Lets go!");
+            });
+            test("Array sm val ret", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test8.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("hi");
+            });
+            test("Memory access inline array", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_inline_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Q");
+            });
+            test("Func pass inline array", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_inline_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array bg ret inline", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_inline_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array sm ret inline", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_inline_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("hi");
+            });
+            test("Array sm ret func call", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test10.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("hi");
+            });
+            test("Array bg ret func call", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test11.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array length", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_length_test.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("&");
+            });
+            test("Array assign one dim", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_assignment1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array assign two dim", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_assignment2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array 0 fill remain one dim fold", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test12.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array 0 fill remain one dim nofold", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test13.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array 0 fill remain inner arr", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test14.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array 0 fill remain inner arr & outer", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test15.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array mixed inner lengths", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test16.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array mixed inner lengths 2", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test17.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array to pointer", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test18.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array ptr arith", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test19.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array assigned indexes", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test20.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array assigned index skip first 2", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test21.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array assigned index skip surounded values", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test22.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array assigned index skip last", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test23.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array assigned determines length", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test24.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Array assigned determines length 2 dims", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test25.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });        
+        });
+        section("loops", [&] {
+            test("Predicate loop", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("aaaaa");
+            });
+            test("Range loop init, cond, and inc", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("aaaaa");
+            });
+            test("Range loop cond and inc", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("aaaaa");
+            });
+            test("Range loop init and inc", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("aaaaa");
+            });
+            test("Range loop init and cond", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("aaaaa");
+            });
+            test("Iterator loop iter over arr", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ramen");
+            });
+            test("Iterator loop iter over foldable arr", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test7.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ramen");
+            });
+            test("Iterator loop iter over arr decayed", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test8.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ramen");
+            });
+            test("Iterator loop iter and assign", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test9.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("HHHHH");
+            });
+            test("Infinite loop", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test10.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("aaaaa");
+            });
+            test("Iterator loop range equal", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test11.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("012345");
+            });
+            test("Iterator loop range less than", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test12.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("01234");
+            });
+            test("Predicate loop break statement", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("aaaaa");
+            });
+            test("Range loop break statement", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("aaaaa");
+            });
+            test("Iterator loop break statement", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ramen");
+            });
+            test("Predicate loop continue statement", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("babaa");
+            });
+            test("Range loop continue statement", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("babaa");
+            });
+            test("Iterator loop continue statement", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("FaBen");
+            });
+            test("Loop break statement depth 2", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test7.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("abcde");
+            });
+            test("Loop control statement depth 2", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test8.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("abbccddeef");
+            });
+        });
+        section("logical conjunctions", [&] {
+            test("Logical and bin op", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True");
+            });
+            test("Logical or bin op", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True1True2True3True4");
+            });
+            test("Logical and bin op with var", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True");
+            });
+            test("Logical or bin op with var", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"logical_bin_ops/logical_bin_ops4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("True1True2True3True4");
+            });    
+        });
+        section("switch statements", [&] {
+            test("Switch takes value case", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"switches/switches1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("case 5");
+            });
+            test("Switch takes default case", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"switches/switches2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("default case");
+            });
+            test("Switch non foldable case", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"switches/switches3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("case > 5");
+            });
+        });
+        section("function type calls", [&] {
+            test("Call function type no args", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called callback!");
+            });
+            test("Call function type with args", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC");
+            });
+            test("Call function type returns value", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("msg from callback!");
+            });
+            test("Call function type from func param pass", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called callback!");
+            });
+            test("Call function type returns aggregate", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+            test("Function call fixes up type", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
+        });
+        section("structs", [&] {
+            test("Struct assign and access fields", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("I Love Coffee!");
+            });
+            test("Struct bg type ret (aggr var)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ijk"); 
+            });
+            test("Struct bg type rets (aggr var)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ijk"); 
+            });
+            test("Struct sm ret val", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("i"); 
+            });
+            test("Struct initializer, initialize values", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC");
+            });
+            test("Struct initializer, initialize some values", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC");
+            });
+            test("Struct initialize field values", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs7.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC"); 
+            });
+            test("Struct initializer init field values non-assigned", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs8.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("iBCijCijk"); 
+            });
+            test("Struct arr initialize field values", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs9.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCABCABCABC"); 
+            });
+            test("Struct arr initialize field values 2-dim", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs10.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCABCABCABCABCABC"); 
+            });
+            test("Struct bg lvalue passed to function", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs11.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD"); 
+            });
+            test("Struct bg struct initializer passed to function", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs12.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD"); 
+            });
+            test("Struct bg struct from call passed to function", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs13.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD"); 
+            });
+            test("Struct sm lvalue passed to function", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs14.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB"); 
+            });
+            test("Struct sm struct initializer passed to function", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs15.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB"); 
+            });
+            test("Struct sm struct from call passed to function", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs16.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB"); 
+            });        
         });
     });
 }
