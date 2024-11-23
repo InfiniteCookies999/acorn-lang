@@ -118,6 +118,8 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
 
                 Type* elm_type = arr_type->get_elm_type();
                 while (elm_type->is_array()) {
+                    container_type = as<ArrayType*>(elm_type);
+
                     arr_type = as<ArrayType*>(elm_type);
                     arr_lengths.push_back(arr_type->get_length());
                     elm_type = container_type->get_elm_type();
@@ -695,6 +697,7 @@ void acorn::Sema::check_variable(Var* var) {
         cur_global_var = var;
     }
     var->is_being_checked = true;
+    var->has_been_checked = true; // Set early to prevent circular checking.
 
     if (var->assignment) {
         check_node(var->assignment);
@@ -766,10 +769,9 @@ void acorn::Sema::check_variable(Var* var) {
 }
 
 void acorn::Sema::check_struct(Struct* structn) {
-    structn->generated = true;
     
     structn->is_being_checked = true;
-    structn->has_been_checked = true;
+    structn->has_been_checked = true; // Set early to prevent circular checking.
 
     for (Var* field : structn->fields) {
         check_variable(field);
@@ -779,6 +781,10 @@ void acorn::Sema::check_struct(Struct* structn) {
         if (field->assignment) {
             structn->fields_have_assignments = true;
         }
+    }
+
+    if (structn->fields_have_assignments) {
+        context.queue_gen(structn);
     }
 
     structn->is_being_checked = false;
@@ -1739,7 +1745,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
     case IdentRef::VarKind: {
         
         Var* var_ref = ref->var_ref;
-        if (!var_ref->generated && var_ref->is_global) {
+        if (var_ref->is_global) {
             ensure_global_variable_checked(ref->loc, ref->var_ref);
         }
         
@@ -2293,6 +2299,8 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
 }
 
 void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) {
+    // TODO: Does this need to just check if var->is_being_checked is true? It may be possible
+    // that it somehow circularly depends on itself through a different means.
     if (cur_global_var) {
         cur_global_var->dependency = var;
         
@@ -2304,7 +2312,7 @@ void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) 
         }
     }
     
-    if (!var->is_being_checked) {
+    if (!var->has_been_checked) {
         Sema sema(context, var->file, var->get_logger());
         sema.check_variable(var);
     }

@@ -196,6 +196,7 @@ namespace acorn {
         Type* type;
 
         Expr* assignment = nullptr;
+        bool has_been_checked = false;
         bool is_foldable = false;
 
         llvm::Value* ll_address;
@@ -218,6 +219,8 @@ namespace acorn {
         bool has_been_checked   = false;
         bool fields_have_errors = false;
         bool fields_have_assignments = false;
+
+        llvm::Function* ll_default_constructor = nullptr;
 
         Var* find_field(Identifier name) const;
     };

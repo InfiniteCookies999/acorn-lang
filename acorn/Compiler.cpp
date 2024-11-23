@@ -274,9 +274,15 @@ void acorn::Compiler::sema_and_irgen() {
         if (decl->is(NodeKind::Func)) {    
             sema.check_function(as<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {
-            sema.check_variable(as<Var*>(decl));
+            auto var = as<Var*>(decl);
+            if (!var->has_been_checked) {
+                sema.check_variable(var);
+            }
         } else if (decl->is(NodeKind::Struct)) {
-            sema.check_struct(as<Struct*>(decl));
+            auto structn = as<Struct*>(decl);
+            if (!structn->has_been_checked) {
+                sema.check_struct(structn);
+            }
         } else {
             acorn_fatal("Unreachable: Missing check case");
         }
@@ -298,6 +304,8 @@ void acorn::Compiler::sema_and_irgen() {
             generator.gen_function(as<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {
             generator.gen_global_variable(as<Var*>(decl));
+        } else if (decl->is(NodeKind::Struct)) {
+            generator.gen_implicit_struct_functions(as<Struct*>(decl));
         } else {
             acorn_fatal("Unreachable: Missing generation case");
         }

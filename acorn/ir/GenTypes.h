@@ -12,6 +12,7 @@ namespace acorn {
     std::string  to_string(llvm::Type* type);
 
     llvm::Type* gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Module& ll_module);
+    llvm::Type* gen_struct_type(StructType* struct_type, llvm::LLVMContext& ll_context, llvm::Module& ll_module);
 
     llvm::Type* gen_ptrsize_int_type(llvm::LLVMContext& ll_context, llvm::Module& ll_module);
 

@@ -152,6 +152,8 @@ namespace acorn {
 
         Type* get_base_type() const;
 
+        size_t get_depth() const;
+
     protected:
         ContainerType(TypeKind kind, bool is_const, Type* elm_type)
             : Type(kind, is_const), elm_type(elm_type) {

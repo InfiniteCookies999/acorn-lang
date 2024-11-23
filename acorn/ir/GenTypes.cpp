@@ -44,32 +44,36 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Mod
     }
     case TypeKind::Struct: {
         auto struct_type = as<StructType*>(type);
-        auto ll_struct_type = struct_type->get_ll_struct_type();
-        if (ll_struct_type) {
-            return ll_struct_type;
-        }
-        
-        auto structn = struct_type->get_struct();
-
-        ll_struct_type = llvm::StructType::create(ll_context);
-
-        llvm::SmallVector<llvm::Type*> ll_field_types;
-
-        for (Var* field : structn->fields) {
-            auto ll_field_type = gen_type(field->type, ll_context, ll_module);
-            ll_field_types.push_back(ll_field_type);
-        }
-
-        ll_struct_type->setBody(ll_field_types);
-        ll_struct_type->setName(structn->name.reduce());
-
-        struct_type->set_ll_struct_type(ll_struct_type);
-        return ll_struct_type;
+        return gen_struct_type(struct_type, ll_context, ll_module);
     }
     default:
         acorn_fatal("gen_type: Unknown type");
         return nullptr;
     }
+}
+
+llvm::Type* acorn::gen_struct_type(StructType* struct_type, llvm::LLVMContext& ll_context, llvm::Module& ll_module) {
+    auto ll_struct_type = struct_type->get_ll_struct_type();
+    if (ll_struct_type) {
+        return ll_struct_type;
+    }
+        
+    auto structn = struct_type->get_struct();
+
+    ll_struct_type = llvm::StructType::create(ll_context);
+
+    llvm::SmallVector<llvm::Type*> ll_field_types;
+
+    for (Var* field : structn->fields) {
+        auto ll_field_type = gen_type(field->type, ll_context, ll_module);
+        ll_field_types.push_back(ll_field_type);
+    }
+
+    ll_struct_type->setBody(ll_field_types);
+    ll_struct_type->setName(structn->name.reduce());
+
+    struct_type->set_ll_struct_type(ll_struct_type);
+    return ll_struct_type;
 }
 
 llvm::Type* acorn::gen_ptrsize_int_type(llvm::LLVMContext& ll_context, llvm::Module& ll_module) {

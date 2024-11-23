@@ -21,6 +21,7 @@ namespace acorn {
         void gen_global_variable(Var* var);
         void finish_incomplete_global_variables();
         void finish_incomplete_global_variable(Var* var);
+        void gen_implicit_struct_functions(Struct* structn);
 
         llvm::Value* gen_node(Node* node);
 
@@ -28,6 +29,9 @@ namespace acorn {
 
         llvm::Type* gen_type(Type* type) const {
             return acorn::gen_type(type, ll_context, ll_module);
+        }
+        llvm::Type* gen_struct_type(StructType* struct_type) const {
+            return acorn::gen_type(struct_type, ll_context, ll_module);
         }
 
         llvm::Type* gen_ptrsize_int_type() {
@@ -114,6 +118,15 @@ namespace acorn {
         llvm::Value* gen_condition(Expr* cond);
 
         llvm::BasicBlock* gen_bblock(const char* name, llvm::Function* ll_func = nullptr);
+
+        void gen_default_constructor_decl(Struct* structn);
+        void gen_default_constructor_call(llvm::Value* ll_address, Struct* structn);
+
+        void struct_array_call_default_constructors();
+        void gen_abstract_array_loop(Type* base_type, 
+                                     llvm::Value* ll_arr_start_ptr, 
+                                     llvm::Value* ll_total_arr_length,
+                                     const std::function<void(llvm::PHINode*)>& codegen_cb);
 
         llvm::Value* gen_isize(uint64_t v);
 

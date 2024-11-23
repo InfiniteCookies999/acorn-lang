@@ -732,6 +732,18 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("iBCijCijk"); 
         });
+        test("Struct arr initialize field values", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs9.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ABCABCABCABC"); 
+        });
+        test("Struct arr initialize field values 2-dim", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs10.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("ABCABCABCABCABCABC"); 
+        });
         test("Default params all default", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());

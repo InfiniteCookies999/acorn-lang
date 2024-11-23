@@ -153,7 +153,7 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
 
     // Creating the parameter types.
     if (func->uses_aggr_param) {
-        ll_param_types.push_back(llvm::PointerType::get(ll_context, 0));
+        ll_param_types.push_back(builder.getPtrTy());
     }
 
     for (const Var* param : func->params) {
@@ -428,6 +428,34 @@ void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
     gen_assignment(var->ll_address, var->type, var->assignment);
 }
 
+void acorn::IRGenerator::gen_implicit_struct_functions(Struct* structn) {
+    if (!structn->ll_default_constructor) {
+        gen_default_constructor_decl(structn);
+    }
+
+    ll_cur_func = structn->ll_default_constructor;
+
+    auto ll_struct_type = gen_struct_type(structn->struct_type);
+
+    auto ll_entry = gen_bblock("entry.block", ll_cur_func);
+    builder.SetInsertPoint(ll_entry);
+
+    auto ll_this = ll_cur_func->getArg(0);
+
+    unsigned field_idx = 0;
+    for (; field_idx < structn->fields.size(); field_idx++) {
+        Var* field = structn->fields[field_idx];
+        auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field_idx);
+        if (field->assignment) {
+            gen_assignment(ll_field_addr, field->type, field->assignment);
+        } else {
+            gen_default_value(ll_field_addr, field->type);
+        }
+    }
+
+    builder.CreateRetVoid();
+}
+
 llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
     bool not_void = cur_func->return_type->is_not(context.void_type);
     bool is_main = cur_func == context.get_main_function();
@@ -631,7 +659,7 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         // Calculate beginning and end of the array for determining
         // the stop condition later.
         // 
-        auto ll_ptr_type = llvm::PointerType::get(ll_context, 0);
+        auto ll_ptr_type = builder.getPtrTy();
         auto arr_type = as<ArrayType*>(loop->container->type);
         auto elm_type = arr_type->get_elm_type();
         auto ll_elm_type = gen_type(elm_type);
@@ -962,7 +990,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
                 ref->var_ref->type->is_array()) {
                 // The argument references an already decayed array
                 // from a parameter so it must be loaded.
-                return builder.CreateLoad(llvm::PointerType::get(ll_context, 0), gen_node(arg));
+                return builder.CreateLoad(builder.getPtrTy(), gen_node(arg));
             }
         }
         return gen_rvalue(arg);
@@ -1059,12 +1087,11 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         llvm::SmallVector<llvm::Type*> ll_param_types;
         ll_param_types.reserve(ll_num_args);
         if (uses_aggr_param) {
-            ll_param_types.push_back(llvm::PointerType::get(ll_context, 0));
+            ll_param_types.push_back(builder.getPtrTy());
         }
         for (Type* type : param_types) {
             if (type->is_array()) { // Array types need to be decayed.
-                auto ll_param_type = llvm::PointerType::get(ll_context, 0);
-                ll_param_types.push_back(ll_param_type);
+                ll_param_types.push_back(builder.getPtrTy());
             } else {
                 ll_param_types.push_back(gen_type(type));
             }
@@ -1137,7 +1164,7 @@ llvm::Value* acorn::IRGenerator::gen_string(String* string) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_null() {
-    return llvm::Constant::getNullValue(llvm::PointerType::get(ll_context, 0));
+    return llvm::Constant::getNullValue(builder.getPtrTy());
 }
 
 llvm::Value* acorn::IRGenerator::gen_cast(Cast* cast) {
@@ -1252,7 +1279,7 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
         // Conceptually this makes sense to do here since gen_array_memory_access
         // works under the assumption that the memory given is the lvalue of the
         // array.
-        ll_memory = builder.CreateLoad(llvm::PointerType::get(ll_context, 0), ll_memory);
+        ll_memory = builder.CreateLoad(builder.getPtrTy(), ll_memory);
         mem_access_ptr = true;
     }
     Type* type = mem_access->site->type;
@@ -1312,19 +1339,39 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Type* to_type, 
 }
 
 void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) {
-    // TODO: default structs or arrays of structs should initialize the members
-    // of those types as well.
     
     auto type_kind = type->get_kind();
     if (type_kind == TypeKind::Array) {
         auto arr_type = as<ArrayType*>(type);
+        auto base_type = arr_type->get_base_type();
+
+        uint64_t total_linear_length = arr_type->get_total_linear_length();
+
+        if (base_type->get_kind() == TypeKind::Struct) {
+            auto struct_type = as<StructType*>(base_type);
+            auto structn = struct_type->get_struct();
+
+            if (structn->fields_have_assignments) {
+                auto ll_arr_type = gen_type(type);
+
+                llvm::SmallVector<llvm::Value*> ll_indexes(arr_type->get_depth() + 1, gen_isize(0));
+                auto ll_arr_start_ptr    = builder.CreateInBoundsGEP(ll_arr_type, ll_address, ll_indexes);
+                auto ll_total_arr_length = gen_isize(total_linear_length);
+                gen_abstract_array_loop(base_type, 
+                                        ll_arr_start_ptr, 
+                                        ll_total_arr_length, 
+                                        [this, structn](auto ll_elm) {
+                    gen_default_constructor_call(ll_elm, structn);
+                });
+                return;
+            }
+        }
+
 
         // TODO: Are we really sure we want to use the alignment of the element type?
         //       Clang seems use the alignment of the array itself.
         auto ll_alignment = get_alignment(arr_type->get_elm_type());
         auto ll_base_type = gen_type(arr_type->get_base_type());
-
-        uint64_t total_linear_length = arr_type->get_total_linear_length();
 
         builder.CreateMemSet(
             ll_address,
@@ -1348,16 +1395,7 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
                 ll_alignment
             );
         } else {
-            unsigned field_idx = 0;
-            for (; field_idx < structn->fields.size(); field_idx++) {
-                Var* field = structn->fields[field_idx];
-                auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_address, field_idx);
-                if (field->assignment) {
-                    gen_assignment(ll_field_addr, field->type, field->assignment);
-                } else {
-                    gen_default_value(ll_field_addr, field->type);
-                }
-            }
+            gen_default_constructor_call(ll_address, structn);
         }
     } else {
         builder.CreateStore(gen_zero(type), ll_address);
@@ -1386,7 +1424,7 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), 0, false);
     case TypeKind::Pointer:
     case TypeKind::Function:
-        return llvm::Constant::getNullValue(llvm::PointerType::get(ll_context, 0));
+        return llvm::Constant::getNullValue(builder.getPtrTy());
     case TypeKind::Array:
     case TypeKind::Struct:
         return llvm::ConstantAggregateZero::get(gen_type(type));
@@ -1422,11 +1460,14 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
     switch (to_type->get_kind()) {
     case TypeKind::Pointer: {
         if (from_type->is_integer() || from_type->is_bool()) {
-            return builder.CreatePtrToInt(ll_value, llvm::PointerType::get(ll_context, 0), "cast");
+            return builder.CreatePtrToInt(ll_value, builder.getPtrTy(), "cast");
         } else if (from_type->is_real_pointer() || from_type->is(context.null_type)) {
             // Pointer to pointer doesn't need casting because of opaque pointers.
             return ll_value;
         } else if (from_type->is_array()) {
+            // TODO: should this GEP? llvm seems fine with assigning directly to a pointer
+            // but there may be GEP issues if the cast happens inline. That and clang uses GEP
+            // to perform a cast from an array to a pointer.
             return ll_value;
         }
         goto NoCastFound;
@@ -1504,6 +1545,70 @@ llvm::Value* acorn::IRGenerator::gen_condition(Expr* cond) {
 
 llvm::BasicBlock* acorn::IRGenerator::gen_bblock(const char* name, llvm::Function* ll_func) {
     return llvm::BasicBlock::Create(ll_context, name, ll_func);
+}
+
+void acorn::IRGenerator::gen_default_constructor_decl(Struct* structn) {
+    auto ll_param_types = llvm::SmallVector<llvm::Type*>{ builder.getPtrTy() };
+    auto ll_func_type   = llvm::FunctionType::get(builder.getVoidTy(), ll_param_types, false);
+
+    auto name = structn->name.reduce();
+    auto ll_func = llvm::Function::Create(
+        ll_func_type,
+        llvm::GlobalValue::InternalLinkage,
+        llvm::Twine(name) + "." + llvm::Twine(name),
+        ll_module
+    );
+
+    structn->ll_default_constructor = ll_func;
+}
+
+void acorn::IRGenerator::gen_default_constructor_call(llvm::Value* ll_address, Struct* structn) {
+    if (!structn->ll_default_constructor) {
+        gen_default_constructor_decl(structn);
+    }
+    builder.CreateCall(structn->ll_default_constructor, ll_address);
+}
+
+void acorn::IRGenerator::struct_array_call_default_constructors() {
+}
+
+void acorn::IRGenerator::gen_abstract_array_loop(Type* base_type,
+                                                 llvm::Value* ll_arr_start_ptr,
+                                                 llvm::Value* ll_total_arr_length,
+                                                 const std::function<void(llvm::PHINode*)>& codegen_cb) {
+    
+    auto ll_base_type = gen_type(base_type);
+
+    auto ll_orginal_bb  = builder.GetInsertBlock();
+    auto ll_arr_end_ptr = builder.CreateInBoundsGEP(ll_base_type, ll_arr_start_ptr, { ll_total_arr_length });
+
+    auto ll_loop_bb     = gen_bblock("arr.loop"    , ll_cur_func);
+    auto ll_loop_end_bb = gen_bblock("arr.loop.end", ll_cur_func);
+
+    builder.CreateBr(ll_loop_bb);
+    builder.SetInsertPoint(ll_loop_bb);
+
+    // Pointer used to traverse through the array.
+    //
+    auto ll_cur_elm = builder.CreatePHI(builder.getPtrTy(), 0, "arr.elm");
+    // Incoming value to the start of the array from the incoming block.
+    ll_cur_elm->addIncoming(ll_arr_start_ptr, ll_orginal_bb);
+
+    codegen_cb(ll_cur_elm);
+
+    // Move to the next element in the arra.
+    auto ll_next_elm = builder.CreateInBoundsGEP(ll_base_type, ll_cur_elm, { gen_isize(1) });
+    
+    // Checking if all objects have been looped over.
+    auto ll_done_cond = builder.CreateICmpEQ(ll_next_elm, ll_arr_end_ptr);
+    builder.CreateCondBr(ll_done_cond, ll_loop_end_bb, ll_loop_bb);
+
+    auto ll_cur_bb = builder.GetInsertBlock();
+    ll_cur_elm->addIncoming(ll_next_elm, ll_cur_bb);
+
+    // Continue generating code after the loop.
+    builder.SetInsertPoint(ll_loop_end_bb);
+
 }
 
 llvm::Value* acorn::IRGenerator::gen_isize(uint64_t v) {

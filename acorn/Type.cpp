@@ -92,6 +92,21 @@ acorn::Type* acorn::ContainerType::get_base_type() const {
     return type_itr;
 }
 
+size_t acorn::ContainerType::get_depth() const {
+    size_t depth = 1;
+
+    Type* type_itr = elm_type;
+    TypeKind our_kind = get_kind();
+    while (type_itr->get_kind() == our_kind) {
+        auto ctr_type = as<ContainerType*>(type_itr);
+        type_itr = ctr_type->elm_type;
+
+        ++depth;
+    }
+
+    return depth;
+}
+
 acorn::Type* acorn::PointerType::create(PageAllocator& allocator, Type* elm_type, bool is_const) {
     PointerType* ptr_type = allocator.alloc_type<PointerType>();
     ptr_type->contains_const = is_const;
