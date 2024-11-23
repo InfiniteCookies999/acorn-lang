@@ -168,7 +168,7 @@ namespace acorn {
         llvm::Type* ll_aggr_int_ret_type = nullptr;
         // when the function returns an aggregate type the function
         // may use a parameter that points to the return value instead
-        // of returning a value directory.
+        // of returning a value directly.
         bool uses_aggr_param = false;
 
         bool cannot_use_aggr_ret_var = false;
@@ -198,7 +198,16 @@ namespace acorn {
         Expr* assignment = nullptr;
         bool has_been_checked = false;
         bool is_foldable = false;
+        
+        // If this is set to true then the function passes the
+        // struct value as an integer type then converts it back
+        // once inside the body of the function.
+        bool is_aggr_int_param = true;
+        // If this is set to true then struct type parameters
+        // are passed as pointers and memcpy is used at the
+        // calling location.
         bool is_aggr_param = false;
+        
 
         llvm::Value* ll_address;
 

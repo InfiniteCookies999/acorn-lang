@@ -1134,6 +1134,8 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
                   get_type_mismatch_error(field->type, value).c_str())
                 .end_error(ErrCode::SemaFieldInitTypeMismatch);
         }
+
+        create_cast(value, field->type);
     }
 
     initializer->is_foldable = false;

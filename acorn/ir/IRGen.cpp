@@ -273,7 +273,8 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 
     for (Var* param : func->params) {
         if (!param->is_aggr_param) {
-            gen_variable_address(param, gen_function_param_type(param));
+            auto ll_param_type = gen_type(param->type);
+            gen_variable_address(param, ll_param_type);
             builder.CreateStore(ll_cur_func->getArg(param_idx++), param->ll_address);
         } else {
             // There is no reason to store the incoming parameter we can just
@@ -1015,26 +1016,41 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         }
         
         if (arg->type->is_struct_type()) {
-            auto struct_type = as<StructType*>(arg->type);
             
-            auto ll_aggr_type = gen_type(struct_type);
+            auto ll_aggr_type = gen_type(arg->type);
             uint64_t aggr_mem_size_bytes = sizeof_type_in_bytes(ll_aggr_type);
             uint64_t aggr_mem_size_bits = aggr_mem_size_bytes * 8;
-            if (aggr_mem_size_bits <= ll_module.getDataLayout().getPointerSizeInBits()) {
-                // The struct can fit into an integer.
-                
-            }
-            // else it could not fit into an integer.
+
+            bool uses_optimized_int_passing = aggr_mem_size_bits <= ll_module.getDataLayout().getPointerSizeInBits();
+
+            auto finish_struct_arg = [this, uses_optimized_int_passing, aggr_mem_size_bits]
+                (auto ll_tmp_arg) finline -> llvm::Value* {
+                if (uses_optimized_int_passing) {
+                    // The struct can fit into an integer.
+                    auto ll_int_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size_bits)));
+                    return builder.CreateLoad(ll_int_type, ll_tmp_arg, "opt.int.tmp.arg");
+                }
+                return ll_tmp_arg;
+            };
 
             // First checking for if it is an rvalue since if it is
             // then there is no reason to make a copy of the argument
             // since it is temporary anyway.
             if (arg->is(NodeKind::FuncCall) ||
                 arg->is(NodeKind::StructInitializer)) {
-                return gen_node(arg);
-            }
+                auto ll_tmp_arg = gen_node(arg);
+                
+                if (uses_optimized_int_passing && arg->is(NodeKind::FuncCall)) {
+                    // If the parameter is the result of a function call and
+                    // it can use an integer type as the argument then the
+                    // function call must have returned an integer, so there
+                    // is no need to convert to an integer as it already is.
+                    return ll_tmp_arg;
+                }
 
-            // else we memcpy and pass as a pointer.
+                return finish_struct_arg(ll_tmp_arg);
+            }
+            
             llvm::Align ll_alignment = get_alignment(ll_aggr_type);
 
             auto ll_copy_from_addr = gen_node(arg);
@@ -1045,7 +1061,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
                 aggr_mem_size_bytes
             );
 
-            return ll_tmp_arg;
+            return finish_struct_arg(ll_tmp_arg);
         }
 
         return gen_rvalue(arg);

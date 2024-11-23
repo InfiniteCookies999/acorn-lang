@@ -762,6 +762,24 @@ void test_codegen() {
 
             expect(result, std::identity()).to_be("ABCD"); 
         });
+        test("Struct sm lvalue passed to function", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs14.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("AB"); 
+        });
+        test("Struct sm struct initializer passed to function", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs15.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("AB"); 
+        });
+        test("Struct sm struct from call passed to function", [&] {
+            auto [err_msg, result] = run_codegen_test(src(L"structs/structs16.ac"));
+            if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+            expect(result, std::identity()).to_be("AB"); 
+        });
         test("Default params all default", [&] {
             auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values1.ac"));
             if (!err_msg.empty())  force_fail(err_msg.c_str());
