@@ -45,9 +45,6 @@ void test_sema() {
             return mock_modl;
         }
 
-        for (auto& entry : context->get_modules()) {
-            Sema::resolve_global_comptime(*context, *entry.second);
-        }
         if (context->has_errors()) {
             return mock_modl;
         }

@@ -33,7 +33,8 @@ namespace acorn {
         
         Logger& logger;
         
-        Func* cur_func = nullptr;
+        Func*   cur_func   = nullptr;
+        Struct* cur_struct = nullptr;
 
         Lexer lex;
         Token cur_token;
@@ -49,6 +50,8 @@ namespace acorn {
 
         // Statement parsing
         //--------------------------------------
+
+        void add_global_node(Node* node);
 
         void parse_import_top();
         ImportStmt* parse_import();
@@ -69,12 +72,13 @@ namespace acorn {
 
         Struct* parse_struct();
         Struct* parse_struct(uint32_t modifiers, Identifier name);
+        void add_node_to_struct(Struct* structn, Node* node);
 
         uint32_t parse_modifiers();
 
         ReturnStmt*        parse_return();
         IfStmt*            parse_if();
-        ComptimeIfStmt*    parse_comptime_if(bool chain_start = true);
+        void               parse_comptime_if(bool chain_start = true, bool takes_path = true);
         Node*              parse_loop();
         PredicateLoopStmt* parse_predicate_loop(Token loop_token);
         RangeLoopStmt*     parse_range_loop(Token loop_token, Node* init_node);

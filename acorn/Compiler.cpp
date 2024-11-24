@@ -228,9 +228,6 @@ void acorn::Compiler::sema_and_irgen() {
         return;
     }
 
-    for (auto& entry : context.get_modules()) {
-        Sema::resolve_global_comptime(context, *entry.second);
-    }
     if (context.has_errors()) {
         return;
     }

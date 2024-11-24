@@ -21,8 +21,6 @@ namespace acorn {
 
         Sema(Context& context, SourceFile* file, Logger& logger);
 
-        static void resolve_global_comptime(Context& context, Module& modl);
-
         static bool is_potential_main_function(Context& context, const Func* canidate);
         static bool find_main_function(Context& context);
 
@@ -37,6 +35,8 @@ namespace acorn {
         static void resolve_imports(Context& context, SourceFile* file);
         static void resolve_import(Context& context, ImportStmt* importn);
 
+        bool check_comptime_cond(Expr* cond);
+
         void check_function(Func* func);
         void check_variable(Var* var);
         void check_struct(Struct* structn);
@@ -49,10 +49,11 @@ namespace acorn {
         SourceFile* file;
         TypeTable&  type_table;
 
-        Func* cur_func;
+        Func*   cur_func;
         Var*  cur_global_var = nullptr;
 
-        bool is_global_comptime = false;
+        bool is_comptime_if_cond = false;
+
         // How many nested loops currently within.
         int loop_depth = 0;
 
@@ -91,7 +92,6 @@ namespace acorn {
 
         void check_return(ReturnStmt* ret);
         void check_if(IfStmt* ifs, bool& all_paths_return);
-        void check_comptime_if(ComptimeIfStmt* ifs);
         void check_predicate_loop(PredicateLoopStmt* loop);
         void check_range_loop(RangeLoopStmt* loop);
         void check_iterator_loop(IteratorLoopStmt* loop);

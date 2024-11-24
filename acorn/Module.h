@@ -25,8 +25,6 @@ namespace acorn {
 
         Namespace* find_namespace(Identifier name);
 
-        void add_global_comptime_control_flow(Node* control_flow);
-
         void mark_bad_scope(ScopeLocation location, Node* node, Logger& logger);
 
         void add_duplicate_decl(Decl* decl, Decl* prev_decl, 
@@ -46,10 +44,6 @@ namespace acorn {
             return bad_scope_nodes;
         }
 
-        const llvm::SmallVector<Node*>& get_comptime_control_flows() const {
-            return comptime_control_flows;
-        }
-
         const DupDeclList& get_declaration_duplicates() const {
             return redecls;
         }
@@ -58,8 +52,6 @@ namespace acorn {
         llvm::SmallVector<SourceFile*> source_files;
         llvm::DenseMap<Identifier, Namespace*> namespaces;
 
-        // Global comptime control flow such as #if
-        llvm::SmallVector<Node*>             comptime_control_flows;
         // Nodes that belong in the wrong scope.
         BadScopeList bad_scope_nodes;
 

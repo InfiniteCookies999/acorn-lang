@@ -115,6 +115,8 @@ X(SemaCircularStructDeclDependency         , 30068)
 X(SemaStructInitFailedToFindStruct         , 30069)
 X(SemaStructTooManyFields                  , 30070)
 X(SemaFieldInitTypeMismatch                , 30071)
+X(SemaNoLocalStructs                       , 20072)
+X(SemaCannotMakeCallsInComptimeIf          , 20073)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)
