@@ -1,6 +1,7 @@
 #file(access=pub, namespace=files)
 
 import .win32;
+import .unix;
 
 /*
  * Returns true if the file system has a file or
@@ -11,8 +12,7 @@ bool exists(const char* path) {
     uint32 attribs = win32.GetFileAttributesA(path);
     return attribs != win32.INVALID_FILE_ATTRIBUTES;
 #elif OS_GROUP_UNIX
-    // TODO!
-    return false;
+    return unix.access(path, unix.F_OK) == 0;
 #endif
 }
 

@@ -17,6 +17,8 @@
 #define MAC_OS  (defined(__APPLE__) && defined(__MACH__))
 #define UNIX_OS (defined(__unix__) || defined(__unix) || defined(__linux__) || MAC_OS)
 
+#define IS_64_BITS (defined(__x86_64__) || defined(__AMD64__) || defined(_WIN64) || defined(__aarch64__) || defined(__arm64__))
+
 namespace acorn {
 
     template<typename T, typename V>

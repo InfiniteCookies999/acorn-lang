@@ -4,4 +4,139 @@
 
 native isize write(int32 fd, const void* buf, usize count);
 
+const int32 R_OK = 4'i32;
+const int32 W_OK = 2'i32;
+const int32 X_OK = 1'i32;
+const int32 F_OK = 0'i32;
+
+native int32 access(const char* pathname, int32 mode);
+
+struct Timespec {
+#ifdef __USE_TIME_BITS64
+  __time64_t tv_sec;		/* Seconds.  */
+#else
+  __time_t tv_sec;		/* Seconds.  */
+#endif
+#if __WORDSIZE == 64 \
+  || (defined __SYSCALL_WORDSIZE && __SYSCALL_WORDSIZE == 64) \
+  || (__TIMESIZE == 32 && !defined __USE_TIME_BITS64)
+  __syscall_slong_t tv_nsec;	/* Nanoseconds.  */
+#else
+# if __BYTE_ORDER == __BIG_ENDIAN
+  int: 32;           /* Padding.  */
+  long int tv_nsec;  /* Nanoseconds.  */
+# else
+  long int tv_nsec;  /* Nanoseconds.  */
+  int: 32;           /* Padding.  */
+# endif
+#endif
+}
+
+// TODO: really this should be using the type information
+// of C. but due to serious difficulties in implementing that
+// the implementation will use fixed size types for now.
+struct Stat {
+
+    // Device.
+#if SYS_64
+    uint64 st_dev;
+#else
+    uint32 st_rdev;
+#endif
+
+#if SYS_64
+    uint16 __pad1;
+#endif
+
+    // File serial number.
+#if SYS_64
+    uint64 st_ino;
+#else
+    uint32 st_ino;
+#endif
+
+    // File mode and link count.
+#if SYS_64
+    uint64 st_mode;
+    uint32 st_nlink;
+#else
+    uint32 st_nlink;
+    uint32 st_mode;
+#endif
+
+    // User ID of the file's owner.
+    uint32 st_uid;
+    // Group ID of the file's group.
+    uint32 st_gid;
+
+#if SYS_64
+    int32 __pad0;
+#endif
+
+    // Device number, if device.
+#if SYS_64
+    uint64 st_rdev;
+#else
+    uint32 st_rdev;
+#endif
+
+#if SYS_64
+    uint16 __pad2;
+#endif
+
+    // Size of file, in bytes.
+    int64 st_size;
+
+    // Optimal block size for I/O.
+#if SYS_64
+    int64 st_blksize;
+#else
+    int32 st_blksize;
+#endif
+
+    // Number 512-byte blocks allocated.
+    int64 st_blocks;
+
+#if __USE_XOPEN2K8
+    /* Nanosecond resolution timestamps are stored in a format
+       equivalent to 'struct timespec'.  This is the type used
+       whenever possible but the Unix namespace rules do not allow the
+       identifier 'timespec' to appear in the <sys/stat.h> header.
+       Therefore we have to handle the use of this header in strictly
+       standard-compliant sources special.  */
+    struct timespec st_atim;		/* Time of last access.  */
+    struct timespec st_mtim;		/* Time of last modification.  */
+    struct timespec st_ctim;		/* Time of last status change.  */
+
+
+#  define st_atime st_atim.tv_sec	/* Backward compatibility.  */
+#  define st_mtime st_mtim.tv_sec
+#  define st_ctime st_ctim.tv_sec
+#else
+    __time_t st_atime;			/* Time of last access.  */
+    __syscall_ulong_t st_atimensec;	/* Nscecs of last access.  */
+    __time_t st_mtime;			/* Time of last modification.  */
+    __syscall_ulong_t st_mtimensec;	/* Nsecs of last modification.  */
+    __time_t st_ctime;			/* Time of last status change.  */
+    __syscall_ulong_t st_ctimensec;	/* Nsecs of last status change.  */
+#endif
+
+
+# ifdef __x86_64__
+    __syscall_slong_t __glibc_reserved[3];
+# else
+#  ifndef __USE_FILE_OFFSET64
+    unsigned long int __glibc_reserved4;
+    unsigned long int __glibc_reserved5;
+#  else
+    __ino64_t st_ino;			/* File serial number.	*/
+#  endif
+# endif
+#endif /* __USE_TIME_BITS64  */
+  };
+
+native int32 stat(const char* path, )
+
+
+
 #endif

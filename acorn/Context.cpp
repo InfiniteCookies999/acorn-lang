@@ -175,6 +175,30 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
         v->value = false;
 #endif
     }));
+
+    universal_constants.insert(new_universal<Bool>(allocator, "SYS_64", [this](Bool* v) {
+        v->type = bool_type;
+#if IS_64_BITS
+        v->value = true;
+#else
+        v->value = false;
+#endif
+    }));
+
+    universal_constants.insert(new_universal<Bool>(allocator, "__USE_XOPEN2K8", [this](Bool* v) {
+        v->type = bool_type;
+#ifdef __USE_XOPEN2K8
+        v->value = true;
+#else
+        v->value = false;
+#endif
+    }));
+
+    #ifdef __USE_TIME_BITS64
+        int a;
+    #else
+        int b;
+    #endif
 }
 
 acorn::Module* acorn::Context::get_or_create_modl(llvm::StringRef mod_name) {
