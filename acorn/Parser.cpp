@@ -84,7 +84,6 @@ void acorn::Parser::parse() {
 
             auto var = as<Var*>(node);
             if (var->name != Identifier::Invalid) {
-                var->is_global = true;
                 context.add_unchecked_decl(var);
                 file->add_variable(var);
             }
@@ -2031,17 +2030,42 @@ acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char
             number->value_s64 = -number->value_s64;
         }
     }
-
+    
     if (*ptr == '\'') {
         ++ptr;
         bool is_signed = *ptr == 'i';
         ++ptr;
 
-        auto check_range_fit = [this, number, neg_sign, already_errored]<typename T>(T) finline {
-            if (!already_errored && !fits_in_range<T>(neg_sign ? number->value_s64 : number->value_s64)) {
-                auto err_msg = get_error_msg_for_value_not_fit_type(number);
-                logger.begin_error(number->loc, "%s", err_msg)
-                    .end_error(ErrCode::ParseIntegerValueNotFitType);
+        auto report_fits_error = [this, number]() finline {
+            auto err_msg = get_error_msg_for_value_not_fit_type(number);
+            logger.begin_error(number->loc, "%s", err_msg)
+                .end_error(ErrCode::ParseIntegerValueNotFitType);
+        };
+
+        auto check_range_fit = [report_fits_error, number, neg_sign, already_errored]<typename T>(T) finline {
+            if (already_errored) {
+                return;
+            }
+
+            if constexpr (std::is_unsigned_v<T>) {
+                if (neg_sign) {
+                    using SignedT = std::make_signed_t<T>;
+                    if (!fits_in_range<SignedT>(number->value_s64)) {
+                        report_fits_error();
+                        return;
+                    }
+
+                    number->value_u64 = (T) (SignedT) number->value_s64;
+                    return;
+                }
+
+                if (!fits_in_range<T>(number->value_u64)) {
+                    report_fits_error();
+                }
+            } else {
+                if (!fits_in_range<T>(number->value_s64)) {
+                    report_fits_error();
+                }
             }
         };
 

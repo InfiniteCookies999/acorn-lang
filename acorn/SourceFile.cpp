@@ -22,6 +22,7 @@ void acorn::SourceFile::add_function(Func* func) {
 }
 
 void acorn::SourceFile::add_variable(Var* var) {
+    var->is_global = true;
     if (has_public_access(var)) {
         nspace->add_variable(var);
     } else {

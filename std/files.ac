@@ -1,0 +1,47 @@
+#file(access=pub, namespace=files)
+
+import .win32;
+
+/*
+ * Returns true if the file system has a file or
+ * directory at the given path.
+ */
+bool exists(const char* path) {
+#if OS_GROUP_WINDOWS
+    uint32 attribs = win32.GetFileAttributesA(path);
+    return attribs != win32.INVALID_FILE_ATTRIBUTES;
+#elif OS_GROUP_UNIX
+    // TODO!
+    return false;
+#endif
+}
+
+/*
+ * Returns true if the file system has a file but
+ * is not a directory at the given path.
+ */
+bool file_exists(const char* path) {
+#if OS_GROUP_WINDOWS
+    uint32 attribs = win32.GetFileAttributesA(path);
+    return attribs != win32.INVALID_FILE_ATTRIBUTES &&
+          (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) == 0;
+#elif OS_GROUP_UNIX
+    // TODO!
+    return false;
+#endif
+}
+
+/*
+ * Returns true if the file system has a directory
+ * at the given path.
+ */
+bool directory_exists(const char* path) {
+#if OS_GROUP_WINDOWS
+    uint32 attribs = win32.GetFileAttributesA(path);
+    return attribs != win32.INVALID_FILE_ATTRIBUTES &&
+          (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) != 0;
+#elif OS_GROUP_UNIX
+    // TODO!
+    return false;
+#endif
+}

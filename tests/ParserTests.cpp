@@ -69,13 +69,14 @@ void test_parser() {
         test("integer parse", [&] {
             const char* program = "123456789; 74532; 2147483647; 2147483648; 9223372036854775807; 9223372036854775808; 18446744073709551615; "
                 "123'i8;  123'i16;  123'i32;  123'i64;"
-                "123'u8;  123'u16;  123'u32;  123'u64;";
+                "123'u8;  123'u16;  123'u32;  123'u64;"
+                "4294967295'u32; -1'u32; -2147483648'u32;";
             Module& modl = mock_parser(program)->modl;
     
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
                                                get_bad_scope_node);
 
-            expect(nodes.size(), to_string<size_t>).to_be(15);
+            expect(nodes.size(), to_string<size_t>).to_be(18);
 
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
@@ -137,6 +138,18 @@ void test_parser() {
             expect(nodes[14]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(as<Number*>(nodes[14])->type, type_to_string).to_be(context->uint64_type);
             expect(as<Number*>(nodes[14])->value_u64, to_string<uint64_t>).to_be(123);
+
+            expect(nodes[15]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[15])->type, type_to_string).to_be(context->uint32_type);
+            expect(as<Number*>(nodes[15])->value_u64, to_string<uint64_t>).to_be(4294967295u);
+
+            expect(nodes[16]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[16])->type, type_to_string).to_be(context->uint32_type);
+            expect(as<Number*>(nodes[16])->value_u64, to_string<uint64_t>).to_be(4294967295u);
+
+            expect(nodes[17]->kind, node_kind_to_string).to_be(NodeKind::Number);
+            expect(as<Number*>(nodes[17])->type, type_to_string).to_be(context->uint32_type);
+            expect(as<Number*>(nodes[17])->value_u64, to_string<uint64_t>).to_be(2147483648u);
 
         });
         test("parsing hexidecimals", [&] {

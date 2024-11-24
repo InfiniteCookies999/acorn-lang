@@ -17,6 +17,7 @@ acorn::IRGenerator::IRGenerator(Context& context)
 
 void acorn::IRGenerator::gen_function(Func* func) {
 
+    // -- Debug
     // Logger::debug("generating function: %s", func->name);
 
     gen_function_decl(func);
@@ -968,14 +969,20 @@ llvm::Value* acorn::IRGenerator::gen_number(Number* number) {
 
 llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
     if (ref->is_var_ref()) {
-        if (ref->var_ref->is_foldable) {
-            return gen_node(ref->var_ref->assignment);
+        Var* var = ref->var_ref;
+
+        if (var->is_foldable) {
+            // The type is a very basic foldable type with a foldable
+            // assignment so there is no code associated with the variable
+            // and the value of the assignment is returned instead.
+            return gen_node(var->assignment);
         }
 
-        if (ref->var_ref->is_global) {
-            gen_global_variable_decl(ref->var_ref);
+        if (var->is_global) {
+            gen_global_variable_decl(var);
         }
-        return ref->var_ref->ll_address;
+
+        return var->ll_address;
     } else if (ref->is_universal_ref()) {
         return gen_rvalue(ref->universal_ref);
     } else if (ref->is_funcs_ref()) {

@@ -2366,9 +2366,12 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
     case TypeKind::USize: case TypeKind::ISize:
     case TypeKind::Char: case TypeKind::Char16:
     case TypeKind::Char32: {
-        
+        if (to_type->is(from_type)) {
+            return true;
+        }
+
         if (expr->is_foldable && expr->is(NodeKind::Number)) {
-            
+
             Number* number = as<Number*>(expr);
 
             auto does_fit_range = [to_type]<typename T>(T value) finline {
@@ -2642,7 +2645,10 @@ void acorn::Sema::check_division_by_zero(PointSourceLoc error_loc, Expr* expr) {
 }
 
 void acorn::Sema::create_cast(Expr* expr, Type* to_type) {
-    if (expr->type->is_not(to_type)) {
+    // TODO: Removing all constness here although because function types are
+    // pointers it may be possible at some point that you can cast between them
+    // but at that point it is unclear if the type needs casting or not?
+    if (expr->type->remove_all_const()->is_not(to_type->remove_all_const())) {
         expr->cast_type = to_type;
     }
 }
