@@ -7,10 +7,6 @@ acorn::Namespace* acorn::Module::find_namespace(Identifier name) {
     return itr == namespaces.end() ? nullptr : itr->second;
 }
 
-void acorn::Module::add_global_comptime_control_flow(Node* control_flow) {
-    comptime_control_flows.push_back(control_flow);
-}
-
 void acorn::Module::mark_bad_scope(ScopeLocation location, Node* node, Logger& logger) {
     bad_scope_nodes.push_back({ location, node, logger });
 }

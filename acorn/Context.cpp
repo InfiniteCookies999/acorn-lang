@@ -198,7 +198,10 @@ void acorn::Context::queue_gen(Decl* decl) {
     if (decl->generated) {
         return;
     }
-    unchcked_gen_queue.erase(std::ranges::find(unchcked_gen_queue, decl));
+    auto itr = std::ranges::find(unchcked_gen_queue, decl);
+    if (itr != unchcked_gen_queue.end()) {
+        unchcked_gen_queue.erase(itr);
+    }
     decl->generated = true;
     decls_gen_queue.push_back(decl);
 }

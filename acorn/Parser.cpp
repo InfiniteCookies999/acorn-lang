@@ -10,6 +10,7 @@
 #include "Util.h"
 #include "SourceExpansion.h"
 #include "SourceFile.h"
+#include "Sema.h"
 
 #define TypeTokens     \
      Token::KwVoid:    \
@@ -70,34 +71,36 @@ void acorn::Parser::parse() {
         Node* node = parse_statement();
         if (!node) continue;
 
-        if (node->is(NodeKind::Func)) {
+        add_global_node(node);
+    }
+}
+
+void acorn::Parser::add_global_node(Node* node) {
+    if (node->is(NodeKind::Func)) {
             
-            auto func = as<Func*>(node);
-            if (func->name != Identifier::Invalid) {
-                file->add_function(func);
-            }
-
-            if (func->name == context.main_identifier) {
-                context.add_canidate_main_function(func);
-            }
-        } else if (node->is(NodeKind::Var)) {
-
-            auto var = as<Var*>(node);
-            if (var->name != Identifier::Invalid) {
-                context.add_unchecked_decl(var);
-                file->add_variable(var);
-            }
-        } else if (node->is(NodeKind::Struct)) {
-
-            auto structn = as<Struct*>(node);
-            if (structn->name != Identifier::Invalid) {
-                file->add_struct(structn);
-            }
-        } else if (node->is(NodeKind::ComptimeIfStmt)) {
-            modl.add_global_comptime_control_flow(node);
-        } else {
-            modl.mark_bad_scope(ScopeLocation::Global, node, logger);
+        auto func = as<Func*>(node);
+        if (func->name != Identifier::Invalid) {
+            file->add_function(func);
         }
+
+        if (func->name == context.main_identifier) {
+            context.add_canidate_main_function(func);
+        }
+    } else if (node->is(NodeKind::Var)) {
+
+        auto var = as<Var*>(node);
+        if (var->name != Identifier::Invalid) {
+            context.add_unchecked_decl(var);
+            file->add_variable(var);
+        }
+    } else if (node->is(NodeKind::Struct)) {
+
+        auto structn = as<Struct*>(node);
+        if (structn->name != Identifier::Invalid) {
+            file->add_struct(structn);
+        }
+    } else {
+        modl.mark_bad_scope(ScopeLocation::Global, node, logger);
     }
 }
 
@@ -167,7 +170,10 @@ acorn::Node* acorn::Parser::parse_statement() {
         return stmt;
     }
     case Token::KwIf:     return parse_if();
-    case Token::KwCTIf:   return parse_comptime_if();
+    case Token::KwCTIf: {
+        parse_comptime_if();
+        return nullptr;
+    }
     case Token::KwLoop:   return parse_loop();
     case Token::KwImport: {
         error(cur_token, "Import expected at top of file")
@@ -440,26 +446,35 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
     new (structn->nspace) Namespace(modl, ScopeLocation::Struct);
     structn->struct_type = StructType::create(allocator, structn);
 
-    uint32_t field_count = 0;
+    auto prev_struct = cur_struct;
+    cur_struct = structn;
+
     expect('{');
     while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
         auto node = parse_statement();
-        if (node->is(NodeKind::Var)) {
-            auto var = as<Var*>(node);
-            if (var->name != Identifier::Invalid) {
-                var->field_idx = field_count++;
-                structn->nspace->add_variable(var);
-                structn->fields.push_back(var);
-            }
-        } else {
-            modl.mark_bad_scope(ScopeLocation::Struct, node, logger);
-        }
+        if (!node) continue;
+
+        add_node_to_struct(structn, node);
     }
     expect('}', "for struct body");
 
     context.add_unchecked_decl(structn);
 
+    cur_struct = prev_struct;
+
     return structn;
+}
+
+void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
+    if (node->is(NodeKind::Var)) {
+        auto var = as<Var*>(node);
+        if (var->name != Identifier::Invalid) {
+            structn->nspace->add_variable(var);
+            structn->fields.push_back(var);
+        }
+    } else {
+        modl.mark_bad_scope(ScopeLocation::Struct, node, logger);
+    }
 }
 
 uint32_t acorn::Parser::parse_modifiers() {
@@ -597,45 +612,47 @@ acorn::IfStmt* acorn::Parser::parse_if() {
     return ifs;
 }
 
-acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
+void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
 
-    ComptimeIfStmt* ifs = new_node<ComptimeIfStmt>(cur_token);
-    ifs->file = file;
     next_token();
 
-    ifs->cond = parse_expr();
-    ifs->scope = new_node<ScopeStmt>(cur_token);
+    auto cond = parse_expr();;
 
-    auto add_statement = [this](ScopeStmt* stmts, Node* stmt) finline{
-        if (!cur_func &&
-            !(stmt->is(NodeKind::Func) || stmt->is(NodeKind::Var))) {
-            modl.mark_bad_scope(ScopeLocation::Global, stmt, logger);
+    Sema analyzer(context, file, logger);
+    takes_path &= analyzer.check_comptime_cond(cond);
+
+    auto add_statement = [this](Node* stmt) finline {
+        if (cur_func) {
+            cur_func->scope->push_back(stmt);
+        } else if (cur_struct) {
+            add_node_to_struct(cur_struct, stmt);
+        } else {
+            add_global_node(stmt);
         }
-        stmts->push_back(stmt);
     };
 
     while (cur_token.is_not(Token::KwCTEndIf) &&
-           cur_token.is_not(Token::KwCTIf) &&
            cur_token.is_not(Token::EOB)) {
         if (cur_token.is(Token::KwCTElIf)) {
-            ifs->elseif = parse_comptime_if(false);
+            parse_comptime_if(false, !takes_path);
             break;
         } else if (cur_token.is(Token::KwCTElse)) {
             
-            ScopeStmt* else_stmts = new_node<ScopeStmt>(cur_token);
-            
             next_token();
             while (cur_token.is_not(Token::KwCTEndIf) &&
-                   cur_token.is_not(Token::KwCTIf) &&
-                   cur_token.is_not(Token::EOB) &&
-                   cur_token.is_not(Token::KwCTElIf) &&
-                   cur_token.is_not(Token::KwCTElse)) {
-                add_statement(else_stmts, parse_statement());
+                   cur_token.is_not(Token::EOB)) {
+                auto node = parse_statement();
+                if (node && !takes_path) {
+                    add_statement(node);
+                }
             }
-            ifs->elseif = else_stmts;
+            
             break;
         } else {
-            add_statement(ifs->scope, parse_statement());
+            auto node = parse_statement();
+            if (node && takes_path) {
+                add_statement(node);
+            }
         }
     }
 
@@ -647,8 +664,6 @@ acorn::ComptimeIfStmt* acorn::Parser::parse_comptime_if(bool chain_start) {
             next_token();
         }
     }
-
-    return ifs;
 }
 
 acorn::Node* acorn::Parser::parse_loop() {

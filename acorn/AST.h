@@ -24,6 +24,7 @@ namespace acorn {
     class Namespace;
     class Logger;
     class StructType;
+    struct ComptimeIfStmt;
 
     const size_t MAX_FUNC_PARAMS = 64;
 
@@ -37,7 +38,6 @@ namespace acorn {
 
         ReturnStmt,
         IfStmt,
-        ComptimeIfStmt,
         ScopeStmt,
         ImportStmt,
         PredicateLoopStmt,
@@ -281,14 +281,6 @@ namespace acorn {
         Expr*      post_variable_cond = nullptr;
         Node*      elseif;
         ScopeStmt* scope;
-    };
-
-    struct ComptimeIfStmt : IfStmt {
-        ComptimeIfStmt() : IfStmt(NodeKind::ComptimeIfStmt) {
-        }
-
-        SourceFile* file;
-        bool takes_path;
     };
 
     struct PredicateLoopStmt : Node {

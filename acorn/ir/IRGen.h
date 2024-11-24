@@ -79,7 +79,6 @@ namespace acorn {
         
         llvm::Value* gen_return(ReturnStmt* ret);
         llvm::Value* gen_if(IfStmt* ifs);
-        llvm::Value* gen_comptime_if(ComptimeIfStmt* ifs);
         llvm::Value* gen_predicate_loop(PredicateLoopStmt* loop);
         llvm::Value* gen_range_loop(RangeLoopStmt* loop);
         llvm::Value* gen_iterator_loop(IteratorLoopStmt* loop);

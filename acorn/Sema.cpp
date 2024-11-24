@@ -24,17 +24,6 @@ acorn::Sema::Sema(Context& context, SourceFile* file, Logger& logger)
       type_table(context.type_table) {
 }
 
-void acorn::Sema::resolve_global_comptime(Context& context, Module& modl) {
-    for (Node* node : modl.get_comptime_control_flows()) {
-        if (node->is(NodeKind::ComptimeIfStmt)) {
-            auto ifs = as<ComptimeIfStmt*>(node);
-            Sema sema(context, ifs->file, ifs->file->logger);
-            sema.is_global_comptime = true;
-            sema.check_comptime_if(ifs);
-        }
-    }
-}
-
 bool acorn::Sema::is_potential_main_function(Context& context, const Func* canidate) {
     if (canidate->params.empty()) {
         return true;
@@ -587,8 +576,6 @@ void acorn::Sema::check_node(Node* node) {
         bool _;
         return check_if(as<IfStmt*>(node), _);
     }
-    case NodeKind::ComptimeIfStmt:
-        return check_comptime_if(as<ComptimeIfStmt*>(node));
     case NodeKind::BinOp:
         return check_binary_op(as<BinOp*>(node));
     case NodeKind::UnaryOp:
@@ -626,6 +613,27 @@ void acorn::Sema::check_node(Node* node) {
     default:
         acorn_fatal("check_node(): missing case");
     }
+}
+
+bool acorn::Sema::check_comptime_cond(Expr* cond) {
+    is_comptime_if_cond = true;
+    check_node(cond);
+    if (!cond->type) {
+        return false;
+    }
+
+    if (!cond->is_foldable) {
+        error(expand(cond), "Comptime if expects the condition to be determined at compile time")
+            .end_error(ErrCode::SemaNotComptimeCompute);
+        return false;
+    }
+
+    if (!is_condition(cond->type)) {
+        return false;
+    }
+
+    auto ll_cond = llvm::cast<llvm::ConstantInt>(gen_constant(expand(cond), cond));
+    return !ll_cond->isZero();
 }
 
 void acorn::Sema::check_function(Func* func) {
@@ -773,7 +781,12 @@ void acorn::Sema::check_struct(Struct* structn) {
     structn->is_being_checked = true;
     structn->has_been_checked = true; // Set early to prevent circular checking.
 
+    uint32_t field_count = 0;
     for (Var* field : structn->fields) {
+
+        field->field_idx = field_count++;
+
+
         check_variable(field);
         if (!field->type) {
             structn->fields_have_errors = true;
@@ -890,48 +903,6 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
 
     cur_scope->all_paths_return = all_paths_return;
     cur_scope->found_terminal = all_paths_return;
-}
-
-void acorn::Sema::check_comptime_if(ComptimeIfStmt* ifs) {
-    if (ifs->is(NodeKind::Var)) {
-        error(ifs->cond, "Comptime if does not allow comparing to variables")
-            .end_error(ErrCode::SemaComptimeIfCannotCompareToVar);
-        return;
-    }
-    
-    Expr* cond = as<Expr*>(ifs->cond);
-    check_and_verify_type(cond);
-    if (!check_condition(cond)) {
-        return;
-    }
-    
-    if (!cond->is_foldable) {
-        error(expand(cond), "Comptime if expects the condition to be determined at compile time")
-            .end_error(ErrCode::SemaNotComptimeCompute);
-        return;
-    }
-
-    // Note: We will only check the scope if the path is taken. If it is not
-    //       then we could possibly run into errors that do not actually represent
-    //       the state of the problem. For example a variable being declared on one
-    //       operating system and trying to access it but not on another.
-
-    // We pass the current scope when calling check_scope because the comptime ifs do not
-    // create new scopes.
-    auto ll_cond = llvm::cast<llvm::ConstantInt>(gen_constant(expand(cond), cond));
-    if (!ll_cond->isZero()) {
-        // Path taken!
-        ifs->takes_path = true;
-        check_scope(ifs->scope, cur_scope);
-    } else if (ifs->elseif) {
-        ifs->takes_path = false;
-        if (ifs->elseif->is(NodeKind::ComptimeIfStmt)) {
-            // Onto the next possible comptime condition.
-            check_comptime_if(as<ComptimeIfStmt*>(ifs->elseif));
-        } else {
-            check_scope(as<ScopeStmt*>(ifs->elseif), cur_scope);
-        }
-    }
 }
 
 void acorn::Sema::check_predicate_loop(PredicateLoopStmt* loop) {
@@ -1173,9 +1144,9 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
         case NodeKind::ReturnStmt:
         case NodeKind::Var:
         case NodeKind::Func:
+        case NodeKind::Struct:
         case NodeKind::FuncCall:
         case NodeKind::IfStmt:
-        case NodeKind::ComptimeIfStmt:
         case NodeKind::ScopeStmt:
         case NodeKind::PredicateLoopStmt:
         case NodeKind::RangeLoopStmt:
@@ -1227,14 +1198,11 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
     ContinueToCheckNodeLab:
         
         if (stmt->is(NodeKind::Func)) {
-            if (is_global_comptime) {
-                file->add_function(as<Func*>(stmt));
-            } else {
-                error(stmt, "Functions cannot be declared within another function")
-                    .end_error(ErrCode::SemaNoLocalFuncs);
-            }
-        } else if (stmt->is(NodeKind::Var) && is_global_comptime) {
-            file->add_variable(as<Var*>(stmt));
+            error(stmt, "Functions cannot be declared within another function")
+                .end_error(ErrCode::SemaNoLocalFuncs);
+        } else if (stmt->is(NodeKind::Struct)) {
+            error(stmt, "Structs cannot be declared within a function")
+                .end_error(ErrCode::SemaNoLocalStructs);
         } else {
             check_node(stmt);
         }
@@ -1675,6 +1643,24 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
 
 void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call) {
     
+    if (is_comptime_if_cond) {
+        if (is_for_call) {
+            error(expand(ref), "Cannot make calls in comptime if conditions")
+                .end_error(ErrCode::SemaCannotMakeCallsInComptimeIf);
+            return;
+        }
+        
+        if (auto* universal = context.get_universal_constant(ref->ident)) {
+            ref->set_universal_ref(universal);
+            ref->type = ref->universal_ref->type;
+            return;
+        }
+        
+        error(expand(ref), "Could not find identifier '%s'", ref->ident)
+            .end_error(ErrCode::SemaNoFindIdentRef);
+        return;
+    }
+
     bool same_nspace = search_nspace == nspace;
 
     auto find_function = [=, this]() finline {

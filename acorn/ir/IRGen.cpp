@@ -48,8 +48,6 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_return(as<ReturnStmt*>(node));
     case NodeKind::IfStmt:
         return gen_if(as<IfStmt*>(node));
-    case NodeKind::ComptimeIfStmt:
-        return gen_comptime_if(as<ComptimeIfStmt*>(node));
     case NodeKind::ScopeStmt:
         return gen_scope(as<ScopeStmt*>(node));
     case NodeKind::FuncCall:
@@ -573,22 +571,6 @@ llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs) {
     // Continue withe the end block after our if statement.
     builder.SetInsertPoint(ll_end_bb);
 
-    return nullptr;
-}
-
-llvm::Value* acorn::IRGenerator::gen_comptime_if(ComptimeIfStmt* ifs) {
-    if (ifs->takes_path) {
-        for (Node* stmt : *ifs->scope) {
-            gen_node(stmt);
-        }
-    } else if (ifs->elseif && ifs->elseif->is(NodeKind::ComptimeIfStmt)) {
-        gen_comptime_if(as<ComptimeIfStmt*>(ifs->elseif));
-    } else if (ifs->elseif && ifs->elseif->is(NodeKind::ScopeStmt)) {
-        auto else_scope = as<ScopeStmt*>(ifs->elseif);
-        for (Node* stmt : *else_scope) {
-            gen_node(stmt);
-        }
-    }
     return nullptr;
 }
 
