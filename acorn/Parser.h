@@ -46,6 +46,8 @@ namespace acorn {
         // Linkage name set by the native modifier.
         llvm::StringRef linkname;
 
+        // If true still parsing imports at the top of the file.
+        bool parsing_import_tops      = true;
         bool allow_struct_initializer = true;
 
         // Statement parsing

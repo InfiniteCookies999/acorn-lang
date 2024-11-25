@@ -59,9 +59,15 @@ void acorn::Parser::parse() {
     }
 
     // Parsing imports.
-    while (cur_token.is(Token::KwImport)) {
-        parse_import_top();
+    while (parsing_import_tops &&
+           (cur_token.is(Token::KwImport) || cur_token.is(Token::KwCTIf))) {
+        if (cur_token.is(Token::KwImport)) {
+            parse_import_top();
+        } else {
+            parse_comptime_if();
+        }
     }
+    parsing_import_tops = false;
 
     // Have to set the previous token because the
     // current token does not exist.
@@ -649,7 +655,14 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
                    cur_token.is_not(Token::EOB)) {
                 if (cur_token.is(Token::KwCTIf)) {
                     parse_comptime_if(true, can_take_else_path);
-                } else{
+                } else if (parsing_import_tops && cur_token.is(Token::KwImport)) {
+                    if (takes_path) {
+                        parse_import_top();
+                    } else {
+                        parse_import();
+                    }
+                } else {
+                    parsing_import_tops = false;
                     auto node = parse_statement();
                     if (node && can_take_else_path) {
                         add_statement(node);
@@ -661,7 +674,14 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
         } else {
             if (cur_token.is(Token::KwCTIf)) {
                 parse_comptime_if(true, takes_path);
+            } else if (parsing_import_tops && cur_token.is(Token::KwImport)) {
+                if (takes_path) {
+                    parse_import_top();
+                } else {
+                    parse_import();
+                }
             } else {
+                parsing_import_tops = false;
                 auto node = parse_statement();
                 if (node && takes_path) {
                     add_statement(node);

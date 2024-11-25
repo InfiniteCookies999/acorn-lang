@@ -2,7 +2,10 @@
 
 import .win32;
 import .unix;
+
+#if OS_GROUP_UNIX
 import .unix.Stat;
+#endif
 
 /*
  * Returns true if the file system has a file or

@@ -138,7 +138,7 @@ struct Stat {
     #if SYS_64
         uint64 st_ino;
     #else
-        uint32 st_ino;
+        uint32 __st_ino;
     #endif
 
         // File mode and link count.
