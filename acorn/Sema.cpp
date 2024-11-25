@@ -248,7 +248,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_struct_type(Type* type) {
     auto unresolved_struct_type = as<UnresolvedStructType*>(type);
 
     auto name = unresolved_struct_type->get_struct_name();
-    auto found_struct = file->find_struct(name);
+    auto found_struct = find_struct(name);
 
     if (!found_struct) {
         error(unresolved_struct_type->get_error_location(),
@@ -430,26 +430,6 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
     auto& key = importn->key;
     auto& logger = importn->file->logger;
 
-    auto find_module = [importn, &logger, &context](Identifier ident) finline -> Module* {
-        if (auto modl = context.find_module(ident)) {
-            return modl;
-        } else {
-            logger.begin_error(importn->loc, "Could not find module '%s'", ident)
-                .end_error(ErrCode::SemaCouldNotResolveImport);
-            return nullptr;
-        }
-    };
-
-    auto find_namespace = [importn, &logger](Module* modl, Identifier ident) finline -> Namespace* {
-        if (auto nspace = modl->find_namespace(ident)) {
-            return nspace;
-        } else {
-            logger.begin_error(importn->loc, "Could not find namespace '%s'", ident)
-                .end_error(ErrCode::SemaCouldNotResolveNamespace);
-            return nullptr;
-        }
-    };
-
     auto add_namespace = [importn](Namespace* nspace) finline {
         if (importn->is_static) {
             importn->file->add_static_import(nspace);
@@ -457,26 +437,87 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
             importn->set_imported_namespace(nspace);
         }
     };
+
+    auto add_struct = [importn](Struct* structn) finline {
+        if (importn->is_static) {
+            // TODO: report error!
+        } else {
+            importn->set_imported_struct(structn);
+        }
+    };
     
+    auto report_could_not_find = [&logger, importn](Identifier ident) finline {
+        logger.begin_error(importn->loc, "Could not find '%s' for import", ident)
+                .end_error(ErrCode::SemaCouldNotResolveImport);
+    };
+
     if (key.size() == 1 && importn->within_same_modl) {
-        if (auto nspace = find_namespace(&importn->file->modl, key[0])) {
+        auto& modl = importn->file->modl;
+        auto ident = key[0];
+        if (auto nspace = modl.find_namespace(ident)) {
             add_namespace(nspace);
+        } else if (auto structn = modl.find_struct(ident)) {
+            add_struct(structn);
+        } else {
+            report_could_not_find(ident);
         }
         return;
     }
     
     if (key.size() == 1) {
-        if (auto modl = find_module(key[0])) {
+        if (auto modl = context.find_module(key[0])) {
             add_namespace(modl);
+        } else {
+            logger.begin_error(importn->loc, "Could not find module '%s'", key[0])
+                .end_error(ErrCode::SemaCouldNotResolveImport);
+        }
+        return;
+    }
+
+    if (key.size() == 2 && importn->within_same_modl) {
+        auto& modl = importn->file->modl;
+        if (auto nspace = modl.find_namespace(key[0])) {
+            if (auto structn = nspace->find_struct(key[1])) {
+                add_struct(structn);
+            } else {
+                logger.begin_error(importn->loc, "Could not find struct '%s'", key[1])
+                    .end_error(ErrCode::SemaCouldNotResolveImport);
+            }
+        } else {
+            logger.begin_error(importn->loc, "Could not find mamespace '%s'", key[0])
+                .end_error(ErrCode::SemaCouldNotResolveImport);
         }
         return;
     }
 
     if (key.size() == 2) {
-        if (auto modl = find_module(key[0])) {
-            if (auto nspace = find_namespace(modl, key[1])) {
+        if (auto modl = context.find_module(key[0])) {
+            if (auto nspace = modl->find_namespace(key[1])) {
                 add_namespace(nspace);
+            } else if (auto structn = modl->find_struct(key[1])) {
+                add_struct(structn);
+            } else {
+                report_could_not_find(key[1]);
             }
+        } else {
+            report_could_not_find(key[0]);
+        }
+        return;
+    }
+
+    if (key.size() == 3) {
+        if (auto modl = context.find_module(key[0])) {
+            if (auto nspace = modl->find_namespace(key[1])) {
+                if (auto structn = modl->find_struct(key[2])) {
+                    add_struct(structn);
+                } else {
+                    report_could_not_find(key[2]);
+                } 
+            } else {
+                report_could_not_find(key[1]);
+            }
+        } else {
+            report_could_not_find(key[0]);
         }
         return;
     }
@@ -1069,11 +1110,12 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
 
 void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
 
-    // TODO: search imports instead!
-    auto structn = file->find_struct(initializer->ref->ident);
+    auto name = initializer->ref->ident;
+    auto structn = find_struct(name);
+
     if (!structn) {
         error(initializer->ref, "Failed to find struct type '%s'", 
-              initializer->ref->ident)
+              name)
             .end_error(ErrCode::SemaStructInitFailedToFindStruct);
         return;
     }
@@ -1859,6 +1901,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         return;
     }
 
+    // Creating casts from the argument to the parameter.
     for (size_t i = 0; i < call->args.size(); i++) {
         auto arg_value = call->args[i];
         Var* param;
@@ -1871,7 +1914,6 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         } else {
             param = called_func->params[i];
         }
-
         create_cast(arg_value, param->type);
     }
 
@@ -2707,6 +2749,28 @@ void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, con
     }
 
     logger.end_error(error_code);
+}
+
+acorn::Struct* acorn::Sema::find_struct(Identifier name) {
+
+    if (auto found_struct = file->get_namespace()->find_struct(name)) {
+        return found_struct;
+    }
+
+    if (auto found_struct = file->find_struct(name)) {
+        return found_struct;
+    }
+
+    auto& imports = file->get_imports();
+    auto itr = imports.find(name);
+    if (itr != imports.end()) {
+        auto importn = itr->second;
+        if (importn->is_imported_struct()) {
+            return itr->second->imported_struct;
+        }
+    }
+
+    return nullptr;
 }
 
 llvm::Constant* acorn::Sema::gen_constant(PointSourceLoc error_loc, Expr* expr) {

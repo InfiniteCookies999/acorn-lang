@@ -161,6 +161,8 @@ namespace acorn {
         void check_modifier_incompatibilities(Decl* decl);
         void display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code);
 
+        Struct* find_struct(Identifier name);
+
         llvm::Constant* gen_constant(PointSourceLoc error_loc, Expr* expr);
         
         std::string get_type_mismatch_error(Type* to_type, Expr* expr) const;

@@ -194,11 +194,33 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
 #endif
     }));
 
-    #ifdef __USE_TIME_BITS64
-        int a;
-    #else
-        int b;
-    #endif
+    universal_constants.insert(new_universal<Bool>(allocator, "__USE_TIME_BITS64", [this](Bool* v) {
+        v->type = bool_type;
+#ifdef __USE_TIME_BITS64
+        v->value = true;
+#else
+        v->value = false;
+#endif
+    }));
+
+    universal_constants.insert(new_universal<Number>(allocator, "SYS_ENDIAN", [this](Number* n) {
+        n->type = int_type;
+        if constexpr (std::endian::native == std::endian::big) {
+            n->value_s64 = 1;
+        } else {
+            n->value_s64 = 2;
+        } 
+    }));
+
+    universal_constants.insert(new_universal<Number>(allocator, "SYS_BIG_ENDIAN", [this](Number* n) {
+        n->type = int_type;
+        n->value_s64 = 1;
+    }));
+
+    universal_constants.insert(new_universal<Number>(allocator, "SYS_LITTLE_ENDIAN", [this](Number* n) {
+        n->type = int_type;
+        n->value_s64 = 2;
+    }));
 }
 
 acorn::Module* acorn::Context::get_or_create_modl(llvm::StringRef mod_name) {

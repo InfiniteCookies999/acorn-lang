@@ -957,7 +957,14 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
             // The type is a very basic foldable type with a foldable
             // assignment so there is no code associated with the variable
             // and the value of the assignment is returned instead.
-            return gen_node(var->assignment);
+
+            if (var->ll_comptime_value) {
+                return var->ll_comptime_value;
+            }
+            
+            auto ll_value = gen_rvalue(var->assignment);
+            var->ll_comptime_value = ll_value;
+            return ll_value;
         }
 
         if (var->is_global) {

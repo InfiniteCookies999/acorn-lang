@@ -80,6 +80,7 @@ void acorn::Parser::add_global_node(Node* node) {
             
         auto func = as<Func*>(node);
         if (func->name != Identifier::Invalid) {
+            context.add_unchecked_decl(func);
             file->add_function(func);
         }
 
@@ -97,6 +98,7 @@ void acorn::Parser::add_global_node(Node* node) {
 
         auto structn = as<Struct*>(node);
         if (structn->name != Identifier::Invalid) {
+            context.add_unchecked_decl(structn);
             file->add_struct(structn);
         }
     } else {
@@ -406,8 +408,6 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
     }
 
     cur_func = prev_func;
-
-    context.add_unchecked_decl(func);
     
     return func;
 }
@@ -457,8 +457,6 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
         add_node_to_struct(structn, node);
     }
     expect('}', "for struct body");
-
-    context.add_unchecked_decl(structn);
 
     cur_struct = prev_struct;
 
@@ -616,10 +614,17 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
 
     next_token();
 
-    auto cond = parse_expr();;
+    auto cond = parse_expr();
 
-    Sema analyzer(context, file, logger);
-    takes_path &= analyzer.check_comptime_cond(cond);
+    bool top_took_path = !takes_path;
+    if (!context.has_errors()) {
+        Sema analyzer(context, file, logger);
+        takes_path &= analyzer.check_comptime_cond(cond);
+    } else {
+        // Give up and do not even try sema because there are parse
+        // errors somewhere.
+        takes_path = false;
+    }
 
     auto add_statement = [this](Node* stmt) finline {
         if (cur_func) {
@@ -631,6 +636,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
         }
     };
 
+    bool can_take_else_path = !top_took_path && !takes_path;
     while (cur_token.is_not(Token::KwCTEndIf) &&
            cur_token.is_not(Token::EOB)) {
         if (cur_token.is(Token::KwCTElIf)) {
@@ -641,17 +647,25 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
             next_token();
             while (cur_token.is_not(Token::KwCTEndIf) &&
                    cur_token.is_not(Token::EOB)) {
-                auto node = parse_statement();
-                if (node && !takes_path) {
-                    add_statement(node);
+                if (cur_token.is(Token::KwCTIf)) {
+                    parse_comptime_if(true, can_take_else_path);
+                } else{
+                    auto node = parse_statement();
+                    if (node && can_take_else_path) {
+                        add_statement(node);
+                    }
                 }
             }
             
             break;
         } else {
-            auto node = parse_statement();
-            if (node && takes_path) {
-                add_statement(node);
+            if (cur_token.is(Token::KwCTIf)) {
+                parse_comptime_if(true, takes_path);
+            } else {
+                auto node = parse_statement();
+                if (node && takes_path) {
+                    add_statement(node);
+                }
             }
         }
     }

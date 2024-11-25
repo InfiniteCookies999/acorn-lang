@@ -195,9 +195,13 @@ namespace acorn {
 
         Type* type;
 
-        Expr* assignment = nullptr;
+        Expr* assignment      = nullptr;
         bool has_been_checked = false;
-        bool is_foldable = false;
+        bool is_foldable      = false;
+
+        // If the variable is foldable then this contains the
+        // generated value of the variable.
+        llvm::Value* ll_comptime_value = nullptr;
         
         // If this is set to true then the function passes the
         // struct value as an integer type then converts it back
@@ -208,7 +212,6 @@ namespace acorn {
         // calling location.
         bool is_aggr_param = false;
         
-
         llvm::Value* ll_address;
 
         bool is_param() const { return param_idx != NotParam; }
@@ -249,18 +252,26 @@ namespace acorn {
 
         // Discriminated union.
         enum {
-            NamespaceKind
+            NamespaceKind,
+            StructKind
         } imported_kind;
 
         union {
             Namespace* imported_nspace;
+            Struct*    imported_struct;
         };
 
         bool is_imported_namespace() const { return imported_kind == NamespaceKind; }
+        bool is_imported_struct() const    { return imported_kind == StructKind; }
 
         void set_imported_namespace(Namespace* nspace) {
             imported_kind = NamespaceKind;
             imported_nspace = nspace;
+        }
+
+        void set_imported_struct(Struct* structn) {
+            imported_kind = StructKind;
+            imported_struct = structn;
         }
     };
 

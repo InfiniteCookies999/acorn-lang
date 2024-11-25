@@ -2,6 +2,7 @@
 
 import .win32;
 import .unix;
+import .unix.Stat;
 
 /*
  * Returns true if the file system has a file or
@@ -26,7 +27,10 @@ bool file_exists(const char* path) {
     return attribs != win32.INVALID_FILE_ATTRIBUTES &&
           (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) == 0;
 #elif OS_GROUP_UNIX
-    // TODO!
+    Stat stats;
+    if unix.stat(path, &stats) == 0 {
+        return !unix.__S_ISTYPE(stats.st_mode, unix.__S_IFDIR);
+    }
     return false;
 #endif
 }
@@ -41,7 +45,10 @@ bool directory_exists(const char* path) {
     return attribs != win32.INVALID_FILE_ATTRIBUTES &&
           (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) != 0;
 #elif OS_GROUP_UNIX
-    // TODO!
+    Stat stats;
+    if unix.stat(path, &stats) == 0 {
+        return unix.__S_ISTYPE(stats.st_mode, unix.__S_IFDIR);
+    }
     return false;
 #endif
 }

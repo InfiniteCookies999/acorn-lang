@@ -22,7 +22,7 @@ void write_val(char c) {
     uint32 written;
     WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    write(1, &c2, 1);
+    write(1, &c, 1);
 #endif
 
 }
