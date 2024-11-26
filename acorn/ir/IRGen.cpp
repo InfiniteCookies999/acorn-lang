@@ -895,6 +895,11 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
         ll_dest_addr = gen_unseen_alloca(ll_struct_type, "tmp.struct");
     }
     
+    if (initializer->values.empty()) {
+        gen_default_value(ll_dest_addr, initializer->type);
+        return ll_dest_addr;
+    }
+
     auto structn = initializer->structn;
 
     unsigned field_idx = 0;
