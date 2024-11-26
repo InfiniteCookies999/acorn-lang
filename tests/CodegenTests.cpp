@@ -524,7 +524,13 @@ void test_codegen() {
                 if (!err_msg.empty())  force_fail(err_msg.c_str());
 
                 expect(result, std::identity()).to_be("Lets go!");
-            });        
+            });
+            test("Array sm return inline memory access", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test26.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB");
+            });
         });
         section("loops", [&] {
             test("Predicate loop", [&] {

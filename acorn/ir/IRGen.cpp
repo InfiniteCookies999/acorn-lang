@@ -1367,6 +1367,24 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
     }
     Type* type = mem_access->site->type;
 
+    if (mem_access->site->is(NodeKind::FuncCall)) {
+        auto call = as<FuncCall*>(mem_access->site);
+        bool uses_aggr_int_ret = false;
+        if (!call->site->type->is_function_type()) {
+            uses_aggr_int_ret = call->called_func->ll_aggr_int_ret_type;
+        }
+
+        if (uses_aggr_int_ret) {
+            // Because the function returned an integer rather than the struct we
+            // must create a temporary struct, cast the int into the struct, then
+            // access its fields.
+            Type* array_type = call->called_func->return_type;
+            auto ll_tmp_array = gen_unseen_alloca(array_type, "tmp.arr");
+            builder.CreateStore(ll_memory, ll_tmp_array);
+            ll_memory = ll_tmp_array;
+        }
+    }
+
     if (mem_access_ptr) {
         auto ctr_type = as<ContainerType*>(type);
         auto ll_load_type = gen_type(ctr_type->get_elm_type());
