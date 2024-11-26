@@ -2490,7 +2490,9 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
         return to_type->is(from_type) || expr->is(NodeKind::Null) || to_type->is(context.void_ptr_type);
     }
     case TypeKind::Array: {
-        if (expr->is(NodeKind::Array)) {
+        if (from_type->get_kind() == TypeKind::EmptyArray) {
+            return true;
+        } else if (expr->is(NodeKind::Array)) {
             auto to_arr_type = as<ArrayType*>(to_type);
             auto from_arr_type = as<ArrayType*>(from_type);
 

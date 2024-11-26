@@ -53,9 +53,9 @@ namespace acorn {
         NamespaceRef,  // A reference to an identifier to a namespace.
         Pointer,
         Array,
+        EmptyArray,
         UnresolvedArrayType, // Length could not be resolved during parsing.
         Null,
-        EmptyArrayType,
         AssignDeterminedArray,
         Function,
         UnresolvedStructType,

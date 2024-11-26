@@ -531,6 +531,18 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("AB");
             });
+            test("Array empty init", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test27.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC");
+            });
+            test("Array empty init 2-dim", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test28.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!");
+            });
         });
         section("loops", [&] {
             test("Predicate loop", [&] {
