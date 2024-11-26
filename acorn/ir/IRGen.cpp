@@ -1384,6 +1384,26 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
     } else if (dot->site->type->is_struct_type()) {
         auto ll_struct_type = gen_type(dot->site->type);
         auto ll_struct_address = gen_node(dot->site);
+        
+        if (dot->site->is(NodeKind::FuncCall)) {
+            auto call = as<FuncCall*>(dot->site);
+            bool uses_aggr_int_ret = false;
+            if (!call->site->type->is_function_type()) {
+                uses_aggr_int_ret = call->called_func->ll_aggr_int_ret_type;
+            }
+
+            if (uses_aggr_int_ret) {
+                // Because the function returned an integer rather than the struct we
+                // must create a temporary struct, cast the int into the struct, then
+                // access its fields.
+                Type* struct_type = call->called_func->return_type;
+                auto ll_tmp_struct = gen_unseen_alloca(struct_type, "tmp.struct");
+                builder.CreateStore(ll_struct_address, ll_tmp_struct);
+                ll_struct_address = ll_tmp_struct;
+            }
+        }
+
+
         auto field = dot->var_ref;
         return builder.CreateStructGEP(ll_struct_type, ll_struct_address, field->field_idx);
     } else {
