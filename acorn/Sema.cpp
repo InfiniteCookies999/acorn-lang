@@ -1778,6 +1778,10 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         if (var_ref->is_global) {
             ensure_global_variable_checked(ref->loc, ref->var_ref);
         }
+
+        if (!var_ref->type) {
+            break;
+        }
         
         if (var_ref->type->is_integer() && var_ref->type->is_const()) {
             ref->is_foldable = true;
