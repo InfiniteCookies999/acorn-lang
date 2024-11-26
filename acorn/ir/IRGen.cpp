@@ -1330,7 +1330,7 @@ llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, ArrayType* ar
             auto elm_arr_type = as<ArrayType*>(elm_arr->get_final_type());
             return gen_constant_array(elm_arr, elm_arr_type, llvm::cast<llvm::ArrayType>(ll_elm_type));
         } else {
-            return llvm::cast<llvm::Constant>(gen_node(elm));
+            return llvm::cast<llvm::Constant>(gen_rvalue(elm));
         }
     };
 

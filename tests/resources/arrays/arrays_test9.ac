@@ -15,7 +15,7 @@ native isize write(int32 fd, const void* buf, usize count);
 
 #endif
 
-void write_val(int val) {
+void write_val(int32 val) {
 
 #if OS_GROUP_WINDOWS
     void* handle = GetStdHandle(-11);
@@ -29,9 +29,9 @@ void write_val(int val) {
 
 }
 
-int[8] foo(bool b) {
-    int[8] a1 = [ 76, 101, 116, 115, 32, 103, 111, 33 ];
-    int[8] a2 = [ 76, 101, 116, 115, 32, 103, 111, 33 ];
+int32[8] foo(bool b) {
+    int32[8] a1 = [ 76, 101, 116, 115, 32, 103, 111, 33 ];
+    int32[8] a2 = [ 76, 101, 116, 115, 32, 103, 111, 33 ];
     
     if b {
         return a1;
@@ -41,8 +41,8 @@ int[8] foo(bool b) {
 }
 
 void main() {
-    int[8] a1 = foo(true);
-    int[8] a2 = foo(false);
+    int32[8] a1 = foo(true);
+    int32[8] a2 = foo(false);
 
     write_val(a1[0]);
     write_val(a1[1]);

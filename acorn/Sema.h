@@ -139,7 +139,7 @@ namespace acorn {
 
         void check_cast(Cast* cast);
         void check_named_value(NamedValue* named_value);
-        void check_array(Array* arr);
+        void check_array(Array* arr, Type* dest_elm_type);
         void check_memory_access(MemoryAccess* mem_access);
 
         void ensure_global_variable_checked(SourceLoc error_loc, Var* var);

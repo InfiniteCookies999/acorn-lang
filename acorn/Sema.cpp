@@ -635,7 +635,7 @@ void acorn::Sema::check_node(Node* node) {
     case NodeKind::ScopeStmt:
         return check_scope(as<ScopeStmt*>(node));
     case NodeKind::Array:
-        return check_array(as<Array*>(node));
+        return check_array(as<Array*>(node), nullptr);
     case NodeKind::MemoryAccess:
         return check_memory_access(as<MemoryAccess*>(node));
     case NodeKind::PredicateLoopStmt:
@@ -749,7 +749,12 @@ void acorn::Sema::check_variable(Var* var) {
     var->has_been_checked = true; // Set early to prevent circular checking.
 
     if (var->assignment) {
-        check_node(var->assignment);
+        if (var->assignment->is(NodeKind::Array) && var->type->is_array()) {
+            auto arr_type = as<ArrayType*>(var->type);
+            check_array(as<Array*>(var->assignment), arr_type->get_elm_type());
+        } else {
+            check_node(var->assignment);
+        }
         if (!var->assignment->type) {
             return cleanup();
         }
@@ -852,7 +857,15 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
 
     bool is_assignable;
     if (ret->value) {
-        check_and_verify_type(ret->value);
+        if (ret->value->is(NodeKind::Array) && cur_func->return_type->is_array()) {
+            auto dest_array_type = as<ArrayType*>(cur_func->return_type);
+            check_array(as<Array*>(ret->value), dest_array_type->get_elm_type());
+            if (!ret->value->type) {
+                return;
+            }
+        } else {
+            check_and_verify_type(ret->value);
+        }
         is_assignable = is_assignable_to(cur_func->return_type, ret->value);
 
         if (cur_func->return_type->is_aggregate() && ret->value->is(NodeKind::IdentRef)) {
@@ -2263,7 +2276,7 @@ void acorn::Sema::check_named_value(NamedValue* named_value) {
     named_value->type = named_value->assignment->type;
 }
 
-void acorn::Sema::check_array(Array* arr) {
+void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
     if (arr->elms.empty()) {
         arr->type = context.empty_array_type;
         return;
@@ -2275,7 +2288,12 @@ void acorn::Sema::check_array(Array* arr) {
     for (Expr* elm : arr->elms) {
         if (!elm) continue;
 
-        check_node(elm);
+        if (elm->is(NodeKind::Array) && dest_elm_type && dest_elm_type->is_array()) {
+            auto next_dest_elm_type = as<ArrayType*>(dest_elm_type)->get_elm_type();
+            check_array(as<Array*>(elm), next_dest_elm_type);
+        } else {
+            check_node(elm);
+        }
 
         if (!elm->type) {
             values_have_errors = true;
@@ -2286,7 +2304,13 @@ void acorn::Sema::check_array(Array* arr) {
             arr->is_foldable = false;
         }
 
-        if (!elm_type) {
+        if (dest_elm_type) {
+            if (!is_assignable_to(dest_elm_type, elm)) {
+                error(expand(elm), "Expected element type '%s' but found '%s'",
+                      dest_elm_type, elm->type)
+                    .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
+            }
+        } else if (!elm_type) {
             elm_type = elm->type;
             value_for_elm_type = elm;
         } else if (elm_type->is_not(elm->type)) {
@@ -2306,6 +2330,10 @@ void acorn::Sema::check_array(Array* arr) {
 
     if (values_have_errors) {
         return;
+    }
+
+    if (!elm_type) {
+        elm_type = dest_elm_type;
     }
     
     for (Expr* value : arr->elms) {
@@ -2481,10 +2509,14 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
                 from_arr_type = as<ArrayType*>(from_arr_type->get_elm_type());
             }
             
+            // Allow for zero filling the remainder.
+            if (from_arr_type->get_length() > to_arr_type->get_length()) {
+                return false;
+            }
+
             if (to_arr_type->get_elm_type()->is_not(from_arr_type->get_elm_type())) {
                 return false;
             }
-            // Allow for zero filling the remainder.
             return true;
         }
         return to_type->is(from_type);
