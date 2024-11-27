@@ -16,7 +16,33 @@ acorn::Type* acorn::TypeTable::get_const_type(Type* type) {
         return itr->second;
     }
 
-    auto const_type = Type::create(allocator, type->get_kind(), true);
+    Type* const_type;
+    switch (type->get_kind()) {
+    case TypeKind::Pointer: {
+        auto ptr_type = as<PointerType*>(type);
+        const_type = PointerType::create(allocator, ptr_type->get_elm_type(), true);
+        break;
+    }
+    case TypeKind::Struct: {
+        auto struct_type = as<StructType*>(type);
+        const_type = StructType::create(allocator, struct_type->get_struct(), true);
+        break;
+    }
+    case TypeKind::Array: {
+        auto arr_type = as<ArrayType*>(type);
+        const_type = ArrayType::create(allocator, arr_type->get_elm_type(), arr_type->get_length(), true);
+        break;
+    }
+    case TypeKind::Function: {
+        auto func_type = as<FunctionType*>(type);
+        const_type = FunctionType::create(allocator, func_type->get_key(), true);
+        break;
+    }
+    default:
+        const_type = Type::create(allocator, type->get_kind(), true);
+        break;
+    }
+
     const_types.insert({ type, const_type });
     const_type->non_const_version = type->does_contain_const() ? type->non_const_version : type;
 

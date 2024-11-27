@@ -149,5 +149,35 @@ void test_sema() {
             )");
             expect_none().to_produce_error(ErrCode::SemaGlobalCircularDependency);
         });
+        test("Const struct field assign", [&] {
+            mock_sema(R"(
+                struct A {
+                    int q;
+                }
+
+                void main() {
+                    const A a = A{9};
+                    a.q = 8;
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaReassignConstAddress);
+        });
+        test("Const struct field assign nested", [&] {
+            mock_sema(R"(
+                struct B {
+                    int q;
+                }
+
+                struct A {
+                    B b;
+                }
+
+                void main() {
+                    const A a = A{ B{9} };
+                    a.b.q = 8;
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaReassignConstAddress);
+        });
     });
 }

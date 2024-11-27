@@ -265,7 +265,12 @@ acorn::Type* acorn::Sema::fixup_unresolved_struct_type(Type* type) {
         return nullptr;
     }
 
-    return found_struct->struct_type;
+    Type* struct_type = found_struct->struct_type;
+    if (unresolved_struct_type->is_const()) {
+        struct_type = type_table.get_const_type(struct_type);
+    }
+
+    return struct_type;
 }
 
 acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
@@ -1152,6 +1157,8 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
 
     for (size_t i = 0; i < values.size(); i++) {
         Expr* value = values[i];
+        check_and_verify_type(value);
+
         Var* field = structn->fields[i];
     
         if (!is_assignable_to(field->type, value)) {
@@ -1858,6 +1865,15 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         auto struct_type = as<StructType*>(dot->site->type);
         auto structn = struct_type->get_struct();
         check_ident_ref(dot, structn->nspace, is_for_call);
+
+        if (!dot->type) {
+            return;
+        }
+
+        if (dot->site->type->is_const() && !dot->type->is_const()) {
+            // The constness must be passed onto the field to prevent modification of fields.
+            dot->type = type_table.get_const_type(dot->type);
+        }
     } else {
         error(expand(dot), "Cannot access field '%s' of type '%s'", dot->ident, dot->site->type)
             .end_error(ErrCode::SemaDotOperatorCannotAccessType);

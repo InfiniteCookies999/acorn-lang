@@ -276,7 +276,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool allow_func_decl, bool 
 
         if (cur_token.is(Token::Identifier) || encountered_null_index) {
             // Variable declarations.
-            auto type = construct_type_from_identifier(name_token);
+            auto type = construct_type_from_identifier(name_token, false);
             type = construct_array_type(type, indexes);
             type = parse_optional_function_type(type);
             if (allow_func_decl) {
@@ -1029,7 +1029,7 @@ return t; }
     case Token::Identifier: {
         Token name_token = cur_token;
         next_token();
-        return construct_type_from_identifier(name_token);
+        return construct_type_from_identifier(name_token, is_const);
     }
     default: {
         error("Expected type").end_error(ErrCode::ParseInvalidType);
@@ -1041,9 +1041,9 @@ return t; }
 #undef ty
 }
 
-acorn::Type* acorn::Parser::construct_type_from_identifier(Token name_token) {
+acorn::Type* acorn::Parser::construct_type_from_identifier(Token name_token, bool is_const) {
     auto name = Identifier::get(name_token.text());
-    return UnresolvedStructType::create(allocator, name, name_token.loc);
+    return UnresolvedStructType::create(allocator, name, name_token.loc, is_const);
 }
 
 acorn::Type* acorn::Parser::construct_array_type(Type* base_type,

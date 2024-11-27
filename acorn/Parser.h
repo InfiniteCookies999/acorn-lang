@@ -97,7 +97,7 @@ namespace acorn {
 
         Type* parse_type();
         Type* parse_base_type();
-        Type* construct_type_from_identifier(Token name_token);
+        Type* construct_type_from_identifier(Token name_token, bool is_const);
         Type* construct_array_type(Type* base_type, 
                                    const llvm::SmallVector<Expr*, 8>& arr_lengths);
         Type* parse_optional_function_type(Type* base_type);

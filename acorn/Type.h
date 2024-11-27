@@ -269,6 +269,10 @@ namespace acorn {
             return key->param_types;
         }
 
+        FunctionTypeKey* get_key() const {
+            return key;
+        }
+
         std::string to_string() const;
 
     protected:
