@@ -780,7 +780,7 @@ void acorn::Sema::check_variable(Var* var) {
         return cleanup();
     }
 
-    var->is_foldable = (var->type->is_integer() || var->type->is_bool()) &&
+    var->is_foldable = var->type->is_number() &&
                        var->type->is_const() &&
                        var->assignment && var->assignment->is_foldable;
 
@@ -2274,6 +2274,7 @@ void acorn::Sema::check_cast(Cast* cast) {
 void acorn::Sema::check_named_value(NamedValue* named_value) {
     check_node(named_value->assignment);
     named_value->type = named_value->assignment->type;
+    named_value->is_foldable = named_value->assignment->is_foldable;
 }
 
 void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {

@@ -232,6 +232,36 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("Lets go!");
             });
+            test("global struct no init empty struct", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"globals/global_test5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC");
+            });
+            test("global struct no init non-empty foldable", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"globals/global_test6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC");
+            });
+            test("global struct no init non-empty not foldable", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"globals/global_test7.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC");
+            });
+            test("global struct no init nested struct fields foldable", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"globals/global_test8.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC");
+            });
+            test("global struct no init nested struct fields not foldable", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"globals/global_test9.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC");
+            });
         });
         section("if statements", [&] {
             test("if deduces true and false", [&] {

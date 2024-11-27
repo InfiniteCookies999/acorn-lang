@@ -30,8 +30,8 @@ namespace acorn {
         llvm::Type* gen_type(Type* type) const {
             return acorn::gen_type(type, ll_context, ll_module);
         }
-        llvm::Type* gen_struct_type(StructType* struct_type) const {
-            return acorn::gen_type(struct_type, ll_context, ll_module);
+        llvm::StructType* gen_struct_type(StructType* struct_type) const {
+            return acorn::gen_struct_type(struct_type, ll_context, ll_module);
         }
 
         llvm::Type* gen_ptrsize_int_type() {
@@ -76,7 +76,13 @@ namespace acorn {
 
         void gen_global_variable_decl(Var* var);
         void gen_global_variable_body(Var* var);
-        
+        bool gen_constant_struct_for_global(StructType* struct_type, llvm::Constant*& ll_constant_struct);
+        llvm::Constant* gen_constant_array_for_global(Array* arr);
+
+        void finish_incomplete_struct_type_global(llvm::Value* ll_address, 
+                                                  StructType* struct_type,
+                                                  const std::function<llvm::Value*()>& address_getter = {});
+
         llvm::Value* gen_return(ReturnStmt* ret);
         llvm::Value* gen_if(IfStmt* ifs);
         llvm::Value* gen_predicate_loop(PredicateLoopStmt* loop);

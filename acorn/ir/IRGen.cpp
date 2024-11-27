@@ -400,25 +400,120 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
     
     auto gen_constant_value = [this, var]() {
         if (var->assignment->type->is_array()) {
-            auto ll_array_type = llvm::cast<llvm::ArrayType>(gen_type(var->assignment->type));
-            auto arr_type = as<ArrayType*>(var->assignment->get_final_type());
-            return gen_constant_array(as<Array*>(var->assignment), arr_type, ll_array_type);
+            return gen_constant_array_for_global(as<Array*>(var->assignment));
         } else {
             auto ll_value = gen_rvalue(var->assignment);
             return llvm::cast<llvm::Constant>(ll_value);
         }
     };
 
-    if (var->assignment && var->assignment->is_foldable) {
+    if (!var->assignment) {
+        if (var->type->is_struct_type()) {
+            // Initialize as many fields as possible then post-pone the initialization
+            // of the rest of the values in the initialize function.
+
+            auto struct_type = as<StructType*>(var->type);
+            
+            llvm::Constant* ll_constant_struct;
+            bool all_values_initialized = gen_constant_struct_for_global(struct_type, ll_constant_struct);
+
+            ll_global->setInitializer(ll_constant_struct);
+            if (!all_values_initialized) {
+                incomplete_global_variables.push_back(var);
+            }
+        } else {
+            ll_global->setInitializer(gen_zero(var->type));
+        }
+        return;
+    }
+
+    if (var->assignment->is_foldable) {
         ll_global->setInitializer(gen_constant_value());
     } else {
         ll_global->setInitializer(gen_zero(var->type));
-        if (var->assignment) {
-            incomplete_global_variables.push_back(var);
-        }
+        incomplete_global_variables.push_back(var);
     }
 }
 
+bool acorn::IRGenerator::gen_constant_struct_for_global(StructType* struct_type, llvm::Constant*& ll_constant_struct) {
+
+    bool all_values_initialized = true;
+
+    auto structn        = struct_type->get_struct();
+    auto ll_struct_type = gen_struct_type(struct_type);
+
+    llvm::SmallVector<llvm::Constant*, 16> ll_field_values;
+            
+    for (Var* field : structn->fields) {
+        if (field->type->is_struct_type()) {
+            auto field_struct_type = as<StructType*>(field->type);
+            llvm::Constant* ll_constant;
+            all_values_initialized &= gen_constant_struct_for_global(field_struct_type, ll_constant);
+            ll_field_values.push_back(ll_constant);
+        } else if (field->type->is_array()) {
+            if (!field->assignment) {
+                ll_field_values.push_back(gen_zero(field->type));
+                continue;
+            }
+
+            if (field->assignment->is_foldable) {
+                auto arr = as<Array*>(field->assignment);
+                ll_field_values.push_back(gen_constant_array_for_global(arr));
+            } else {
+                ll_field_values.push_back(gen_zero(field->type));
+                all_values_initialized = false;
+            }
+        } else if (field->assignment && field->assignment->is_foldable) {
+            auto ll_constant = llvm::cast<llvm::Constant>(gen_rvalue(field->assignment));
+            ll_field_values.push_back(ll_constant);
+        } else {
+            ll_field_values.push_back(gen_zero(field->type));
+            if (field->assignment) {
+                all_values_initialized = false;
+            }
+        }
+    }
+
+    ll_constant_struct = llvm::ConstantStruct::get(ll_struct_type, ll_field_values);
+
+    return all_values_initialized;
+}
+
+llvm::Constant* acorn::IRGenerator::gen_constant_array_for_global(Array* arr) {
+    // TODO: This is probably broken for assigning directly to a pointer.
+    auto arr_type = as<ArrayType*>(arr->get_final_type());
+    auto ll_array_type = llvm::cast<llvm::ArrayType>(gen_type(arr_type));
+    return gen_constant_array(arr, arr_type, ll_array_type);
+}
+
+void acorn::IRGenerator::finish_incomplete_struct_type_global(llvm::Value* ll_address,
+                                                              StructType* struct_type,
+                                                              const std::function<llvm::Value* ()>& address_getter) {
+    
+    auto structn = struct_type->get_struct();
+    auto ll_struct_type = gen_struct_type(struct_type);
+
+    auto get_struct_address = [&ll_address, address_getter]() finline{
+        if (!ll_address) {
+            ll_address = address_getter();
+        }
+        return ll_address;
+    };
+
+    unsigned field_idx = 0;
+    for (Var* field : structn->fields) {
+        if (field->type->is_struct_type()) {
+            auto field_struct_type = as<StructType*>(field->type);
+            finish_incomplete_struct_type_global(nullptr, field_struct_type, [=, this]() -> llvm::Value* {
+                return builder.CreateStructGEP(ll_struct_type, get_struct_address(), field_idx);
+            });
+        } else if (field->assignment && !field->assignment->is_foldable) {
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, get_struct_address(), field_idx);
+            gen_assignment(ll_field_addr, field->type, field->assignment);
+        }
+        ++field_idx;
+    }
+}
 
 void acorn::IRGenerator::finish_incomplete_global_variables() {
     if (incomplete_global_variables.empty()) {
@@ -445,7 +540,12 @@ void acorn::IRGenerator::finish_incomplete_global_variables() {
 }
 
 void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
-    gen_assignment(var->ll_address, var->type, var->assignment);
+    if (!var->assignment && var->type->is_struct_type()) {
+        auto struct_type = as<StructType*>(var->type);
+        finish_incomplete_struct_type_global(var->ll_address, struct_type);
+    } else {
+        gen_assignment(var->ll_address, var->type, var->assignment);
+    }
 }
 
 void acorn::IRGenerator::gen_implicit_struct_functions(Struct* structn) {

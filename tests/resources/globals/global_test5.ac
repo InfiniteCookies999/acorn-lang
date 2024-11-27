@@ -15,12 +15,6 @@ native isize write(int32 fd, const void* buf, usize count);
 
 #endif
 
-int L = 76;
-int t = 116;
-int s = 115;
-int o = 111;
-int[8] a = [ L, 101, t, s, 32, 103, o, 33 ];
-
 void write_val(int val) {
 
 #if OS_GROUP_WINDOWS
@@ -35,13 +29,16 @@ void write_val(int val) {
 
 }
 
+struct A {
+    int a;
+    int b;
+    int c;
+}
+
+A a;
+
 void main() {
-    write_val(a[0]);
-    write_val(a[1]);
-    write_val(a[2]);
-    write_val(a[3]);
-    write_val(a[4]);
-    write_val(a[5]);
-    write_val(a[6]);
-    write_val(a[7]);
+    write_val(a.a + 65);
+    write_val(a.b + 66);
+    write_val(a.c + 67);
 }

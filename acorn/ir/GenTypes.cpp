@@ -52,7 +52,7 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Mod
     }
 }
 
-llvm::Type* acorn::gen_struct_type(StructType* struct_type, llvm::LLVMContext& ll_context, llvm::Module& ll_module) {
+llvm::StructType* acorn::gen_struct_type(StructType* struct_type, llvm::LLVMContext& ll_context, llvm::Module& ll_module) {
     auto ll_struct_type = struct_type->get_ll_struct_type();
     if (ll_struct_type) {
         return ll_struct_type;
