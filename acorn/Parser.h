@@ -137,6 +137,7 @@ namespace acorn {
         Number* parse_number_literal(const char* start, const char* end);
 
         Expr* parse_array();
+        Expr* parse_struct_initializer(IdentRef* ref);
 
         // Utility functions
         //--------------------------------------

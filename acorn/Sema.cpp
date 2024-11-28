@@ -1155,11 +1155,47 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
 
     initializer->structn = structn;
 
+    bool named_values_out_of_order = false;
+    uint32_t named_value_high_idx = 0;
     for (size_t i = 0; i < values.size(); i++) {
         Expr* value = values[i];
         check_and_verify_type(value);
 
-        Var* field = structn->fields[i];
+        Var* field;
+        if (value->is(NodeKind::NamedValue)) {
+            // Handle named arguments by finding the corresponding parameter
+
+            auto named_value = as<NamedValue*>(value);
+            value = named_value->assignment;
+
+            field = structn->nspace->find_variable(named_value->name);
+
+            // Check to make sure we found the field by the given name.
+            if (!field) {
+                error(expand(value), "Could not find field '%s' for named value", named_value->name)
+                    .end_error(ErrCode::SemaStructInitCouldNotFindField);
+                return;
+            }
+
+            if (field->field_idx != i) {
+                named_values_out_of_order = true;
+            }
+            named_value_high_idx = std::max(field->field_idx, named_value_high_idx);
+            named_value->mapped_idx = field->field_idx;
+        } else {
+            initializer->non_named_args_offset = i + 1;
+
+            field = structn->fields[i];
+
+            // Cannot determine the order of the values if the
+            // non-named values come after the named values
+            // and the named values are not in order.
+            if (named_values_out_of_order || named_value_high_idx > i) {
+                error(expand(value), "Value %s causes the values to be out of order", i + 1)
+                    .end_error(ErrCode::SemaStructInitValuesOutOfOrder);
+                return;
+            }
+        }
     
         if (!is_assignable_to(field->type, value)) {
             error(expand(value), "Field '%s'. %s", 
@@ -2098,7 +2134,7 @@ bool acorn::Sema::compare_as_call_canidate(Func* canidate,
             param = canidate->params[i];
 
             // Cannot determine the order of the arguments if the
-            // non-named arguments come after the name arguments
+            // non-named arguments come after the named arguments
             // and the named arguments are not in order.
             if (named_args_out_of_order || named_arg_high_idx > i) {
                 return false;

@@ -116,6 +116,8 @@ X(SemaStructTooManyFields                  , 30070)
 X(SemaFieldInitTypeMismatch                , 30071)
 X(SemaNoLocalStructs                       , 20072)
 X(SemaCannotMakeCallsInComptimeIf          , 20073)
+X(SemaStructInitCouldNotFindField          , 20074)
+X(SemaStructInitValuesOutOfOrder           , 20075)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

@@ -883,6 +883,36 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("A"); 
             });
+            test("Struct named vals all fields set by names", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs18.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABC"); 
+            });
+            test("Struct named vals some fields set by names", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs19.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD"); 
+            });
+            test("Struct named vals mixed named+not named all set", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs20.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD"); 
+            });
+            test("Struct named vals mixed named+not named some set", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs21.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD"); 
+            });
+            test("Struct named vals mixed named+not named some set + gap", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs22.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD"); 
+            });
         });
     });
 }

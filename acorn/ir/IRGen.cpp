@@ -1002,21 +1002,37 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
 
     auto structn = initializer->structn;
 
+    llvm::SmallVector<bool, 32> fields_set_list(structn->fields.size(), false);
+
     unsigned field_idx = 0;
     for (Expr* value : initializer->values) {
-        Var* field = structn->fields[field_idx];
-        auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field_idx);
-        gen_assignment(ll_field_addr, field->type, value);
+        if (value->is(NodeKind::NamedValue)) {
+            auto named_val = as<NamedValue*>(value);
+            Var* field = structn->fields[named_val->mapped_idx];
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, named_val->mapped_idx);
+            gen_assignment(ll_field_addr, field->type, named_val->assignment);
+            
+            fields_set_list[named_val->mapped_idx] = true;
+        } else {
+            Var* field = structn->fields[field_idx];
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field_idx);
+            gen_assignment(ll_field_addr, field->type, value);
+        
+            fields_set_list[field_idx] = true;
+        }
         ++field_idx;
     }
 
-    for (; field_idx < structn->fields.size(); field_idx++) {
-        Var* field = structn->fields[field_idx];
-        auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field_idx);
-        if (field->assignment) {
-            gen_assignment(ll_field_addr, field->type, field->assignment);
-        } else {
-            gen_default_value(ll_field_addr, field->type);
+    // Filling in remainder fields that were not set.
+    for (field_idx = initializer->non_named_args_offset; field_idx < structn->fields.size(); field_idx++) {
+        if (!fields_set_list[field_idx]) {
+            Var* field = structn->fields[field_idx];
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field_idx);
+            if (field->assignment) {
+                gen_assignment(ll_field_addr, field->type, field->assignment);
+            } else {
+                gen_default_value(ll_field_addr, field->type);
+            }
         }
     }
 

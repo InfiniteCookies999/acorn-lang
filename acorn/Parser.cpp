@@ -1684,25 +1684,7 @@ acorn::Expr* acorn::Parser::parse_term() {
         next_token(); // Consuming the identifier.
         
         if (allow_struct_initializer && cur_token.is('{')) {
-            auto initializer = new_node<StructInitializer>(cur_token);
-            initializer->ref = ref;
-
-            next_token();
-
-            bool more_values = cur_token.is_not('}');
-            while (more_values) {
-
-                initializer->values.push_back(parse_expr());
-
-                more_values = cur_token.is(',');
-                if (more_values) {
-                    next_token();
-                }
-            }
-
-            expect('}', "for struct initializer");
-            
-            return initializer;
+            return parse_struct_initializer(ref);
         }
         
         return ref;
@@ -2233,6 +2215,43 @@ acorn::Expr* acorn::Parser::parse_array() {
 
     expect(']', "for array");
     return arr;
+}
+
+acorn::Expr* acorn::Parser::parse_struct_initializer(IdentRef* ref) {
+    auto initializer = new_node<StructInitializer>(cur_token);
+    initializer->ref = ref;
+
+    next_token();
+
+    if (cur_token.is_not('}')) {
+        bool more_values = false;
+        do {
+            Expr* value;
+            if (cur_token.is(Token::Identifier) && peek_token(0).is('=')) {
+                
+                auto named_value = new_node<NamedValue>(cur_token);
+                named_value->name = Identifier::get(cur_token.text());
+                value = named_value;
+                next_token(); // Consuming identifier token.
+                next_token(); // Consuming '=' token.
+
+                named_value->assignment = parse_expr();
+            } else {
+                value = parse_expr();
+            }
+
+            initializer->values.push_back(value);
+
+            more_values = cur_token.is(',');
+            if (more_values) {
+                next_token();
+            }
+        } while (more_values);
+    }
+
+    expect('}', "for struct initializer");
+            
+    return initializer;
 }
 
 // Utility functions
