@@ -1024,7 +1024,10 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
     }
 
     // Filling in remainder fields that were not set.
-    for (field_idx = initializer->non_named_args_offset; field_idx < structn->fields.size(); field_idx++) {
+    if (initializer->non_named_vals_offset == -1) {
+        initializer->non_named_vals_offset = 0;
+    }
+    for (field_idx = initializer->non_named_vals_offset; field_idx < structn->fields.size(); field_idx++) {
         if (!fields_set_list[field_idx]) {
             Var* field = structn->fields[field_idx];
             auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field_idx);

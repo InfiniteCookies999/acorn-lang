@@ -527,6 +527,7 @@ namespace acorn {
         Expr* site;
         Func* called_func;
 
+        size_t non_named_args_offset = -1;
         llvm::SmallVector<Expr*, 8> args;
 
     };
@@ -535,7 +536,7 @@ namespace acorn {
         StructInitializer() : Expr(NodeKind::StructInitializer) {
         }
 
-        unsigned non_named_args_offset = 0;
+        unsigned non_named_vals_offset = 0;
         Struct* structn;
         IdentRef* ref;
         llvm::SmallVector<Expr*, 8> values;

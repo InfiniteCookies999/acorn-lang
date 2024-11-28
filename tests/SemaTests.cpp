@@ -179,5 +179,34 @@ void test_sema() {
             )");
             expect_none().to_produce_error(ErrCode::SemaReassignConstAddress);
         });
+        test("Function call duplicate named arg", [&] {
+            mock_sema(R"(
+                void foo(int a, int b) {
+                    
+                }
+
+                void main() {
+                    foo(a=44, b=44, a=77);
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaDuplicatedNamedCallArg);
+        });
+        test("Struct init duplicate named val", [&] {
+            mock_sema(R"(
+                struct A {
+                    int v1;
+                    int v2;
+                }
+
+                void main() {
+                    A a = A{
+                        v1=55,
+                        v2=66,
+                        v1=88
+                    };
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaDuplicatedNamedStructInitVal);
+        });
     });
 }

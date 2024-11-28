@@ -1610,6 +1610,10 @@ acorn::FuncCall* acorn::Parser::parse_function_call(Expr* site) {
                 next_token(); // Consuming '=' token.
 
                 named_arg->assignment = parse_expr();
+
+                if (call->non_named_args_offset == -1) {
+                    call->non_named_args_offset = call->args.size();
+                }
             } else {
                 arg = parse_expr();
             }
@@ -2236,6 +2240,10 @@ acorn::Expr* acorn::Parser::parse_struct_initializer(IdentRef* ref) {
                 next_token(); // Consuming '=' token.
 
                 named_value->assignment = parse_expr();
+
+                if (initializer->non_named_vals_offset == -1) {
+                    initializer->non_named_vals_offset = initializer->values.size();
+                }
             } else {
                 value = parse_expr();
             }

@@ -1146,6 +1146,37 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
         return;
     }
     
+    // Check for duplicate values;
+    if (initializer->non_named_vals_offset != -1) {
+        bool dup_named_vals = false;
+        for (size_t i = initializer->non_named_vals_offset; i < initializer->values.size(); i++) {
+            auto val = initializer->values[i];
+            if (!val->is(NodeKind::NamedValue)) {
+                continue;
+            }
+
+            auto named_val = as<NamedValue*>(val);
+            for (size_t j = i + 1; j < initializer->values.size(); j++) {
+                auto other_val = initializer->values[j];
+                if (!other_val->is(NodeKind::NamedValue)) {
+                    continue;
+                }
+                
+                auto other_named_val = as<NamedValue*>(other_val);
+                if (named_val->name == other_named_val->name) {
+                    error(other_named_val, "Duplicated named value '%s'", named_val->name)
+                        .end_error(ErrCode::SemaDuplicatedNamedStructInitVal);
+                    dup_named_vals = true;
+                    break;
+                }
+            }
+        }
+    
+        if (dup_named_vals) {
+            return;
+        }
+    }
+    
     auto& values = initializer->values;
     if (values.size() > structn->fields.size()) {
         error(initializer, "More values than struct fields")
@@ -1183,8 +1214,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
             named_value_high_idx = std::max(field->field_idx, named_value_high_idx);
             named_value->mapped_idx = field->field_idx;
         } else {
-            initializer->non_named_args_offset = i + 1;
-
+            
             field = structn->fields[i];
 
             // Cannot determine the order of the values if the
@@ -2062,11 +2092,42 @@ acorn::Func* acorn::Sema::check_function_decl_call(FuncCall* call, FuncList& can
         }
     }
 
+    // Check for duplicated named arguments.
+    if (call->non_named_args_offset != -1) {
+        bool dup_named_args = false;
+        for (size_t i = call->non_named_args_offset; i < call->args.size(); i++) {
+            auto arg = call->args[i];
+            if (!arg->is(NodeKind::NamedValue)) {
+                continue;
+            }
+
+            auto named_arg = as<NamedValue*>(arg);
+            for (size_t j = i + 1; j < call->args.size(); j++) {
+                auto other_arg = call->args[j];
+                if (!other_arg->is(NodeKind::NamedValue)) {
+                    continue;
+                }
+                
+                auto other_named_arg = as<NamedValue*>(other_arg);
+                if (named_arg->name == other_named_arg->name) {
+                    error(other_named_arg, "Duplicated named argument '%s'", named_arg->name)
+                        .end_error(ErrCode::SemaDuplicatedNamedCallArg);
+                    dup_named_args = true;
+                    break;
+                }
+            }
+        }
+        if (dup_named_args) {
+            return nullptr;
+        }
+    }
+
     auto called_func = find_best_call_canidate(canidates, call->args);
     if (!called_func) {
         display_call_mismatch_info(expand(call), canidates, call->args);
         return nullptr;
     }
+
     return called_func;
 }
 
