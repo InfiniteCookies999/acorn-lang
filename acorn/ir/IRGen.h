@@ -17,11 +17,13 @@ namespace acorn {
 
         IRGenerator(Context& context);
 
+        static void clear_static_data();
+
         void gen_function(Func* func);
         void gen_global_variable(Var* var);
         void finish_incomplete_global_variables();
         void finish_incomplete_global_variable(Var* var);
-        void gen_implicit_struct_functions(Struct* structn);
+        void gen_implicit_structs_functions();
 
         llvm::Value* gen_node(Node* node);
 
@@ -63,9 +65,12 @@ namespace acorn {
         llvm::SmallVector<llvm::BasicBlock*, 8> loop_break_stack;
         llvm::SmallVector<llvm::BasicBlock*, 8> loop_continue_stack;
 
-        static int                         global_counter;
-        static llvm::SmallVector<Var*, 32> incomplete_global_variables;
-        static llvm::BasicBlock*           ll_global_init_call_bb;
+        static int                           global_counter;
+        static llvm::SmallVector<Var*, 32>   incomplete_global_variables;
+        static llvm::SmallVector<Struct*, 4> structs_needing_implicit_functions;
+        static llvm::BasicBlock*             ll_global_init_call_bb;
+
+        void gen_default_constructor(Struct* structn);
 
         void gen_function_decl(Func* func);
         llvm::Type* gen_function_return_type(Func* func, bool is_main);

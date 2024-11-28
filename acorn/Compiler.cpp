@@ -301,8 +301,6 @@ void acorn::Compiler::sema_and_irgen() {
             generator.gen_function(as<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {
             generator.gen_global_variable(as<Var*>(decl));
-        } else if (decl->is(NodeKind::Struct)) {
-            generator.gen_implicit_struct_functions(as<Struct*>(decl));
         } else {
             acorn_fatal("Unreachable: Missing generation case");
         }
@@ -312,6 +310,7 @@ void acorn::Compiler::sema_and_irgen() {
 
     IRGenerator generator(context);
     generator.finish_incomplete_global_variables();
+    generator.gen_implicit_structs_functions();
 
     // Checking any declarations that were not checked.
     for (Decl* decl : context.get_unchecked()) {

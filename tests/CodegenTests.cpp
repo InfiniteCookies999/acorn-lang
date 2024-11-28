@@ -23,6 +23,7 @@
 #include "Compiler.h"
 #include "Process.h"
 #include "Util.h"
+#include "ir/IRGen.h"
 
 using namespace acorn;
 
@@ -109,6 +110,7 @@ static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file
     using acorn::Context;
     context->~Context();
     allocator.dealloc_all();
+    acorn::IRGenerator::clear_static_data();
 
     if (has_errors) {
         return { "", "" };

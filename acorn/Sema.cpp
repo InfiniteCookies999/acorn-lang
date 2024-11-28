@@ -847,10 +847,6 @@ void acorn::Sema::check_struct(Struct* structn) {
         }
     }
 
-    if (structn->fields_have_assignments) {
-        context.queue_gen(structn);
-    }
-
     structn->is_being_checked = false;
 }
 

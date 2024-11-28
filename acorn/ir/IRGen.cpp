@@ -4,15 +4,24 @@
 #include "../Util.h"
 #include "../Logger.h"
 
-int                                acorn::IRGenerator::global_counter = 0;
-llvm::SmallVector<acorn::Var*, 32> acorn::IRGenerator::incomplete_global_variables;
-llvm::BasicBlock*                  acorn::IRGenerator::ll_global_init_call_bb;
+// Forward declaring static member fields.
+int                                  acorn::IRGenerator::global_counter = 0;
+llvm::SmallVector<acorn::Var*, 32>   acorn::IRGenerator::incomplete_global_variables;
+llvm::SmallVector<acorn::Struct*, 4> acorn::IRGenerator::structs_needing_implicit_functions;
+llvm::BasicBlock*                    acorn::IRGenerator::ll_global_init_call_bb;
 
 acorn::IRGenerator::IRGenerator(Context& context)
     : context(context),
       ll_context(context.get_ll_context()),
       ll_module(context.get_ll_module()),
       builder(ll_context) {
+}
+
+void acorn::IRGenerator::clear_static_data() {
+    global_counter = 0;
+    incomplete_global_variables.clear();
+    structs_needing_implicit_functions.clear();
+    ll_global_init_call_bb = nullptr;
 }
 
 void acorn::IRGenerator::gen_function(Func* func) {
@@ -548,7 +557,15 @@ void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
     }
 }
 
-void acorn::IRGenerator::gen_implicit_struct_functions(Struct* structn) {
+void acorn::IRGenerator::gen_implicit_structs_functions() {
+    for (Struct* structn : structs_needing_implicit_functions) {
+        if (structn->ll_default_constructor) {
+            gen_default_constructor(structn);
+        }
+    }
+}
+
+void acorn::IRGenerator::gen_default_constructor(Struct* structn) {
     if (!structn->ll_default_constructor) {
         gen_default_constructor_decl(structn);
     }
@@ -1810,6 +1827,7 @@ void acorn::IRGenerator::gen_default_constructor_decl(Struct* structn) {
 void acorn::IRGenerator::gen_default_constructor_call(llvm::Value* ll_address, Struct* structn) {
     if (!structn->ll_default_constructor) {
         gen_default_constructor_decl(structn);
+        structs_needing_implicit_functions.push_back(structn);
     }
     builder.CreateCall(structn->ll_default_constructor, ll_address);
 }
