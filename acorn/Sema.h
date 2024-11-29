@@ -50,7 +50,8 @@ namespace acorn {
         TypeTable&  type_table;
 
         Func*   cur_func;
-        Var*  cur_global_var = nullptr;
+        Var*    cur_global_var = nullptr;
+        Struct* cur_struct = nullptr;
 
         bool is_comptime_if_cond = false;
 

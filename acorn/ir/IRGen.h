@@ -47,6 +47,7 @@ namespace acorn {
         llvm::IRBuilder<>  builder;
 
         Func*           cur_func;
+        Struct*         cur_struct;
         llvm::Function* ll_cur_func;
         // If there are multiple returns this is a block that
         // multiple return statements will jump to.
@@ -61,6 +62,10 @@ namespace acorn {
             // address then jump to the return block (ll_ret_block).
             llvm::Value* ll_ret_addr;
         };
+
+        // When generating code inside a member function this is a pointer
+        // to the struct.
+        llvm::Value* ll_this;
 
         llvm::SmallVector<llvm::BasicBlock*, 8> loop_break_stack;
         llvm::SmallVector<llvm::BasicBlock*, 8> loop_continue_stack;

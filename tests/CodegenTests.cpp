@@ -916,5 +916,25 @@ void test_codegen() {
                 expect(result, std::identity()).to_be("ABCD"); 
             });
         });
+        section("member functions", [&] {
+            test("Member function sets field", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("W"); 
+            });
+            test("Member function returns bg aggr type", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Lets go!"); 
+            });
+            test("Member function returns sm aggr type", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB"); 
+            });
+        });
     });
 }

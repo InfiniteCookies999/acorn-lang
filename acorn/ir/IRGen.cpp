@@ -160,6 +160,10 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     auto ll_ret_type = gen_function_return_type(func, is_main);
 
     // Creating the parameter types.
+    if (func->structn) {
+        ll_param_types.push_back(builder.getPtrTy());
+    }
+
     if (func->uses_aggr_param) {
         ll_param_types.push_back(builder.getPtrTy());
     }
@@ -214,6 +218,9 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     };
 
     size_t param_idx = 0;
+    if (func->structn) {
+        auto ll_param = assign_param_info(param_idx++, "this");
+    }
     if (func->uses_aggr_param) {
         auto ll_param = assign_param_info(param_idx, "aggr.ret.addr");
         // Add noalias attribute which tells the compiler no other pointer
@@ -250,6 +257,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     if (func->has_modifier(Modifier::Native)) return;
 
     cur_func    = func;
+    cur_struct  = func->structn;
     ll_cur_func = func->ll_func;
 
     auto ll_entry = gen_bblock("entry.block", ll_cur_func);
@@ -275,6 +283,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 
     // Allocating and storing incoming variables.
     unsigned int param_idx = 0;
+    if (func->structn) {
+        ll_this = ll_cur_func->getArg(param_idx++);
+    }
     if (func->uses_aggr_param) {
         ll_ret_addr = ll_cur_func->getArg(param_idx++);
     }
@@ -569,6 +580,8 @@ void acorn::IRGenerator::gen_default_constructor(Struct* structn) {
     if (!structn->ll_default_constructor) {
         gen_default_constructor_decl(structn);
     }
+
+    cur_struct = structn;
 
     ll_cur_func = structn->ll_default_constructor;
 
@@ -1108,6 +1121,11 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
             return ll_value;
         }
 
+        if (var->is_field()) {
+            auto ll_struct_type = gen_type(cur_struct->struct_type);
+            return builder.CreateStructGEP(ll_struct_type, ll_this, var->field_idx);
+        }
+
         if (var->is_global) {
             gen_global_variable_decl(var);
         }
@@ -1205,14 +1223,32 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
     };
 
     llvm::SmallVector<llvm::Value*> ll_args;
+    bool is_member_func = call->called_func && call->called_func->structn;
     size_t ll_num_args = call->called_func ? call->called_func->params.size()
                                            : call->args.size();
     size_t arg_offset = 0;
     
+    if (is_member_func) {
+        ++ll_num_args;
+    }
     if (uses_aggr_param) {
         ++ll_num_args;
     }
     ll_args.resize(ll_num_args);
+
+    // Pass the address of the struct for the member function.
+    if (is_member_func) {
+        // When a member function is called from a variable the
+        // function call has the dot operator as its child. Otherwise
+        // the member function must be a call from the current function
+        // where the current function is a member function of the same
+        // struct.
+        //
+        bool from_dot_op = call->site->is(NodeKind::DotOperator);
+        llvm::Value* ll_in_this = from_dot_op ? gen_node(as<DotOperator*>(call->site)->site)
+                                              : ll_this;
+        ll_args[arg_offset++] = ll_in_this;
+    }
 
     // Pass the return address as an argument.
     if (uses_aggr_param) {

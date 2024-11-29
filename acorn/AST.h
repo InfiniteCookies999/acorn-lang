@@ -25,6 +25,7 @@ namespace acorn {
     class Logger;
     class StructType;
     struct ComptimeIfStmt;
+    struct Struct;
 
     const size_t MAX_FUNC_PARAMS = 64;
 
@@ -147,6 +148,9 @@ namespace acorn {
     struct Func : Decl {
         Func() : Decl(NodeKind::Func) {
         }
+
+        // If not null then the function is a member function.
+        Struct* structn = nullptr;
 
         llvm::Function* ll_func = nullptr;
 

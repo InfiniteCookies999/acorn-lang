@@ -476,6 +476,12 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
             structn->nspace->add_variable(var);
             structn->fields.push_back(var);
         }
+    } else if (node->is(NodeKind::Func)) {
+        auto func = as<Func*>(node);
+        if (func->name != Identifier::Invalid) {
+            structn->nspace->add_function(func);
+            func->structn = structn;
+        }
     } else {
         modl.mark_bad_scope(ScopeLocation::Struct, node, logger);
     }

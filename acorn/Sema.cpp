@@ -686,6 +686,12 @@ void acorn::Sema::check_function(Func* func) {
 
     if (func->has_modifier(Modifier::Native)) return;
 
+    Struct* prev_struct;
+    if (func->structn) {
+        prev_struct = cur_struct;
+        cur_struct = func->structn;
+    }
+
     // -- debug
     // Logger::debug("checking function: %s", func->name);
 
@@ -713,6 +719,10 @@ void acorn::Sema::check_function(Func* func) {
 
     if (uses_implicit_return) {
         ++func->num_returns;
+    }
+
+    if (func->structn) {
+        cur_struct = prev_struct;
     }
 }
 
@@ -829,6 +839,9 @@ void acorn::Sema::check_variable(Var* var) {
 
 void acorn::Sema::check_struct(Struct* structn) {
     
+    auto prev_struct = cur_struct;
+    cur_struct = structn;
+
     structn->is_being_checked = true;
     structn->has_been_checked = true; // Set early to prevent circular checking.
 
@@ -836,7 +849,6 @@ void acorn::Sema::check_struct(Struct* structn) {
     for (Var* field : structn->fields) {
 
         field->field_idx = field_count++;
-
 
         check_variable(field);
         if (!field->type) {
@@ -848,6 +860,9 @@ void acorn::Sema::check_struct(Struct* structn) {
     }
 
     structn->is_being_checked = false;
+
+    cur_struct = prev_struct;
+
 }
 
 void acorn::Sema::check_return(ReturnStmt* ret) {
@@ -1789,6 +1804,13 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
 
     auto find_function = [=, this]() finline {
         if (same_nspace) {
+            if (cur_struct) {
+                if (auto* funcs = cur_struct->nspace->find_functions(ref->ident)) {
+                    ref->set_funcs_ref(funcs);
+                    return;
+                }
+            }
+
             if (auto* funcs = file->find_functions(ref->ident)) {
                 ref->set_funcs_ref(funcs);
                 return;
@@ -1809,6 +1831,13 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         if (same_nspace) {
             if (cur_scope) {
                 if (auto* var = cur_scope->find_variable(ref->ident)) {
+                    ref->set_var_ref(var);
+                    return;
+                }
+            }
+
+            if (cur_struct) {
+                if (auto* var = cur_struct->nspace->find_variable(ref->ident)) {
                     ref->set_var_ref(var);
                     return;
                 }
@@ -2512,7 +2541,8 @@ bool acorn::Sema::ensure_struct_checked(SourceLoc error_loc, Struct* structn) {
         return false;
     }
     if (!structn->has_been_checked) {
-        check_struct(structn);
+        Sema sema(context, structn->file, structn->get_logger());
+        sema.check_struct(structn);
     }
     return true;
 }
