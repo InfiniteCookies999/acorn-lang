@@ -947,6 +947,18 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("W"); 
             });
+            test("Member function calls another member function", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("W"); 
+            });
+            test("Member function calls another member function with this ptr", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions7.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("W"); 
+            });
         });
     });
 }
