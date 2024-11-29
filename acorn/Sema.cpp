@@ -1787,6 +1787,12 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
             return;
         }
 
+        if (expr->is(NodeKind::This)) {
+            error(expand(unary_op), "Cannot dereference 'this' ptr")
+                .end_error(ErrCode::SemaCannotDereferenceThisPtr);
+            return;
+        }
+
         unary_op->type = as<PointerType*>(expr->type)->get_elm_type();
         unary_op->is_foldable = false;
         break;
