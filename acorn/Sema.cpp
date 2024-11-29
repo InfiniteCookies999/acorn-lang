@@ -684,6 +684,17 @@ bool acorn::Sema::check_comptime_cond(Expr* cond) {
 
 void acorn::Sema::check_function(Func* func) {
 
+    if (func->structn) {
+        if (func->has_modifier(Modifier::Native)) {
+            error(func->get_modifier_location(Modifier::Native), "Member function cannot have native modifier")
+                .end_error(ErrCode::SemaMemberFuncHasNativeModifier);
+        }
+        if (func->has_modifier(Modifier::DllImport)) {
+            error(func->get_modifier_location(Modifier::DllImport), "Member function cannot have dllimport modifier")
+                .end_error(ErrCode::SemaMemberFuncHasDllimportModifier);
+        }
+    }
+
     if (func->has_modifier(Modifier::Native)) return;
 
     Struct* prev_struct;
@@ -737,7 +748,7 @@ void acorn::Sema::check_variable(Var* var) {
 
     // Reporting errors if the variable is local to a function and has
     // modifiers.
-    if (!var->is_global && var->modifiers) {
+    if (!var->is_global && !var->is_field() && var->modifiers) {
         for (uint32_t modifier = Modifier::Start;
                       modifier != Modifier::End; modifier *= 2) {
             if (var->modifiers & modifier) {
@@ -849,6 +860,15 @@ void acorn::Sema::check_struct(Struct* structn) {
     for (Var* field : structn->fields) {
 
         field->field_idx = field_count++;
+
+        if (field->has_modifier(Modifier::Native)) {
+            error(field->get_modifier_location(Modifier::Native), "Field cannot have native modifier")
+                .end_error(ErrCode::SemaFieldHasNativeModifier);
+        }
+        if (field->has_modifier(Modifier::DllImport)) {
+            error(field->get_modifier_location(Modifier::DllImport), "Field cannot have dllimport modifier")
+                .end_error(ErrCode::SemaFieldHasDllimportModifier);
+        }
 
         check_variable(field);
         if (!field->type) {

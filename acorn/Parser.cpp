@@ -481,6 +481,7 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
         if (func->name != Identifier::Invalid) {
             structn->nspace->add_function(func);
             func->structn = structn;
+            context.add_unchecked_decl(func);
         }
     } else {
         modl.mark_bad_scope(ScopeLocation::Struct, node, logger);
