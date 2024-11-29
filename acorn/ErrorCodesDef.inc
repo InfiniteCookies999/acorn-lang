@@ -124,6 +124,7 @@ X(SemaFieldHasNativeModifier               , 20078)
 X(SemaFieldHasDllimportModifier            , 20079)
 X(SemaMemberFuncHasNativeModifier          , 20080)
 X(SemaMemberFuncHasDllimportModifier       , 20081)
+X(SemaThisNotInStruct                      , 20082)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

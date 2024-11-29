@@ -656,6 +656,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_switch(as<SwitchStmt*>(node));
     case NodeKind::StructInitializer:
         return check_struct_initializer(as<StructInitializer*>(node));
+    case NodeKind::This:
+        return check_this(as<This*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -1270,6 +1272,17 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
 
     initializer->is_foldable = false;
     initializer->type = structn->struct_type;
+}
+
+void acorn::Sema::check_this(This* thisn) {
+    if (!cur_struct) {
+        error(thisn, "Cannot use 'this' pointer outside a struct")
+            .end_error(ErrCode::SemaThisNotInStruct);
+        return;
+    }
+    
+    thisn->type = type_table.get_ptr_type(cur_struct->struct_type);
+    thisn->is_foldable = false;
 }
 
 acorn::Sema::SemScope acorn::Sema::push_scope() {
@@ -1969,11 +1982,12 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         dot->is_foldable = dot->site->is_foldable;
     }
 
-    if (dot->ident == context.length_identifier && dot->site->type->is_array()) {
-        dot->is_array_length = true;
-        dot->type = context.int_type;
-    } else if (dot->site->type->is_struct_type()) {
-        auto struct_type = as<StructType*>(dot->site->type);
+    auto report_error_cannot_access_field = [this, dot]() finline {
+        error(expand(dot), "Cannot access field '%s' of type '%s'", dot->ident, dot->site->type)
+            .end_error(ErrCode::SemaDotOperatorCannotAccessType);
+    };
+
+    auto check_struct_ident_ref = [this, dot, is_for_call](StructType* struct_type) finline {
         auto structn = struct_type->get_struct();
         check_ident_ref(dot, structn->nspace, is_for_call);
 
@@ -1985,9 +1999,25 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             // The constness must be passed onto the field to prevent modification of fields.
             dot->type = type_table.get_const_type(dot->type);
         }
+    };
+
+    if (dot->ident == context.length_identifier && dot->site->type->is_array()) {
+        dot->is_array_length = true;
+        dot->type = context.int_type;
+    } else if (dot->site->type->is_struct_type()) {
+        auto struct_type = as<StructType*>(dot->site->type);
+        check_struct_ident_ref(struct_type);
+    } else if (dot->site->type->is_pointer()) {
+        auto ptr_type = as<PointerType*>(dot->site->type);
+        auto elm_type = ptr_type->get_elm_type();
+        if (elm_type->is_struct_type()) {
+            auto struct_type = as<StructType*>(elm_type);
+            check_struct_ident_ref(struct_type);
+        } else {
+            report_error_cannot_access_field();
+        }
     } else {
-        error(expand(dot), "Cannot access field '%s' of type '%s'", dot->ident, dot->site->type)
-            .end_error(ErrCode::SemaDotOperatorCannotAccessType);
+        report_error_cannot_access_field();
     }
 }
 

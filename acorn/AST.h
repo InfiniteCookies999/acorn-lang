@@ -64,6 +64,7 @@ namespace acorn {
         Null,
         Cast,
         Array,
+        This,
         ExprEnd
 
     };
@@ -579,6 +580,11 @@ namespace acorn {
         }
 
         llvm::SmallVector<Expr*, 8> elms;
+    };
+
+    struct This : Expr {
+        This() : Expr(NodeKind::This) {
+        }
     };
 }
 

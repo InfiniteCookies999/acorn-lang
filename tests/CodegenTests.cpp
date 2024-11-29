@@ -935,6 +935,18 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("AB"); 
             });
+            test("Member functions sets field with this ptr", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("W"); 
+            });
+            test("Member functions returns pointer to self and inline field access", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("W"); 
+            });
         });
     });
 }

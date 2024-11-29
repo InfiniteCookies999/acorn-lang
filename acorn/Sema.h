@@ -100,6 +100,7 @@ namespace acorn {
         void check_loop_scope(ScopeStmt* scope, SemScope* sem_scope);
         void check_switch(SwitchStmt* switchn);
         void check_struct_initializer(StructInitializer* initializer);
+        void check_this(This* thisn);
 
         SemScope push_scope();
         void pop_scope();

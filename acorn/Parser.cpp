@@ -1798,6 +1798,11 @@ acorn::Expr* acorn::Parser::parse_term() {
         cast->value = parse_postfix();
         return cast;
     }
+    case Token::KwThis: {
+        This* thisn = new_node<This>(cur_token);
+        next_token();
+        return thisn;
+    }
     default:
         error("Expected an expression")
             .end_error(ErrCode::ParseExpectedExpression);

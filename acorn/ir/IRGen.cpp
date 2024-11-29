@@ -88,6 +88,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_switch(as<SwitchStmt*>(node));
     case NodeKind::StructInitializer:
         return gen_struct_initializer(as<StructInitializer*>(node), nullptr);
+    case NodeKind::This:
+        return gen_this(as<This*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -1072,6 +1074,10 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
     return ll_dest_addr;
 }
 
+llvm::Value* acorn::IRGenerator::gen_this(This* thisn) {
+    return ll_this;
+}
+
 llvm::Value* acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
     for (Node* stmt : *scope) {
         gen_node(stmt);
@@ -1573,20 +1579,23 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
-    if (dot->is_array_length) {
-        auto arr_type = as<ArrayType*>(dot->site->type);
-        return builder.getInt32(arr_type->get_length());
-    } else if (dot->site->type->is_struct_type()) {
-        auto ll_struct_type = gen_type(dot->site->type);
-        auto ll_struct_address = gen_node(dot->site);
+
+    auto gen_struct_type_access = [this, dot](StructType* struct_type) finline{
+        auto site = dot->site;
+
+        auto ll_struct_type = gen_type(struct_type);
+        auto ll_struct_address = gen_node(site);
         
-        if (dot->site->is(NodeKind::FuncCall)) {
-            auto call = as<FuncCall*>(dot->site);
+        if (site->is(NodeKind::FuncCall)) {
+            auto call = as<FuncCall*>(site);
             bool uses_aggr_int_ret = false;
             if (!call->site->type->is_function_type()) {
                 uses_aggr_int_ret = call->called_func->ll_aggr_int_ret_type;
             }
 
+            // Note: We do not need to allocate the object if the function call
+            //       returns a parameter aggregate value because gen_function_call
+            //       will create an allocation in that case for us.
             if (uses_aggr_int_ret) {
                 // Because the function returned an integer rather than the struct we
                 // must create a temporary struct, cast the int into the struct, then
@@ -1598,9 +1607,32 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
             }
         }
 
+        // Automatically dereferencing pointers.
+        if (site->type->is_pointer() &&
+            site->is_not(NodeKind::Cast) &&     // Casting call 'gen_rvalue' so there is no address to load.
+            site->is_not(NodeKind::FuncCall) && // There is no address to load.
+            site->is_not(NodeKind::This)        // The 'this' pointer has no address.
+            ) {
+            ll_struct_address = builder.CreateLoad(builder.getPtrTy(), ll_struct_address);
+        }
 
         auto field = dot->var_ref;
         return builder.CreateStructGEP(ll_struct_type, ll_struct_address, field->field_idx);
+    };
+
+    if (dot->is_array_length) {
+        auto arr_type = as<ArrayType*>(dot->site->type);
+        return builder.getInt32(arr_type->get_length());
+    } else if (dot->site->type->is_struct_type()) {
+        return gen_struct_type_access(as<StructType*>(dot->site->type));
+    } else if (dot->site->type->is_pointer()) {
+        auto ptr_type = as<PointerType*>(dot->site->type);
+        auto elm_type = ptr_type->get_elm_type();
+        if (elm_type->is_struct_type()) {
+            return gen_struct_type_access(as<StructType*>(elm_type));
+        } else {
+            return gen_ident_reference(dot);
+        }
     } else {
         return gen_ident_reference(dot);
     }
