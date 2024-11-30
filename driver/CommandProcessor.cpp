@@ -127,13 +127,13 @@ template<class... Ts>
 overloaded(Ts...) -> overloaded<Ts...>;
 
 int CommandLineProcessor::process(llvm::StringRef flag_name, int idx) {
-
-
+    
     for (Flag& flag : flags) {
+        
         if (flag.only_starts_with) {
             if (!flag_name.starts_with(flag.flag_name) &&
-                std::ranges::find_if(flag.aliases, [flag_name, &flag](llvm::StringRef alias) {
-                    return alias.starts_with(flag.flag_name);
+                std::ranges::find_if(flag.aliases, [flag_name](llvm::StringRef alias) {
+                    return flag_name.starts_with(alias);
                 }) == flag.aliases.end()) {
                 continue;
             }

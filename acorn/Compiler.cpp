@@ -382,11 +382,11 @@ void acorn::Compiler::link() {
     };
 
     auto get_libs = [this] {
-        // ucrt.lib     -- dll standard C lib
+        // ucrt.lib     -- dynamic standard C lib.
         // libucrt.lib  -- static standard C lib
 
-        // libcmt.lib  -- static CRT startup
-        // msvcrt.lib  -- static CRT to work with dll ucrt and vcruntime.
+        // libcmt.lib  -- static CRT.
+        // msvcrt.lib  -- dynamic CRT.
         std::wstring libs = L"msvcrt.lib ucrt.lib kernel32.lib user32.lib shell32.lib gdi32.lib ";
         for (const std::wstring& lib : libraries) {
             libs += lib.ends_with(L".lib") ? lib : lib + L".lib ";

@@ -1900,6 +1900,7 @@ namespace acorn {
         case 'r':  return '\r';
         case 't':  return '\t';
         case 'v':  return '\v';
+        case '0':  return '\0';
         default:   return c;
         }
     }
@@ -2019,7 +2020,7 @@ acorn::Expr* acorn::Parser::parse_char_literal() {
         character->value_u64 = parse_unicode_value<char32_t>(ptr, ptr + 8);
         character->type = context.char32_type;
     } else if (*ptr == '\\') {
-        character->value_u64 = get_escape_char(*ptr);
+        character->value_u64 = get_escape_char(*(ptr + 1));
         character->type = context.char_type;
     } else {
         character->value_u64 = *ptr;

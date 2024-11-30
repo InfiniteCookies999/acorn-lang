@@ -2404,10 +2404,10 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
 
     bool named_args_out_of_order = false;
     uint32_t named_arg_high_idx = 0;
-    for (size_t i = 0; i < num_params; i++) {
+    for (size_t i = 0; i < args.size(); i++) {
         
         Expr* arg_value = args[i];
-        Var* param;
+        Var* param = nullptr;
 
         if (arg_value->is(NodeKind::NamedValue)) {
             

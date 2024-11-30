@@ -1820,7 +1820,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
         if (from_type->is_integer() || from_type->is_bool()) {
             return builder.CreateIntCast(ll_value, gen_type(to_type), to_type->is_signed(), "cast");
         } else if (from_type->is_real_pointer()) {
-            return builder.CreateIntToPtr(ll_value, gen_type(to_type), "cast");
+            return builder.CreatePtrToInt(ll_value, gen_type(to_type), "cast");
         } else if (from_type->is_float()) {
             if (to_type->is_signed()) {
                 return builder.CreateFPToSI(ll_value, gen_type(to_type), "cast");
@@ -1850,6 +1850,8 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
     }
     case TypeKind::Function: {
         if (from_type->get_kind() == TypeKind::FuncsRef) {
+            return ll_value;
+        } else if (from_type->is_pointer()) {
             return ll_value;
         }
 
@@ -2094,5 +2096,5 @@ llvm::AllocaInst* acorn::IRGenerator::gen_unseen_alloca(llvm::Type* ll_type, llv
 bool acorn::IRGenerator::is_decayed_array(Expr* arr) {
     if (arr->is_not(NodeKind::IdentRef)) return false;
     auto ref = as<IdentRef*>(arr);
-    return ref->is_var_ref() && ref->var_ref->is_param();
+    return ref->is_var_ref() && ref->var_ref->is_param() && ref->type->is_array();
 }

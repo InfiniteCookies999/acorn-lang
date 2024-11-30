@@ -66,6 +66,20 @@ native dllimport int32 WriteFile(void*       hFile,
                                  uint32*     lpNumberOfBytesWritten,
                                  void*       lpOverlapped);
 
+native dllimport int32 ReadFile(void*   hFile,
+                                void*   lpBuffer,
+                                uint32  nNumberOfBytesToRead,
+                                uint32* lpNumberOfBytesRead,
+                                void*   lpOverlapped);
+
+native dllimport void* CreateFileA(const char* lpFileName,
+                                   uint32      dwDesiredAccess,
+                                   uint32      dwShareMode,
+                                   void*       lpSecurityAttributes,
+                                   uint32      dwCreationDisposition,
+                                   uint32      dwFlagsAndAttributes,
+                                   void*       hTemplateFile);
+
 native dllimport uint32 GetFileAttributesA(const char* lpFileName);
 
 #endif

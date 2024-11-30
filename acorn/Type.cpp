@@ -183,11 +183,13 @@ acorn::Type* acorn::FunctionType::create(PageAllocator& allocator,
 std::string acorn::FunctionType::to_string() const {
     std::string str = key->return_type->to_string() + "!";
     str += "(";
+    size_t count = 0;
     for (Type* type : key->param_types) {
         str += type->to_string();
-        if (type != key->param_types.back()) {
+        if (count != key->param_types.size() - 1) {
             str += ", ";
         }
+        ++count;
     }
     str += ")";
     return str;

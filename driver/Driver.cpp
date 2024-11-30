@@ -37,10 +37,10 @@ R"(
 Usage: acorn <options> <sources>
 Options:
 
-    -o, -out-name, -output-name=<name>
+    -o=<name>, -out-name, -output-name
         Sets the name of the executable.
     
-    -d, -directory, -out-directory, -output-directory=<dir>
+    -d=<dir>, -directory, -out-directory, -output-directory
         Sets the directory to place the output files such as
         the executable. Will create the director(ies) if they
         do not exist.
