@@ -627,11 +627,16 @@ static ParseData parse_float_data(PageAllocator& allocator, llvm::StringRef text
     size_t idx = 0;
     size_t length = text.size();
 
-    bool is_negative = text[0] == '-';
-    if (is_negative) {
+    bool is_negative = false;
+    bool has_sign = false;
+    if (text[0] == '+') {
         ++idx;
+        has_sign = true;
+    } else if (text[0] == '-') {
+        ++idx;
+        is_negative = true;
+        has_sign = true;
     }
-   
 
     // Consuming leading zeros.
     //
@@ -741,7 +746,7 @@ static ParseData parse_float_data(PageAllocator& allocator, llvm::StringRef text
     }
 
     size_t  digits_count = big_digits_count + small_digits_count;
-    int64_t exp = seen_decimal_pt ? decimal_idx - leading_zeros_count - seperator_count_bef_dot - (is_negative ? 1 : 0)
+    int64_t exp = seen_decimal_pt ? decimal_idx - leading_zeros_count - seperator_count_bef_dot - (has_sign ? 1 : 0)
                                   : digits_count + trailing_zero_count;
 
     // Consuming the optional exponent.
@@ -1087,7 +1092,7 @@ void acorn::initialize_float_parsing(PageAllocator& allocator) {
 
 std::pair<float, acorn::FloatParseError>
 acorn::parse_float32_bits(PageAllocator& allocator, llvm::StringRef text) {
-    
+
     auto parse_data = parse_float_data(allocator, text, MAX_SMALL_SINGLE_DIGITS);
     if (parse_data.error != FloatParseError::None) {
         return { 0.0f, parse_data.error };

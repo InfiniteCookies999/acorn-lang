@@ -323,7 +323,8 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
         gen_branch_if_not_term(ll_ret_block);
         builder.SetInsertPoint(ll_ret_block);
     
-        if (!func->uses_aggr_param) {
+        if (!func->uses_aggr_param &&
+            func->return_type->is_not(context.void_type) && !is_main) {
             // The return value returns to an address so need to load
             // the value.
             auto ll_load_type = is_main ? llvm::Type::getInt32Ty(ll_context) : gen_type(func->return_type);
@@ -1250,9 +1251,18 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         // where the current function is a member function of the same
         // struct.
         //
-        bool from_dot_op = call->site->is(NodeKind::DotOperator);
-        llvm::Value* ll_in_this = from_dot_op ? gen_node(as<DotOperator*>(call->site)->site)
-                                              : ll_this;
+        llvm::Value* ll_in_this;
+        if (call->site->is(NodeKind::DotOperator)) {
+            auto dot_operator = as<DotOperator*>(call->site);
+            ll_in_this = gen_node(dot_operator->site);
+            if (dot_operator->site->type->is_pointer()) {
+                // The function call auto-dereferences the pointer.
+                ll_in_this = builder.CreateLoad(builder.getPtrTy(), ll_in_this);
+            }
+        } else {
+            ll_in_this = ll_this;
+        }
+
         ll_args[arg_offset++] = ll_in_this;
     }
 

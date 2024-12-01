@@ -1426,28 +1426,28 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     };
 
     auto get_number_type = [=](bool enforce_lhs) finline -> Type* {
-        // TODO: If one of the types is a float and the other an integer
+        // TODO: If one of the types is a float and the other an integer 
         //       we may want the bitwidth to be less than or equal to the
         //       size of the float for the integer.
         
         if (lhs->type->is_float()) {
-            if (rhs->type->is_float() && 
-                rhs->type->get_number_of_bits() != lhs->type->get_number_of_bits()) {
-                return nullptr;
-            } else if (!rhs->type->is_integer()) {
-                return nullptr;
+            if (rhs->type->is_float()) {
+                if (rhs->type->get_number_of_bits() == lhs->type->get_number_of_bits()) {
+                    return lhs->type->remove_all_const();
+                }
+            } else if (rhs->type->is_integer()) {
+                return lhs->type->remove_all_const();
             }
-
-            return lhs->type->remove_all_const();
+            return nullptr;
         } else if (rhs->type->is_float()) {
-            if (lhs->type->is_float() &&
-                lhs->type->get_number_of_bits() != rhs->type->get_number_of_bits()) {
-                return nullptr;
-            } else if (!lhs->type->is_integer()) {
-                return nullptr;
+            if (lhs->type->is_float()) {
+                if (lhs->type->get_number_of_bits() == rhs->type->get_number_of_bits()) {
+                    return rhs->type->remove_all_const();
+                }
+            } else if (lhs->type->is_integer()) {
+                return rhs->type->remove_all_const();
             }
-            
-            return rhs->type->remove_all_const();
+            return nullptr;
         }
         return get_integer_type(enforce_lhs);
     };
@@ -1933,12 +1933,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
             break;
         }
         
-        if (var_ref->type->is_integer() && var_ref->type->is_const()) {
-            ref->is_foldable = true;
-        } else {
-            ref->is_foldable = false;
-        }
-
+        ref->is_foldable = var_ref->is_foldable;
         ref->type = var_ref->type;
         break;
     }
@@ -2461,8 +2456,8 @@ void acorn::Sema::check_cast(Cast* cast) {
     
     check_and_verify_type(cast->value);
     if (!is_castable_to(cast->explicit_cast_type, cast->value)) {
-        error(expand(cast), "Cannot cast to type '%s' from '%s'",
-              cast->explicit_cast_type, cast->value->type)
+        error(expand(cast), "Cannot cast from '%s' to '%s'",
+              cast->value->type, cast->explicit_cast_type)
             .end_error(ErrCode::SemaInvalidCast);
     }
 }
@@ -2762,6 +2757,10 @@ bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) const {
         }
         // Pointers and numbers can cast to each other.
         return true;
+    } else if (to_type->is_integer()) {
+        return expr->type->is_number() || expr->type->is_real_pointer();
+    } else if (to_type->is_float()) {
+        return expr->type->is_number();
     } else {
         return is_assignable_to(to_type, expr);
     }

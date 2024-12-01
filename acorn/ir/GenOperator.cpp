@@ -235,25 +235,25 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
     // Comparisons Operators
     // -------------------------------------------
     case '>':
-        if (bin_op->type->is_float())
+        if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOGT(ll_lhs, ll_rhs, "gt");
         if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
             return builder.CreateICmpSGT(ll_lhs, ll_rhs, "gt");
         else return builder.CreateICmpUGT(ll_lhs, ll_rhs, "gt");
     case '<':
-        if (bin_op->type->is_float())
+        if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOLT(ll_lhs, ll_rhs, "gt");
         if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
             return builder.CreateICmpSLT(ll_lhs, ll_rhs, "lt");
         else return builder.CreateICmpULT(ll_lhs, ll_rhs, "lt");
     case Token::GtEq:
-        if (bin_op->type->is_float())
+        if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOGE(ll_lhs, ll_rhs, "gt");
         if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
             return builder.CreateICmpSGE(ll_lhs, ll_rhs, "gte");
         else return builder.CreateICmpUGE(ll_lhs, ll_rhs, "gte");
     case Token::LtEq:
-        if (bin_op->type->is_float())
+        if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOLE(ll_lhs, ll_rhs, "gt");
         if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
             return builder.CreateICmpSLE(ll_lhs, ll_rhs, "lte");
@@ -292,7 +292,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
                 ll_value = builder.CreateInBoundsGEP(gen_type(elm_type), ll_value, gen_isize(1), "ptr.inc");
             } else {
                 if (type->is_signed())
-                    ll_value = builder.CreateNSWSub(ll_value, gen_one(type), "inc");
+                    ll_value = builder.CreateNSWAdd(ll_value, gen_one(type), "inc");
                 else ll_value = builder.CreateAdd(ll_value, gen_one(type), "inc");
             }
         } else {

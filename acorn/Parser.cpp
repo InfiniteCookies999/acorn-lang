@@ -242,10 +242,11 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool allow_func_decl, bool 
     Token peek3 = peek_token(2);
 
     if (
-        (peek1.is(Token::Identifier))    ||                                // ident ident
-        (peek1.is('*') && peek2.is('*') && peek3.is(Token::Identifier)) || // ident** ident
+        (peek1.is(Token::Identifier))    || // ident ident
+        (peek1.is('*') && peek2.is('*')) || // ident**
         (peek1.is('*') && peek2.is(Token::Identifier) &&
-                (peek3.is('=') || peek3.is(';') || peek3.is('(')))   // ident* ident =   or   ident* ident;   or ident* ident(
+                (peek3.is('=') || peek3.is(';') || peek3.is('('))) ||  // ident* ident =   or   ident* ident;   or ident* ident(
+        (peek1.is('*') && peek2.is('['))
         ) {
 
         if (allow_func_decl) {
