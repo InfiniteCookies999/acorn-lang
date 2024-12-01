@@ -1306,35 +1306,35 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         }
     }
 
-    // -- Debug
-    // if (!call->site->type->is_function_type()) {
-    //     Func* called_func = call->called_func;
-    //     std::string debug_info = "Calling function with name: " + called_func->name.reduce().str() + "\n";
-    //     debug_info += "         LLVM Types passed to function:  [";
-    //     for (auto ll_arg : ll_args) {
-    //         debug_info += to_string(ll_arg->getType());
-    //         if (ll_arg != ll_args.back()) {
-    //             debug_info += ", ";
-    //         }
-    //     }
-    //     debug_info += "]\n";
-    //     debug_info += "         Types expected by the function: [";
-    //     for (size_t count = 0; llvm::Argument & ll_arg : called_func->ll_func->args()) {
-    //         debug_info += to_string(ll_arg.getType());
-    //         if (count + 1 != called_func->ll_func->arg_size()) {
-    //             debug_info += ", ";
-    //         }
-    //         ++count;
-    //     }
-    //     debug_info += "]\n";
-    //     Logger::debug(debug_info.c_str());
-    // }
-
     llvm::Value* ll_ret;
     if (!call_func_type) {
+
+        // -- Debug
+        // Func* called_func = call->called_func;
+        // std::string debug_info = "Calling function with name: " + called_func->name.reduce().str() + "\n";
+        // debug_info += "         LLVM Types passed to function:  [";
+        // for (auto ll_arg : ll_args) {
+        //     debug_info += to_string(ll_arg->getType());
+        //     if (ll_arg != ll_args.back()) {
+        //         debug_info += ", ";
+        //     }
+        // }
+        // debug_info += "]\n";
+        // debug_info += "         Types expected by the function: [";
+        // for (size_t count = 0; llvm::Argument & ll_param : called_func->ll_func->args()) {
+        //     debug_info += to_string(ll_param.getType());
+        //     if (count + 1 != called_func->ll_func->arg_size()) {
+        //         debug_info += ", ";
+        //     }
+        //     ++count;
+        // }
+        // debug_info += "]\n";
+        // Logger::debug(debug_info.c_str());
+
         Func* called_func = call->called_func;
         ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
     } else {
+
         auto ll_site = gen_rvalue(call->site);
         
         auto func_type    = as<FunctionType*>(call->site->type);
@@ -1355,6 +1355,27 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
                 ll_param_types.push_back(gen_type(type));
             }
         }
+
+        // -- Debug
+        // std::string debug_info = "";
+        // debug_info += "LLVM Types passed to function:  [";
+        // for (auto ll_arg : ll_args) {
+        //     debug_info += to_string(ll_arg->getType());
+        //     if (ll_arg != ll_args.back()) {
+        //         debug_info += ", ";
+        //     }
+        // }
+        // debug_info += "]\n";
+        // debug_info += "Types expected by the function: [";
+        // for (size_t count = 0; llvm::Type* ll_type : ll_param_types) {
+        //     debug_info += to_string(ll_type);
+        //     if (count + 1 != ll_param_types.size()) {
+        //         debug_info += ", ";
+        //     }
+        //     ++count;
+        // }
+        // debug_info += "]\n";
+        // Logger::debug(debug_info.c_str());
 
         auto ll_func_type = llvm::FunctionType::get(ll_ret_type, ll_param_types, false);
         ll_ret = builder.CreateCall(ll_func_type, ll_site, ll_args);
@@ -1790,7 +1811,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
     switch (to_type->get_kind()) {
     case TypeKind::Pointer: {
         if (from_type->is_integer() || from_type->is_bool()) {
-            return builder.CreatePtrToInt(ll_value, builder.getPtrTy(), "cast");
+            return builder.CreateIntToPtr(ll_value, builder.getPtrTy(), "cast");
         } else if (from_type->is_real_pointer() || from_type->is(context.null_type)) {
             // Pointer to pointer doesn't need casting because of opaque pointers.
             return ll_value;

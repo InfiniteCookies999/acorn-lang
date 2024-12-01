@@ -224,10 +224,7 @@ void acorn::Compiler::sema_and_irgen() {
     for (auto& entry : context.get_modules()) {
         Sema::check_nodes_wrong_scopes(*entry.second);
     }
-    if (context.has_errors()) {
-        return;
-    }
-
+    
     if (context.has_errors()) {
         return;
     }

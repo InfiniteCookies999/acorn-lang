@@ -2131,6 +2131,8 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
             display_error();
             return;
         }
+
+        create_cast(arg, param_type);
     }
 
     call->type = func_type->get_return_type();
