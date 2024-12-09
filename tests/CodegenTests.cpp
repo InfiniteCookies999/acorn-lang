@@ -972,5 +972,43 @@ void test_codegen() {
                 expect(result, std::identity()).to_be("A"); 
             });
         });
+        section("Multi-variables in a line", [&] {
+            test("Multi-var assign 2 variables", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB"); 
+            });
+            test("Multi-var no 4 variables", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test2.ac")); 
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABAB"); 
+            });
+            test("Multi-var default assign", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB"); 
+            });
+            test("Multi-var struct type variables", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD"); 
+            });
+            test("Multi-var global vars", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB"); 
+            });
+            test("Multi-var struct fields", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB");
+            });
+        });
     });
 }

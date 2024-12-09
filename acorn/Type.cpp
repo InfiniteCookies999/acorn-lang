@@ -77,7 +77,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::AssignDeterminedArray:
                               return as<const AssignDeterminedArrayType*>(this)->to_string();
     default:
-        acorn_fatal("Type::to_string() missing to_string case");
+        acorn_fatal_fmt("Type::to_string() missing to_string case. Kind=%s", static_cast<int>(kind));
         return "";
     }
 #undef str

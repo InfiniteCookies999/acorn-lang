@@ -82,6 +82,14 @@ void acorn::Parser::parse() {
 }
 
 void acorn::Parser::add_global_node(Node* node) {
+
+    auto process_variable = [this](Var* var) finline {
+        if (var->name != Identifier::Invalid) {
+            context.add_unchecked_decl(var);
+            file->add_variable(var);
+        }
+    };
+
     if (node->is(NodeKind::Func)) {
             
         auto func = as<Func*>(node);
@@ -93,13 +101,14 @@ void acorn::Parser::add_global_node(Node* node) {
         if (func->name == context.main_identifier) {
             context.add_canidate_main_function(func);
         }
-    } else if (node->is(NodeKind::Var)) {
-
-        auto var = as<Var*>(node);
-        if (var->name != Identifier::Invalid) {
-            context.add_unchecked_decl(var);
-            file->add_variable(var);
+    } else if (node->is(NodeKind::VarList)) {
+        auto vlist = as<VarList*>(node);
+        for (auto var : vlist->list) {
+            process_variable(var);
         }
+        vlist->list.clear();
+    } else if (node->is(NodeKind::Var)) {
+        process_variable(as<Var*>(node));
     } else if (node->is(NodeKind::Struct)) {
 
         auto structn = as<Struct*>(node);
@@ -198,7 +207,7 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
     case Token::KwSwitch: return parse_switch();
     case Token::Identifier:
-        return parse_ident_decl_or_expr(true, true);
+        return parse_ident_decl_or_expr(false);
     case ModifierTokens:
         modifiers = parse_modifiers();
         if (cur_token.is(Token::KwStruct)) {
@@ -235,7 +244,7 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
 }
 
-acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool allow_func_decl, bool expects_semicolon) {
+acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
 
     Token peek1 = peek_token(0);
     Token peek2 = peek_token(1);
@@ -247,7 +256,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool allow_func_decl, bool 
         (peek1.is('*') && peek2.is('['))
         ) {
 
-        if (allow_func_decl) {
+        if (!is_for_expr) {
             return parse_decl(0, parse_type());
         } else {
             return parse_variable(0, parse_type());
@@ -278,7 +287,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool allow_func_decl, bool 
             auto type = construct_type_from_identifier(name_token, false);
             type = construct_array_type(type, indexes);
             type = parse_optional_function_type(type);
-            if (allow_func_decl) {
+            if (!is_for_expr) {
                 return parse_decl(0, type);
             } else {
                 return parse_variable(0, type);
@@ -302,18 +311,18 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool allow_func_decl, bool 
     }
 
     auto stmt = parse_assignment_and_expr();
-    if (expects_semicolon) {
+    if (!is_for_expr) {
         expect(';');
     }
     return stmt;
 }
 
-acorn::Decl* acorn::Parser::parse_decl(uint32_t modifiers, Type* type) {
+acorn::Node* acorn::Parser::parse_decl(uint32_t modifiers, Type* type) {
     if (cur_token.is(Token::Identifier)) {
         if (peek_token(0).is('(')) {
             return parse_function(modifiers, type);
         } else {
-            auto stmt = parse_variable(modifiers, type);
+            auto stmt = parse_variable_list(modifiers, type);
             expect(';');
             return stmt;
         }
@@ -402,10 +411,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
         func->scope = new_node<ScopeStmt>(cur_token);
         expect('{');
         while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
-            Node* stmt = parse_statement();
-            if (!stmt) continue;
-
-            func->scope->push_back(stmt);
+            add_node_to_scope(func->scope, parse_statement());
         }
         expect('}', "for function body");
     } else if (func->has_modifier(Modifier::Native)) {
@@ -422,7 +428,7 @@ acorn::Var* acorn::Parser::parse_variable() {
 }
 
 acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type) {
-    return parse_variable(modifiers, type, expect_identifier());
+    return parse_variable(modifiers, type, expect_identifier("for variable"));
 }
 
 acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identifier name) {
@@ -436,6 +442,25 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
     }
 
     return var;
+}
+
+acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers, Type* type) {
+    
+    auto vlist = &var_list;
+
+    bool more_variables = false;
+    do {
+
+        auto name = expect_identifier("for variable");
+        vlist->list.push_back(parse_variable(modifiers, type, name));
+
+        more_variables = cur_token.is(',');
+        if (more_variables) {
+            next_token();
+        }
+    } while (more_variables);
+
+    return vlist;
 }
 
 acorn::Struct* acorn::Parser::parse_struct() {
@@ -459,7 +484,7 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
         auto node = parse_statement();
         if (!node) continue;
 
-        add_node_to_struct(structn, node);
+        add_struct_node(structn, node);
     }
     expect('}', "for struct body");
 
@@ -468,13 +493,23 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
     return structn;
 }
 
-void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
-    if (node->is(NodeKind::Var)) {
-        auto var = as<Var*>(node);
+void acorn::Parser::add_struct_node(Struct* structn, Node* node) {
+    
+    auto process_var = [structn](Var* var) finline {
         if (var->name != Identifier::Invalid) {
             structn->nspace->add_variable(var);
             structn->fields.push_back(var);
         }
+    };
+    
+    if (node->is(NodeKind::Var)) {
+        process_var(as<Var*>(node));
+    } else if (node->is(NodeKind::VarList)) {
+        auto vlist = as<VarList*>(node);
+        for (auto var : vlist->list) {
+            process_var(var);
+        }
+        vlist->list.clear();
     } else if (node->is(NodeKind::Func)) {
         auto func = as<Func*>(node);
         if (func->name != Identifier::Invalid) {
@@ -590,7 +625,7 @@ acorn::IfStmt* acorn::Parser::parse_if() {
         break;
     case Token::Identifier: {
         allow_struct_initializer = false;
-        auto node = parse_ident_decl_or_expr(false, false);
+        auto node = parse_ident_decl_or_expr(true);
         if (node->is(NodeKind::Var)) {
             ifs->cond = node;
             if (cur_token.is(';')) {
@@ -640,9 +675,17 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
 
     auto add_statement = [this](Node* stmt) finline {
         if (cur_func) {
-            cur_func->scope->push_back(stmt);
+            if (stmt->is(NodeKind::VarList)) {
+                auto vlist = as<VarList*>(stmt);
+                for (auto var : vlist->list) {
+                    cur_func->scope->push_back(var);
+                }
+                vlist->list.clear();
+            } else {
+                cur_func->scope->push_back(stmt);
+            }
         } else if (cur_struct) {
-            add_node_to_struct(cur_struct, stmt);
+            add_struct_node(cur_struct, stmt);
         } else {
             add_global_node(stmt);
         }
@@ -672,6 +715,11 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
                     auto node = parse_statement();
                     if (node && can_take_else_path) {
                         add_statement(node);
+                    } else if (node && node->is(NodeKind::VarList)) {
+                        // We still have to clear the variable list because we called
+                         // parse_statement.
+                        auto vlist = as<VarList*>(node);
+                        vlist->list.clear();
                     }
                 }
             }
@@ -691,6 +739,11 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
                 auto node = parse_statement();
                 if (node && takes_path) {
                     add_statement(node);
+                } else if (node && node->is(NodeKind::VarList)) {
+                    // We still have to clear the variable list because we called
+                    // parse_statement.
+                    auto vlist = as<VarList*>(node);
+                    vlist->list.clear();
                 }
             }
         }
@@ -724,7 +777,7 @@ acorn::Node* acorn::Parser::parse_loop() {
         return loop_with_var(var);
     }
     case Token::Identifier: {
-        Node* expr = parse_ident_decl_or_expr(false, false);
+        Node* expr = parse_ident_decl_or_expr(true);
         if (expr->is(NodeKind::Var)) {
             Var* var = as<Var*>(expr);
             return loop_with_var(var);
@@ -858,9 +911,7 @@ acorn::SwitchStmt* acorn::Parser::parse_switch() {
 
         ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
         while (cur_token.is_not('}') && cur_token.is_not(Token::KwCase) && cur_token.is_not(Token::EOB)) {
-            if (Node* stmt = parse_statement()) {
-                scope->push_back(stmt);
-            }
+            add_node_to_scope(scope, parse_statement());
         }
 
         if (cond) {
@@ -879,22 +930,36 @@ acorn::SwitchStmt* acorn::Parser::parse_switch() {
 }
 
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
+    
     ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
+    
     if (cur_token.is('{')) {
         next_token(); // Consuming '{' token.
 
         while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
-            if (Node* stmt = parse_statement()) {
-                scope->push_back(stmt);
-            }
+            add_node_to_scope(scope, parse_statement());
         }
 
         expect('}', closing_for);
     } else {
         // Single statement scope.
-        scope->push_back(parse_statement());
+        add_node_to_scope(scope, parse_statement());
     }
     return scope;
+}
+
+void acorn::Parser::add_node_to_scope(ScopeStmt* scope, Node* node) {
+    if (!node) return;
+        
+    if (node->is(NodeKind::VarList)) {
+        auto vlist = as<VarList*>(node);
+        for (auto var : vlist->list) {
+            scope->push_back(var);
+        }
+        vlist->list.clear();
+    } else {
+        scope->push_back(node);
+    }
 }
 
 void acorn::Parser::parse_comptime_file_info() {

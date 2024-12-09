@@ -35,6 +35,7 @@ namespace acorn {
         
         Func,
         Var,
+        VarList,
         Struct,
 
         ReturnStmt,
@@ -222,6 +223,13 @@ namespace acorn {
         bool is_param() const { return param_idx != NotParam; }
         bool is_field() const { return field_idx != NotField; }
 
+    };
+
+    struct VarList : Node {
+        VarList() : Node(NodeKind::VarList) {
+        }
+
+        llvm::SmallVector<Var*> list;
     };
 
     struct Struct : Decl {

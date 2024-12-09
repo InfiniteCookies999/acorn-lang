@@ -43,6 +43,11 @@ namespace acorn {
         Token  peeked_tokens[MAX_PEEKED_TOKENS];
         size_t peeked_size = 0;
 
+        // A single variable list to temporarily
+        // place multiple variables that appear in
+        // a single line into.
+        VarList var_list;
+
         // Linkage name set by the native modifier.
         llvm::StringRef linkname;
 
@@ -59,8 +64,8 @@ namespace acorn {
         ImportStmt* parse_import();
 
         Node* parse_statement();
-        Node* parse_ident_decl_or_expr(bool allow_func_decl, bool expects_semicolon);
-        Decl* parse_decl(uint32_t modifiers, Type*);
+        Node* parse_ident_decl_or_expr(bool is_for_expr);
+        Node* parse_decl(uint32_t modifiers, Type*);
 
         template<typename D, bool uses_linkname>
         D* new_declaration(uint32_t modifiers, Identifier name, Token loc_token);
@@ -71,10 +76,11 @@ namespace acorn {
         Var* parse_variable();
         Var* parse_variable(uint32_t modifiers, Type* type);
         Var* parse_variable(uint32_t modifiers, Type* type, Identifier name);
+        VarList* parse_variable_list(uint32_t modifiers, Type* type);
 
         Struct* parse_struct();
         Struct* parse_struct(uint32_t modifiers, Identifier name);
-        void add_node_to_struct(Struct* structn, Node* node);
+        void add_struct_node(Struct* structn, Node* node);
 
         uint32_t parse_modifiers();
 
@@ -89,6 +95,7 @@ namespace acorn {
         SwitchStmt*        parse_switch();
 
         ScopeStmt* parse_scope(const char* closing_for = nullptr);
+        static void add_node_to_scope(ScopeStmt* scope, Node* node);
 
         void parse_comptime_file_info();
 

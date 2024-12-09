@@ -307,13 +307,6 @@ acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
 // Statement checking
 //--------------------------------------
 
-void acorn::Sema::check_for_duplicate_functions(Struct* structn, Context& context) {
-    check_for_duplicate_functions(structn->nspace, context);
-    for (auto [_, structn] : structn->nspace->get_structs()) {
-        check_for_duplicate_functions(structn, context);
-    }
-}
-
 void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& context) {
     nspace->set_duplicates_checked();
 
@@ -333,6 +326,10 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
                 }
             }
         }
+    }
+
+    for (auto [_, structn] : nspace->get_structs()) {
+        check_for_duplicate_functions(structn->nspace, context);
     }
 }
 
@@ -691,6 +688,12 @@ bool acorn::Sema::check_comptime_cond(Expr* cond) {
 void acorn::Sema::check_function(Func* func) {
 
     if (func->structn) {
+        // The function is a member function so need to check the fields first
+        // in case they are referenced.
+        if (!ensure_struct_checked(func->loc, func->structn)) {
+            return;
+        }
+
         if (func->has_modifier(Modifier::Native)) {
             error(func->get_modifier_location(Modifier::Native), "Member function cannot have native modifier")
                 .end_error(ErrCode::SemaMemberFuncHasNativeModifier);
@@ -1363,6 +1366,10 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
             }
 
             goto IncompleteStatementLab;
+        }
+        case NodeKind::VarList: {
+            acorn_fatal("Variable list used as scope node");
+            break;
         }
         default:
         IncompleteStatementLab:
@@ -2633,6 +2640,12 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
 
             Number* number = as<Number*>(expr);
 
+            // TODO: We want to allow for certain floats to be assignable such
+            //       as 1e+9 because those are even numbers.
+            if (from_type->is_float()) {
+                return false;
+            }
+
             auto does_fit_range = [to_type]<typename T>(T value) finline {
                 switch (to_type->get_kind()) {
                 // Signed cases
@@ -2644,7 +2657,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
                     return fits_in_range<int32_t>(value);
                 case TypeKind::Int64: return fits_in_range<int64_t>(value);
                 // Unsigned cases
-                case TypeKind::UInt8: case TypeKind::Char:                   
+                case TypeKind::UInt8: case TypeKind::Char:
                     return fits_in_range<uint8_t>(value);
                 case TypeKind::UInt16: case TypeKind::Char16:
                     return fits_in_range<uint16_t>(value);

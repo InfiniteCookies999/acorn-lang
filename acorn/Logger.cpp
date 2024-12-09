@@ -185,7 +185,7 @@ void acorn::Logger::info(const std::function<void()>& print_cb) {
 }
 
 
-void acorn::Logger::fatal_internal(const char* cpp_file, int line, const char* msg) {
+void acorn::Logger::fatal_internal(const char* cpp_file, int line, const std::function<void()>& print_cb) {
     std::string relative_file(cpp_file);
     size_t pos = relative_file.find_last_of("/\\");
     if (pos != std::string::npos) {
@@ -194,7 +194,9 @@ void acorn::Logger::fatal_internal(const char* cpp_file, int line, const char* m
 
     std::lock_guard<mtx_type> lock(mtx);
     fmt_print(StdErr, "\n[%sInternal Error%s] ", BrightRed, White);
-    fmt_print(StdErr, "@ (%s:%s) %s\n\n", relative_file, line, msg);
+    fmt_print(StdErr, "@ (%s:%s) ", relative_file, line);
+    print_cb();
+    print(StdErr, "\n\n");
     exit(1);
 }
 

@@ -24,7 +24,6 @@ namespace acorn {
         static bool is_potential_main_function(Context& context, const Func* canidate);
         static bool find_main_function(Context& context);
 
-        static void check_for_duplicate_functions(Struct* structn, Context& context);
         static void check_for_duplicate_functions(Namespace* nspace, Context& context);
         static bool check_for_duplicate_match(const Func* func1, const Func* func2);
         static void check_all_other_duplicates(Module& modl, Context& context);
