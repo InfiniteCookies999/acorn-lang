@@ -2667,6 +2667,12 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
 
         return to_type->is(from_type);
     }
+    case TypeKind::Float32: case TypeKind::Float64: {
+        if (expr->is(NodeKind::Number) && from_type == context.int_type) {
+            return true;
+        }
+        return to_type->is(from_type);
+    }
     case TypeKind::Pointer: {
         if (expr->is(NodeKind::String)) {
             if (expr->type->is(context.const_char_ptr_type) &&
