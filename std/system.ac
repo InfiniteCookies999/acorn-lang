@@ -1,9 +1,18 @@
 #file(access=pub)
 
 import .win32;
+import .unix;
+
+#if OS_GROUP_UNIX
+import .unix.Timespec;
+#endif
 
 void exit(int exit_code) {
+#if OS_GROUP_WINDOWS
     win32.ExitProcess(as(uint32) exit_code);
+#elif OS_GROUP_UNIX
+    unix._exit(as(int32) exit_code);
+#endif
 }
 
 // Used to keep track of time.
@@ -18,7 +27,14 @@ int64 time_in_nanosecs() {
     win32.QueryPerformanceCounter(&current);
     return as(int64) ((as(float64) (current * 1E+9) / performance_freq));
 #elif OS_GROUP_UNIX
-    return 0;
+    Timespec ts;
+    if unix.clock_gettime(unix.CLOCK_MONOTONIC, &ts) == 0 {
+        return as(int64) (ts.tv_sec * 1E+9) + (as(int64) ts.tv_nsec);
+    } else {
+        // TODO: handle the error. Would only really happen on
+        //       some old systems not supporting CLOCK_MONOTONIC.
+        return 0;
+    }
 #endif
 }
 
