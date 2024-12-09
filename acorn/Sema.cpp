@@ -704,7 +704,16 @@ void acorn::Sema::check_function(Func* func) {
         }
     }
 
-    if (func->has_modifier(Modifier::Native)) return;
+    if (func->has_modifier(Modifier::Native)) {
+        if (func->return_type->is_array()) {
+            error(func, "Native functions cannot return arrays")
+                .end_error(ErrCode::SemaNativeFunctionsCannotReturnArrays);
+        } else if (func->return_type->is_struct_type()) {
+            error(func, "Native functions cannot return structs")
+                .end_error(ErrCode::SemaNativeFunctionsCannotReturnStructs);
+        }
+        return;
+    }
 
     Struct* prev_struct;
     if (func->structn) {
