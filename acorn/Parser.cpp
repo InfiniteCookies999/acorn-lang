@@ -1889,6 +1889,14 @@ acorn::Expr* acorn::Parser::parse_term() {
         next_token();
         return thisn;
     }
+    case Token::KwSizeof: {
+        SizeOf* sof = new_node<SizeOf>(cur_token);
+        next_token();
+        expect('(');
+        sof->type_with_size = parse_type();
+        expect(')');
+        return sof;
+    }
     default:
         error("Expected an expression")
             .end_error(ErrCode::ParseExpectedExpression);

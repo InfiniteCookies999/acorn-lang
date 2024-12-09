@@ -107,6 +107,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "static"   , Token::KwStatic    },
           { "struct"   , Token::KwStruct    },
           { "this"     , Token::KwThis      },
+          { "sizeof"   , Token::KwSizeof    },
 
           { "native"   , Token::KwNative    },
           { "dllimport", Token::KwDllimport },

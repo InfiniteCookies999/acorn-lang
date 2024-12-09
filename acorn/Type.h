@@ -123,6 +123,8 @@ namespace acorn {
         bool is_real_pointer() const {
             return kind == TypeKind::Pointer || kind == TypeKind::Null || kind == TypeKind::Function;
         }
+
+        bool is_sized() const;
              
         uint32_t get_number_of_bits() const;
 

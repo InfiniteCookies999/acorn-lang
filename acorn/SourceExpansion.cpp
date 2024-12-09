@@ -10,16 +10,35 @@ if (s1 < s) { s = s1; }           \
 if (e1 > e) { e = e1; }           \
 }
 
-    static void go_until(const char*& e, char c) {
+    static void go_until(const char*& e, char open, char close) {
+        
+        while (*e != '\0') {
+            // It is possible that when calling this the end already
+            // passed the opening so just check for either.
+            if (*e == open || *e == close) {
+                break;
+            }
+            ++e;
+        }
+        
+        int count = 1;
+        
         // Only include '\0' for safety but only it should
         // not be needed.
-        while (*e != c && *e != '\0') {
+        while (count > 0 && *e != '\0') {
+            if (*e == close) {
+                --count;
+            }
+            if (*e == open) {
+                ++count;
+            }
+            
             ++e;
         }
         if (*e == '\0') {
             --e;
         }
-        ++e;
+        //++e;
     }
 
     static std::pair<const char*, const char*> get_expansion(Node* node) {
@@ -55,11 +74,12 @@ if (e1 > e) { e = e1; }           \
                 e = call->loc.ptr + call->loc.length;
             }
             // Include the closing )
-            go_until(e, ')');
+            go_until(e, '(', ')');
             break;
         }
         case NodeKind::Cast: {
-            Cast* cast = as<Cast*>(node);
+            // Include the closing )
+            auto cast = as<Cast*>(node);
             get(cast->value);
             break;
         }
@@ -74,7 +94,7 @@ if (e1 > e) { e = e1; }           \
                 get(arr->elms.back());
             }
             // Include the closing ]
-            go_until(e, ']');
+            go_until(e, '[', ']');
             break;
         }
         case NodeKind::MemoryAccess: {
@@ -82,12 +102,17 @@ if (e1 > e) { e = e1; }           \
             get(mem_access->site);
             get(mem_access->index);
             // Include the closing ]
-            go_until(e, ']');
+            go_until(e, '[', ']');
             break;
         }
         case NodeKind::DotOperator: {
             DotOperator* dot = as<DotOperator*>(node);
             e += dot->ident.reduce().size();
+            break;
+        }
+        case NodeKind::SizeOf: {
+            // Include the closing )
+            go_until(e, '(', ')');
             break;
         }
         case NodeKind::Number:

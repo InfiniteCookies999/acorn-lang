@@ -66,6 +66,7 @@ namespace acorn {
         Cast,
         Array,
         This,
+        SizeOf,
         ExprEnd
 
     };
@@ -593,6 +594,13 @@ namespace acorn {
     struct This : Expr {
         This() : Expr(NodeKind::This) {
         }
+    };
+
+    struct SizeOf : Expr {
+        SizeOf() : Expr(NodeKind::SizeOf) {
+        }
+
+        Type* type_with_size;
     };
 }
 

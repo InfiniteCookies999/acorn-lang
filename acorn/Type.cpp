@@ -5,6 +5,7 @@
 #include "Util.h"
 #include "TypeTable.h"
 #include "Context.h"
+#include "ir/GenTypes.h"
 
 acorn::Type* acorn::Type::create(PageAllocator& allocator, TypeKind kind, bool is_const) {
     Type* type = allocator.alloc_type<Type>();
@@ -17,6 +18,33 @@ acorn::Type* acorn::Type::create(PageAllocator& allocator, TypeKind kind, bool i
 
 bool acorn::Type::is_comparable() const {
     return is_number() || is_pointer() || kind == TypeKind::Null;
+}
+
+bool acorn::Type::is_sized() const {
+    switch (kind) {
+    case TypeKind::Int8:
+    case TypeKind::Int16:
+    case TypeKind::Int32:
+    case TypeKind::Int64:
+    case TypeKind::UInt8:
+    case TypeKind::UInt16:
+    case TypeKind::UInt32:
+    case TypeKind::UInt64:
+    case TypeKind::Bool:
+    case TypeKind::Char:
+    case TypeKind::Char16:
+    case TypeKind::Char32:
+    case TypeKind::Float32:
+    case TypeKind::Float64:
+    case TypeKind::Pointer:
+    case TypeKind::Function:
+    case TypeKind::Array:
+    case TypeKind::ISize:
+    case TypeKind::USize:
+        return true;
+    default:
+        return false;
+    }
 }
 
 uint32_t acorn::Type::get_number_of_bits() const {
@@ -42,6 +70,7 @@ uint32_t acorn::Type::get_number_of_bits() const {
         return 0;
     }
 }
+
 
 std::string acorn::Type::to_string() const {
 #define str(s) !is_const() ? s : "const " s;

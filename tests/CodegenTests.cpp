@@ -208,6 +208,12 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("potato");    
             });
+            test("Sizeof gets size", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"sizeof_test.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD");
+            });
         });
         section("global variables", [&] {
             test("global foldable value", [&] {

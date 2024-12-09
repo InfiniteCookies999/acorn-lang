@@ -90,6 +90,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_struct_initializer(as<StructInitializer*>(node), nullptr);
     case NodeKind::This:
         return gen_this(as<This*>(node));
+    case NodeKind::SizeOf:
+        return gen_sizeof(as<SizeOf*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -1077,6 +1079,10 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
 
 llvm::Value* acorn::IRGenerator::gen_this(This* thisn) {
     return ll_this;
+}
+
+llvm::Value* acorn::IRGenerator::gen_sizeof(SizeOf* sof) {
+    return builder.getInt32((uint32_t) sizeof_type_in_bytes(gen_type(sof->type_with_size)));
 }
 
 llvm::Value* acorn::IRGenerator::gen_scope(ScopeStmt* scope) {

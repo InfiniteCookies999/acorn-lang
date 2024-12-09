@@ -659,6 +659,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_struct_initializer(as<StructInitializer*>(node));
     case NodeKind::This:
         return check_this(as<This*>(node));
+    case NodeKind::SizeOf:
+        return check_sizeof(as<SizeOf*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -1299,6 +1301,11 @@ void acorn::Sema::check_this(This* thisn) {
     
     thisn->type = type_table.get_ptr_type(cur_struct->struct_type);
     thisn->is_foldable = false;
+}
+
+void acorn::Sema::check_sizeof(SizeOf* sof) {
+    
+    sof->type = context.int_type;
 }
 
 acorn::Sema::SemScope acorn::Sema::push_scope() {
