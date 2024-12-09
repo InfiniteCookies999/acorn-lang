@@ -90,6 +90,10 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
         auto container_type = as<ContainerType*>(type);
         auto base_type = container_type->get_base_type();
         auto fixed_base_type = fixup_type(base_type);
+        if (!fixed_base_type) {
+            return nullptr;
+        }
+
         if (fixed_base_type != base_type) {
             if (type_kind == TypeKind::Pointer) {
                 Type* fixed_ptr_type = type_table.get_ptr_type(fixed_base_type);
@@ -1719,7 +1723,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             return;
         }
         
-        if (!lhs->type->is(rhs->type)) {
+        if (!lhs->type->is_ignore_const(rhs->type)) {
             error_mismatched();
             return;
         }
@@ -2092,6 +2096,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         create_cast(arg_value, param->type);
     }
 
+    call->is_foldable = false;
     call->called_func = called_func;
     call->type = called_func->return_type;
     context.queue_gen(call->called_func);
@@ -2130,6 +2135,7 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
         create_cast(arg, param_type);
     }
 
+    call->is_foldable = false;
     call->type = func_type->get_return_type();
 }
 

@@ -1284,7 +1284,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
     if (uses_default_param_values) {
         // Zero initializing the arguments after the start of the default parameter values
         // then filling them in later if they were not filled by the named parameter.
-        size_t default_params_offset = call->called_func->default_params_offset;
+        size_t default_params_offset = call->called_func->default_params_offset + arg_offset;
         std::fill(ll_args.begin() + default_params_offset, ll_args.end(), nullptr);
     }
 
@@ -1307,12 +1307,17 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         if (uses_aggr_param) {
             ++start;
         }
+        if (is_member_func) {
+            ++start;
+        }
 
+        size_t param_idx = call->called_func->default_params_offset;
         for (size_t i = start; i < ll_num_args; i++) {
             if (ll_args[i] == nullptr) {
-                Expr* arg = params[i]->assignment;
+                Expr* arg = params[param_idx]->assignment;
                 ll_args[i] = gen_function_call_arg(arg);
             }
+            ++param_idx;
         }
     }
 
@@ -1861,7 +1866,8 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
         }
         goto NoCastFound;
     }
-    case TypeKind::Float32: {
+    case TypeKind::Float32:
+    case TypeKind::Float64: {
         if (from_type->is_float()) {
             if (to_type->get_number_of_bits() > from_type->get_number_of_bits()) {
                 // Upcasting float.

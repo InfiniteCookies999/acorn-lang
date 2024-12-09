@@ -239,13 +239,11 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool allow_func_decl, bool 
 
     Token peek1 = peek_token(0);
     Token peek2 = peek_token(1);
-    Token peek3 = peek_token(2);
 
     if (
         (peek1.is(Token::Identifier))    || // ident ident
         (peek1.is('*') && peek2.is('*')) || // ident**
-        (peek1.is('*') && peek2.is(Token::Identifier) &&
-                (peek3.is('=') || peek3.is(';') || peek3.is('('))) ||  // ident* ident =   or   ident* ident;   or ident* ident(
+        (peek1.is('*') && peek2.is(Token::Identifier)) ||  // ident* ident
         (peek1.is('*') && peek2.is('['))
         ) {
 
@@ -299,7 +297,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool allow_func_decl, bool 
                 site = mem_access;
             }
 
-            return parse_assignment_and_expr(site);
+            return parse_assignment_and_expr(parse_expr(parse_postfix(site)));
         }
     }
 
@@ -712,13 +710,29 @@ acorn::Node* acorn::Parser::parse_loop() {
     Token loop_token = cur_token;
     next_token();
 
-    switch (cur_token.kind) {
-    case TypeTokens: {
-        Var* var = parse_variable();
+    auto loop_with_var = [this, loop_token](Var* var) finline -> Node* {
         if (var->assignment || !cur_token.is(':')) {
             return parse_range_loop(loop_token, var);
         } else {
             return parse_iterator_loop(loop_token, var);
+        }
+    };
+
+    switch (cur_token.kind) {
+    case TypeTokens: {
+        Var* var = parse_variable();
+        return loop_with_var(var);
+    }
+    case Token::Identifier: {
+        Node* expr = parse_ident_decl_or_expr(false, false);
+        if (expr->is(NodeKind::Var)) {
+            Var* var = as<Var*>(expr);
+            return loop_with_var(var);
+        } else {
+            auto loop = new_node<PredicateLoopStmt>(loop_token);
+            loop->cond = as<Expr*>(expr);
+            loop->scope = parse_scope();
+            return loop;
         }
     }
     case ';':
@@ -757,7 +771,9 @@ acorn::RangeLoopStmt* acorn::Parser::parse_range_loop(Token loop_token, Node* in
     expect(';');
 
     if (cur_token.is_not('{')) {
+        allow_struct_initializer = false;
         loop->inc = parse_assignment_and_expr();
+        allow_struct_initializer = true;
         loop->scope = parse_scope();
     } else { // loop node; expr; {}
         loop->scope = parse_scope("for loop");
@@ -1175,7 +1191,11 @@ acorn::Expr* acorn::Parser::parse_assignment_and_expr(Expr* lhs) {
 }
 
 acorn::Expr* acorn::Parser::parse_expr() {
-    return parse_binary_expr();
+    return parse_expr(parse_postfix());
+}
+
+acorn::Expr* acorn::Parser::parse_expr(Expr* lhs) {
+    return parse_binary_expr(lhs);
 }
 
 std::pair<acorn::Token, acorn::Token> acorn::Parser::split_number_from_sign(Token token) {
@@ -1189,15 +1209,13 @@ std::pair<acorn::Token, acorn::Token> acorn::Parser::split_number_from_sign(Toke
     return { op, token };
 }
 
-acorn::Expr* acorn::Parser::parse_binary_expr() {
+acorn::Expr* acorn::Parser::parse_binary_expr(Expr* lhs) {
 
     struct StackUnit {
         Token op;
         Expr* expr;
     };
     std::stack<StackUnit> op_stack;
-
-    Expr* lhs = parse_postfix();
 
     auto get_op = [this]() finline {
         if (cur_token.is_number_literal()) {
@@ -1243,10 +1261,11 @@ acorn::Expr* acorn::Parser::parse_binary_expr() {
                     break;
                 }
                 op_stack.pop();
+                rhs = unit.expr;
                 if (lhs->is(NodeKind::Number) && rhs->is(NodeKind::Number)) {
-                    lhs = fold_number(unit.op, unit.expr, lhs);
+                    lhs = fold_number(unit.op, rhs, lhs);
                 } else {
-                    lhs = new_binary_op(unit.op, unit.expr, lhs);
+                    lhs = new_binary_op(unit.op, rhs, lhs);
                 }
             }
 

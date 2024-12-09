@@ -82,4 +82,15 @@ native dllimport void* CreateFileA(const char* lpFileName,
 
 native dllimport uint32 GetFileAttributesA(const char* lpFileName);
 
+// ------------------------------------------------
+// Win32: profileapi.h
+
+native dllimport bool QueryPerformanceFrequency(int64* lpFrequency);
+native dllimport bool QueryPerformanceCounter(int64* lpPerformanceCount);
+
+// ------------------------------------------------
+// Win32: libloaderapi.h
+
+native dllimport void ExitProcess(uint32 uExitCode);
+
 #endif

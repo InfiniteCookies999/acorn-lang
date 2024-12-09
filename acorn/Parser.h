@@ -105,7 +105,8 @@ namespace acorn {
         Expr* parse_assignment_and_expr();
         Expr* parse_assignment_and_expr(Expr* lhs);
         Expr* parse_expr();
-        Expr* parse_binary_expr();
+        Expr* parse_expr(Expr* lhs);
+        Expr* parse_binary_expr(Expr* lhs);
         std::pair<Token, Token> split_number_from_sign(Token token);
         Expr* fold_number(Token op, Expr* lhs, Expr* rhs);
         template<typename T>
