@@ -2312,6 +2312,9 @@ acorn::Expr* acorn::Parser::parse_array() {
             more_values = cur_token.is(',');
             if (more_values) {
                 next_token();
+                if (cur_token.is(']')) {
+                    more_values = false;
+                }
             }
         } while (more_values);
     }
@@ -2352,6 +2355,9 @@ acorn::Expr* acorn::Parser::parse_struct_initializer(IdentRef* ref) {
             more_values = cur_token.is(',');
             if (more_values) {
                 next_token();
+                if (cur_token.is('}')) {
+                    more_values = false;
+                }
             }
         } while (more_values);
     }
