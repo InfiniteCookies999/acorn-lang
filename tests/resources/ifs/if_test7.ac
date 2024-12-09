@@ -25,12 +25,20 @@ void print(const char* s, int length) {
 #endif
 }
 
+const int* get_true() {
+    return as(const int*) 1;
+}
+
+const int* get_false() {
+    return null;
+}
+
 void main() {
-    if int a = 4; a < 4 {
+    if const int* tof = get_false() {
         print("False Case", 10);
     }
     
-    if int a = 4; a > 3 {
+    if const int* tof = get_true() {
         print("True Case", 9);
     }
 }

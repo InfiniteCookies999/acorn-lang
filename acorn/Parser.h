@@ -76,7 +76,7 @@ namespace acorn {
         Var* parse_variable();
         Var* parse_variable(uint32_t modifiers, Type* type);
         Var* parse_variable(uint32_t modifiers, Type* type, Identifier name);
-        VarList* parse_variable_list(uint32_t modifiers, Type* type);
+        Node* parse_variable_list(uint32_t modifiers, Type* type);
 
         Struct* parse_struct();
         Struct* parse_struct(uint32_t modifiers, Identifier name);

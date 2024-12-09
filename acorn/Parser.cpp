@@ -444,21 +444,29 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
     return var;
 }
 
-acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers, Type* type) {
+acorn::Node* acorn::Parser::parse_variable_list(uint32_t modifiers, Type* type) {
     
     auto vlist = &var_list;
 
-    bool more_variables = false;
-    do {
+    auto name = expect_identifier("for variable");
+    auto first_var = parse_variable(modifiers, type, name);
 
+    if (cur_token.is_not(',')) {
+        return first_var;
+    }
+
+    vlist->list.push_back(first_var);
+
+    while (true) {
+        next_token(); // Consuming ',' token
+        
         auto name = expect_identifier("for variable");
         vlist->list.push_back(parse_variable(modifiers, type, name));
 
-        more_variables = cur_token.is(',');
-        if (more_variables) {
-            next_token();
+        if (cur_token.is_not(',')) {
+            break;
         }
-    } while (more_variables);
+    }
 
     return vlist;
 }
@@ -615,27 +623,20 @@ acorn::IfStmt* acorn::Parser::parse_if() {
 
     switch (cur_token.kind) {
     case TypeTokens:
-        allow_struct_initializer = false;
-        ifs->cond = parse_variable();
-        if (cur_token.is(';')) {
-            next_token();
-            ifs->post_variable_cond = parse_expr();
-        }
-        allow_struct_initializer = true;
-        break;
     case Token::Identifier: {
-        allow_struct_initializer = false;
-        auto node = parse_ident_decl_or_expr(true);
-        if (node->is(NodeKind::Var)) {
-            ifs->cond = node;
+        int off = cur_token.is(Token::KwConst) ? 1 : 0;
+
+        if (peek_token(off).is('*') && peek_token(off + 1).is(Token::Identifier) && peek_token(off + 2).is('=')) {
+            ifs->cond = parse_variable();
             if (cur_token.is(';')) {
                 next_token();
                 ifs->post_variable_cond = parse_expr();
             }
         } else {
-            ifs->cond = node;
+            allow_struct_initializer = false;
+            ifs->cond = parse_expr();
+            allow_struct_initializer = true;
         }
-        allow_struct_initializer = true;
         break;
     }
     default:

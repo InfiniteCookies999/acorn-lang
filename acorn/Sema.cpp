@@ -2774,8 +2774,8 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
 }
 
 bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) const {
-    if ((to_type->is_real_pointer() || to_type->is_integer()) &&
-        (expr->type->is_real_pointer() || expr->type->is_integer())) {
+    if ((to_type->is_real_pointer() || to_type->is_integer() || to_type->is_bool()) &&
+        (expr->type->is_real_pointer() || expr->type->is_integer() || expr->type->is_bool())) {
         Type* from_type = expr->type;
         if (!try_remove_const_for_compare(to_type, from_type, expr)) {
             return false;
