@@ -55,3 +55,20 @@ bool directory_exists(const char* path) {
     return false;
 #endif
 }
+
+/*
+ * Creates the directory at the given path. Returns
+ * true if created.
+ */
+bool mkdir(const char* path) {
+    // TODO: improve the return to indicate why it failed
+    //       besides just a bool for if is succeeded or not.
+    // TODO: We will also want to pass a variable for creating
+    //       the parent directories if the user wants.
+
+#if OS_GROUP_WINDOWS
+    return win32.CreateDirectoryA(path, null) != 0;
+#elif OS_GROUP_UNIX
+    return false;
+#endif
+}
