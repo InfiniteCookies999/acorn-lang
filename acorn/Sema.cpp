@@ -605,6 +605,81 @@ bool acorn::Sema::check_function_decl(Func* func) {
         func->default_params_offset = func->params.size() - num_default_params;
     }
 
+
+    if (func->has_modifier(Modifier::Native)) {
+        Identifier link_name = func->linkname.empty() ? func->name
+                                                      : Identifier::get(func->linkname);
+        auto itr = context.ll_intrinsics_table.find(link_name);
+        if (itr != context.ll_intrinsics_table.end()) {
+            func->ll_intrinsic_id = itr->second;
+            
+            // Validating that the parameters are correct.
+
+            for (Var* param : func->params) {
+                if (param->assignment) {
+                    error(expand(param), "Parameters of intrinsic functions cannot have a default value")
+                        .end_error(ErrCode::SemaIntrinsicFuncParamDefValue);
+                }
+            }
+
+            bool found_valid_intrinsic = false;
+            for (const auto& intrinsic_def : context.ll_valid_intrinsic_defs) {
+                if (intrinsic_def.name != link_name) {
+                    continue;
+                }
+                if (intrinsic_def.return_type->is_not(func->return_type)) {
+                    continue;
+                }
+                if (intrinsic_def.param_types.size() != func->params.size()) {
+                    continue;
+                }
+                bool params_match = true;
+                for (size_t i = 0; i < intrinsic_def.param_types.size(); i++) {
+                    if (intrinsic_def.param_types[i]->is_not(func->params[i]->type)) {
+                        params_match = false;
+                        break;
+                    }
+                }
+                if (!params_match) {
+                    continue;
+                }
+                found_valid_intrinsic = true;
+                break;
+            }
+
+            if (!found_valid_intrinsic) {
+                llvm::SmallVector<Context::LLVMIntrinsicDefinition> options;
+                for (const auto& intrinsic_def : context.ll_valid_intrinsic_defs) {
+                    if (intrinsic_def.name == link_name) {
+                        options.push_back(intrinsic_def);
+                    }
+                }
+                if (options.empty()) {
+                    acorn_fatal("Placed an intrinsic function in the table but not in the definitions list");
+                }
+
+                logger.begin_error(func->loc, "Invalid parameter types or return type for intrinsic functon declaration");
+                logger.add_line("Valid intrinsics declarations for '%s':", func->name).remove_period();
+                for (const auto& intrinsic_def : options) {
+                    std::string func_decl = intrinsic_def.return_type->to_string();
+                    func_decl += " ";
+                    func_decl += intrinsic_def.name.reduce();
+                    func_decl += "(";
+                    for (size_t i = 0; i < intrinsic_def.param_types.size(); i++) {
+                        func_decl += intrinsic_def.param_types[i]->to_string();
+                        if (i != intrinsic_def.param_types.size()) {
+                            func_decl += ", ";
+                        }
+                    }
+                    func_decl += ")";
+
+                    logger.add_line("    - '%s'", func_decl);
+                }
+                logger.end_error(ErrCode::SemaInvalidIntrinsicDecl);
+            }
+        }
+    }
+
     func->is_checking_declaration = false;
     return true;
 }

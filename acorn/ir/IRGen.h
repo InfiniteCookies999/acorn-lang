@@ -117,6 +117,7 @@ namespace acorn {
         llvm::Value* gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
         llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr);
+        llvm::Value* gen_intrinsic_call(FuncCall* call);
         llvm::Value* gen_bool(Bool* b);
         llvm::Value* gen_string(String* string);
         llvm::Value* gen_null();

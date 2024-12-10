@@ -14,6 +14,10 @@
 namespace llvm {
     class LLVMContext;
     class Module;
+
+    namespace Intrinsic {
+        typedef unsigned ID;
+    }
 }
 
 namespace acorn {
@@ -60,6 +64,7 @@ namespace acorn {
         Type* null_type;
         Type* void_ptr_type;
         Type* const_void_type;
+        Type* const_void_ptr_type;
         Type* empty_array_type;
         Type* int_range_type;
         Type* int8_range_type;
@@ -82,6 +87,15 @@ namespace acorn {
         Identifier length_identifier;
         Identifier access_identifier;
         Identifier namespace_identifier;
+
+        struct LLVMIntrinsicDefinition {
+            Identifier               name;
+            llvm::SmallVector<Type*> param_types;
+            Type*                    return_type;
+        };
+
+        llvm::DenseMap<Identifier, llvm::Intrinsic::ID> ll_intrinsics_table;
+        llvm::SmallVector< LLVMIntrinsicDefinition>     ll_valid_intrinsic_defs;
 
         llvm::LLVMContext& get_ll_context() const { return ll_context; }
 

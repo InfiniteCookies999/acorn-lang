@@ -157,6 +157,12 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         return; // Return early because the declaration has already been generated.
     }
 
+    if (func->has_modifier(Modifier::Native)) {
+        if (func->ll_intrinsic_id != llvm::Intrinsic::not_intrinsic) {
+            return; // Return early because the declaration has already been "generated" (it is intrinsic).
+        }
+    }
+
     llvm::SmallVector<llvm::Type*> ll_param_types;
     ll_param_types.reserve(func->params.size());
 
@@ -1165,6 +1171,9 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
     if (!call_func_type) {
         Func* called_func = call->called_func;
         gen_function_decl(called_func);
+        if (called_func->ll_intrinsic_id != llvm::Intrinsic::not_intrinsic) {
+            return gen_intrinsic_call(call);
+        }
         uses_aggr_param = called_func->uses_aggr_param;
     } else {
         auto func_type = as<FunctionType*>(call->site->type);
@@ -1416,6 +1425,79 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         return ll_dest_addr;
     } else {
         return ll_ret;
+    }
+}
+
+llvm::Value* acorn::IRGenerator::gen_intrinsic_call(FuncCall* call) {
+
+    auto get_arg = [call](size_t idx) finline -> Expr* {
+        if (idx < call->non_named_args_offset) {
+            return call->args[idx];
+        }
+
+        for (size_t i = call->non_named_args_offset; i < call->args.size(); i++) {
+            Expr* arg = call->args[i];
+            if (!arg->is(NodeKind::NamedValue)) continue;
+        
+            auto named_arg = as<NamedValue*>(arg);
+            if (named_arg->mapped_idx == idx) {
+                return named_arg->assignment;
+            }
+        }
+
+        acorn_fatal("Unreachable. Failed to find named argument mapping");
+        return nullptr;
+    };
+
+    switch (call->called_func->ll_intrinsic_id) {
+    case llvm::Intrinsic::memcpy: {
+        // We know the first argument is a pointer/array type since
+        // it is cast to a void* so to get the type that we are
+        // aligning with we need to get the element type
+        // of that pointer/array.
+
+        Expr* arg0 = get_arg(0);
+        Expr* arg1 = get_arg(1);
+        Expr* arg2 = get_arg(2);
+        
+        auto container_type = as<ContainerType*>(arg0->type);
+        auto elm_type = container_type->get_elm_type();
+        auto ll_elm_type = elm_type->is(context.void_type) ? llvm::Type::getInt8Ty(ll_context)
+                                                           : gen_type(elm_type);
+        llvm::Align ll_alignment = get_alignment(ll_elm_type);
+
+        return builder.CreateMemCpy(
+            gen_rvalue(arg0), ll_alignment,
+            gen_rvalue(arg1), ll_alignment,
+            gen_rvalue(arg2)
+        );
+    }
+    case llvm::Intrinsic::memset: {
+        // We know the first argument is a pointer/array type since
+        // it is cast to a void* so to get the type that we are
+        // aligning with we need to get the element type
+        // of that pointer/array.
+
+        Expr* arg0 = get_arg(0);
+        Expr* arg1 = get_arg(1);
+        Expr* arg2 = get_arg(2);
+
+        auto container_type = as<ContainerType*>(arg0->type);
+        auto elm_type = container_type->get_elm_type();
+        auto ll_elm_type = elm_type->is(context.void_type) ? llvm::Type::getInt8Ty(ll_context)
+                                                           : gen_type(elm_type);
+        llvm::Align ll_alignment = get_alignment(ll_elm_type);
+
+        return builder.CreateMemSet(
+            gen_rvalue(arg0),
+            gen_rvalue(arg1),
+            gen_rvalue(arg2),
+            ll_alignment
+        );
+    }
+    default:
+        acorn_fatal("Unreachabled. not a intrinsic");
+        return nullptr;
     }
 }
 

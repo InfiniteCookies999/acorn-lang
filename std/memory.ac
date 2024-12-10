@@ -1,0 +1,37 @@
+#file(access=pub)
+
+/*
+ * Counts the number of characters until
+ * it finds a null terminator in the c-string.
+ *
+ * @return  length of the null terminated
+ *          c-string.
+ */
+int strlen(const char* s) {
+    if !s  return 0;
+    return as(int) _strlen(s);
+}
+prv native("strlen") isize _strlen(const char* s);
+
+/*
+ * Copies count amount of bytes from the src
+ * to the dest.
+ *
+ * Warning: This is not a safe function. Use with caution.
+ */
+void memcpy(void* dest, const void* src, int count) {
+    _memcpy(dest, src, as(usize) count);
+}
+prv native("memcpy") void _memcpy(void* dest, const void* src, usize count);
+
+/*
+ * Sets n copies of the value to the dest.
+ *
+ * @param n is the number of bytes and value is a byte value.
+ *
+ * Warning: This is not a safe function. Use with caution.
+ */
+void memset(void* dest, int8 value, int n) {
+    _memset(dest, value, as(usize) n);
+}
+prv native("memset") void* _memset(void* dest, int8 value, usize n);

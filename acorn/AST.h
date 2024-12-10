@@ -9,6 +9,10 @@ namespace llvm {
     class Function;
     class Value;
     class Type;
+
+    namespace Intrinsic {
+        typedef unsigned ID;
+    }
 }
 
 namespace acorn {
@@ -67,6 +71,7 @@ namespace acorn {
         Array,
         This,
         SizeOf,
+        Ternary,
         ExprEnd
 
     };
@@ -156,6 +161,9 @@ namespace acorn {
         Struct* structn = nullptr;
 
         llvm::Function* ll_func = nullptr;
+        // If the function is a native intrinsic function then this
+        // id is set.
+        llvm::Intrinsic::ID ll_intrinsic_id = 0;
 
         llvm::StringRef linkname;
 
@@ -601,6 +609,11 @@ namespace acorn {
         }
 
         Type* type_with_size;
+    };
+
+    struct Ternary : Expr {
+        Ternary() : Expr(NodeKind::Ternary) {
+        }
     };
 }
 

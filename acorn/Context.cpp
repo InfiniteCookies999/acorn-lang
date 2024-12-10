@@ -51,6 +51,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       null_type(Type::create(allocator, TypeKind::Null)),
       void_ptr_type(type_table.get_ptr_type(void_type)),
       const_void_type(type_table.get_const_type(void_type)),
+      const_void_ptr_type(type_table.get_ptr_type(const_void_type)),
       empty_array_type(Type::create(allocator, TypeKind::EmptyArray)),
       int_range_type(RangeType::create(allocator, int_type)),
       int8_range_type(RangeType::create(allocator, int8_type)),
@@ -121,6 +122,16 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "#else"    , Token::KwCTElse    },
           { "#endif"   , Token::KwCTEndIf   },
           { "#file"    , Token::KwCTFile    },
+      }),
+
+      ll_intrinsics_table({
+          { Identifier::get("memcpy"), llvm::Intrinsic::IndependentIntrinsics::memcpy },
+          { Identifier::get("memset"), llvm::Intrinsic::IndependentIntrinsics::memset },
+      }),
+
+      ll_valid_intrinsic_defs({
+          { Identifier::get("memcpy"), { void_ptr_type, const_void_ptr_type, usize_type }, void_type      },
+          { Identifier::get("memset"), { void_ptr_type, int8_type          , usize_type }, void_ptr_type  },
       }),
 
       precedence({

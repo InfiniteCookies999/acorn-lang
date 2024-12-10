@@ -3,12 +3,6 @@
 import .win32;
 import .unix;
 
-int strlen(const char* s) {
-    if !s  return 0;
-    return as(int) istrlen(s);
-}
-prv native("strlen") isize istrlen(const char* s);
-
 void print(const char* s, int length) {
 #if OS_GROUP_WINDOWS
     void* handle = win32.GetStdHandle(-11);
