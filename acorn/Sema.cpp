@@ -355,7 +355,7 @@ void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
             return ErrCode::SemaDuplicateGlobalVar;
         }
     };
-    for (auto [location, decl1, decl2] : modl.get_declaration_duplicates()) {
+    for (auto& [location, decl1, decl2] : modl.get_declaration_duplicates()) {
         report_redeclaration(decl1, 
                              decl2, 
                              get_duplicate_kind_str(decl1),
@@ -459,7 +459,7 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
 
     if (key.size() == 1 && importn->within_same_modl) {
         auto& modl = importn->file->modl;
-        auto ident = key[0];
+        Identifier ident = key[0];
         if (auto nspace = modl.find_namespace(ident)) {
             add_namespace(nspace);
         } else if (auto structn = modl.find_struct(ident)) {

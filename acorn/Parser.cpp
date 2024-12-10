@@ -624,7 +624,7 @@ acorn::IfStmt* acorn::Parser::parse_if() {
     switch (cur_token.kind) {
     case TypeTokens:
     case Token::Identifier: {
-        int off = cur_token.is(Token::KwConst) ? 1 : 0;
+        size_t off = cur_token.is(Token::KwConst) ? 1 : 0;
 
         if (peek_token(off).is('*') && peek_token(off + 1).is(Token::Identifier) && peek_token(off + 2).is('=')) {
             ifs->cond = parse_variable();
