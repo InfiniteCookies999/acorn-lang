@@ -2793,7 +2793,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             auto to_elm_type = to_arr_Type->get_elm_type();
             auto from_elm_type = from_ptr_type->get_elm_type();
 
-            return to_elm_type->is(from_elm_type);
+            return to_elm_type->is(from_elm_type) || to_elm_type->is(context.void_type);
         }
         
         return to_type->is(from_type) || expr->is(NodeKind::Null) || to_type->is(context.void_ptr_type);
