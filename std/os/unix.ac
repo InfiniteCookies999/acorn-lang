@@ -253,4 +253,6 @@ const int32 TIMER_ABSTIME            = 1;
 
 native int32 clock_gettime(int32 clk_id, Timespec* tp);
 
+native int32 mkdir(const char* path, int32 mode);
+
 #endif

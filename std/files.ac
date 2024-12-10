@@ -69,6 +69,6 @@ bool mkdir(const char* path) {
 #if OS_GROUP_WINDOWS
     return win32.CreateDirectoryA(path, null) != 0;
 #elif OS_GROUP_UNIX
-    return false;
+    return unix.mkdir(path, 0775) == 0;
 #endif
 }

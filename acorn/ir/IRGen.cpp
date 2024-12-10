@@ -1457,14 +1457,14 @@ llvm::Value* acorn::IRGenerator::gen_intrinsic_call(FuncCall* call) {
 
 #define call_args_1(name)                                       \
 auto ll_arg0 = gen_rvalue(get_arg(0));                          \
-auto ll_func = llvm::Intrinsic::getDeclaration(                 \
+auto ll_func = llvm::Intrinsic::getOrInsertDeclaration(                 \
     &ll_module, llvm::Intrinsic::name, { ll_arg0->getType() }); \
 return builder.CreateCall(ll_func, ll_arg0);
 
 #define call_args_2(name)                       \
 auto ll_arg0 = gen_rvalue(get_arg(0));          \
 auto ll_arg1 = gen_rvalue(get_arg(1));          \
-auto ll_func = llvm::Intrinsic::getDeclaration( \
+auto ll_func = llvm::Intrinsic::getOrInsertDeclaration( \
     &ll_module, llvm::Intrinsic::name, {        \
         ll_arg0->getType(),                     \
         ll_arg1->getType()                      \
