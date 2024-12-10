@@ -2237,9 +2237,9 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
     call->type = func_type->get_return_type();
 }
 
-acorn::Func* acorn::Sema::check_function_decl_call(FuncCall* call, FuncList& canidates) {
+acorn::Func* acorn::Sema::check_function_decl_call(FuncCall* call, FuncList& candidates) {
 
-    for (Func* canidate : canidates) {
+    for (Func* canidate : candidates) {
         if (canidate->is_checking_declaration) {
             logger.begin_error(call->loc, 
                                "Circular dependency while checking function declaration '%s'",
@@ -2304,20 +2304,56 @@ acorn::Func* acorn::Sema::check_function_decl_call(FuncCall* call, FuncList& can
         }
     }
 
-    auto called_func = find_best_call_canidate(canidates, call->args);
+    auto called_func = find_best_call_candidate(candidates, call->args);
     if (!called_func) {
-        display_call_mismatch_info(expand(call), canidates, call->args);
+        display_call_mismatch_info(expand(call), candidates, call->args);
         return nullptr;
     }
 
     return called_func;
 }
 
-acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
-                                                  llvm::SmallVector<Expr*, 8>& args) {
+uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm::SmallVector<Expr*, 8>& args) const {
+    // We just want to define enough to definitely place the next score
+    // value above any of the mismatched types.
+    const uint32_t MAX_ARGS_SCORE_CAP          = MAX_FUNC_PARAMS * 4;
+    const uint32_t MAX_NOT_ASSIGNABLE_CAP      = MAX_ARGS_SCORE_CAP *2;
+
+    const uint32_t INCORRECT_PARAM_NAME_OR_ORD = MAX_NOT_ASSIGNABLE_CAP * 2;
+    const uint32_t INCORRECT_NUM_ARGS_CAP      = MAX_NOT_ASSIGNABLE_CAP * 2;
+
+    uint32_t score = 0;
+    
+    uint32_t mimatched_types = 0;
+    uint32_t not_assignable_types = 0;
+    auto status = compare_as_call_candidate<true>(candidate, args, mimatched_types, not_assignable_types);
+    switch (status) {
+    case CallCompareStatus::INCORRECT_ARGS:
+        return INCORRECT_NUM_ARGS_CAP;
+        break;
+    case CallCompareStatus::INCORRECT_PARAM_BY_NAME_NOT_FOUND:
+    case CallCompareStatus::OUT_OF_ORDER_PARAMS:
+        return INCORRECT_PARAM_NAME_OR_ORD;
+        break;
+    default:
+        break;
+    }
+    score += mimatched_types;
+    if (not_assignable_types != 0) {
+        score += MAX_ARGS_SCORE_CAP;
+        score += not_assignable_types;
+    }
+    
+    return score;
+}
+
+acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
+                                                   llvm::SmallVector<Expr*, 8>& args) {
     
     Func* selected = nullptr;
     uint32_t best_mimatched_types = 0;
+
+
     // TODO: select if has fewer default values?
 
     auto select = [&selected, &best_mimatched_types](Func* canidate,
@@ -2325,10 +2361,12 @@ acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
         selected = canidate;
         best_mimatched_types = mimatched_types;
     };
-    for (Func* canidate : canidates) {
+    for (Func* canidate : candidates) {
 
         uint32_t mimatched_types = 0;
-        if (!compare_as_call_canidate(canidate, args, mimatched_types)) {
+        uint32_t not_assignable_types = 0;
+        auto status = compare_as_call_candidate<false>(canidate, args, mimatched_types, not_assignable_types);
+        if (status != CallCompareStatus::SUCCESS) {
             continue;
         }
 
@@ -2344,11 +2382,13 @@ acorn::Func* acorn::Sema::find_best_call_canidate(FuncList& canidates,
     return selected;
 }
 
-bool acorn::Sema::compare_as_call_canidate(Func* canidate,
-                                           llvm::SmallVector<Expr*, 8>& args,
-                                           uint32_t& mimatched_types) {
-    if (!has_correct_number_of_args(canidate, args)) {
-        return false;
+template<bool for_score_gathering>
+acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func* candidate,
+                                                                      const llvm::SmallVector<Expr*, 8>& args,
+                                                                      uint32_t& mimatched_types,
+                                                                      uint32_t& not_assignable_types) const {
+    if (!has_correct_number_of_args(candidate, args)) {
+        return CallCompareStatus::INCORRECT_ARGS;
     }
 
     bool named_args_out_of_order = false;
@@ -2362,11 +2402,11 @@ bool acorn::Sema::compare_as_call_canidate(Func* canidate,
 
             auto named_arg = as<NamedValue*>(arg_value);
             arg_value = named_arg->assignment;
-            param = canidate->find_parameter(named_arg->name);
+            param = candidate->find_parameter(named_arg->name);
             
             // Check to make sure we found the parameter by the given name.
             if (!param) {
-                return false;
+                return CallCompareStatus::INCORRECT_PARAM_BY_NAME_NOT_FOUND;
             }
 
             if (param->param_idx != i) {
@@ -2374,18 +2414,23 @@ bool acorn::Sema::compare_as_call_canidate(Func* canidate,
             }
             named_arg_high_idx = std::max(param->param_idx, named_arg_high_idx);
         } else {
-            param = canidate->params[i];
+            param = candidate->params[i];
 
             // Cannot determine the order of the arguments if the
             // non-named arguments come after the named arguments
             // and the named arguments are not in order.
             if (named_args_out_of_order || named_arg_high_idx > i) {
-                return false;
+                return CallCompareStatus::OUT_OF_ORDER_PARAMS;
             }
         }
         
         if (!is_assignable_to(param->type, arg_value)) {
-            return false;
+            if constexpr (for_score_gathering) {
+                ++not_assignable_types;
+                continue;
+            } else {
+                return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
+            }
         }
 
         if (param->type->is_not(arg_value->type)) {
@@ -2393,18 +2438,18 @@ bool acorn::Sema::compare_as_call_canidate(Func* canidate,
         }
     }
 
-    return true;
+    return CallCompareStatus::SUCCESS;
 }
 
-bool acorn::Sema::has_correct_number_of_args(const Func* canidate, const 
+bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const 
                                              llvm::SmallVector<Expr*, 8>& args) const {
-    if (canidate->default_params_offset == -1) {
-        if (canidate->params.size() != args.size()) {
+    if (candidate->default_params_offset == -1) {
+        if (candidate->params.size() != args.size()) {
             return false;
         }
     } else {
-        size_t num_params = canidate->params.size();
-        if (!(args.size() >= canidate->default_params_offset
+        size_t num_params = candidate->params.size();
+        if (!(args.size() >= candidate->default_params_offset
              && args.size() <= num_params)) {
             return false;
         }
@@ -2413,7 +2458,7 @@ bool acorn::Sema::has_correct_number_of_args(const Func* canidate, const
 }
 
 void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc, 
-                                             const FuncList& canidates, 
+                                             const FuncList& candidates, 
                                              const llvm::SmallVector<Expr*, 8>& args) const {
     
     auto function_decl_to_string = [](const Func* canidate) {
@@ -2431,9 +2476,9 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
         return str;
     };
 
-    if (canidates.size() == 1) {
+    if (candidates.size() == 1) {
         
-        Func* canidate = canidates[0];
+        Func* canidate = candidates[0];
 
         logger.begin_error(error_loc, "Invalid call to function: %s", function_decl_to_string(canidate));
         logger.add_empty_line();
@@ -2442,11 +2487,25 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
 
     } else {
 
-        logger.begin_error(error_loc, "Could not find a valid overloaded function");
-        for (const Func* canidate : canidates) {
+        llvm::SmallVector<std::pair<uint32_t, const Func*>> candidates_and_scores;
+        for (const Func* candidate : candidates) {
+            uint32_t score = get_function_call_score(candidate, args);
+            candidates_and_scores.push_back(std::make_pair(score, candidate));
+        }
+        std::ranges::sort(candidates_and_scores, [](const auto& lhs, const auto& rhs) {
+            return lhs.first < rhs.first;
+        });
+
+        logger.begin_error(error_loc, "Could not find a valid overloaded function to call");
+        for (auto [_, candidate] : candidates_and_scores | std::views::take(context.get_max_call_err_funcs())) {
             logger.add_empty_line();
-            logger.add_line("Could not match: %s", function_decl_to_string(canidate));
-            display_call_mismatch_info(canidate, args, true);
+            logger.add_line("Could not match: %s", function_decl_to_string(candidate));
+            display_call_mismatch_info(candidate, args, true);
+        }
+        int64_t remaining = static_cast<int64_t>(candidates.size()) - static_cast<int64_t>(context.get_max_call_err_funcs());
+        if (remaining > 0) {
+            logger.add_empty_line()
+                  .add_line("... and %s more not shown", remaining);
         }
         logger.end_error(ErrCode::SemaInvalidFuncCallOverloaded);
 
@@ -2454,7 +2513,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
 }
 
 template<typename F>
-void acorn::Sema::display_call_mismatch_info(const F* canidate,
+void acorn::Sema::display_call_mismatch_info(const F* candidate,
                                              const llvm::SmallVector<Expr*, 8>& args,
                                              bool indent) const {
 
@@ -2462,19 +2521,19 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
 
     constexpr bool is_func_decl = std::is_same_v<std::remove_const_t<F>, Func>;
         
-    auto get_num_params = [canidate]() constexpr -> size_t {
+    auto get_num_params = [candidate]() constexpr -> size_t {
         if constexpr (is_func_decl) {
-            return canidate->params.size();
+            return candidate->params.size();
         } else {
-            return canidate->get_param_types().size();
+            return candidate->get_param_types().size();
         }
     };
 
     size_t num_params = get_num_params();
 
-    auto check_correct_number_of_args = [this, canidate, args, num_params]() finline {
+    auto check_correct_number_of_args = [this, candidate, args, num_params]() finline {
         if constexpr (is_func_decl) {
-            return has_correct_number_of_args(canidate, args);
+            return has_correct_number_of_args(candidate, args);
         } else {
             return num_params == args.size();
         }  
@@ -2482,8 +2541,8 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
 
     if (!check_correct_number_of_args()) {
         if constexpr (is_func_decl) {
-            if (canidate->default_params_offset != -1) {
-                size_t min_params = canidate->default_params_offset;
+            if (candidate->default_params_offset != -1) {
+                size_t min_params = candidate->default_params_offset;
                 err_line("Incorrect number of args. Expected between %s-%s but found %s",
                          min_params, num_params, args.size());
                 return;
@@ -2495,11 +2554,11 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
         return;
     }
 
-    auto get_param_type = [canidate](Var* param, size_t arg_idx) constexpr -> Type* {
+    auto get_param_type = [candidate](Var* param, size_t arg_idx) constexpr -> Type* {
         if constexpr (is_func_decl) {
             return param->type;
         } else {
-            return canidate->get_param_types()[arg_idx];
+            return candidate->get_param_types()[arg_idx];
         }
     };
 
@@ -2515,7 +2574,7 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
             if constexpr (is_func_decl) {
                 auto named_arg = as<NamedValue*>(arg_value);
                 arg_value = named_arg->assignment;
-                param = canidate->find_parameter(named_arg->name);
+                param = candidate->find_parameter(named_arg->name);
             
                 if (!param) {
                     err_line("Could not find param '%s' for named arg", named_arg->name);
@@ -2532,7 +2591,7 @@ void acorn::Sema::display_call_mismatch_info(const F* canidate,
             }
         } else {
             if constexpr (is_func_decl) {
-                param = canidate->params[i];
+                param = candidate->params[i];
 
                 if (named_args_out_of_order || named_arg_high_idx > i) {
                     // Do not continue reporting errors because the arguments

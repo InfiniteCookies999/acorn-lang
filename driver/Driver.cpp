@@ -83,6 +83,9 @@ Options:
         Sets how many errors will be encountered before
         giving up and exiting compilation.
 
+    -max-call-err-funcs=<count>
+        Sets how many overloaded functions to show mismatch
+        information for when calling an overloaded function.
 
 )";
 
@@ -101,7 +104,7 @@ int main(int argc, char* argv[]) {
     processor.add_flag("run", &acorn::Compiler::set_run_program);
     processor.add_flag("run-seperate", { "run-seperate-window"}, &acorn::Compiler::set_run_program_seperate_window);
     processor.add_flag("show-linker-command", { "show-linker-cmd" }, &acorn::Compiler::set_show_linker_command);
-    
+
     processor.add_flag("output-name", { "out-name", "o" }, [](CommandConsumer& consumer) {
         consumer.next_eql_pair(&acorn::Compiler::set_output_name, "Missing output program name");
     }, true);
@@ -112,6 +115,10 @@ int main(int argc, char* argv[]) {
     processor.add_flag("max-errors", [&compiler](CommandConsumer& consumer) {
         consumer.next_eql_pair("Missing max errors")
             .parse_int([&compiler](int max_errors) { compiler.set_max_error_count(max_errors); });
+    }, true);
+    processor.add_flag("max-call-err-funcs", [&compiler](CommandConsumer& consumer) {
+        consumer.next_eql_pair("Missing max errors")
+            .parse_int([&compiler](int max_errors) { compiler.set_max_call_err_funcs(max_errors); });
     }, true);
 
     processor.add_flag("L", [&compiler](CommandConsumer& consumer) {

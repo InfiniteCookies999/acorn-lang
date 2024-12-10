@@ -46,6 +46,7 @@ namespace acorn {
         void set_run_program_seperate_window()   { should_run_seperate_window = true;       }
         void set_show_linker_command()           { show_linker_command = true;              }
         void set_max_error_count(int max_errors) { context.set_max_error_count(max_errors); }
+        void set_max_call_err_funcs(int max_errors) { context.set_max_call_err_funcs(max_errors); }
 
         void set_output_name(std::wstring output_name);
         void set_output_directory(std::wstring output_directory);

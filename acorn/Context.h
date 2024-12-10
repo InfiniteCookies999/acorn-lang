@@ -160,6 +160,14 @@ namespace acorn {
             max_error_count = max;
         }
 
+        void set_max_call_err_funcs(size_t max) {
+            max_call_err_funcs = max;
+        }
+
+        size_t get_max_call_err_funcs() {
+            return max_call_err_funcs;
+        }
+
         bool should_show_error_codes() const {
             return show_error_codes;
         }
@@ -183,9 +191,10 @@ namespace acorn {
         llvm::SmallVector<Func*> canidate_main_funcs;
         Func* main_func = nullptr;
 
-        std::atomic<size_t> error_count      = 0;
-        size_t              max_error_count  = 30;
-        bool                show_error_codes = false;
+        std::atomic<size_t> error_count                    = 0;
+        size_t              max_error_count                = 30;
+        size_t              max_call_err_funcs = 3;
+        bool                show_error_codes               = false;
 
         llvm::LLVMContext& ll_context;
         llvm::Module&      ll_module;
