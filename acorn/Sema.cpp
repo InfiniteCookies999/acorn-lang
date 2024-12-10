@@ -2330,11 +2330,9 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm:
     switch (status) {
     case CallCompareStatus::INCORRECT_ARGS:
         return INCORRECT_NUM_ARGS_CAP;
-        break;
     case CallCompareStatus::INCORRECT_PARAM_BY_NAME_NOT_FOUND:
     case CallCompareStatus::OUT_OF_ORDER_PARAMS:
         return INCORRECT_PARAM_NAME_OR_ORD;
-        break;
     default:
         break;
     }
