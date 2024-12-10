@@ -667,7 +667,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
                     func_decl += "(";
                     for (size_t i = 0; i < intrinsic_def.param_types.size(); i++) {
                         func_decl += intrinsic_def.param_types[i]->to_string();
-                        if (i != intrinsic_def.param_types.size()) {
+                        if (i + 1 != intrinsic_def.param_types.size()) {
                             func_decl += ", ";
                         }
                     }
@@ -1534,18 +1534,18 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         
         if (lhs->type->is_float()) {
             if (rhs->type->is_float()) {
-                if (rhs->type->get_number_of_bits() == lhs->type->get_number_of_bits()) {
-                    return lhs->type->remove_all_const();
-                }
+                uint32_t lbits = rhs->type->get_number_of_bits();
+                uint32_t rbits = lhs->type->get_number_of_bits();
+                return lbits > rbits ? lhs->type : rhs->type;
             } else if (rhs->type->is_integer()) {
                 return lhs->type->remove_all_const();
             }
             return nullptr;
         } else if (rhs->type->is_float()) {
             if (lhs->type->is_float()) {
-                if (lhs->type->get_number_of_bits() == rhs->type->get_number_of_bits()) {
-                    return rhs->type->remove_all_const();
-                }
+                uint32_t lbits = rhs->type->get_number_of_bits();
+                uint32_t rbits = lhs->type->get_number_of_bits();
+                return lbits > rbits ? lhs->type : rhs->type;
             } else if (lhs->type->is_integer()) {
                 return rhs->type->remove_all_const();
             }
@@ -1555,7 +1555,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     };
 
     //lhs, rhs, error_cannot_apply, error_mismatched, valid_number_compare
-    auto get_add_sub_mul_type = [=, this](bool enforce_lhs) finline -> Type* {
+    auto get_add_sub_mul_type = [=, this](bool enforce_lhs) finline->Type* {
         // valid pointer arithmetic cases:
         // 
         // ptr + int

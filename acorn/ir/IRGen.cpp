@@ -1171,9 +1171,15 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
     if (!call_func_type) {
         Func* called_func = call->called_func;
         gen_function_decl(called_func);
+
         if (called_func->ll_intrinsic_id != llvm::Intrinsic::not_intrinsic) {
-            return gen_intrinsic_call(call);
+            auto ll_ret = gen_intrinsic_call(call);
+            if (ll_dest_addr) {
+                builder.CreateStore(ll_ret, ll_dest_addr);
+            }
+            return ll_ret;
         }
+        
         uses_aggr_param = called_func->uses_aggr_param;
     } else {
         auto func_type = as<FunctionType*>(call->site->type);
@@ -1449,6 +1455,22 @@ llvm::Value* acorn::IRGenerator::gen_intrinsic_call(FuncCall* call) {
         return nullptr;
     };
 
+#define call_args_1(name)                                       \
+auto ll_arg0 = gen_rvalue(get_arg(0));                          \
+auto ll_func = llvm::Intrinsic::getDeclaration(                 \
+    &ll_module, llvm::Intrinsic::name, { ll_arg0->getType() }); \
+return builder.CreateCall(ll_func, ll_arg0);
+
+#define call_args_2(name)                       \
+auto ll_arg0 = gen_rvalue(get_arg(0));          \
+auto ll_arg1 = gen_rvalue(get_arg(1));          \
+auto ll_func = llvm::Intrinsic::getDeclaration( \
+    &ll_module, llvm::Intrinsic::name, {        \
+        ll_arg0->getType(),                     \
+        ll_arg1->getType()                      \
+    });                                         \
+return builder.CreateCall(ll_func, { ll_arg0, ll_arg1 });
+
     switch (call->called_func->ll_intrinsic_id) {
     case llvm::Intrinsic::memcpy: {
         // We know the first argument is a pointer/array type since
@@ -1495,10 +1517,48 @@ llvm::Value* acorn::IRGenerator::gen_intrinsic_call(FuncCall* call) {
             ll_alignment
         );
     }
+    case llvm::Intrinsic::floor: {
+        call_args_1(floor);
+    }
+    case llvm::Intrinsic::ceil: {
+        call_args_1(ceil);
+    }
+    case llvm::Intrinsic::pow: {
+        call_args_2(pow);
+    }
+    case llvm::Intrinsic::log: {
+        call_args_1(log);
+    }
+    case llvm::Intrinsic::log10: {
+        call_args_1(log10);
+    }
+    case llvm::Intrinsic::sqrt: {
+        call_args_1(sqrt);
+    }
+    case llvm::Intrinsic::sin: {
+        call_args_1(sin);
+    }
+    case llvm::Intrinsic::cos: {
+        call_args_1(cos);
+    }
+    case llvm::Intrinsic::tan: {
+        call_args_1(tan);
+    }
+    case llvm::Intrinsic::asin: {
+        call_args_1(asin);
+    }
+    case llvm::Intrinsic::acos: {
+        call_args_1(acos);
+    }
+    case llvm::Intrinsic::atan: {
+        call_args_1(atan);
+    }
     default:
         acorn_fatal("Unreachabled. not a intrinsic");
         return nullptr;
     }
+#undef call_args_1
+#undef call_args_2
 }
 
 llvm::Value* acorn::IRGenerator::gen_bool(Bool* b) {
