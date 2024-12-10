@@ -1460,7 +1460,7 @@ llvm::Value* acorn::IRGenerator::gen_intrinsic_call(FuncCall* call) {
         Expr* arg1 = get_arg(1);
         Expr* arg2 = get_arg(2);
         
-        auto container_type = as<ContainerType*>(arg0->type);
+        auto container_type = as<ContainerType*>(arg0->get_final_type());
         auto elm_type = container_type->get_elm_type();
         auto ll_elm_type = elm_type->is(context.void_type) ? llvm::Type::getInt8Ty(ll_context)
                                                            : gen_type(elm_type);
@@ -1482,7 +1482,7 @@ llvm::Value* acorn::IRGenerator::gen_intrinsic_call(FuncCall* call) {
         Expr* arg1 = get_arg(1);
         Expr* arg2 = get_arg(2);
 
-        auto container_type = as<ContainerType*>(arg0->type);
+        auto container_type = as<ContainerType*>(arg0->get_final_type());
         auto elm_type = container_type->get_elm_type();
         auto ll_elm_type = elm_type->is(context.void_type) ? llvm::Type::getInt8Ty(ll_context)
                                                            : gen_type(elm_type);
