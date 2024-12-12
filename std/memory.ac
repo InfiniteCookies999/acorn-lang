@@ -35,3 +35,18 @@ void memset(void* dest, int8 value, int n) {
     _memset(dest, value, as(usize) n);
 }
 prv native("memset") void* _memset(void* dest, int8 value, usize n);
+
+/*
+ * Allocates memory on the heap. Allocates size number of bytes.
+ */
+void* malloc(int size) {
+    return _malloc(as(isize) size);
+}
+prv native("malloc") void* _malloc(isize size);
+
+/*
+ * Given a pointer to memory on the heap this function frees up the
+ * memory. Only pointers allocated with malloc should be passed
+ * as an argument to this function.
+ */
+native void free(void* ptr);

@@ -2842,7 +2842,11 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             } else if (expr->type->is(context.const_char16_ptr_type) &&
                        to_type->is(context.const_char32_ptr_type)) {
                 return true;
+            } else if (to_type->is(context.void_ptr_type)) {
+                return true;
             }
+
+            return false;
         } else if (from_type->is_array()) {
             auto to_arr_Type = as<ArrayType*>(to_type);
             auto from_ptr_type = as<PointerType*>(from_type);
@@ -2851,9 +2855,13 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             auto from_elm_type = from_ptr_type->get_elm_type();
 
             return to_elm_type->is(from_elm_type) || to_elm_type->is(context.void_type);
+        } else if (from_type->is_pointer()) {
+            return to_type->is(from_type) || to_type->is(context.void_ptr_type);
+        } else if (expr->is(NodeKind::Null)) {
+            return true;
+        } else {
+            return false;
         }
-        
-        return to_type->is(from_type) || expr->is(NodeKind::Null) || to_type->is(context.void_ptr_type);
     }
     case TypeKind::Array: {
         if (from_type->get_kind() == TypeKind::EmptyArray) {

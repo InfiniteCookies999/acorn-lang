@@ -558,7 +558,7 @@ namespace acorn {
         StructInitializer() : Expr(NodeKind::StructInitializer) {
         }
 
-        unsigned non_named_vals_offset = 0;
+        size_t non_named_vals_offset = 0;
         Struct* structn;
         IdentRef* ref;
         llvm::SmallVector<Expr*, 8> values;

@@ -15,7 +15,10 @@ if (e1 > e) { e = e1; }           \
         while (*e != '\0') {
             // It is possible that when calling this the end already
             // passed the opening so just check for either.
-            if (*e == open || *e == close) {
+            if (*e == open) {
+                ++e;
+                break;
+            } else if (*e == close) {
                 break;
             }
             ++e;
