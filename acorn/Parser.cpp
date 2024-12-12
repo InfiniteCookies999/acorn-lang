@@ -206,14 +206,30 @@ acorn::Node* acorn::Parser::parse_statement() {
         return stmt;
     }
     case Token::KwSwitch: return parse_switch();
-    case Token::Identifier:
+    case Token::Identifier: {
+        if (cur_struct) {
+            auto ident = Identifier::get(cur_token.text());
+            if (cur_struct->name == ident && peek_token(0).is('(')) {
+                next_token(); // Consuming the identifier token.
+                return parse_function(0, context.void_type, cur_struct->name);
+            }
+        }
+
         return parse_ident_decl_or_expr(false);
+    }
     case ModifierTokens:
         modifiers = parse_modifiers();
         if (cur_token.is(Token::KwStruct)) {
             auto name = expect_identifier("for struct");
             return parse_struct(modifiers, name);
+        } else if (cur_token.is(Token::Identifier)) {
+            auto ident = Identifier::get(cur_token.text());
+            if (cur_struct->name == ident && peek_token(0).is('(')) {
+                next_token(); // Consuming the identifier token.
+                return parse_function(modifiers, context.void_type, cur_struct->name);
+            }
         }
+
         [[fallthrough]];
     case TypeTokens: {
         return parse_decl(modifiers, parse_type());
@@ -489,10 +505,10 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
 
     expect('{');
     while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
-        auto node = parse_statement();
+        Node* node = parse_statement();
         if (!node) continue;
 
-        add_struct_node(structn, node);
+        add_node_to_struct(structn, node);
     }
     expect('}', "for struct body");
 
@@ -501,7 +517,7 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
     return structn;
 }
 
-void acorn::Parser::add_struct_node(Struct* structn, Node* node) {
+void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
     
     auto process_var = [structn](Var* var) finline {
         if (var->name != Identifier::Invalid) {
@@ -521,8 +537,17 @@ void acorn::Parser::add_struct_node(Struct* structn, Node* node) {
     } else if (node->is(NodeKind::Func)) {
         auto func = as<Func*>(node);
         if (func->name != Identifier::Invalid) {
-            structn->nspace->add_function(func);
-            func->structn = structn;
+            if (func->name == cur_struct->name) {
+                func->is_constructor = true;
+                if (func->params.empty()) {
+                    structn->default_constructor = func;
+                }
+                structn->constructors.push_back(func);
+                func->structn = structn;
+            } else {
+                structn->nspace->add_function(func);
+                func->structn = structn;
+            }
             context.add_unchecked_decl(func);
         }
     } else {
@@ -686,7 +711,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
                 cur_func->scope->push_back(stmt);
             }
         } else if (cur_struct) {
-            add_struct_node(cur_struct, stmt);
+            add_node_to_struct(cur_struct, stmt);
         } else {
             add_global_node(stmt);
         }

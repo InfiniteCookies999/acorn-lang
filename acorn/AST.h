@@ -189,6 +189,7 @@ namespace acorn {
         bool cannot_use_aggr_ret_var = false;
         bool has_checked_declaration = false;
         bool is_checking_declaration = false;
+        bool is_constructor          = false;
         Var* aggr_ret_var = nullptr;
 
         Var* find_parameter(Identifier name) const;
@@ -250,6 +251,9 @@ namespace acorn {
         Namespace* nspace;
         // Ordered list of the fields.
         llvm::SmallVector<Var*> fields;
+
+        Func*                    default_constructor = nullptr;
+        llvm::SmallVector<Func*> constructors;
 
         bool has_been_checked   = false;
         bool fields_have_errors = false;
@@ -550,7 +554,7 @@ namespace acorn {
         Func* called_func;
 
         size_t non_named_args_offset = -1;
-        llvm::SmallVector<Expr*, 8> args;
+        llvm::SmallVector<Expr*> args;
 
     };
 
@@ -561,7 +565,8 @@ namespace acorn {
         size_t non_named_vals_offset = 0;
         Struct* structn;
         IdentRef* ref;
-        llvm::SmallVector<Expr*, 8> values;
+        Func* called_constructor = nullptr;
+        llvm::SmallVector<Expr*> values;
     };
 
     struct String : Expr {

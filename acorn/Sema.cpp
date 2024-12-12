@@ -915,6 +915,25 @@ void acorn::Sema::check_variable(Var* var) {
         }
     }
 
+    auto process_struct_type = [this](StructType* struct_type) finline {
+        auto structn = struct_type->get_struct();
+        if (structn->default_constructor) {
+            context.queue_gen(structn->default_constructor);
+        }
+    };
+
+    if (var->type->is_struct_type()) {
+        auto struct_type = as<StructType*>(var->type);
+        process_struct_type(struct_type);
+    } else if (var->type->is_array()) {
+        auto arr_type = as<ArrayType*>(var->type);
+        auto base_type = arr_type->get_base_type();
+        if (base_type->is_struct_type()) {
+            auto struct_type = as<StructType*>(base_type);
+            process_struct_type(struct_type);
+        }
+    }
+
     if (var->type->is(context.void_type)) {
         error(var, "Variables cannot have type 'void'")
             .end_error(ErrCode::SemaVariableCannotHaveVoidType);
@@ -1271,8 +1290,25 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
     if (structn->fields_have_errors) {
         return;
     }
+
+    if (!structn->constructors.empty()) {
+        Func* found_constructor = check_function_decl_call(initializer,
+                                                           initializer->values,
+                                                           initializer->non_named_vals_offset,
+                                                           structn->constructors);
+        if (!found_constructor) {
+            return;
+        }
+
+        initializer->is_foldable = false;
+        initializer->called_constructor = found_constructor;
+        initializer->type = structn->struct_type;
+        context.queue_gen(found_constructor);
+
+        return;
+    }
     
-    // Check for duplicate values;
+    // Check for duplicate values.
     if (initializer->non_named_vals_offset != -1) {
         bool dup_named_vals = false;
         for (size_t i = initializer->non_named_vals_offset; i < initializer->values.size(); i++) {
@@ -2173,25 +2209,12 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
 
     IdentRef* ref = as<IdentRef*>(call->site);
-    auto called_func = check_function_decl_call(call, *ref->funcs_ref);
+    auto called_func = check_function_decl_call(call, 
+                                                call->args, 
+                                                call->non_named_args_offset, 
+                                                *ref->funcs_ref);
     if (!called_func) {
         return;
-    }
-
-    // Creating casts from the argument to the parameter.
-    for (size_t i = 0; i < call->args.size(); i++) {
-        auto arg_value = call->args[i];
-        Var* param;
-        if (arg_value->is(NodeKind::NamedValue)) {
-            auto named_arg = as<NamedValue*>(arg_value);
-            param = called_func->find_parameter(named_arg->name);
-            named_arg->mapped_idx = param->param_idx;
-            
-            arg_value = named_arg->assignment;
-        } else {
-            param = called_func->params[i];
-        }
-        create_cast(arg_value, param->type);
     }
 
     call->is_foldable = false;
@@ -2237,27 +2260,25 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
     call->type = func_type->get_return_type();
 }
 
-acorn::Func* acorn::Sema::check_function_decl_call(FuncCall* call, FuncList& candidates) {
+acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
+                                                   llvm::SmallVector<Expr*>& args,
+                                                   size_t non_named_args_offset,
+                                                   FuncList& candidates) {
 
     for (Func* canidate : candidates) {
         if (canidate->is_checking_declaration) {
-            logger.begin_error(call->loc, 
+            logger.begin_error(call_node->loc,
                                "Circular dependency while checking function declaration '%s'",
                                canidate->name);
             
             const char* func_end_ptr = canidate->loc.ptr;
-            func_end_ptr = strchr(func_end_ptr, '(') + 1;
-            int bracket_count = 1;
-            while (bracket_count > 0) {
-                if (*func_end_ptr == '(') {
-                    ++bracket_count;
-                } else if (*func_end_ptr == ')') {
-                    --bracket_count;
-                }
-                ++func_end_ptr;
+            if (call_node->is(NodeKind::FuncCall)) {
+                go_until(func_end_ptr, '(', ')');
+            } else {
+                go_until(func_end_ptr, '{', '}');
             }
             
-            bool within_func_params = call->loc.ptr >= canidate->loc.ptr && call->loc.ptr <= func_end_ptr;
+            bool within_func_params = call_node->loc.ptr >= canidate->loc.ptr && call_node->loc.ptr <= func_end_ptr;
             if (!within_func_params) {
                 logger.add_line([canidate](Logger& logger) {
                     logger.print("Function declared at: ");
@@ -2275,17 +2296,17 @@ acorn::Func* acorn::Sema::check_function_decl_call(FuncCall* call, FuncList& can
     }
 
     // Check for duplicated named arguments.
-    if (call->non_named_args_offset != -1) {
+    if (non_named_args_offset != -1) {
         bool dup_named_args = false;
-        for (size_t i = call->non_named_args_offset; i < call->args.size(); i++) {
-            auto arg = call->args[i];
+        for (size_t i = non_named_args_offset; i < args.size(); i++) {
+            auto arg = args[i];
             if (!arg->is(NodeKind::NamedValue)) {
                 continue;
             }
 
             auto named_arg = as<NamedValue*>(arg);
-            for (size_t j = i + 1; j < call->args.size(); j++) {
-                auto other_arg = call->args[j];
+            for (size_t j = i + 1; j < args.size(); j++) {
+                auto other_arg = args[j];
                 if (!other_arg->is(NodeKind::NamedValue)) {
                     continue;
                 }
@@ -2304,16 +2325,32 @@ acorn::Func* acorn::Sema::check_function_decl_call(FuncCall* call, FuncList& can
         }
     }
 
-    auto called_func = find_best_call_candidate(candidates, call->args);
+    auto called_func = find_best_call_candidate(candidates, args);
     if (!called_func) {
-        display_call_mismatch_info(expand(call), candidates, call->args);
+        display_call_mismatch_info(expand(call_node), candidates, args);
         return nullptr;
+    }
+
+    // Creating casts from the argument to the parameter.
+    for (size_t i = 0; i < args.size(); i++) {
+        auto arg_value = args[i];
+        Var* param;
+        if (arg_value->is(NodeKind::NamedValue)) {
+            auto named_arg = as<NamedValue*>(arg_value);
+            param = called_func->find_parameter(named_arg->name);
+            named_arg->mapped_idx = param->param_idx;
+            
+            arg_value = named_arg->assignment;
+        } else {
+            param = called_func->params[i];
+        }
+        create_cast(arg_value, param->type);
     }
 
     return called_func;
 }
 
-uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm::SmallVector<Expr*, 8>& args) const {
+uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm::SmallVector<Expr*>& args) const {
     // We just want to define enough to definitely place the next score
     // value above any of the mismatched types.
     const uint32_t MAX_ARGS_SCORE_CAP          = MAX_FUNC_PARAMS * 4;
@@ -2346,7 +2383,7 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm:
 }
 
 acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
-                                                   llvm::SmallVector<Expr*, 8>& args) {
+                                                   llvm::SmallVector<Expr*>& args) {
     
     Func* selected = nullptr;
     uint32_t best_mimatched_types = 0;
@@ -2382,7 +2419,7 @@ acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
 
 template<bool for_score_gathering>
 acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func* candidate,
-                                                                      const llvm::SmallVector<Expr*, 8>& args,
+                                                                      const llvm::SmallVector<Expr*>& args,
                                                                       uint32_t& mimatched_types,
                                                                       uint32_t& not_assignable_types) const {
     if (!has_correct_number_of_args(candidate, args)) {
@@ -2440,7 +2477,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
 }
 
 bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const 
-                                             llvm::SmallVector<Expr*, 8>& args) const {
+                                             llvm::SmallVector<Expr*>& args) const {
     if (candidate->default_params_offset == -1) {
         if (candidate->params.size() != args.size()) {
             return false;
@@ -2457,7 +2494,7 @@ bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const
 
 void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc, 
                                              const FuncList& candidates, 
-                                             const llvm::SmallVector<Expr*, 8>& args) const {
+                                             const llvm::SmallVector<Expr*>& args) const {
     
     auto function_decl_to_string = [](const Func* canidate) {
         std::string str = canidate->name.reduce().str();
@@ -2474,11 +2511,13 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
         return str;
     };
 
+    const char* func_type_str = candidates[0]->is_constructor ? "constructor" : "function";
+
     if (candidates.size() == 1) {
         
         Func* canidate = candidates[0];
 
-        logger.begin_error(error_loc, "Invalid call to function: %s", function_decl_to_string(canidate));
+        logger.begin_error(error_loc, "Invalid call to %s: %s", func_type_str, function_decl_to_string(canidate));
         logger.add_empty_line();
         display_call_mismatch_info(canidate, args, false);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
@@ -2494,7 +2533,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
             return lhs.first < rhs.first;
         });
 
-        logger.begin_error(error_loc, "Could not find a valid overloaded function to call");
+        logger.begin_error(error_loc, "Could not find a valid overloaded %s to call", func_type_str);
         for (auto [_, candidate] : candidates_and_scores | std::views::take(context.get_max_call_err_funcs())) {
             logger.add_empty_line();
             logger.add_line("Could not match: %s", function_decl_to_string(candidate));
@@ -2512,7 +2551,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
 
 template<typename F>
 void acorn::Sema::display_call_mismatch_info(const F* candidate,
-                                             const llvm::SmallVector<Expr*, 8>& args,
+                                             const llvm::SmallVector<Expr*>& args,
                                              bool indent) const {
 
 #define err_line(fmt, ...) logger.add_line(("%s- " fmt), indent ? "  " : "", ##__VA_ARGS__)
@@ -2842,11 +2881,9 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             } else if (expr->type->is(context.const_char16_ptr_type) &&
                        to_type->is(context.const_char32_ptr_type)) {
                 return true;
-            } else if (to_type->is(context.void_ptr_type)) {
-                return true;
             }
 
-            return false;
+            return to_type->is(from_type) || to_type->is(context.void_ptr_type);
         } else if (from_type->is_array()) {
             auto to_arr_Type = as<ArrayType*>(to_type);
             auto from_ptr_type = as<PointerType*>(from_type);

@@ -80,7 +80,7 @@ namespace acorn {
 
         Struct* parse_struct();
         Struct* parse_struct(uint32_t modifiers, Identifier name);
-        void add_struct_node(Struct* structn, Node* node);
+        void add_node_to_struct(Struct* structn, Node* node);
 
         uint32_t parse_modifiers();
 

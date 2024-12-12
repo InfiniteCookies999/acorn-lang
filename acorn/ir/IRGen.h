@@ -75,7 +75,7 @@ namespace acorn {
         static llvm::SmallVector<Struct*, 4> structs_needing_implicit_functions;
         static llvm::BasicBlock*             ll_global_init_call_bb;
 
-        void gen_default_constructor(Struct* structn);
+        void gen_implicit_default_constructor(Struct* structn);
 
         void gen_function_decl(Func* func);
         llvm::Type* gen_function_return_type(Func* func, bool is_main);
@@ -117,6 +117,12 @@ namespace acorn {
         llvm::Value* gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
         llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr);
+        llvm::Value* gen_function_decl_call(Func* called_func,
+                                            llvm::SmallVector<Expr*>& args,
+                                            llvm::Value* ll_dest_addr,
+                                            llvm::Value* ll_in_this);
+        llvm::Value* gen_function_call_arg(Expr* arg);
+        llvm::Value* gen_function_type_call(FuncCall* call, llvm::Value* ll_dest_addr);
         llvm::Value* gen_intrinsic_call(FuncCall* call);
         llvm::Value* gen_bool(Bool* b);
         llvm::Value* gen_string(String* string);

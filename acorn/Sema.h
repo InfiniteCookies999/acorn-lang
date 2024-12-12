@@ -117,10 +117,13 @@ namespace acorn {
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
         void check_function_type_call(FuncCall* call, FunctionType* func_type);
-        Func* check_function_decl_call(FuncCall* call, FuncList& candidates);
+        Func* check_function_decl_call(Expr* call_node,
+                                       llvm::SmallVector<Expr*>& args,
+                                       size_t non_named_args_offset,
+                                       FuncList& candidates);
         Func* find_best_call_candidate(FuncList& candidates,
-                                       llvm::SmallVector<Expr*, 8>& args);
-        uint32_t get_function_call_score(const Func* candidate, const llvm::SmallVector<Expr*, 8>& args) const;
+                                       llvm::SmallVector<Expr*>& args);
+        uint32_t get_function_call_score(const Func* candidate, const llvm::SmallVector<Expr*>& args) const;
         enum class CallCompareStatus {
             INCORRECT_ARGS,
             INCORRECT_PARAM_BY_NAME_NOT_FOUND,
@@ -135,18 +138,18 @@ namespace acorn {
         // @return true if the function is callable with the given arguments.
         template<bool for_score_gathering>
         CallCompareStatus compare_as_call_candidate(const Func* candidate,
-                                                    const llvm::SmallVector<Expr*, 8>& args,
+                                                    const llvm::SmallVector<Expr*>& args,
                                                     uint32_t& mimatched_types,
                                                     uint32_t& not_assignable_types) const;
         bool has_correct_number_of_args(const Func* candidate, 
-                                        const llvm::SmallVector<Expr*, 8>& args) const;
+                                        const llvm::SmallVector<Expr*>& args) const;
         void display_call_mismatch_info(PointSourceLoc error_loc,
                                         const FuncList& candidates,
-                                        const llvm::SmallVector<Expr*, 8>& args) const;
+                                        const llvm::SmallVector<Expr*>& args) const;
         // Displays information for why trying to call a function failed.
         template<typename F>
         void display_call_mismatch_info(const F* candidate,
-                                        const llvm::SmallVector<Expr*, 8>& args,
+                                        const llvm::SmallVector<Expr*>& args,
                                         bool indent) const;
 
         void check_cast(Cast* cast);

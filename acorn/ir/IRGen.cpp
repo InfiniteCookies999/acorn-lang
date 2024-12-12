@@ -321,6 +321,28 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
         }
     }
 
+    if (func->is_constructor) {
+        // Need to initialize the field's values.
+        auto structn = func->structn;
+        auto ll_struct_type = gen_type(structn->struct_type);
+
+        // TODO: once there are initializer lists this will need
+        //       to only initialize the values not in the initializer
+        //       list.
+        auto ll_this = ll_cur_func->getArg(0);
+
+        unsigned field_idx = 0;
+        for (; field_idx < structn->fields.size(); field_idx++) {
+            Var* field = structn->fields[field_idx];
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field_idx);
+            if (field->assignment) {
+                gen_assignment(ll_field_addr, field->type, field->assignment);
+            } else {
+                gen_default_value(ll_field_addr, field->type);
+            }
+        }
+    }
+
     for (Node* node : *func->scope) {
         gen_node(node);
     }
@@ -582,12 +604,12 @@ void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
 void acorn::IRGenerator::gen_implicit_structs_functions() {
     for (Struct* structn : structs_needing_implicit_functions) {
         if (structn->ll_default_constructor) {
-            gen_default_constructor(structn);
+            gen_implicit_default_constructor(structn);
         }
     }
 }
 
-void acorn::IRGenerator::gen_default_constructor(Struct* structn) {
+void acorn::IRGenerator::gen_implicit_default_constructor(Struct* structn) {
     if (!structn->ll_default_constructor) {
         gen_default_constructor_decl(structn);
     }
@@ -1036,6 +1058,17 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
         ll_dest_addr = gen_unseen_alloca(ll_struct_type, "tmp.struct");
     }
     
+    if (initializer->called_constructor) {
+
+        Func* called_func = initializer->called_constructor;
+        gen_function_decl(called_func);
+
+        return gen_function_decl_call(called_func,
+                                      initializer->values,
+                                      nullptr,
+                                      ll_dest_addr);
+    }
+
     if (initializer->values.empty()) {
         gen_default_value(ll_dest_addr, initializer->type);
         return ll_dest_addr;
@@ -1166,9 +1199,9 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
 llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr) {
     
     bool call_func_type = call->site->type->is_function_type();
-
-    bool uses_aggr_param;
-    if (!call_func_type) {
+    if (call->site->type->is_function_type()) {
+        return gen_function_type_call(call, ll_dest_addr);
+    } else {
         Func* called_func = call->called_func;
         gen_function_decl(called_func);
 
@@ -1179,81 +1212,105 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
             }
             return ll_ret;
         }
-        
-        uses_aggr_param = called_func->uses_aggr_param;
-    } else {
-        auto func_type = as<FunctionType*>(call->site->type);
-        uses_aggr_param = func_type->get_return_type()->is_aggregate();
-    }
 
-    auto gen_function_call_arg = [this](Expr* arg) finline -> llvm::Value* {
-        if (arg->is(NodeKind::IdentRef)) {
-            auto ref = as<IdentRef*>(arg);
-            if (ref->is_var_ref() &&
-                ref->var_ref->is_param() &&
-                ref->var_ref->type->is_array()) {
-                // The argument references an already decayed array
-                // from a parameter so it must be loaded.
-                return builder.CreateLoad(builder.getPtrTy(), gen_node(arg));
+        // When a member function is called from a variable the
+        // function call has the dot operator as its child. Otherwise
+        // the member function must be a call from the current function
+        // where the current function is a member function of the same
+        // struct.
+        //
+        llvm::Value* ll_in_this = nullptr;
+        if (call->called_func->structn) {
+            if (call->site->is(NodeKind::DotOperator)) {
+                auto dot_operator = as<DotOperator*>(call->site);
+                ll_in_this = gen_node(dot_operator->site);
+                if (dot_operator->site->type->is_pointer()) {
+                    // The function call auto-dereferences the pointer.
+                    ll_in_this = builder.CreateLoad(builder.getPtrTy(), ll_in_this);
+                }
+            } else {
+                ll_in_this = ll_this;
             }
         }
+
+        return gen_function_decl_call(called_func, call->args, ll_dest_addr, ll_in_this);
+    }
+}
+
+llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
+    if (arg->is(NodeKind::IdentRef)) {
+        auto ref = as<IdentRef*>(arg);
+        if (ref->is_var_ref() &&
+            ref->var_ref->is_param() &&
+            ref->var_ref->type->is_array()) {
+            // The argument references an already decayed array
+            // from a parameter so it must be loaded.
+            return builder.CreateLoad(builder.getPtrTy(), gen_node(arg));
+        }
+    }
         
-        if (arg->type->is_struct_type()) {
+    if (arg->type->is_struct_type()) {
             
-            auto ll_aggr_type = gen_type(arg->type);
-            uint64_t aggr_mem_size_bytes = sizeof_type_in_bytes(ll_aggr_type);
-            uint64_t aggr_mem_size_bits = aggr_mem_size_bytes * 8;
+        auto ll_aggr_type = gen_type(arg->type);
+        uint64_t aggr_mem_size_bytes = sizeof_type_in_bytes(ll_aggr_type);
+        uint64_t aggr_mem_size_bits = aggr_mem_size_bytes * 8;
 
-            bool uses_optimized_int_passing = aggr_mem_size_bits <= ll_module.getDataLayout().getPointerSizeInBits();
+        bool uses_optimized_int_passing = aggr_mem_size_bits <= ll_module.getDataLayout().getPointerSizeInBits();
 
-            auto finish_struct_arg = [this, uses_optimized_int_passing, aggr_mem_size_bits]
-                (auto ll_tmp_arg) finline -> llvm::Value* {
-                if (uses_optimized_int_passing) {
-                    // The struct can fit into an integer.
-                    auto ll_int_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size_bits)));
-                    return builder.CreateLoad(ll_int_type, ll_tmp_arg, "opt.int.tmp.arg");
-                }
-                return ll_tmp_arg;
-            };
-
-            // First checking for if it is an rvalue since if it is
-            // then there is no reason to make a copy of the argument
-            // since it is temporary anyway.
-            if (arg->is(NodeKind::FuncCall) ||
-                arg->is(NodeKind::StructInitializer)) {
-                auto ll_tmp_arg = gen_node(arg);
-                
-                if (uses_optimized_int_passing && arg->is(NodeKind::FuncCall)) {
-                    // If the parameter is the result of a function call and
-                    // it can use an integer type as the argument then the
-                    // function call must have returned an integer, so there
-                    // is no need to convert to an integer as it already is.
-                    return ll_tmp_arg;
-                }
-
-                return finish_struct_arg(ll_tmp_arg);
+        auto finish_struct_arg = [this, uses_optimized_int_passing, aggr_mem_size_bits]
+            (auto ll_tmp_arg) finline -> llvm::Value* {
+            if (uses_optimized_int_passing) {
+                // The struct can fit into an integer.
+                auto ll_int_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size_bits)));
+                return builder.CreateLoad(ll_int_type, ll_tmp_arg, "opt.int.tmp.arg");
             }
-            
-            llvm::Align ll_alignment = get_alignment(ll_aggr_type);
+            return ll_tmp_arg;
+        };
 
-            auto ll_copy_from_addr = gen_node(arg);
-            auto ll_tmp_arg = gen_unseen_alloca(ll_aggr_type, "aggr.arg");
-            builder.CreateMemCpy(
-                ll_tmp_arg, ll_alignment,
-                ll_copy_from_addr, ll_alignment,
-                aggr_mem_size_bytes
-            );
+        // First checking for if it is an rvalue since if it is
+        // then there is no reason to make a copy of the argument
+        // since it is temporary anyway.
+        if (arg->is(NodeKind::FuncCall) ||
+            arg->is(NodeKind::StructInitializer)) {
+            auto ll_tmp_arg = gen_node(arg);
+                
+            if (uses_optimized_int_passing && arg->is(NodeKind::FuncCall)) {
+                // If the parameter is the result of a function call and
+                // it can use an integer type as the argument then the
+                // function call must have returned an integer, so there
+                // is no need to convert to an integer as it already is.
+                return ll_tmp_arg;
+            }
 
             return finish_struct_arg(ll_tmp_arg);
         }
+            
+        llvm::Align ll_alignment = get_alignment(ll_aggr_type);
 
-        return gen_rvalue(arg);
-    };
+        auto ll_copy_from_addr = gen_node(arg);
+        auto ll_tmp_arg = gen_unseen_alloca(ll_aggr_type, "aggr.arg");
+        builder.CreateMemCpy(
+            ll_tmp_arg, ll_alignment,
+            ll_copy_from_addr, ll_alignment,
+            aggr_mem_size_bytes
+        );
+
+        return finish_struct_arg(ll_tmp_arg);
+    }
+
+    return gen_rvalue(arg);
+}
+
+llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
+                                                        llvm::SmallVector<Expr*>& args,
+                                                        llvm::Value* ll_dest_addr,
+                                                        llvm::Value* ll_in_this) {
+    
+    bool uses_aggr_param = called_func->uses_aggr_param;
 
     llvm::SmallVector<llvm::Value*> ll_args;
-    bool is_member_func = call->called_func && call->called_func->structn;
-    size_t ll_num_args = call->called_func ? call->called_func->params.size()
-                                           : call->args.size();
+    bool is_member_func = called_func->structn;
+    size_t ll_num_args = called_func->params.size();
     size_t arg_offset = 0;
     
     if (is_member_func) {
@@ -1266,26 +1323,119 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
 
     // Pass the address of the struct for the member function.
     if (is_member_func) {
-        // When a member function is called from a variable the
-        // function call has the dot operator as its child. Otherwise
-        // the member function must be a call from the current function
-        // where the current function is a member function of the same
-        // struct.
-        //
-        llvm::Value* ll_in_this;
-        if (call->site->is(NodeKind::DotOperator)) {
-            auto dot_operator = as<DotOperator*>(call->site);
-            ll_in_this = gen_node(dot_operator->site);
-            if (dot_operator->site->type->is_pointer()) {
-                // The function call auto-dereferences the pointer.
-                ll_in_this = builder.CreateLoad(builder.getPtrTy(), ll_in_this);
-            }
-        } else {
-            ll_in_this = ll_this;
-        }
-
         ll_args[arg_offset++] = ll_in_this;
     }
+
+    // Pass the return address as an argument.
+    if (uses_aggr_param) {
+
+        if (!ll_dest_addr) {
+            // The user decided to ignore the return or the value
+            // is a temporary value so we must create a temporary 
+            // value to place the return value into.
+            //
+            auto ll_ret_type = gen_type(called_func->return_type);
+            ll_dest_addr = gen_unseen_alloca(ll_ret_type, "tmp.aggr.ret");
+        }
+
+        ll_args[arg_offset++] = ll_dest_addr;
+    }
+    
+    bool uses_default_param_values = called_func->default_params_offset != -1;
+    if (uses_default_param_values) {
+        // Zero initializing the arguments after the start of the default parameter values
+        // then filling them in later if they were not filled by the named parameter.
+        size_t default_params_offset = called_func->default_params_offset + arg_offset;
+        std::fill(ll_args.begin() + default_params_offset, ll_args.end(), nullptr);
+    }
+
+    for (size_t i = 0; i < args.size(); ++i) {
+        Expr* arg = args[i];
+        if (arg->is(NodeKind::NamedValue)) {
+            auto named_arg = as<NamedValue*>(arg);
+            size_t arg_idx = arg_offset + named_arg->mapped_idx;
+            ll_args[arg_idx] = gen_function_call_arg(named_arg->assignment);
+        } else {
+            ll_args[arg_offset + i] = gen_function_call_arg(arg);
+        }
+    }
+
+    // Fill in slots with default parameter values.
+    if (uses_default_param_values) {
+        auto& params = called_func->params;
+        size_t default_params_offset = called_func->default_params_offset;
+        size_t start = default_params_offset;
+        if (uses_aggr_param) {
+            ++start;
+        }
+        if (is_member_func) {
+            ++start;
+        }
+
+        size_t param_idx = called_func->default_params_offset;
+        for (size_t i = start; i < ll_num_args; i++) {
+            if (ll_args[i] == nullptr) {
+                Expr* arg = params[param_idx]->assignment;
+                ll_args[i] = gen_function_call_arg(arg);
+            }
+            ++param_idx;
+        }
+    }
+
+    // -- Debug
+    // std::string debug_info = "Calling function with name: " + called_func->name.reduce().str() + "\n";
+    // debug_info += "         LLVM Types passed to function:  [";
+    // for (auto ll_arg : ll_args) {
+    //     debug_info += to_string(ll_arg->getType());
+    //     if (ll_arg != ll_args.back()) {
+    //         debug_info += ", ";
+    //     }
+    // }
+    // debug_info += "]\n";
+    // debug_info += "         Types expected by the function: [";
+    // for (size_t count = 0; llvm::Argument & ll_param : called_func->ll_func->args()) {
+    //     debug_info += to_string(ll_param.getType());
+    //     if (count + 1 != called_func->ll_func->arg_size()) {
+    //         debug_info += ", ";
+    //     }
+    //     ++count;
+    // }
+    // debug_info += "]\n";
+    // Logger::debug(debug_info.c_str());
+
+    auto ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
+    
+    if (!ll_ret->getType()->isVoidTy()) {
+        ll_ret->setName("call.ret");
+    }
+
+    if (ll_dest_addr && !uses_aggr_param) {
+        builder.CreateStore(ll_ret, ll_dest_addr);
+    }
+
+    if (uses_aggr_param) {
+        // If it uses an aggregate parameter value then we need to
+        // return the ll_dest_addr since it is possible that the
+        // address needs to be used in inline code.
+        return ll_dest_addr;
+    } else {
+        return ll_ret;
+    }
+}
+
+llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Value* ll_dest_addr) {
+    auto func_type = as<FunctionType*>(call->site->type);
+    bool uses_aggr_param = func_type->get_return_type()->is_aggregate();
+    auto& param_types = func_type->get_param_types();
+
+    llvm::SmallVector<llvm::Value*> ll_args;
+    size_t ll_num_args = call->args.size();
+    size_t arg_offset = 0;
+    
+    if (uses_aggr_param) {
+        ++ll_num_args;
+    }
+    ll_args.resize(ll_num_args);
 
     // Pass the return address as an argument.
     if (uses_aggr_param) {
@@ -1301,121 +1451,53 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         ll_args[arg_offset++] = ll_dest_addr;
     }
 
-    bool uses_default_param_values = call->called_func && call->called_func->default_params_offset != -1;
-    if (uses_default_param_values) {
-        // Zero initializing the arguments after the start of the default parameter values
-        // then filling them in later if they were not filled by the named parameter.
-        size_t default_params_offset = call->called_func->default_params_offset + arg_offset;
-        std::fill(ll_args.begin() + default_params_offset, ll_args.end(), nullptr);
-    }
-
     for (size_t i = 0; i < call->args.size(); ++i) {
         Expr* arg = call->args[i];
-        if (arg->is(NodeKind::NamedValue)) {
-            auto named_arg = as<NamedValue*>(arg);
-            size_t arg_idx = arg_offset + named_arg->mapped_idx;
-            ll_args[arg_idx] = gen_function_call_arg(named_arg->assignment);
-        } else {
-            ll_args[arg_offset + i] = gen_function_call_arg(arg);
-        }
+        ll_args[arg_offset + i] = gen_function_call_arg(arg);
     }
 
-    // Fill in slots with default parameter values.
-    if (uses_default_param_values) {
-        auto& params = call->called_func->params;
-        size_t default_params_offset = call->called_func->default_params_offset;
-        size_t start = default_params_offset;
-        if (uses_aggr_param) {
-            ++start;
-        }
-        if (is_member_func) {
-            ++start;
-        }
+    auto ll_site = gen_rvalue(call->site);
 
-        size_t param_idx = call->called_func->default_params_offset;
-        for (size_t i = start; i < ll_num_args; i++) {
-            if (ll_args[i] == nullptr) {
-                Expr* arg = params[param_idx]->assignment;
-                ll_args[i] = gen_function_call_arg(arg);
-            }
-            ++param_idx;
-        }
+    auto ll_ret_type = !uses_aggr_param ? gen_type(func_type->get_return_type())
+                                        : llvm::Type::getVoidTy(ll_context);
+        
+    llvm::SmallVector<llvm::Type*> ll_param_types;
+    ll_param_types.reserve(ll_num_args);
+    if (uses_aggr_param) {
+        ll_param_types.push_back(builder.getPtrTy());
     }
-
-    llvm::Value* ll_ret;
-    if (!call_func_type) {
-
-        // -- Debug
-        // Func* called_func = call->called_func;
-        // std::string debug_info = "Calling function with name: " + called_func->name.reduce().str() + "\n";
-        // debug_info += "         LLVM Types passed to function:  [";
-        // for (auto ll_arg : ll_args) {
-        //     debug_info += to_string(ll_arg->getType());
-        //     if (ll_arg != ll_args.back()) {
-        //         debug_info += ", ";
-        //     }
-        // }
-        // debug_info += "]\n";
-        // debug_info += "         Types expected by the function: [";
-        // for (size_t count = 0; llvm::Argument & ll_param : called_func->ll_func->args()) {
-        //     debug_info += to_string(ll_param.getType());
-        //     if (count + 1 != called_func->ll_func->arg_size()) {
-        //         debug_info += ", ";
-        //     }
-        //     ++count;
-        // }
-        // debug_info += "]\n";
-        // Logger::debug(debug_info.c_str());
-
-        Func* called_func = call->called_func;
-        ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
-    } else {
-
-        auto ll_site = gen_rvalue(call->site);
-        
-        auto func_type    = as<FunctionType*>(call->site->type);
-        auto& param_types = func_type->get_param_types();
-
-        auto ll_ret_type = !uses_aggr_param ? gen_type(func_type->get_return_type())
-                                            : llvm::Type::getVoidTy(ll_context);
-        
-        llvm::SmallVector<llvm::Type*> ll_param_types;
-        ll_param_types.reserve(ll_num_args);
-        if (uses_aggr_param) {
+    for (Type* type : param_types) {
+        if (type->is_array()) { // Array types need to be decayed.
             ll_param_types.push_back(builder.getPtrTy());
+        } else {
+            ll_param_types.push_back(gen_type(type));
         }
-        for (Type* type : param_types) {
-            if (type->is_array()) { // Array types need to be decayed.
-                ll_param_types.push_back(builder.getPtrTy());
-            } else {
-                ll_param_types.push_back(gen_type(type));
-            }
-        }
-
-        // -- Debug
-        // std::string debug_info = "";
-        // debug_info += "LLVM Types passed to function:  [";
-        // for (auto ll_arg : ll_args) {
-        //     debug_info += to_string(ll_arg->getType());
-        //     if (ll_arg != ll_args.back()) {
-        //         debug_info += ", ";
-        //     }
-        // }
-        // debug_info += "]\n";
-        // debug_info += "Types expected by the function: [";
-        // for (size_t count = 0; llvm::Type* ll_type : ll_param_types) {
-        //     debug_info += to_string(ll_type);
-        //     if (count + 1 != ll_param_types.size()) {
-        //         debug_info += ", ";
-        //     }
-        //     ++count;
-        // }
-        // debug_info += "]\n";
-        // Logger::debug(debug_info.c_str());
-
-        auto ll_func_type = llvm::FunctionType::get(ll_ret_type, ll_param_types, false);
-        ll_ret = builder.CreateCall(ll_func_type, ll_site, ll_args);
     }
+
+    // -- Debug
+    // std::string debug_info = "";
+    // debug_info += "LLVM Types passed to function:  [";
+    // for (auto ll_arg : ll_args) {
+    //     debug_info += to_string(ll_arg->getType());
+    //     if (ll_arg != ll_args.back()) {
+    //         debug_info += ", ";
+    //     }
+    // }
+    // debug_info += "]\n";
+    // debug_info += "Types expected by the function: [";
+    // for (size_t count = 0; llvm::Type* ll_type : ll_param_types) {
+    //     debug_info += to_string(ll_type);
+    //     if (count + 1 != ll_param_types.size()) {
+    //         debug_info += ", ";
+    //     }
+    //     ++count;
+    // }
+    // debug_info += "]\n";
+    // Logger::debug(debug_info.c_str());
+
+    auto ll_func_type = llvm::FunctionType::get(ll_ret_type, ll_param_types, false);
+    auto ll_ret = builder.CreateCall(ll_func_type, ll_site, ll_args);
+    
     if (!ll_ret->getType()->isVoidTy()) {
         ll_ret->setName("call.ret");
     }
@@ -1865,7 +1947,7 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
             auto struct_type = as<StructType*>(base_type);
             auto structn = struct_type->get_struct();
 
-            if (structn->fields_have_assignments) {
+            if (structn->fields_have_assignments || structn->default_constructor) {
                 auto ll_arr_type = gen_type(type);
 
                 llvm::SmallVector<llvm::Value*> ll_indexes(arr_type->get_depth() + 1, gen_isize(0));
@@ -1901,7 +1983,7 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
         auto ll_struct_type = gen_type(type);
         auto ll_alignment = get_alignment(ll_struct_type);
 
-        if (!structn->fields_have_assignments) {
+        if (!structn->fields_have_assignments && !structn->default_constructor) {
             builder.CreateMemSet(
                 ll_address,
                 builder.getInt8(0),
@@ -2082,7 +2164,11 @@ void acorn::IRGenerator::gen_default_constructor_decl(Struct* structn) {
 void acorn::IRGenerator::gen_default_constructor_call(llvm::Value* ll_address, Struct* structn) {
     if (!structn->ll_default_constructor) {
         gen_default_constructor_decl(structn);
-        structs_needing_implicit_functions.push_back(structn);
+        if (structn->default_constructor) {
+            structn->default_constructor->ll_func = structn->ll_default_constructor;
+        } else {
+            structs_needing_implicit_functions.push_back(structn);
+        }
     }
     builder.CreateCall(structn->ll_default_constructor, ll_address);
 }

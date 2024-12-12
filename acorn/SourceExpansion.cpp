@@ -10,40 +10,6 @@ if (s1 < s) { s = s1; }           \
 if (e1 > e) { e = e1; }           \
 }
 
-    static void go_until(const char*& e, char open, char close) {
-        
-        while (*e != '\0') {
-            // It is possible that when calling this the end already
-            // passed the opening so just check for either.
-            if (*e == open) {
-                ++e;
-                break;
-            } else if (*e == close) {
-                break;
-            }
-            ++e;
-        }
-        
-        int count = 1;
-        
-        // Only include '\0' for safety but only it should
-        // not be needed.
-        while (count > 0 && *e != '\0') {
-            if (*e == close) {
-                --count;
-            }
-            if (*e == open) {
-                ++count;
-            }
-            
-            ++e;
-        }
-        if (*e == '\0') {
-            --e;
-        }
-        //++e;
-    }
-
     static std::pair<const char*, const char*> get_expansion(Node* node) {
         
         auto s = node->uses_expanded_loc ? node->expanded_loc.ptr : node->loc.ptr;;
@@ -118,6 +84,11 @@ if (e1 > e) { e = e1; }           \
             go_until(e, '(', ')');
             break;
         }
+        case NodeKind::StructInitializer: {
+            // Include the closing }
+            go_until(e, '{', '}');
+            break;
+        }
         case NodeKind::Number:
         case NodeKind::IdentRef:
         case NodeKind::String:
@@ -131,6 +102,40 @@ if (e1 > e) { e = e1; }           \
         }
         return {s, e};
     }
+}
+
+void acorn::go_until(const char*& e, char open, char close) {
+        
+    while (*e != '\0') {
+        // It is possible that when calling this the end already
+        // passed the opening so just check for either.
+        if (*e == open) {
+            ++e;
+            break;
+        } else if (*e == close) {
+            break;
+        }
+        ++e;
+    }
+        
+    int count = 1;
+        
+    // Only include '\0' for safety but only it should
+    // not be needed.
+    while (count > 0 && *e != '\0') {
+        if (*e == close) {
+            --count;
+        }
+        if (*e == open) {
+            ++count;
+        }
+            
+        ++e;
+    }
+    if (*e == '\0') {
+        --e;
+    }
+    //++e;
 }
 
 acorn::PointSourceLoc acorn::expand(Node* node) {

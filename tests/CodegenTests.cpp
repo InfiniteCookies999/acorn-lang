@@ -1010,5 +1010,37 @@ void test_codegen() {
                 expect(result, std::identity()).to_be("AB");
             });
         });
+        section("constructors", [&] {
+            test("Call constructor with arg", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"constructors/constructors_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("@");
+            });
+            test("Default constructor called automatically", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"constructors/constructors_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB");
+            });
+            test("Default constructor called automatically (for arrays)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"constructors/constructors_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABABAB");
+            });
+            test("Default constructor called automatically init fields", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"constructors/constructors_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB");
+            });
+            test("Default constructor called automatically init fields (for arrays)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"constructors/constructors_test5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABABAB");
+            });
+        });
     });
 }
