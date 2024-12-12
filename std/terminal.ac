@@ -17,6 +17,10 @@ void print(const char* s) {
     print(s, strlen(s));
 }
 
+void print(String* s) {
+    print(s.buffer, s.length);
+}
+
 void print(int value, int base=10) {
     if value < 0 {
         print("-");
@@ -74,5 +78,10 @@ void println(char c) {
 
 void println(bool b) {
     print(b);
+    print("\n");
+}
+
+void println(String* s) {
+    print(s);
     print("\n");
 }

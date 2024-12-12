@@ -1,0 +1,38 @@
+#file(access=pub)
+
+struct String {
+    char* buffer;
+    int   length;
+    
+    /*
+     * Creates a String with a length of 0.
+     */
+    String() {
+        buffer = "\0";
+    }
+
+    /*
+     * Creates a String from a null terminated
+     * character buffer.
+     */
+    String(const char* buffer) {
+        this.length = strlen(buffer);
+        this.buffer = as(char*) malloc(length + 1); // +1 for null terminator.
+        memcpy(this.buffer, buffer, length + 1);
+    }
+
+    /*
+     * Creates a String from a character buffer and an
+     * explicit length. Because of the explicitly defined
+     * length the buffer does not have to be null terminated.
+     *
+     * If the buffer is null terminated do not include the
+     * null termination in the length.
+     */
+    String(const char* buffer, int length) {
+        this.length = length;
+        this.buffer = malloc(length + 1); // +1 for null terminator.
+        memcpy(this.buffer, buffer, length);
+        this.buffer[length] = '\0';
+    }
+}
