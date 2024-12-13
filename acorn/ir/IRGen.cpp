@@ -379,6 +379,21 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
         ll_global_cleanup_call_bb = builder.GetInsertBlock();
     }
 
+    if (func->is_destructor) {
+        // The function is a destructor so need to call the destructors
+        // of any of the fields that have destructors themselves.
+        auto structn = func->structn;
+        if (structn->fields_need_destruction) {
+            auto ll_struct_type = gen_struct_type(structn->struct_type);
+            for (Var* field : structn->fields) {
+                if (field->type->needs_destruction()) {
+                    auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->field_idx);
+                    gen_call_destructors(field->type, ll_field_addr);
+                }
+            }
+        }
+    }
+
     if (func->num_returns > 1) {
         // Have to check for termination because the last statement might
         // have been an if statement that already branched.
@@ -476,7 +491,7 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
         ll_address->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
     }
 
-    if (type_needs_destruction(var->type)) {
+    if (var->type->needs_destruction()) {
         globals_needing_destroyed.push_back(var);
     }
 
@@ -672,14 +687,14 @@ void acorn::IRGenerator::gen_implicit_structs_functions() {
         if (structn->ll_default_constructor) {
             gen_implicit_default_constructor(structn);
         }
+        if (structn->ll_destructor) {
+            gen_implicit_destructor(structn);
+        }
     }
 }
 
 void acorn::IRGenerator::gen_implicit_default_constructor(Struct* structn) {
-    if (!structn->ll_default_constructor) {
-        structn->ll_default_constructor = gen_no_param_member_function_decl(structn, structn->name.reduce());
-    }
-
+    
     cur_struct = structn;
 
     ll_cur_func = structn->ll_default_constructor;
@@ -705,6 +720,29 @@ void acorn::IRGenerator::gen_implicit_default_constructor(Struct* structn) {
     builder.CreateRetVoid();
 }
 
+void acorn::IRGenerator::gen_implicit_destructor(Struct* structn) {
+
+    cur_struct = structn;
+
+    ll_cur_func = structn->ll_destructor;
+
+    auto ll_struct_type = gen_struct_type(structn->struct_type);
+
+    auto ll_entry = gen_bblock("entry.block", ll_cur_func);
+    builder.SetInsertPoint(ll_entry);
+
+    auto ll_this = ll_cur_func->getArg(0);
+
+    for (Var* field : structn->fields) {
+        if (field->type->needs_destruction()) {
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->field_idx);
+            gen_call_destructors(field->type, ll_field_addr);
+        }
+    }
+
+    builder.CreateRetVoid();
+}
+
 void acorn::IRGenerator::add_object_with_destructor(Type* type, llvm::Value* ll_address) {
     if (!encountered_return && !ir_scope->parent) {
         always_initialized_destructor_objects.push_back({ type, ll_address });
@@ -721,21 +759,33 @@ void acorn::IRGenerator::gen_call_destructors(llvm::SmallVector<DestructorObject
 }
 
 void acorn::IRGenerator::gen_call_destructors(Type* type, llvm::Value* ll_address) {
+
+    auto gen_struct_destructor = [this, ll_address](StructType* struct_type) finline {
+        auto structn = struct_type->get_struct();
+        if (!structn->ll_destructor) {
+            auto name = llvm::Twine("~") + structn->name.reduce();
+            structn->ll_destructor = gen_no_param_member_function_decl(structn, name);
+            if (structn->destructor) {
+                structn->destructor->ll_func = structn->ll_destructor;
+            } else if (!structn->has_requested_gen_implicits) {
+                structn->has_requested_gen_implicits = true;
+                structs_needing_implicit_functions.push_back(structn);
+            }
+        }
+    };
+
     if (type->is_struct_type()) {
         auto struct_type = as<StructType*>(type);
         auto structn = struct_type->get_struct();
-        if (!structn->ll_destructor) {
-            structn->ll_destructor = gen_no_param_member_function_decl(structn, structn->destructor->name.reduce());
-            if (structn->destructor) {
-                structn->destructor->ll_func = structn->ll_destructor;
-            }
-        }
+        gen_struct_destructor(struct_type);
         builder.CreateCall(structn->ll_destructor, ll_address);
     } else if (type->is_array()) {
         auto arr_type = as<ArrayType*>(type);
         auto base_type = arr_type->get_base_type();
         auto struct_type = as<StructType*>(base_type);
         auto structn = struct_type->get_struct();
+
+        gen_struct_destructor(struct_type);
 
         if (!structn->ll_destructor) {
             structn->ll_destructor = gen_no_param_member_function_decl(structn, structn->destructor->name.reduce());
@@ -775,26 +825,9 @@ void acorn::IRGenerator::gen_call_loc_scope_destructors() {
 }
 
 void acorn::IRGenerator::process_destructor_state(Type* type, llvm::Value* ll_address) {
-    if (type_needs_destruction(type)) {
+    if (type->needs_destruction()) {
         add_object_with_destructor(type, ll_address);
     }
-}
-
-bool acorn::IRGenerator::type_needs_destruction(Type* type) {
-    if (type->is_struct_type()) {
-        auto struct_type = as<StructType*>(type);
-        auto structn = struct_type->get_struct();
-        return structn->destructor != nullptr;
-    } else if (type->is_array()) {
-        auto arr_type = as<ArrayType*>(type);
-        auto base_type = arr_type->get_base_type();
-        if (base_type->is_struct_type()) {
-            auto struct_type = as<StructType*>(base_type);
-            auto structn = struct_type->get_struct();
-            return structn->destructor != nullptr;
-        }
-    }
-    return false;
 }
 
 llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
@@ -853,7 +886,7 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
                     // reason to create a temporary object except if the type has a destructor.
                     auto call = as<FuncCall*>(ret->value);
                     llvm::Value* ll_tmp_address = nullptr;
-                    if (type_needs_destruction(cur_func->return_type)) {
+                    if (cur_func->return_type->needs_destruction()) {
                         ll_tmp_address = gen_unseen_alloca(cur_func->return_type, "tmp.inline.aggr");
                     }
                     ll_value = gen_function_call(call, ll_tmp_address);
@@ -1745,7 +1778,7 @@ void acorn::IRGenerator::gen_call_return_aggr_type_temporary(Type* return_type,
     // type contains a struct with a destructor then ensuring the
     // object is added to be destroyed.
     //
-    if (type_needs_destruction(return_type)) {
+    if (return_type->needs_destruction()) {
         auto ll_ret_type = gen_type(return_type);
         ll_dest_addr = gen_unseen_alloca(ll_ret_type, "tmp.aggr.ret");
         add_object_with_destructor(return_type, ll_dest_addr);
@@ -2202,7 +2235,7 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
                                         ll_arr_start_ptr, 
                                         ll_total_arr_length, 
                                         [this, structn](auto ll_elm) {
-                    gen_default_constructor_call(ll_elm, structn);
+                    gen_call_default_constructor(ll_elm, structn);
                 });
                 return;
             }
@@ -2236,7 +2269,7 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
                 ll_alignment
             );
         } else {
-            gen_default_constructor_call(ll_address, structn);
+            gen_call_default_constructor(ll_address, structn);
         }
     } else {
         builder.CreateStore(gen_zero(type), ll_address);
@@ -2391,26 +2424,27 @@ llvm::BasicBlock* acorn::IRGenerator::gen_bblock(const char* name, llvm::Functio
     return llvm::BasicBlock::Create(ll_context, name, ll_func);
 }
 
-llvm::Function* acorn::IRGenerator::gen_no_param_member_function_decl(Struct* structn, llvm::StringRef name) {
+llvm::Function* acorn::IRGenerator::gen_no_param_member_function_decl(Struct* structn, llvm::Twine name) {
     auto ll_param_types = llvm::SmallVector<llvm::Type*>{ builder.getPtrTy() };
     auto ll_func_type   = llvm::FunctionType::get(builder.getVoidTy(), ll_param_types, false);
 
     auto ll_func = llvm::Function::Create(
         ll_func_type,
         llvm::GlobalValue::InternalLinkage,
-        llvm::Twine(name),
+        name,
         ll_module
     );
 
     return ll_func;
 }
 
-void acorn::IRGenerator::gen_default_constructor_call(llvm::Value* ll_address, Struct* structn) {
+void acorn::IRGenerator::gen_call_default_constructor(llvm::Value* ll_address, Struct* structn) {
     if (!structn->ll_default_constructor) {
         structn->ll_default_constructor = gen_no_param_member_function_decl(structn, structn->name.reduce());
         if (structn->default_constructor) {
             structn->default_constructor->ll_func = structn->ll_default_constructor;
-        } else {
+        } else if (!structn->has_requested_gen_implicits) {
+            structn->has_requested_gen_implicits = true;
             structs_needing_implicit_functions.push_back(structn);
         }
     }

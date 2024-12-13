@@ -571,6 +571,7 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
         if (func->name != Identifier::Invalid) {
             if (func->is_destructor) {
                 structn->destructor = func;
+                structn->needs_destruction = true;
                 func->structn = structn;
             } else if (func->name == cur_struct->name) {
                 func->is_constructor = true;

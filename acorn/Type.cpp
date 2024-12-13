@@ -71,6 +71,24 @@ uint32_t acorn::Type::get_number_of_bits() const {
     }
 }
 
+bool acorn::Type::needs_destruction() const {
+    auto kind = get_kind();
+    if (kind == TypeKind::Struct) {
+        auto struct_type = as<const StructType*>(this);
+        auto structn = struct_type->get_struct();
+        return structn->needs_destruction;
+    } else if (kind == TypeKind::Array) {
+        auto arr_type = as<const ArrayType*>(this);
+        auto base_type = arr_type->get_base_type();
+        if (base_type->is_struct_type()) {
+            auto struct_type = as<const StructType*>(base_type);
+            auto structn = struct_type->get_struct();
+            return structn->needs_destruction;
+        }
+    }
+
+    return false;
+}
 
 std::string acorn::Type::to_string() const {
 #define str(s) !is_const() ? s : "const " s;

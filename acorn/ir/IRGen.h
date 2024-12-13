@@ -112,6 +112,7 @@ namespace acorn {
         bool encountered_return = false;
 
         void gen_implicit_default_constructor(Struct* structn);
+        void gen_implicit_destructor(Struct* structn);
 
         void gen_function_decl(Func* func);
         llvm::Type* gen_function_return_type(Func* func, bool is_main);
@@ -134,7 +135,6 @@ namespace acorn {
         void gen_call_destructors(Type* type, llvm::Value* ll_address);
         void gen_call_loc_scope_destructors();
         void process_destructor_state(Type* type, llvm::Value* ll_address);
-        bool type_needs_destruction(Type* type);
 
         llvm::Value* gen_return(ReturnStmt* ret);
         llvm::Value* gen_if(IfStmt* ifs);
@@ -189,8 +189,8 @@ namespace acorn {
 
         llvm::BasicBlock* gen_bblock(const char* name, llvm::Function* ll_func = nullptr);
 
-        llvm::Function* gen_no_param_member_function_decl(Struct* structn, llvm::StringRef name);
-        void gen_default_constructor_call(llvm::Value* ll_address, Struct* structn);
+        llvm::Function* gen_no_param_member_function_decl(Struct* structn, llvm::Twine name);
+        void gen_call_default_constructor(llvm::Value* ll_address, Struct* structn);
 
         void gen_abstract_array_loop(Type* base_type, 
                                      llvm::Value* ll_arr_start_ptr, 

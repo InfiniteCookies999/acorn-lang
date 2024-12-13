@@ -128,8 +128,10 @@ namespace acorn {
              
         uint32_t get_number_of_bits() const;
 
-        std::string to_string() const;
+        // True if the type needs to have it's destructor called.
+        bool needs_destruction() const;
 
+        std::string to_string() const;
 
     protected:
         Type(TypeKind kind, bool is_const)

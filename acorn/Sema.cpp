@@ -986,6 +986,9 @@ void acorn::Sema::check_struct(Struct* structn) {
         check_variable(field);
         if (!field->type) {
             structn->fields_have_errors = true;
+        } else if (field->type->needs_destruction()) {
+            structn->needs_destruction = true;
+            structn->fields_need_destruction = true;
         }
         if (field->assignment) {
             structn->fields_have_assignments = true;
