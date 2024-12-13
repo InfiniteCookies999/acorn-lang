@@ -1027,16 +1027,35 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
         if (cur_func->return_type->is_aggregate() && ret->value->is(NodeKind::IdentRef)) {
             auto ref = as<IdentRef*>(ret->value);
             if (ref->is_var_ref()) {
-                if (cur_func->aggr_ret_var &&
-                    cur_func->aggr_ret_var != ref->var_ref) {
-                    // Returning multiple different variable references
-                    // so we cannot treat the variable as the return address.
-                    cur_func->cannot_use_aggr_ret_var = true;
-                    cur_func->aggr_ret_var = nullptr;
-                } else if (!cur_func->cannot_use_aggr_ret_var) {
-                    // May be the only variable returned in which case the
-                    // variable may be used as the return address.
-                    cur_func->aggr_ret_var = ref->var_ref;
+                // Have to check if it is global because obviously
+                // global variables are not local to the function
+                // and we do not want to mess up the global variable's
+                // memory.
+                //
+                // Additionally have to check that it is not a parameter because
+                // the parameter may be passed in as an aggregate parameter and
+                // but the caller thinks a seperate parameter is responsible for
+                // handling the aggregate returning. Additionally for certain memory
+                // handling cases it is important that these two are distinct or it
+                // leads to issues of shared memory.
+                // 
+                // TODO: We also include a check for if it is a field but this is probably
+                // not needed if it is a field of a local variable. Although there would
+                // then be extra IRGen complications in referencing the memory. For now it
+                // is not allowed.
+                //
+                if (!ref->var_ref->is_param() && !ref->var_ref->is_global && !ref->var_ref->is_field()) {
+                    if (cur_func->aggr_ret_var &&
+                        cur_func->aggr_ret_var != ref->var_ref) {
+                        // Returning multiple different variable references
+                        // so we cannot treat the variable as the return address.
+                        cur_func->cannot_use_aggr_ret_var = true;
+                        cur_func->aggr_ret_var = nullptr;
+                    } else if (!cur_func->cannot_use_aggr_ret_var) {
+                        // May be the only variable returned in which case the
+                        // variable may be used as the return address.
+                        cur_func->aggr_ret_var = ref->var_ref;
+                    }
                 }
             }
         } else {

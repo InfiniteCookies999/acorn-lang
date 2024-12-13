@@ -244,6 +244,10 @@ namespace acorn {
 
         bool is_decayed_array(Expr* arr);
 
+        void gen_copy_struct(llvm::Value* ll_to_address,
+                             llvm::Value* ll_from_address,
+                             StructType* struct_type);
+
     };
 }
 

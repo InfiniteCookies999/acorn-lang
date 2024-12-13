@@ -921,6 +921,18 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("ABCD"); 
             });
+            test("Struct passed as param and returned (sm struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs23.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("@");
+            });
+            test("Struct passed as param and returned (bg struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs24.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD");
+            });
         });
         section("member functions", [&] {
             test("Member function sets field", [&] {
@@ -1186,6 +1198,12 @@ void test_codegen() {
                 if (!err_msg.empty())  force_fail(err_msg.c_str());
 
                 expect(result, std::identity()).to_be("called");
+            });
+            test("Destructor called for param", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test25.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called called ");
             });
         });
     });

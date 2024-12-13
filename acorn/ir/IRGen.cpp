@@ -334,6 +334,8 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
             // point to the incoming parameter value.
             param->ll_address = ll_cur_func->getArg(param_idx++);
         }
+
+        process_destructor_state(param->type, param->ll_address);
     }
 
     // Allocating memory for variables declared in the function.
@@ -830,6 +832,125 @@ void acorn::IRGenerator::process_destructor_state(Type* type, llvm::Value* ll_ad
     }
 }
 
+
+// Explaination of returning aggregate types.
+// 
+// The number of different cases involved when returning aggregate
+// types is quite a lot so a description of the different cases is
+// given here for clarify the IR generation.
+// 
+// 
+// 
+// 
+// ** Returning local non-parameter variables:
+// 
+// Ex.
+// 
+// A foo() {
+//     A a;
+//     a.j = 5;
+//     return a;
+// }
+//
+// When returning a single local variable the IR generation will
+// pass the local variable in as a parameter if the aggregate type
+// cannot fit into an integer and behavior of returning the variable
+// ends up just being a matter of of direct assignment to the parameter.
+// 
+// Ex. the IR generation becomes:
+// 
+// define void @foo.acorn(ptr %aggr.ret.addr) {
+// entry.block: 
+//   call void @llvm.memset.p0.i64(ptr align 8 %aggr.ret.addr, i8 0, i64 32, i1 false)
+//   %0 = getelementptr inbound nuw %A, ptr %aggr.ret.addr, i32 0, i32 0
+//   store i64 5, ptr %0, align 8
+//   ret void
+// }
+// 
+// Otherwise if the local variable can fit into an integer then the variable is
+// cast to an integer and returned.
+// 
+// 
+// 
+// 
+// 
+// ** The case above is distinct from the case in which multiple local variables
+//    are returned:
+// 
+// Ex.
+// 
+// A foo(bool t) {
+//     if t {
+//         A a1;
+//         return a1;
+//     }
+// 
+//     A a2;
+//     return a2;
+// }
+//
+// In this case case there is still a %aggr.ret.addr but each local variable
+// must be copied over into this return address.
+// 
+// Ex. the IR generation becomes:
+// 
+// define void @foo.acorn(ptr %aggr.ret.addr, i1 %in.t) {
+// entry.block:
+//   %t = alloca i1, align 1
+//   store i1 %in.t, ptr %t, align 1
+//   %a1 = alloca %A, align 8                 ; local variable 1
+//   %a2 = alloca % A, align 8                ; local variable 2
+//   %0 = load i1, ptr % t, align 1
+//   br i1 % 0, label% if.then, label% if.end
+// 
+// if.then:
+//   call void @llvm.memset.p0.i64(ptr align 8 %a1, i8 0, i64 32, i1 false)
+//   call void @llvm.memcpy.p0.p0.i64(ptr align 8 %aggr.ret.addr, ptr align 8 %a1, i64 32, i1 false)  ; copies memory from a1 to return address.
+//   br label %ret.block
+// 
+// if.end:
+//   call void @llvm.memset.p0.i64(ptr align 8 %a2, i8 0, i64 32, i1 false)
+//   call void @llvm.memcpy.p0.p0.i64(ptr align 8 %aggr.ret.addr, ptr align 8 %a2, i64 32, i1 false)  ; copies memory from a2 to return address.
+//   br label %ret.block
+// 
+// ret.block:
+//   ret void
+// }
+// 
+// 
+// 
+// 
+// 
+// ** Similar to the case of returning multiple variables returning a non-local
+//    variable will also copy over into the return address:
+//
+// Ex.
+// 
+// A a; // global variable a.
+// 
+// A foo() {
+//     return a; // returning a non-local variable.
+// }
+// 
+// This simply copies over the memory into the return address:
+// 
+// Ex. the IR generation becomes:
+// 
+// define void @foo.acorn(ptr %aggr.ret.addr) {
+// entry.block:
+//   call void @llvm.memcpy.p0.p0.i64(ptr align 8 %aggr.ret.addr, ptr align 8 @global.a.0, i64 32, i1 false)
+//   ret void
+// }
+//
+//
+// 
+// 
+// ** There is also the case for returning inline aggregate variables.
+// 
+// This case essentially behaves like a returning a local variable where
+// if it needs it will pass an %aggr.ret.addr then directly assign or
+// will store into a the return address.
+//
 llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
     encountered_return = true;
 
@@ -899,6 +1020,21 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
                 }
                 ll_ret_value = ll_value;
             }
+            // else we may just be using an aggregate return variable that is just a local
+            // variable to the function and does not need returned since it's memory is passed
+            // in.
+            //
+            // Ex.
+            // 
+            // struct A { int64 a, b, c, d, e;  }
+            //
+            // A foo() {
+            //     A a; // Local to the function but actually becomes a parameter
+            //          // for returning.
+            // 
+            //     return a;
+            // }
+            //
         } else {
             // Return non-aggregate value.
             ll_ret_value = gen_rvalue(ret->value);
@@ -1513,8 +1649,9 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
         
     if (arg->type->is_struct_type()) {
             
-        auto ll_aggr_type = gen_type(arg->type);
-        uint64_t aggr_mem_size_bytes = sizeof_type_in_bytes(ll_aggr_type);
+        auto struct_type = as<StructType*>(arg->type);
+        auto ll_struct_type = gen_struct_type(struct_type);
+        uint64_t aggr_mem_size_bytes = sizeof_type_in_bytes(ll_struct_type);
         uint64_t aggr_mem_size_bits = aggr_mem_size_bytes * 8;
 
         bool uses_optimized_int_passing = aggr_mem_size_bits <= ll_module.getDataLayout().getPointerSizeInBits();
@@ -1546,18 +1683,10 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
 
             return finish_struct_arg(ll_tmp_arg);
         }
-            
-        llvm::Align ll_alignment = get_alignment(ll_aggr_type);
-
+        
         auto ll_copy_from_addr = gen_node(arg);
-        auto ll_tmp_arg = gen_unseen_alloca(ll_aggr_type, "aggr.arg");
-        // We do not need to call process_destructor_state since the struct
-        // is not managed from the call site but in the called function.
-        builder.CreateMemCpy(
-            ll_tmp_arg, ll_alignment,
-            ll_copy_from_addr, ll_alignment,
-            aggr_mem_size_bytes
-        );
+        auto ll_tmp_arg = gen_unseen_alloca(ll_struct_type, "aggr.arg");
+        gen_copy_struct(ll_tmp_arg, ll_copy_from_addr, struct_type);
 
         return finish_struct_arg(ll_tmp_arg);
     }
@@ -2206,6 +2335,9 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address, Type* to_type, 
     } else if (value->is(NodeKind::StructInitializer)) {
         auto initializer = as<StructInitializer*>(value);
         gen_struct_initializer(initializer, ll_address);
+    } else if (to_type->is_struct_type()) {
+        auto ll_from_addr = gen_node(value);
+        gen_copy_struct(ll_address, ll_from_addr, as<StructType*>(to_type));
     } else {
         auto ll_assignment = gen_rvalue(value);
         builder.CreateStore(ll_assignment, ll_address);
@@ -2643,4 +2775,20 @@ bool acorn::IRGenerator::is_decayed_array(Expr* arr) {
     if (arr->is_not(NodeKind::IdentRef)) return false;
     auto ref = as<IdentRef*>(arr);
     return ref->is_var_ref() && ref->var_ref->is_param() && ref->type->is_array();
+}
+
+void acorn::IRGenerator::gen_copy_struct(llvm::Value* ll_to_address,
+                                         llvm::Value* ll_from_address,
+                                         StructType* struct_type) {
+
+    auto ll_struct_type = gen_struct_type(struct_type);
+
+    // TODO: Is the alignment correct?
+    llvm::Align ll_alignment = get_alignment(ll_struct_type);
+
+    builder.CreateMemCpy(
+        ll_to_address, ll_alignment,
+        ll_from_address, ll_alignment,
+        sizeof_type_in_bytes(ll_struct_type)
+    );
 }
