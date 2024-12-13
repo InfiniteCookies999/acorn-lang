@@ -15,27 +15,28 @@ native isize write(int32 fd, const void* buf, usize count);
 
 #endif
 
-void write_val(int8 val) {
-
+void print(const char* s, int length) {
 #if OS_GROUP_WINDOWS
     void* handle = GetStdHandle(-11);
     uint32 written;
-    char c = as(char) val;
-    WriteFile(handle, &c, 1, &written, null);
+    WriteFile(handle, s, as(uint32) length, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
-    write(1, &c, 1);
+    write(1, s, as(usize) length);
 #endif
-
 }
 
-int8[2] foo() {
-    return [ 104, 105 ];
+struct A {
+    int64 a;
+    int64 b;
+    int64 c;
+    int64 d;
+
+    ~A() {
+        print("called", 6);
+    }
 }
 
 void main() {
-    int8[2] a = foo();
-    
-    write_val(a[0]);
-    write_val(a[1]);
+    int64 a = A{}.a;
+    print("begin ", 6);
 }

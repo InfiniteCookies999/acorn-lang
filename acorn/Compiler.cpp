@@ -305,8 +305,15 @@ void acorn::Compiler::sema_and_irgen() {
 
     }
 
+    // TODO: further work needs to be done to make sure this is correct.
+    //       These functionss rely on calling other functions which may
+    //       end up causing more requested to be generated while processing
+    //       the existing requests. This should probably use a queue strategy
+    //       and just keep generating anything in the queue until everything is
+    //       finished.
     IRGenerator generator(context);
     generator.finish_incomplete_global_variables();
+    generator.destroy_global_variables();
     generator.gen_implicit_structs_functions();
 
     // Checking any declarations that were not checked.

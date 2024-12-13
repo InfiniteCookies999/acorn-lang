@@ -23,6 +23,7 @@ namespace acorn {
         void gen_global_variable(Var* var);
         void finish_incomplete_global_variables();
         void finish_incomplete_global_variable(Var* var);
+        void destroy_global_variables();
         void gen_implicit_structs_functions();
 
         llvm::Value* gen_node(Node* node);
@@ -72,8 +73,43 @@ namespace acorn {
 
         static int                           global_counter;
         static llvm::SmallVector<Var*, 32>   incomplete_global_variables;
+        static llvm::SmallVector<Var*, 32>   globals_needing_destroyed;
         static llvm::SmallVector<Struct*, 4> structs_needing_implicit_functions;
         static llvm::BasicBlock*             ll_global_init_call_bb;
+        static llvm::BasicBlock*             ll_global_cleanup_call_bb;
+
+        struct DestructorObject {
+            Type*        type;
+            llvm::Value* ll_address;
+        };
+
+        struct IRScope {
+            IRScope* parent = nullptr;
+            // All objects currently initialized within the scope unless the scope is
+            // the primary scope of a function and no returns have been encountered
+            // in which case they are placed in the always_initialized_destructor_objects
+            // list.
+            //
+            llvm::SmallVector<DestructorObject> objects_needing_destroyed;
+        }* ir_scope = nullptr;
+
+        // Objects which have destructors and need to be destroyed
+        // and are encountered before any returns or branching is
+        // encountered.
+        //
+        // These objects can always be gaurenteed to be destroyed so
+        // any object in this list has its destructor called no matter
+        // where a return occured.
+        // 
+        // The entire point to having this list is to reduce the number
+        // of instructions needed to be generated since when there are
+        // multiple returns the return statements branch to a common
+        // function return.
+        // This common return can then manage the cleanup of all of these
+        // objects.
+        llvm::SmallVector<DestructorObject> always_initialized_destructor_objects;
+
+        bool encountered_return = false;
 
         void gen_implicit_default_constructor(Struct* structn);
 
@@ -92,6 +128,13 @@ namespace acorn {
         void finish_incomplete_struct_type_global(llvm::Value* ll_address, 
                                                   StructType* struct_type,
                                                   const std::function<llvm::Value*()>& address_getter = {});
+
+        void add_object_with_destructor(Type* type, llvm::Value* ll_address);
+        void gen_call_destructors(llvm::SmallVector<DestructorObject>& objects);
+        void gen_call_destructors(Type* type, llvm::Value* ll_address);
+        void gen_call_loc_scope_destructors();
+        void process_destructor_state(Type* type, llvm::Value* ll_address);
+        bool type_needs_destruction(Type* type);
 
         llvm::Value* gen_return(ReturnStmt* ret);
         llvm::Value* gen_if(IfStmt* ifs);
@@ -123,6 +166,9 @@ namespace acorn {
                                             llvm::Value* ll_in_this);
         llvm::Value* gen_function_call_arg(Expr* arg);
         llvm::Value* gen_function_type_call(FuncCall* call, llvm::Value* ll_dest_addr);
+        void gen_call_return_aggr_type_temporary(Type* return_type,
+                                                 bool uses_aggr_param,
+                                                 llvm::Value*& ll_dest_addr);
         llvm::Value* gen_intrinsic_call(FuncCall* call);
         llvm::Value* gen_bool(Bool* b);
         llvm::Value* gen_string(String* string);
@@ -143,10 +189,9 @@ namespace acorn {
 
         llvm::BasicBlock* gen_bblock(const char* name, llvm::Function* ll_func = nullptr);
 
-        void gen_default_constructor_decl(Struct* structn);
+        llvm::Function* gen_no_param_member_function_decl(Struct* structn, llvm::StringRef name);
         void gen_default_constructor_call(llvm::Value* ll_address, Struct* structn);
 
-        void struct_array_call_default_constructors();
         void gen_abstract_array_loop(Type* base_type, 
                                      llvm::Value* ll_arr_start_ptr, 
                                      llvm::Value* ll_total_arr_length,

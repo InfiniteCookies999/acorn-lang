@@ -228,11 +228,41 @@ acorn::Node* acorn::Parser::parse_statement() {
                 next_token(); // Consuming the identifier token.
                 return parse_function(modifiers, context.void_type, cur_struct->name);
             }
+        } else if (cur_token.is('~') && peek_token(0).is(Token::Identifier)) {
+            auto peek0 = peek_token(0);
+            auto ident = Identifier::get(peek0.text());
+            if (cur_struct->name == ident && peek_token(1).is('(')) {
+                // Encountered a destructor!
+                next_token(); // Consuming '~' token.
+                next_token(); // Consuming the identifier token.
+                auto text = peek0.text();
+                auto name = Identifier::get(llvm::StringRef(text.data() - 1, text.size() + 1));
+                auto destructor = parse_function(modifiers, context.void_type, ident);
+                destructor->is_destructor = true;
+                return destructor;
+            }
         }
 
         [[fallthrough]];
     case TypeTokens: {
         return parse_decl(modifiers, parse_type());
+    }
+    case '~': {
+        auto peek0 = peek_token(0);
+        if (cur_struct && peek0.is(Token::Identifier)) {
+            auto ident = Identifier::get(peek0.text());
+            if (cur_struct->name == ident && peek_token(1).is('(')) {
+                // Encountered a destructor!
+                next_token(); // Consuming '~' token.
+                next_token(); // Consuming the identifier token.
+                auto text = peek0.text();
+                auto name = Identifier::get(llvm::StringRef(text.data() - 1, text.size() + 1));
+                auto destructor = parse_function(0, context.void_type, name);
+                destructor->is_destructor = true;
+                return destructor;
+            }
+        }
+        return parse_expr();
     }
     case Token::KwStruct: {
         return parse_struct();
@@ -269,7 +299,9 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
         (peek1.is(Token::Identifier))    || // ident ident
         (peek1.is('*') && peek2.is('*')) || // ident**
         (peek1.is('*') && peek2.is(Token::Identifier)) ||  // ident* ident
-        (peek1.is('*') && peek2.is('['))
+        (peek1.is('*') && peek2.is('[')) || // ident*[
+        (peek1.is('!') && peek2.is('(')) || // ident!(
+        (peek1.is('*') && peek2.is('!'))    // ident*!
         ) {
 
         if (!is_for_expr) {
@@ -537,7 +569,10 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
     } else if (node->is(NodeKind::Func)) {
         auto func = as<Func*>(node);
         if (func->name != Identifier::Invalid) {
-            if (func->name == cur_struct->name) {
+            if (func->is_destructor) {
+                structn->destructor = func;
+                func->structn = structn;
+            } else if (func->name == cur_struct->name) {
                 func->is_constructor = true;
                 if (func->params.empty()) {
                     structn->default_constructor = func;

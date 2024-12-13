@@ -19,6 +19,13 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     switch (bin_op->op) {
     case '=': {
         auto ll_address = gen_node(lhs);
+
+        if (type_needs_destruction(lhs->type)) {
+            // Reassigning so need to destroy the existing memory
+            // before assignign new memory.
+            gen_call_destructors(lhs->type, ll_address);
+        }
+
         gen_assignment(ll_address, lhs->type, rhs);
         return ll_address;
     }

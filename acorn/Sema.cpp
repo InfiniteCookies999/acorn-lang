@@ -915,22 +915,21 @@ void acorn::Sema::check_variable(Var* var) {
         }
     }
 
-    auto process_struct_type = [this](StructType* struct_type) finline {
+    if (var->type->is_struct_type()) {
+        auto struct_type = as<StructType*>(var->type);
         auto structn = struct_type->get_struct();
         if (structn->default_constructor) {
             context.queue_gen(structn->default_constructor);
         }
-    };
-
-    if (var->type->is_struct_type()) {
-        auto struct_type = as<StructType*>(var->type);
-        process_struct_type(struct_type);
     } else if (var->type->is_array()) {
         auto arr_type = as<ArrayType*>(var->type);
         auto base_type = arr_type->get_base_type();
         if (base_type->is_struct_type()) {
             auto struct_type = as<StructType*>(base_type);
-            process_struct_type(struct_type);
+            auto structn = struct_type->get_struct();
+            if (structn->default_constructor) {
+                context.queue_gen(structn->default_constructor);
+            }
         }
     }
 
@@ -991,6 +990,10 @@ void acorn::Sema::check_struct(Struct* structn) {
         if (field->assignment) {
             structn->fields_have_assignments = true;
         }
+    }
+
+    if (structn->destructor) {
+        context.queue_gen(structn->destructor);
     }
 
     structn->is_being_checked = false;

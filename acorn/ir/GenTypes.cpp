@@ -69,12 +69,12 @@ llvm::StructType* acorn::gen_struct_type(StructType* struct_type, llvm::LLVMCont
         ll_field_types.push_back(ll_field_type);
     }
 
-    ll_struct_type->setBody(ll_field_types);
-    ll_struct_type->setName(structn->name.reduce());
-
     if (ll_field_types.empty()) {
         ll_field_types.push_back(llvm::Type::getInt8Ty(ll_context));
     }
+
+    ll_struct_type->setBody(ll_field_types);
+    ll_struct_type->setName(structn->name.reduce());
 
     struct_type->set_ll_struct_type(ll_struct_type);
     return ll_struct_type;
