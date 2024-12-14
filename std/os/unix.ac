@@ -132,7 +132,7 @@ struct Stat {
         uint32 st_dev;
     #endif
 
-    #if SYS_64
+    #if !SYS_64
         uint16 __pad1;
     #endif
 
@@ -145,11 +145,11 @@ struct Stat {
 
         // File mode and link count.
     #if SYS_64
-        uint32 st_mode;
         uint64 st_nlink;
-    #else
-        uint32 st_nlink;
         uint32 st_mode;
+    #else
+        uint32 st_mode;
+        uint32 st_nlink;
     #endif
 
         // User ID of the file's owner.
@@ -168,7 +168,7 @@ struct Stat {
         uint32 st_rdev;
     #endif
 
-    #if SYS_64
+    #if !SYS_64
         uint16 __pad2;
     #endif
 
@@ -237,6 +237,7 @@ bool __S_ISTYPE(uint32 mode, uint32 mask) {
 }
 
 native int32 stat(const char* path, Stat* buf);
+native int32 fstat(int32 fd, Stat* buf);
 
 const int32 CLOCK_REALTIME           = 0;
 const int32 CLOCK_MONOTONIC	         = 1;
@@ -254,5 +255,40 @@ const int32 TIMER_ABSTIME            = 1;
 native int32 clock_gettime(int32 clk_id, Timespec* tp);
 
 native int32 mkdir(const char* path, int32 mode);
+
+/* open/fcntl.  */
+const int32 O_ACCMODE     = 0003;
+const int32 O_RDONLY      =   00;
+const int32 O_WRONLY      =   01;
+const int32 O_RDWR	      =   02;
+const int32 O_CREAT	      = 0100; /* Not fcntl.  */
+const int32 O_EXCL        = 0200; /* Not fcntl.  */
+const int32 O_NOCTTY      = 0400; /* Not fcntl.  */
+const int32 O_TRUNC	      = 01000; /* Not fcntl.  */
+const int32 O_APPEND      = 02000;
+const int32 O_NONBLOCK    = 04000;
+const int32 O_NDELAY	  = O_NONBLOCK;
+const int32 O_SYNC        = 04010000;
+const int32 O_ASYNC	      = 020000;
+const int32 __O_LARGEFILE = 0100000;
+
+const int32 __O_DIRECTORY = 0200000;
+const int32 __O_NOFOLLOW  = 0400000;
+const int32 __O_CLOEXEC   = 02000000;
+const int32 __O_DIRECT    = 040000;
+const int32 __O_NOATIME   = 01000000;
+const int32 __O_PATH      = 010000000;
+const int32 __O_DSYNC     = 010000;
+// TODO: bitwise operator requires explicit type. Sema
+// should allow for this.
+const int32 __O_TMPFILE   = (020000000'i32 | __O_DIRECTORY);
+
+// TODO: This is meant to take var-args but we do not support
+//       native var-args yet!
+native int32 open(const char* pathname, int32 flags);
+
+native int32 close(int32 fd);
+
+native isize read(int32 fd, void* buf, usize count);
 
 #endif

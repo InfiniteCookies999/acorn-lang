@@ -43,38 +43,64 @@ const uint32 IO_FLAG_CREATE = 0x0008;
 const uint32 IO_FLAG_APPEND = 0x0010;
 
 
+// TODO: We need to fix the file handle to work with
+//       large files?
 struct FileHandle {
-    void* handle;
 
+#if OS_GROUP_WINDOWS
+    void* handle;
+#elif OS_GROUP_UNIX
+    int32 handle;
+#endif
+
+#if OS_GROUP_WINDOWS
     FileHandle(void* handle) {
         this.handle = handle;
     }
+#elif OS_GROUP_UNIX
+    FileHandle(int32 handle) {
+        this.handle = handle;
+    }
+#endif
 
     int get_size() {
+        // TODO: error handling!
 #if OS_GROUP_WINDOWS
         uint32 size = win32.GetFileSize(handle, null);
         return as(int) size;
 #elif OS_GROUP_UNIX
-        // TODO: implement!
+        Stat stats;
+        if unix.fstat(handle, &stats) == 0 {
+            return as(int) stats.st_size;
+        }
         return 0;
 #endif
     }
 
     int read_buffer(char* buffer, int length) {
-        uint32 number_of_bytes_read;
-        if win32.ReadFile(handle, buffer, as(uint32) length, &number_of_bytes_read, null) == 0 {
+#if OS_GROUP_WINDOWS
+        uint32 bytes_read;
+        if win32.ReadFile(handle, buffer, as(uint32) length, &bytes_read, null) == 0 {
             // TODO: proper error handling.
             println("failed to read buffer of file :(");
             return 0;
         }
-        return as(int) number_of_bytes_read;
+        return as(int) bytes_read;
+#elif OS_GROUP_UNIX
+        isize bytes_read = unix.read(handle, buffer, as(usize) length);
+        if bytes_read == -1 {
+            println("failed to read buffer of file :(");
+            return 0;
+        }
+        return as(int) bytes_read;
+#endif
     }
 
     void close() {
 #if OS_GROUP_WINDOWS
         win32.CloseHandle(handle);
 #elif OS_GROUP_UNIX
-        // TODO: implement!
+        unix.close(handle);
 #endif
     }
 }
@@ -83,17 +109,25 @@ struct FileHandle {
  * Reads an entire file into a string.
  */
 String read(const char* path) {
-    FileHandle handle = open(path, IO_FLAG_IN);
+    FileHandle handle = open(path, IO_FLAG_IN | IO_FLAG_SHARE);
+
+// TODO: eventually when we have proper error handling this should
+//       not be needed.
+#if OS_GROUP_WINDOWS
     if !handle.handle {
-        // TODO: eventually when we have proper error handling this should
-        //       not be needed.
         return String{ "" };
     }
+#elif OS_GROUP_UNIX
+    if handle.handle == -1 {
+        return String{ "" };
+    }
+#endif
 
     int size = handle.get_size();
 
     char* buffer = as(char*) malloc(size + 1); // +1 for null terminator.
     int bytes_read = handle.read_buffer(buffer, size);
+    
     if bytes_read != size {
         // TODO: proper error handling.
         println("Read the incorrect number of bytes from file :(");
@@ -224,7 +258,34 @@ FileHandle open(const char* path, uint32 flags) {
 
     return FileHandle{ handle };
 #elif OS_GROUP_UNIX
-    // TODO: implement!
-    return FileHandle{ null };
+    
+    // TODO: O_LARGEFILE -- Allow working for large file sizes.
+
+    int32 os_flags = 0;
+
+    if (flags & IO_FLAG_IN) != 0 && (flags & IO_FLAG_IN) != 0 {
+        os_flags |= unix.O_RDWR;
+    } elif (flags & IO_FLAG_IN) != 0 {
+        os_flags |= unix.O_RDONLY;
+    } elif (flags & IO_FLAG_IN) != 0 {
+        os_flags |= unix.O_WRONLY;
+    }
+
+    if (flags & IO_FLAG_APPEND) != 0 {
+        os_flags |= unix.O_APPEND;
+    }
+
+    if (flags & IO_FLAG_CREATE) != 0 {
+        os_flags |= unix.O_CREAT;
+    }
+
+    int32 handle = unix.open(path, os_flags);
+    if handle == -1 {
+        // TODO: proper error handling!
+        println("Failed to open file :(");
+        return FileHandle{ -1 };
+    }
+
+    return FileHandle{ handle };
 #endif
 }
