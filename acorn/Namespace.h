@@ -49,6 +49,10 @@ namespace acorn {
             return duplicates_checked;
         }
 
+        Module& get_module() const {
+            return modl;
+        }
+
     private:
         Module&       modl;
         ScopeLocation scope_location;

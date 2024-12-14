@@ -18,6 +18,7 @@ acorn::Namespace* acorn::Module::get_or_create_namespace(Context& context, Ident
     }
 
     auto nspace = context.get_allocator().alloc_type<Namespace>();
+    new (nspace) Namespace(*this, ScopeLocation::Global);
     namespaces.insert({ ident, nspace });
     return nspace;
 }

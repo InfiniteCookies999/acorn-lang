@@ -1374,6 +1374,14 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
     }
 
     if (!structn->constructors.empty()) {
+        // Need to check the arguments before trying to select a constructor.
+        bool args_have_errors = false;
+        for (auto arg : initializer->values) {
+            check_node(arg);
+            if (!arg->type) args_have_errors = true;
+        }
+        if (args_have_errors) return;
+
         Func* found_constructor = check_function_decl_call(initializer,
                                                            initializer->values,
                                                            initializer->non_named_vals_offset,
@@ -2079,6 +2087,16 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
                 ref->set_funcs_ref(funcs);
                 return;
             }
+
+            auto& modl = search_nspace->get_module();
+            if (&modl != nspace) {
+                // The namespace is a sub namespace of a module. Want to search
+                // the module as well.
+                if (auto* funcs = modl.find_functions(ref->ident)) {
+                    ref->set_funcs_ref(funcs);
+                    return;
+                }
+            }
         }
 
         if (auto* funcs = search_nspace->find_functions(ref->ident)) {
@@ -2110,6 +2128,16 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
             if (auto* var = file->find_static_import_variable(ref->ident)) {
                 ref->set_var_ref(var);
                 return;
+            }
+
+            auto& modl = search_nspace->get_module();
+            if (&modl != nspace) {
+                // The namespace is a sub namespace of a module. Want to search
+                // the module as well.
+                if (auto* var = modl.find_variable(ref->ident)) {
+                    ref->set_var_ref(var);
+                    return;
+                }
             }
         }
 

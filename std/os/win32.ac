@@ -80,6 +80,8 @@ native dllimport void* CreateFileA(const char* lpFileName,
                                    uint32      dwFlagsAndAttributes,
                                    void*       hTemplateFile);
 
+native dllimport uint32 GetFileSize(void* hFile, uint32* lpFileSizeHigh);
+
 native dllimport uint32 GetFileAttributesA(const char* lpFileName);
 
 native dllimport int32 CreateDirectoryA(const char* lpPathName, void* lpSecurityAttributes);
@@ -94,5 +96,12 @@ native dllimport bool QueryPerformanceCounter(int64* lpPerformanceCount);
 // Win32: libloaderapi.h
 
 native dllimport void ExitProcess(uint32 uExitCode);
+
+// ------------------------------------------------
+// Win32: handleapi.h
+
+const void* INVALID_HANDLE_VALUE = as(void*) -1'i64;
+
+native dllimport int32 CloseHandle(void* hObject);
 
 #endif

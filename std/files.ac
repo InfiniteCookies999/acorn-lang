@@ -2,10 +2,107 @@
 
 import .win32;
 import .unix;
+import .String;
 
 #if OS_GROUP_UNIX
 import .unix.Stat;
 #endif
+
+
+/*
+ * Flags that indicate how to open a file for
+ * reading and writing.
+ */
+
+const uint32 IO_FLAG_IN  = 0x0001;
+const uint32 IO_FLAG_OUT = 0x0002;	
+
+/*
+* More than once open instance of the
+* file can be opened and accessed at
+* the same time.
+*/
+const uint32 IO_FLAG_SHARE = 0x0004;
+
+/*
+* Creates the file if it does not exist.
+* Will override the contents of the old
+* file.
+*
+* The default behavior is to override the
+* file it it exists. If you wish to append
+* to an existing file use APPEND.
+*/
+const uint32 IO_FLAG_CREATE = 0x0008;
+
+/*
+* Will append to an existing file or may be used
+* in conjunction with CREATE to create the file
+* if it does not exist and append to the new file.
+*/
+const uint32 IO_FLAG_APPEND = 0x0010;
+
+
+struct FileHandle {
+    void* handle;
+
+    FileHandle(void* handle) {
+        this.handle = handle;
+    }
+
+    int get_size() {
+#if OS_GROUP_WINDOWS
+        uint32 size = win32.GetFileSize(handle, null);
+        return as(int) size;
+#elif OS_GROUP_UNIX
+        // TODO: implement!
+        return 0;
+#endif
+    }
+
+    int read_buffer(char* buffer, int length) {
+        uint32 number_of_bytes_read;
+        if win32.ReadFile(handle, buffer, as(uint32) length, &number_of_bytes_read, null) == 0 {
+            // TODO: proper error handling.
+            println("failed to read buffer of file :(");
+            return 0;
+        }
+        return as(int) number_of_bytes_read;
+    }
+
+    void close() {
+#if OS_GROUP_WINDOWS
+        win32.CloseHandle(handle);
+#elif OS_GROUP_UNIX
+        // TODO: implement!
+#endif
+    }
+}
+
+/*
+ * Reads an entire file into a string.
+ */
+String read(const char* path) {
+    FileHandle handle = open(path, IO_FLAG_IN);
+    if !handle.handle {
+        // TODO: eventually when we have proper error handling this should
+        //       not be needed.
+        return String{ "" };
+    }
+
+    int size = handle.get_size();
+
+    char* buffer = as(char*) malloc(size + 1); // +1 for null terminator.
+    int bytes_read = handle.read_buffer(buffer, size);
+    if bytes_read != size {
+        // TODO: proper error handling.
+        println("Read the incorrect number of bytes from file :(");
+        return String{ "" };
+    }
+
+    buffer[size] = '\0'; // Adding null terminator.
+    return String{ buffer, size, copy_buffer=false };
+}
 
 /*
  * Returns true if the file system has a file or
@@ -70,5 +167,64 @@ bool mkdir(const char* path) {
     return win32.CreateDirectoryA(path, null) != 0;
 #elif OS_GROUP_UNIX
     return unix.mkdir(path, 0775) == 0;
+#endif
+}
+
+FileHandle open(const char* path, uint32 flags) {
+#if OS_GROUP_WINDOWS
+    uint32 access_flags = 0;
+    uint32 share_flags  = 0;
+    uint32 create_flags = 0;
+
+    if flags == 0 {
+        access_flags = win32.GENERIC_ALL;
+    }
+
+    if (flags & IO_FLAG_IN) != 0 {
+        access_flags |= win32.GENERIC_READ;
+    }
+
+    if (flags & IO_FLAG_APPEND) != 0 {
+        access_flags |= win32.FILE_APPEND_DATA;
+    } else if (flags & IO_FLAG_OUT) != 0 {
+        access_flags |= win32.GENERIC_WRITE;
+    }
+
+    if (flags & IO_FLAG_SHARE) != 0 {
+        share_flags |= win32.FILE_SHARE_READ;
+    }
+
+    if (flags & IO_FLAG_CREATE) != 0 {
+        if (flags & IO_FLAG_APPEND) != 0 {
+            create_flags |= win32.OPEN_ALWAYS;
+        } else {
+            // Windows is weird and none of the create options allow us to simply
+            // overwrite the old file. We will simply remove the existing file if
+            // it exists then create a new one.
+            // TODO: come back to!! remove(path);
+            create_flags |= win32.CREATE_NEW;
+        }
+    } else {
+        create_flags |= win32.OPEN_EXISTING;
+    }
+
+    void* handle = win32.CreateFileA(path,
+                                     access_flags,
+                                     share_flags,
+                                     null,
+                                     create_flags,
+                                     win32.FILE_ATTRIBUTE_NORMAL,
+                                     null);
+
+    if handle == win32.INVALID_HANDLE_VALUE {
+        // TODO: Proper error handling!
+        println("Failed to open file :(");
+        return FileHandle{ null };
+    }
+
+    return FileHandle{ handle };
+#elif OS_GROUP_UNIX
+    // TODO: implement!
+    return FileHandle{ null };
 #endif
 }
