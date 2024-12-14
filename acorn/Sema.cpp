@@ -963,11 +963,26 @@ void acorn::Sema::check_variable(Var* var) {
 
 void acorn::Sema::check_struct(Struct* structn) {
     
+    // -- Debug
+    // Logger::debug("checking struct: %s", structn->name);
+
     auto prev_struct = cur_struct;
     cur_struct = structn;
 
     structn->is_being_checked = true;
     structn->has_been_checked = true; // Set early to prevent circular checking.
+
+    auto process_field_struct_type_state = [this,structn](StructType* field_struct_type) finline {
+        auto field_struct = field_struct_type->get_struct();
+                
+        structn->needs_destruction |= field_struct->needs_destruction;
+        structn->fields_need_destruction |= field_struct->needs_destruction;
+
+        structn->needs_copy_call |= field_struct->needs_copy_call;
+        structn->fields_need_copy_call |= field_struct->needs_copy_call;
+
+        structn->needs_default_call |= field_struct->needs_default_call;
+    };
 
     uint32_t field_count = 0;
     for (Var* field : structn->fields) {
@@ -984,22 +999,64 @@ void acorn::Sema::check_struct(Struct* structn) {
         }
 
         check_variable(field);
+
         if (!field->type) {
             structn->fields_have_errors = true;
-        } else if (field->type->needs_destruction()) {
-            structn->needs_destruction = true;
-            structn->fields_need_destruction = true;
+        } else {
+            if (field->type->is_struct_type()) {
+                process_field_struct_type_state(as<StructType*>(field->type));
+            } else if (field->type->is_array()) {
+                auto arr_type = as<ArrayType*>(field->type);
+                auto base_type = arr_type->get_base_type();
+                if (base_type->is_struct_type()) {
+                    process_field_struct_type_state(as<StructType*>(base_type));
+                }
+            }
         }
         if (field->assignment) {
             structn->fields_have_assignments = true;
         }
     }
 
-    if (structn->destructor) {
-        context.queue_gen(structn->destructor);
-    }
+    structn->needs_default_call |= structn->fields_have_assignments || structn->default_constructor;
 
     structn->is_being_checked = false;
+
+    // Note: We need to check these after is_being_checked has been set to false because
+    //       otherwise the function declaration checking will think there is a circular
+    //       dependency with the struct type since the constructor's can reference the
+    //       struct type.
+
+    if (structn->destructor) {
+        if (structn->destructor->has_checked_declaration || check_function_decl(structn->destructor)) {
+            if (!structn->destructor->params.empty()) {
+                error(structn->destructor, "Destructors are expected to not have any parameters")
+                    .end_error(ErrCode::SemaDestructorsCannotHaveParams);
+            }
+            context.queue_gen(structn->destructor);
+        }
+    }
+    if (structn->copy_constructor) {
+        if (structn->copy_constructor->has_checked_declaration || check_function_decl(structn->copy_constructor)) {
+            auto struct_ptr_type = type_table.get_ptr_type(structn->struct_type);
+            if (structn->copy_constructor->params.size() != 1) {
+                error(structn->copy_constructor,
+                      "Copy constructor expected to have expactly one parameter of type '%s'",
+                      struct_ptr_type)
+                    .end_error(ErrCode::SemaCopyConstructorExpectsOneParam);
+            } else {
+                auto param1 = structn->copy_constructor->params[0];
+                if (param1->type->is_not(struct_ptr_type)) {
+                    error(param1,
+                          "Copy constructor parameter expected to be of type '%s'",
+                          struct_ptr_type)
+                        .end_error(ErrCode::SemaCopyConstructorExpectedStructPtrType);
+                }
+            }
+            // TODO: May want to make this only generate if needed.
+            context.queue_gen(structn->copy_constructor);
+        }
+    }
 
     cur_struct = prev_struct;
 

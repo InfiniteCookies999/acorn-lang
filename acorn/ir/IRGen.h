@@ -113,6 +113,7 @@ namespace acorn {
 
         void gen_implicit_default_constructor(Struct* structn);
         void gen_implicit_destructor(Struct* structn);
+        void gen_implicit_copy_constructor(Struct* structn);
 
         void gen_function_decl(Func* func);
         llvm::Type* gen_function_return_type(Func* func, bool is_main);
@@ -179,7 +180,10 @@ namespace acorn {
         llvm::Value* gen_memory_access(MemoryAccess* mem_access);
         llvm::Value* gen_dot_operator(DotOperator* dot);
 
-        void gen_assignment(llvm::Value* ll_address, Type* to_type, Expr* value);
+        void gen_assignment(llvm::Value* ll_address,
+                            Type* to_type,
+                            Expr* value,
+                            Expr* to_expr_for_assign_op = nullptr);
         void gen_default_value(llvm::Value* ll_address, Type* type);
         llvm::Constant* gen_zero(Type* type);
         llvm::Constant* gen_one(Type* type);
@@ -196,6 +200,11 @@ namespace acorn {
                                      llvm::Value* ll_arr_start_ptr, 
                                      llvm::Value* ll_total_arr_length,
                                      const std::function<void(llvm::PHINode*)>& codegen_cb);
+        void gen_abstract_double_array_loop(Type* base_type, 
+                                            llvm::Value* ll_to_arr_start_ptr,
+                                            llvm::Value* ll_from_arr_start_ptr,
+                                            llvm::Value* ll_total_arr_length,
+                                            const std::function<void(llvm::PHINode*, llvm::PHINode*)>& codegen_cb);
 
         llvm::Value* gen_isize(uint64_t v);
 
@@ -244,9 +253,24 @@ namespace acorn {
 
         bool is_decayed_array(Expr* arr);
 
+        void copy_struct_field_if_has_copy_constructor(Var* field,
+                                                       llvm::Value* ll_to_struct_address,
+                                                       llvm::Value* ll_from_struct_address,
+                                                       llvm::Type* ll_struct_type);
+
         void gen_copy_struct(llvm::Value* ll_to_address,
                              llvm::Value* ll_from_address,
                              StructType* struct_type);
+        void gen_copy_array(llvm::Value* ll_to_address,
+                            llvm::Value* ll_from_address,
+                            ArrayType* arr_type);
+        void gen_call_copy_constructor(llvm::Value* ll_to_address,
+                                       llvm::Value* ll_from_address,
+                                       Struct* structn);
+        void gen_call_array_copy_constructors(llvm::Value* ll_to_address,
+                                              llvm::Value* ll_from_address,
+                                              ArrayType* arr_type,
+                                              Struct* structn);
 
     };
 }

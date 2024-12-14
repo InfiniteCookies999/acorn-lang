@@ -933,6 +933,18 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("ABCD");
             });
+            test("Struct ret multiple loc vars (sm struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs25.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AB");
+            });
+            test("Struct ret multiple loc vars (bg struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs26.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCDabcd");
+            });
         });
         section("member functions", [&] {
             test("Member function sets field", [&] {
@@ -1204,6 +1216,104 @@ void test_codegen() {
                 if (!err_msg.empty())  force_fail(err_msg.c_str());
 
                 expect(result, std::identity()).to_be("called called ");
+            });
+            test("Destructors called for field array of destructible types", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test26.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called called called ");
+            });
+            test("Destructors called for field array of destructible types (implicit destructor)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test27.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called called called ");
+            });
+            test("Destructor called when reassigning to seperate variable and when both destroyed", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test28.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called1 called2 called2 ");
+            });
+            test("Destructor called when reassigning to seperate variable and when both destroyed", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test28.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called1 called2 called2 ");
+            });
+            test("Destructor called once when assigning to self", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test29.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called");
+            });
+            test("Destructor called once when assigning to self (assigned through ptrs)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test30.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called");
+            });
+        });
+        section("copy constructor", [&] {
+            test("Copy constructor called on assignment", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called");
+            });
+            test("Copy constructor called on reassignment", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called");
+            });
+            test("Copy constructor called on assignment (implicitly)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called");
+            });
+            test("Copy constructor called on reassignment (implicitly)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called");
+            });
+            test("Copy constructor not called for local var ret (sm struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("end");
+            });
+            test("Copy constructor not called for local var ret (bg struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("end");
+            });
+            test("Copy constructor called dep on which ret for multi-var ret (sm struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test7.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called1 called2 ");
+            });
+            test("Copy constructor called dep on which ret for multi-var ret (bg struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test8.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called1 called2 ");
+            });
+            test("Copy constructor called ret global var (sm struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test9.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called");
+            });
+            test("Copy constructor called ret global var (bg struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test10.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("called");
             });
         });
     });

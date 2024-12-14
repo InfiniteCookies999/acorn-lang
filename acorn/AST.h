@@ -191,6 +191,7 @@ namespace acorn {
         bool is_checking_declaration = false;
         bool is_constructor          = false;
         bool is_destructor           = false;
+        bool is_copy_constructor     = false;
         Var* aggr_ret_var = nullptr;
 
         Var* find_parameter(Identifier name) const;
@@ -254,17 +255,22 @@ namespace acorn {
         llvm::SmallVector<Var*> fields;
 
         Func*                    default_constructor = nullptr;
+        Func*                    copy_constructor    = nullptr;
         Func*                    destructor          = nullptr;
         llvm::SmallVector<Func*> constructors;
 
         llvm::Function* ll_default_constructor = nullptr;
         llvm::Function* ll_destructor          = nullptr;
+        llvm::Function* ll_copy_constructor    = nullptr;
 
         bool has_been_checked   = false;
         bool fields_have_errors = false;
         bool fields_have_assignments = false;
+        bool needs_default_call = false;
         bool needs_destruction = false;
+        bool needs_copy_call = false;
         bool fields_need_destruction = false;
+        bool fields_need_copy_call = false;
         bool has_requested_gen_implicits = false;
 
         Var* find_field(Identifier name) const;

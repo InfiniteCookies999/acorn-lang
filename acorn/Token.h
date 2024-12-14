@@ -54,6 +54,8 @@ namespace acorn {
             KwStruct,
             KwThis,
             KwSizeof,
+            KwCopyobj,
+            KwMoveobj,
 
             KwNull,
             KwTrue,

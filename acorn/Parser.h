@@ -71,7 +71,7 @@ namespace acorn {
         D* new_declaration(uint32_t modifiers, Identifier name, Token loc_token);
 
         Func* parse_function(uint32_t modifiers, Type* type);
-        Func* parse_function(uint32_t modifiers, Type* type, Identifier name);
+        Func* parse_function(uint32_t modifiers, Type* type, Identifier name, bool is_copy_constructor = false);
 
         Var* parse_variable();
         Var* parse_variable(uint32_t modifiers, Type* type);

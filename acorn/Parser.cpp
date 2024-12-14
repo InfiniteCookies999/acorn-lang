@@ -267,6 +267,19 @@ acorn::Node* acorn::Parser::parse_statement() {
     case Token::KwStruct: {
         return parse_struct();
     }
+    case Token::KwCopyobj: {
+        auto peek0 = peek_token(0);
+        if (peek0.is(Token::Identifier)) {
+            auto ident = Identifier::get(peek0.text());
+            if (cur_struct->name == ident && peek_token(1).is('(')) {
+                next_token(); // Consuming the 'moveobj' token.
+                next_token(); // Consuming the identifier token.
+                return parse_function(modifiers, context.void_type, cur_struct->name, true);
+            }
+        }
+    
+        return parse_assignment_and_expr();
+    }
     case '{':
         return parse_scope();
     case ')': case '}': case ',': {
@@ -414,10 +427,11 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type) {
     return parse_function(modifiers, type, expect_identifier());
 }
 
-acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Identifier name) {
+acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Identifier name, bool is_copy_constructor) {
     
     Func* func = new_declaration<Func, true>(modifiers, name, prev_token);
     func->return_type = type;
+    func->is_copy_constructor = is_copy_constructor;
 
     Func* prev_func = cur_func;
     cur_func = func;
@@ -573,6 +587,13 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
                 structn->destructor = func;
                 structn->needs_destruction = true;
                 func->structn = structn;
+            } else if (func->is_copy_constructor) {
+                structn->copy_constructor = func;
+                func->structn = structn;
+                structn->needs_copy_call = true;
+                // Need to add to the list of constructors still because
+                // the user may want to manually call the copy constructor.
+                structn->constructors.push_back(func);
             } else if (func->name == cur_struct->name) {
                 func->is_constructor = true;
                 if (func->params.empty()) {
