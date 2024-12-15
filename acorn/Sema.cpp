@@ -1654,6 +1654,12 @@ void acorn::Sema::check_this(This* thisn) {
 
 void acorn::Sema::check_sizeof(SizeOf* sof) {
     
+    if (is_incomplete_type(sof->type_with_size)) {
+        error(expand(sof), "Cannot get size of unsized type '%s'", sof->type_with_size)
+                .end_error(ErrCode::SemaCannotGetSizeOfUnsizedType);
+        return;
+    }
+
     sof->type = context.int_type;
 }
 
@@ -2908,29 +2914,10 @@ void acorn::Sema::check_cast(Cast* cast) {
         return;
     }
 
-    auto report_error_incomplete_type = [this, cast, fixed_cast_type]() finline {
+    if (is_incomplete_type(fixed_cast_type)) {
         error(expand(cast), "Cannot cast incomplete type '%s'", fixed_cast_type)
-                .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
-    };
-
-    switch (fixed_cast_type->get_kind()) {
-    case TypeKind::Void:
-    case TypeKind::NamespaceRef:
-    case TypeKind::EmptyArray:
-    case TypeKind::Null:
-    case TypeKind::Range:
-    case TypeKind::Auto:
-        report_error_incomplete_type();
+                .end_error(ErrCode::SemaCannotCastIncompleteType);
         return;
-    case TypeKind::Pointer: {
-        if (fixed_cast_type == context.auto_ptr_type) {
-            report_error_incomplete_type();
-            return;
-        }
-        break;
-    }
-    default:
-        break;
     }
 
     cast->type = fixed_cast_type;
@@ -3393,6 +3380,23 @@ bool acorn::Sema::is_lvalue(Expr* expr) {
     }
 
     return false;
+}
+
+bool acorn::Sema::is_incomplete_type(Type* type) {
+    switch (type->get_kind()) {
+    case TypeKind::Void:
+    case TypeKind::NamespaceRef:
+    case TypeKind::EmptyArray:
+    case TypeKind::Null:
+    case TypeKind::Range:
+    case TypeKind::Auto:
+        return true;
+    case TypeKind::Pointer: {
+        return type == context.auto_ptr_type;
+    }
+    default:
+        return false;
+    }
 }
 
 void acorn::Sema::check_division_by_zero(PointSourceLoc error_loc, Expr* expr) {

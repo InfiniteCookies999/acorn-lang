@@ -141,6 +141,8 @@ X(SemaCannotAssignIncompleteTypeToAuto     , 20093)
 X(SemaMustHaveAssignmentToDetAuto          , 20094)
 X(SemaAutoPtrExpectsPtrType                , 20095)
 X(SemaFuncsCannotReturnAuto                , 20096)
+X(SemaCannotCastIncompleteType             , 20097)
+X(SemaCannotGetSizeOfUnsizedType           , 20098)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)
