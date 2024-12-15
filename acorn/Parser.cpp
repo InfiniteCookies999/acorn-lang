@@ -92,7 +92,7 @@ void acorn::Parser::add_global_node(Node* node) {
 
     if (node->is(NodeKind::Func)) {
             
-        auto func = as<Func*>(node);
+        auto func = static_cast<Func*>(node);
         if (func->name != Identifier::Invalid) {
             context.add_unchecked_decl(func);
             file->add_function(func);
@@ -102,16 +102,16 @@ void acorn::Parser::add_global_node(Node* node) {
             context.add_canidate_main_function(func);
         }
     } else if (node->is(NodeKind::VarList)) {
-        auto vlist = as<VarList*>(node);
+        auto vlist = static_cast<VarList*>(node);
         for (auto var : vlist->list) {
             process_variable(var);
         }
         vlist->list.clear();
     } else if (node->is(NodeKind::Var)) {
-        process_variable(as<Var*>(node));
+        process_variable(static_cast<Var*>(node));
     } else if (node->is(NodeKind::Struct)) {
 
-        auto structn = as<Struct*>(node);
+        auto structn = static_cast<Struct*>(node);
         if (structn->name != Identifier::Invalid) {
             context.add_unchecked_decl(structn);
             file->add_struct(structn);
@@ -573,15 +573,15 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
     };
     
     if (node->is(NodeKind::Var)) {
-        process_var(as<Var*>(node));
+        process_var(static_cast<Var*>(node));
     } else if (node->is(NodeKind::VarList)) {
-        auto vlist = as<VarList*>(node);
+        auto vlist = static_cast<VarList*>(node);
         for (auto var : vlist->list) {
             process_var(var);
         }
         vlist->list.clear();
     } else if (node->is(NodeKind::Func)) {
-        auto func = as<Func*>(node);
+        auto func = static_cast<Func*>(node);
         if (func->name != Identifier::Invalid) {
             if (func->is_destructor) {
                 structn->destructor = func;
@@ -759,7 +759,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
     auto add_statement = [this](Node* stmt) finline {
         if (cur_func) {
             if (stmt->is(NodeKind::VarList)) {
-                auto vlist = as<VarList*>(stmt);
+                auto vlist = static_cast<VarList*>(stmt);
                 for (auto var : vlist->list) {
                     cur_func->scope->push_back(var);
                 }
@@ -801,7 +801,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
                     } else if (node && node->is(NodeKind::VarList)) {
                         // We still have to clear the variable list because we called
                          // parse_statement.
-                        auto vlist = as<VarList*>(node);
+                        auto vlist = static_cast<VarList*>(node);
                         vlist->list.clear();
                     }
                 }
@@ -825,7 +825,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
                 } else if (node && node->is(NodeKind::VarList)) {
                     // We still have to clear the variable list because we called
                     // parse_statement.
-                    auto vlist = as<VarList*>(node);
+                    auto vlist = static_cast<VarList*>(node);
                     vlist->list.clear();
                 }
             }
@@ -862,11 +862,11 @@ acorn::Node* acorn::Parser::parse_loop() {
     case Token::Identifier: {
         Node* expr = parse_ident_decl_or_expr(true);
         if (expr->is(NodeKind::Var)) {
-            Var* var = as<Var*>(expr);
+            Var* var = static_cast<Var*>(expr);
             return loop_with_var(var);
         } else {
             auto loop = new_node<PredicateLoopStmt>(loop_token);
-            loop->cond = as<Expr*>(expr);
+            loop->cond = static_cast<Expr*>(expr);
             loop->scope = parse_scope();
             return loop;
         }
@@ -1035,7 +1035,7 @@ void acorn::Parser::add_node_to_scope(ScopeStmt* scope, Node* node) {
     if (!node) return;
         
     if (node->is(NodeKind::VarList)) {
-        auto vlist = as<VarList*>(node);
+        auto vlist = static_cast<VarList*>(node);
         for (auto var : vlist->list) {
             scope->push_back(var);
         }
@@ -1258,7 +1258,7 @@ acorn::Type* acorn::Parser::construct_array_type(Type* base_type,
         bool resolvable = length_expr->is(NodeKind::Number);
         Number* number;
         if (resolvable) {
-            number = as<Number*>(length_expr);
+            number = static_cast<Number*>(length_expr);
             resolvable &= number->type->is_integer() && number->type->get_number_of_bits() <= 32 &&
                           number->value_s32 > 0;
         }
@@ -1452,7 +1452,7 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         lhs->uses_expanded_loc = true;
         lhs->expanded_loc = PointSourceLoc{
             s,
-            as<uint16_t>(e - s),
+            static_cast<uint16_t>(e - s),
             op.loc.ptr,
             op.loc.length
         };
@@ -1576,7 +1576,7 @@ acorn::Expr* acorn::Parser::fold_float(Token op, Number* lhs, Number* rhs, Type*
         lhs->uses_expanded_loc = true;
         lhs->expanded_loc = PointSourceLoc{
             s,
-            as<uint16_t>(e - s),
+            static_cast<uint16_t>(e - s),
             op.loc.ptr,
             op.loc.length
         };
@@ -1642,8 +1642,8 @@ acorn::Expr* acorn::Parser::report_underflow(Token op, Expr* lhs, Expr* rhs, Typ
 acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
 
     auto fold_int_by_side = [op, this, lhs, rhs](Expr* side) -> Expr* finline {
-        Number* lnum = as<Number*>(lhs);
-        Number* rnum = as<Number*>(rhs);
+        Number* lnum = static_cast<Number*>(lhs);
+        Number* rnum = static_cast<Number*>(rhs);
         Type* to_type = side->type;
         switch (to_type->get_kind()) {
         case TypeKind::UInt8: case TypeKind::Char:
@@ -1687,8 +1687,8 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
             }
         }
     } else if (lhs->type->is_float()) {
-        Number* lnum = as<Number*>(lhs);
-        Number* rnum = as<Number*>(rhs);
+        Number* lnum = static_cast<Number*>(lhs);
+        Number* rnum = static_cast<Number*>(rhs);
         if (lhs->type == rhs->type) {
             if (lhs->type == context.float32_type) {
                 return fold_float<float>(op, lnum, rnum, lhs->type, lnum->value_f32, rnum->value_f32);
@@ -1708,8 +1708,8 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
             return new_binary_op(op, lhs, rhs);
         }
     } else if (rhs->type->is_float()) {
-        Number* lnum = as<Number*>(lhs);
-        Number* rnum = as<Number*>(rhs);
+        Number* lnum = static_cast<Number*>(lhs);
+        Number* rnum = static_cast<Number*>(rhs);
         if (lhs->type == rhs->type) {
             if (lhs->type == context.float32_type) {
                 return fold_float<float>(op, lnum, rnum, lhs->type, lnum->value_f32, rnum->value_f32);
@@ -1881,7 +1881,7 @@ acorn::Expr* acorn::Parser::parse_term() {
         if (unary_token.kind == '+' && expr->is(NodeKind::Number)) {
             return expr; // + has no effect on value.
         } else if (unary_token.kind == '-' && expr->is(NodeKind::Number)) {
-            Number* num = as<Number*>(expr);
+            Number* num = static_cast<Number*>(expr);
 
             switch (num->type->get_kind()) {
             case TypeKind::UInt64: num->value_u64 = -num->value_u64; break;
@@ -1903,7 +1903,7 @@ acorn::Expr* acorn::Parser::parse_term() {
             return expr;
         } else if (unary_token.kind == '~' && expr->is(NodeKind::Number) &&
                    expr->type->is_integer()) {
-            Number* num = as<Number*>(expr);
+            Number* num = static_cast<Number*>(expr);
             
             switch (num->type->get_kind()) {
             case TypeKind::UInt64: num->value_u64 = ~num->value_u64; break;
@@ -2362,7 +2362,7 @@ acorn::Expr* acorn::Parser::parse_array() {
                     
                         Token number_token = cur_token;
                     
-                        auto number = as<Number*>(parse_expr());
+                        auto number = static_cast<Number*>(parse_expr());
 
                         next_token(); // Consume ]
                         next_token(); // Consume =

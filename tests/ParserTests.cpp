@@ -79,77 +79,77 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(18);
 
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[0])->value_u64, to_string<int32_t>).to_be(123456789);
+            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[0])->value_u64, to_string<int32_t>).to_be(123456789);
             
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[1])->value_u64, to_string<int32_t>).to_be(74532);
+            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[1])->value_u64, to_string<int32_t>).to_be(74532);
             
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[2])->value_u64, to_string<int32_t>).to_be(2147483647);
+            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[2])->value_u64, to_string<int32_t>).to_be(2147483647);
 
             expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[3])->type, type_to_string).to_be(context->int64_type);
-            expect(as<Number*>(nodes[3])->value_u64, to_string<int64_t>).to_be(2147483648);
+            expect(static_cast<Number*>(nodes[3])->type, type_to_string).to_be(context->int64_type);
+            expect(static_cast<Number*>(nodes[3])->value_u64, to_string<int64_t>).to_be(2147483648);
 
             expect(nodes[4]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[4])->type, type_to_string).to_be(context->int64_type);
-            expect(as<Number*>(nodes[4])->value_u64, to_string<int64_t>).to_be(9223372036854775807);
+            expect(static_cast<Number*>(nodes[4])->type, type_to_string).to_be(context->int64_type);
+            expect(static_cast<Number*>(nodes[4])->value_u64, to_string<int64_t>).to_be(9223372036854775807);
 
             expect(nodes[5]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[5])->type, type_to_string).to_be(context->uint64_type);
-            expect(as<Number*>(nodes[5])->value_u64, to_string<uint64_t>).to_be(9223372036854775808ull);
+            expect(static_cast<Number*>(nodes[5])->type, type_to_string).to_be(context->uint64_type);
+            expect(static_cast<Number*>(nodes[5])->value_u64, to_string<uint64_t>).to_be(9223372036854775808ull);
 
             expect(nodes[6]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[6])->type, type_to_string).to_be(context->uint64_type);
-            expect(as<Number*>(nodes[6])->value_u64, to_string<uint64_t>).to_be(18446744073709551615ull);
+            expect(static_cast<Number*>(nodes[6])->type, type_to_string).to_be(context->uint64_type);
+            expect(static_cast<Number*>(nodes[6])->value_u64, to_string<uint64_t>).to_be(18446744073709551615ull);
 
             // Testing explicit integer types.
             expect(nodes[7]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[7])->type, type_to_string).to_be(context->int8_type);
-            expect(as<Number*>(nodes[7])->value_u64, to_string<int8_t>).to_be(123);
+            expect(static_cast<Number*>(nodes[7])->type, type_to_string).to_be(context->int8_type);
+            expect(static_cast<Number*>(nodes[7])->value_u64, to_string<int8_t>).to_be(123);
 
             expect(nodes[8]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[8])->type, type_to_string).to_be(context->int16_type);
-            expect(as<Number*>(nodes[8])->value_u64, to_string<int16_t>).to_be(123);
+            expect(static_cast<Number*>(nodes[8])->type, type_to_string).to_be(context->int16_type);
+            expect(static_cast<Number*>(nodes[8])->value_u64, to_string<int16_t>).to_be(123);
 
             expect(nodes[9]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[9])->type, type_to_string).to_be(context->int32_type);
-            expect(as<Number*>(nodes[9])->value_u64, to_string<int32_t>).to_be(123);
+            expect(static_cast<Number*>(nodes[9])->type, type_to_string).to_be(context->int32_type);
+            expect(static_cast<Number*>(nodes[9])->value_u64, to_string<int32_t>).to_be(123);
 
             expect(nodes[10]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[10])->type, type_to_string).to_be(context->int64_type);
-            expect(as<Number*>(nodes[10])->value_u64, to_string<int64_t>).to_be(123);
+            expect(static_cast<Number*>(nodes[10])->type, type_to_string).to_be(context->int64_type);
+            expect(static_cast<Number*>(nodes[10])->value_u64, to_string<int64_t>).to_be(123);
 
             expect(nodes[11]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[11])->type, type_to_string).to_be(context->uint8_type);
-            expect(as<Number*>(nodes[11])->value_u64, to_string<uint8_t>).to_be(123);
+            expect(static_cast<Number*>(nodes[11])->type, type_to_string).to_be(context->uint8_type);
+            expect(static_cast<Number*>(nodes[11])->value_u64, to_string<uint8_t>).to_be(123);
 
             expect(nodes[12]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[12])->type, type_to_string).to_be(context->uint16_type);
-            expect(as<Number*>(nodes[12])->value_u64, to_string<uint16_t>).to_be(123);
+            expect(static_cast<Number*>(nodes[12])->type, type_to_string).to_be(context->uint16_type);
+            expect(static_cast<Number*>(nodes[12])->value_u64, to_string<uint16_t>).to_be(123);
 
             expect(nodes[13]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[13])->type, type_to_string).to_be(context->uint32_type);
-            expect(as<Number*>(nodes[13])->value_u64, to_string<uint32_t>).to_be(123);
+            expect(static_cast<Number*>(nodes[13])->type, type_to_string).to_be(context->uint32_type);
+            expect(static_cast<Number*>(nodes[13])->value_u64, to_string<uint32_t>).to_be(123);
 
             expect(nodes[14]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[14])->type, type_to_string).to_be(context->uint64_type);
-            expect(as<Number*>(nodes[14])->value_u64, to_string<uint64_t>).to_be(123);
+            expect(static_cast<Number*>(nodes[14])->type, type_to_string).to_be(context->uint64_type);
+            expect(static_cast<Number*>(nodes[14])->value_u64, to_string<uint64_t>).to_be(123);
 
             expect(nodes[15]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[15])->type, type_to_string).to_be(context->uint32_type);
-            expect(as<Number*>(nodes[15])->value_u64, to_string<uint64_t>).to_be(4294967295u);
+            expect(static_cast<Number*>(nodes[15])->type, type_to_string).to_be(context->uint32_type);
+            expect(static_cast<Number*>(nodes[15])->value_u64, to_string<uint64_t>).to_be(4294967295u);
 
             expect(nodes[16]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[16])->type, type_to_string).to_be(context->uint32_type);
-            expect(as<Number*>(nodes[16])->value_u64, to_string<uint64_t>).to_be(4294967295u);
+            expect(static_cast<Number*>(nodes[16])->type, type_to_string).to_be(context->uint32_type);
+            expect(static_cast<Number*>(nodes[16])->value_u64, to_string<uint64_t>).to_be(4294967295u);
 
             expect(nodes[17]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[17])->type, type_to_string).to_be(context->uint32_type);
-            expect(as<Number*>(nodes[17])->value_u64, to_string<uint64_t>).to_be(2147483648u);
+            expect(static_cast<Number*>(nodes[17])->type, type_to_string).to_be(context->uint32_type);
+            expect(static_cast<Number*>(nodes[17])->value_u64, to_string<uint64_t>).to_be(2147483648u);
 
         });
         test("parsing hexidecimals", [&] {
@@ -162,24 +162,24 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(5);
 
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[0])->value_u64, to_string<int32_t>).to_be(0);
+            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[0])->value_u64, to_string<int32_t>).to_be(0);
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[1])->value_u64, to_string<int32_t>).to_be(291);
+            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[1])->value_u64, to_string<int32_t>).to_be(291);
 
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[2])->value_u64, to_string<int32_t>).to_be(1525791356);
+            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[2])->value_u64, to_string<int32_t>).to_be(1525791356);
 
             expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[3])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[3])->value_u64, to_string<int32_t>).to_be(11259375);
+            expect(static_cast<Number*>(nodes[3])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[3])->value_u64, to_string<int32_t>).to_be(11259375);
 
             expect(nodes[4]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[4])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[4])->value_u64, to_string<int32_t>).to_be(11259375);
+            expect(static_cast<Number*>(nodes[4])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[4])->value_u64, to_string<int32_t>).to_be(11259375);
 
         });
         test("parsing binary", [&] {
@@ -192,16 +192,16 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(3);
 
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[0])->value_u64, to_string<int32_t>).to_be(0);
+            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[0])->value_u64, to_string<int32_t>).to_be(0);
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[1])->value_u64, to_string<int32_t>).to_be(26);
+            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[1])->value_u64, to_string<int32_t>).to_be(26);
 
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[2])->value_u64, to_string<int32_t>).to_be(511);
+            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[2])->value_u64, to_string<int32_t>).to_be(511);
 
         });
         test("octal parsing", [&] {
@@ -214,20 +214,20 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(4);
 
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[0])->value_u64, to_string<int32_t>).to_be(0);
+            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[0])->value_u64, to_string<int32_t>).to_be(0);
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[1])->value_u64, to_string<int32_t>).to_be(83);
+            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[1])->value_u64, to_string<int32_t>).to_be(83);
 
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[2])->value_u64, to_string<int32_t>).to_be(342391);
+            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[2])->value_u64, to_string<int32_t>).to_be(342391);
 
             expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[3])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[3])->value_u64, to_string<int32_t>).to_be(173881);
+            expect(static_cast<Number*>(nodes[3])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[3])->value_u64, to_string<int32_t>).to_be(173881);
 
         });
         test("integer parsing overflow", [&] {
@@ -350,68 +350,68 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(15);
             
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[0])->value_u64, to_string<uint64_t>).to_be(72047ull);
+            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[0])->value_u64, to_string<uint64_t>).to_be(72047ull);
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[1])->value_u64, to_string<uint64_t>).to_be(250ull);
+            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[1])->value_u64, to_string<uint64_t>).to_be(250ull);
             
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[2])->value_s64, to_string<int64_t>).to_be(-709ll);
+            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[2])->value_s64, to_string<int64_t>).to_be(-709ll);
             
             expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[3])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[3])->value_u64, to_string<uint64_t>).to_be(676ull);
+            expect(static_cast<Number*>(nodes[3])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[3])->value_u64, to_string<uint64_t>).to_be(676ull);
             
             expect(nodes[4]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[4])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[4])->value_u64, to_string<uint64_t>).to_be(61ull);
+            expect(static_cast<Number*>(nodes[4])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[4])->value_u64, to_string<uint64_t>).to_be(61ull);
 
             expect(nodes[5]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[5])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[5])->value_u64, to_string<uint64_t>).to_be(2ull);
+            expect(static_cast<Number*>(nodes[5])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[5])->value_u64, to_string<uint64_t>).to_be(2ull);
 
             expect(nodes[6]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[6])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[6])->value_u64, to_string<uint64_t>).to_be(1050ull);
+            expect(static_cast<Number*>(nodes[6])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[6])->value_u64, to_string<uint64_t>).to_be(1050ull);
 
             expect(nodes[7]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[7])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[7])->value_u64, to_string<uint64_t>).to_be(7161ull);
+            expect(static_cast<Number*>(nodes[7])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[7])->value_u64, to_string<uint64_t>).to_be(7161ull);
 
             expect(nodes[7]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[7])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[7])->value_u64, to_string<uint64_t>).to_be(7161ull);
+            expect(static_cast<Number*>(nodes[7])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[7])->value_u64, to_string<uint64_t>).to_be(7161ull);
 
             expect(nodes[8]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[8])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[8])->value_u64, to_string<uint64_t>).to_be(90ull);
+            expect(static_cast<Number*>(nodes[8])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[8])->value_u64, to_string<uint64_t>).to_be(90ull);
 
             expect(nodes[9]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[9])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[9])->value_u64, to_string<uint64_t>).to_be(127ull);
+            expect(static_cast<Number*>(nodes[9])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[9])->value_u64, to_string<uint64_t>).to_be(127ull);
 
             expect(nodes[10]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[10])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[10])->value_u64, to_string<uint64_t>).to_be(90ull);
+            expect(static_cast<Number*>(nodes[10])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[10])->value_u64, to_string<uint64_t>).to_be(90ull);
 
             expect(nodes[11]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[11])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[11])->value_u64, to_string<uint64_t>).to_be(127ull);
+            expect(static_cast<Number*>(nodes[11])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[11])->value_u64, to_string<uint64_t>).to_be(127ull);
 
             expect(nodes[12]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[12])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[12])->value_u64, to_string<uint64_t>).to_be(7854ull);
+            expect(static_cast<Number*>(nodes[12])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[12])->value_u64, to_string<uint64_t>).to_be(7854ull);
 
             expect(nodes[13]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[13])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[13])->value_u64, to_string<uint64_t>).to_be(49ull);
+            expect(static_cast<Number*>(nodes[13])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[13])->value_u64, to_string<uint64_t>).to_be(49ull);
 
             expect(nodes[14]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[14])->type, type_to_string).to_be(context->int_type);
-            expect(as<Number*>(nodes[14])->value_s64, to_string<int64_t>).to_be(-12ll);
+            expect(static_cast<Number*>(nodes[14])->type, type_to_string).to_be(context->int_type);
+            expect(static_cast<Number*>(nodes[14])->value_s64, to_string<int64_t>).to_be(-12ll);
 
         });
 
@@ -479,22 +479,22 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(5);
 
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::String);
-            expect(as<String*>(nodes[0])->type, type_to_string).to_be(context->const_char_ptr_type);
-            expect(as<String*>(nodes[0])->text8bit, std::identity()).to_be("");
+            expect(static_cast<String*>(nodes[0])->type, type_to_string).to_be(context->const_char_ptr_type);
+            expect(static_cast<String*>(nodes[0])->text8bit, std::identity()).to_be("");
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::String);
-            expect(as<String*>(nodes[1])->type, type_to_string).to_be(context->const_char_ptr_type);
-            expect(as<String*>(nodes[1])->text8bit, std::identity()).to_be("abcASwe325#@R12eAsF/.,(1");
+            expect(static_cast<String*>(nodes[1])->type, type_to_string).to_be(context->const_char_ptr_type);
+            expect(static_cast<String*>(nodes[1])->text8bit, std::identity()).to_be("abcASwe325#@R12eAsF/.,(1");
 
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::String);
-            expect(as<String*>(nodes[2])->type, type_to_string).to_be(context->const_char_ptr_type);
-            expect(as<String*>(nodes[2])->text8bit, std::identity()).to_be("abc\n\\\tew@\f");
+            expect(static_cast<String*>(nodes[2])->type, type_to_string).to_be(context->const_char_ptr_type);
+            expect(static_cast<String*>(nodes[2])->text8bit, std::identity()).to_be("abc\n\\\tew@\f");
 
             expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::String);
-            expect(as<String*>(nodes[3])->type, type_to_string).to_be(context->const_char16_ptr_type);
+            expect(static_cast<String*>(nodes[3])->type, type_to_string).to_be(context->const_char16_ptr_type);
 
             expect(nodes[4]->kind, node_kind_to_string).to_be(NodeKind::String);
-            expect(as<String*>(nodes[4])->type, type_to_string).to_be(context->const_char32_ptr_type);
+            expect(static_cast<String*>(nodes[4])->type, type_to_string).to_be(context->const_char32_ptr_type);
             
         });
         test("char literals", [&] {
@@ -512,20 +512,20 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(4);
 
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->char_type);
-            expect(as<Number*>(nodes[0])->value_u64, to_string<uint64_t>).to_be(97);
+            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->char_type);
+            expect(static_cast<Number*>(nodes[0])->value_u64, to_string<uint64_t>).to_be(97);
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->char_type);
-            expect(as<Number*>(nodes[1])->value_u64, to_string<uint64_t>).to_be(94);
+            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->char_type);
+            expect(static_cast<Number*>(nodes[1])->value_u64, to_string<uint64_t>).to_be(94);
 
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->char16_type);
-            expect(as<Number*>(nodes[2])->value_u64, to_string<uint64_t>).to_be(0xB35c);
+            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->char16_type);
+            expect(static_cast<Number*>(nodes[2])->value_u64, to_string<uint64_t>).to_be(0xB35c);
 
             expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[3])->type, type_to_string).to_be(context->char32_type);
-            expect(as<Number*>(nodes[3])->value_u64, to_string<uint64_t>).to_be(0x62Ab0DD7);
+            expect(static_cast<Number*>(nodes[3])->type, type_to_string).to_be(context->char32_type);
+            expect(static_cast<Number*>(nodes[3])->value_u64, to_string<uint64_t>).to_be(0x62Ab0DD7);
 
         });
         test("elm type of array must have element", [&] {
@@ -550,16 +550,16 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(3);
             
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->float64_type);
-            expect(std::bit_cast<uint64_t>(as<Number*>(nodes[0])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value1));
+            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->float64_type);
+            expect(std::bit_cast<uint64_t>(static_cast<Number*>(nodes[0])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value1));
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->float64_type);
-            expect(std::bit_cast<uint64_t>(as<Number*>(nodes[1])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value2));
+            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->float64_type);
+            expect(std::bit_cast<uint64_t>(static_cast<Number*>(nodes[1])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value2));
 
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->float64_type);
-            expect(std::bit_cast<uint64_t>(as<Number*>(nodes[2])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value3));
+            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->float64_type);
+            expect(std::bit_cast<uint64_t>(static_cast<Number*>(nodes[2])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value3));
 
         });
         test("float 32 arithmetic", [&] {
@@ -580,16 +580,16 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(3);
             
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[0])->type, type_to_string).to_be(context->float32_type);
-            expect(std::bit_cast<uint32_t>(as<Number*>(nodes[0])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value1));
+            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->float32_type);
+            expect(std::bit_cast<uint32_t>(static_cast<Number*>(nodes[0])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value1));
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[1])->type, type_to_string).to_be(context->float32_type);
-            expect(std::bit_cast<uint32_t>(as<Number*>(nodes[1])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value2));
+            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->float32_type);
+            expect(std::bit_cast<uint32_t>(static_cast<Number*>(nodes[1])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value2));
 
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(as<Number*>(nodes[2])->type, type_to_string).to_be(context->float32_type);
-            expect(std::bit_cast<uint32_t>(as<Number*>(nodes[2])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value3));
+            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->float32_type);
+            expect(std::bit_cast<uint32_t>(static_cast<Number*>(nodes[2])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value3));
 
         });
     });

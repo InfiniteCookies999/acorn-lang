@@ -38,12 +38,12 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Mod
     case TypeKind::Float64:
         return llvm::Type::getDoubleTy(ll_context);
     case TypeKind::Array: {
-        auto arr_type = as<ArrayType*>(type);
+        auto arr_type = static_cast<ArrayType*>(type);
         auto ll_elm_type = gen_type(arr_type->get_elm_type(), ll_context, ll_module);
         return llvm::ArrayType::get(ll_elm_type, arr_type->get_length());
     }
     case TypeKind::Struct: {
-        auto struct_type = as<StructType*>(type);
+        auto struct_type = static_cast<StructType*>(type);
         return gen_struct_type(struct_type, ll_context, ll_module);
     }
     default:

@@ -74,14 +74,14 @@ uint32_t acorn::Type::get_number_of_bits() const {
 bool acorn::Type::needs_destruction() const {
     auto kind = get_kind();
     if (kind == TypeKind::Struct) {
-        auto struct_type = as<const StructType*>(this);
+        auto struct_type = static_cast<const StructType*>(this);
         auto structn = struct_type->get_struct();
         return structn->needs_destruction;
     } else if (kind == TypeKind::Array) {
-        auto arr_type = as<const ArrayType*>(this);
+        auto arr_type = static_cast<const ArrayType*>(this);
         auto base_type = arr_type->get_base_type();
         if (base_type->is_struct_type()) {
-            auto struct_type = as<const StructType*>(base_type);
+            auto struct_type = static_cast<const StructType*>(base_type);
             auto structn = struct_type->get_struct();
             return structn->needs_destruction;
         }
@@ -116,13 +116,13 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Float32:   return str("float32");
     case TypeKind::Float64:   return str("float64");
     case TypeKind::EmptyArray: return str("[]");
-    case TypeKind::Range:     return as<const RangeType*>(this)->to_string();
-    case TypeKind::Pointer:   return as<const PointerType*>(this)->to_string();
-    case TypeKind::Array:     return as<const ArrayType*>(this)->to_string();
-    case TypeKind::Function:  return as<const FunctionType*>(this)->to_string();
-    case TypeKind::Struct:    return as<const StructType*>(this)->to_string();
+    case TypeKind::Range:     return static_cast<const RangeType*>(this)->to_string();
+    case TypeKind::Pointer:   return static_cast<const PointerType*>(this)->to_string();
+    case TypeKind::Array:     return static_cast<const ArrayType*>(this)->to_string();
+    case TypeKind::Function:  return static_cast<const FunctionType*>(this)->to_string();
+    case TypeKind::Struct:    return static_cast<const StructType*>(this)->to_string();
     case TypeKind::AssignDeterminedArray:
-                              return as<const AssignDeterminedArrayType*>(this)->to_string();
+                              return static_cast<const AssignDeterminedArrayType*>(this)->to_string();
     default:
         acorn_fatal_fmt("Type::to_string() missing to_string case. Kind=%s", static_cast<int>(kind));
         return "";
@@ -134,7 +134,7 @@ acorn::Type* acorn::ContainerType::get_base_type() const {
     Type* type_itr = elm_type;
     TypeKind our_kind = get_kind();
     while (type_itr->get_kind() == our_kind) {
-        auto ctr_type = as<ContainerType*>(type_itr);
+        auto ctr_type = static_cast<ContainerType*>(type_itr);
         type_itr = ctr_type->elm_type;
     }
     return type_itr;
@@ -146,7 +146,7 @@ size_t acorn::ContainerType::get_depth() const {
     Type* type_itr = elm_type;
     TypeKind our_kind = get_kind();
     while (type_itr->get_kind() == our_kind) {
-        auto ctr_type = as<ContainerType*>(type_itr);
+        auto ctr_type = static_cast<ContainerType*>(type_itr);
         type_itr = ctr_type->elm_type;
 
         ++depth;
@@ -184,7 +184,7 @@ uint64_t acorn::ArrayType::get_total_linear_length() const {
     uint64_t length = this->length;
     Type* type_itr = elm_type;
     while (type_itr->is_array()) {
-        auto arr_type = as<ArrayType*>(type_itr);
+        auto arr_type = static_cast<ArrayType*>(type_itr);
         length *= arr_type->length;
         type_itr = arr_type->elm_type;
     }

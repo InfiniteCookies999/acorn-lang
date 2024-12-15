@@ -266,14 +266,14 @@ void acorn::Compiler::sema_and_irgen() {
         
         Sema sema(context, decl->file, decl->get_logger());
         if (decl->is(NodeKind::Func)) {    
-            sema.check_function(as<Func*>(decl));
+            sema.check_function(static_cast<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {
-            auto var = as<Var*>(decl);
+            auto var = static_cast<Var*>(decl);
             if (!var->has_been_checked) {
                 sema.check_variable(var);
             }
         } else if (decl->is(NodeKind::Struct)) {
-            auto structn = as<Struct*>(decl);
+            auto structn = static_cast<Struct*>(decl);
             if (!structn->has_been_checked) {
                 sema.check_struct(structn);
             }
@@ -295,9 +295,9 @@ void acorn::Compiler::sema_and_irgen() {
             
         IRGenerator generator(context);
         if (decl->is(NodeKind::Func)) {
-            generator.gen_function(as<Func*>(decl));
+            generator.gen_function(static_cast<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {
-            generator.gen_global_variable(as<Var*>(decl));
+            generator.gen_global_variable(static_cast<Var*>(decl));
         } else {
             acorn_fatal("Unreachable: Missing generation case");
         }
