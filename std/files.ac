@@ -1,5 +1,6 @@
 #file(access=pub, namespace=files)
 
+import .. module;
 import .win32;
 import .unix;
 import .String;
@@ -82,14 +83,14 @@ struct FileHandle {
         uint32 bytes_read;
         if win32.ReadFile(handle, buffer, as(uint32) length, &bytes_read, null) == 0 {
             // TODO: proper error handling.
-            println("failed to read buffer of file :(");
+            module.println("failed to read buffer of file :(");
             return 0;
         }
         return as(int) bytes_read;
 #elif OS_GROUP_UNIX
         isize bytes_read = unix.read(handle, buffer, as(usize) length);
         if bytes_read == -1 {
-            println("failed to read buffer of file :(");
+            module.println("failed to read buffer of file :(");
             return 0;
         }
         return as(int) bytes_read;
@@ -125,12 +126,12 @@ String read(const char* path) {
 
     int size = handle.get_size();
 
-    char* buffer = as(char*) malloc(size + 1); // +1 for null terminator.
+    char* buffer = as(char*) module.malloc(size + 1); // +1 for null terminator.
     int bytes_read = handle.read_buffer(buffer, size);
     
     if bytes_read != size {
         // TODO: proper error handling.
-        println("Read the incorrect number of bytes from file :(");
+        module.println("Read the incorrect number of bytes from file :(");
         return String{ "" };
     }
 
@@ -252,7 +253,7 @@ FileHandle open(const char* path, uint32 flags) {
 
     if handle == win32.INVALID_HANDLE_VALUE {
         // TODO: Proper error handling!
-        println("Failed to open file :(");
+        module.println("Failed to open file :(");
         return FileHandle{ null };
     }
 
@@ -282,7 +283,7 @@ FileHandle open(const char* path, uint32 flags) {
     int32 handle = unix.open(path, os_flags);
     if handle == -1 {
         // TODO: proper error handling!
-        println("Failed to open file :(");
+        module.println("Failed to open file :(");
         return FileHandle{ -1 };
     }
 

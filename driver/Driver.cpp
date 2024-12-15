@@ -55,6 +55,9 @@ Options:
     -r, -rel, -release
         Compile in release mode.
 
+    -stand-alone
+        Compile the project without the standard library.
+
     -show-times
         Display how long different stages took.
 
@@ -104,6 +107,7 @@ int main(int argc, char* argv[]) {
     processor.add_flag("run", &acorn::Compiler::set_run_program);
     processor.add_flag("run-seperate", { "run-seperate-window"}, &acorn::Compiler::set_run_program_seperate_window);
     processor.add_flag("show-linker-command", { "show-linker-cmd" }, &acorn::Compiler::set_show_linker_command);
+    processor.add_flag("stand-alone", &acorn::Compiler::set_stand_alone);
 
     processor.add_flag("output-name", { "out-name", "o" }, [](CommandConsumer& consumer) {
         consumer.next_eql_pair(&acorn::Compiler::set_output_name, "Missing output program name");

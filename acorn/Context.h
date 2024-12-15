@@ -87,6 +87,7 @@ namespace acorn {
         Identifier length_identifier;
         Identifier access_identifier;
         Identifier namespace_identifier;
+        Identifier module_identifier;
 
         struct LLVMIntrinsicDefinition {
             Identifier               name;

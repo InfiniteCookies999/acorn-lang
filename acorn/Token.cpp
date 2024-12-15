@@ -46,6 +46,7 @@ std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
     case Token::OrOr:                 return "||";
     case Token::RangeEq:              return "..=";
     case Token::RangeLt:              return "..<";
+    case Token::DotDot:               return "..";
 
     default: {
         if (kind > Token::KeywordStart && kind < Token::KeywordEnd) {

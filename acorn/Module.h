@@ -57,6 +57,7 @@ namespace acorn {
 
         // Placed in this list if the declaration was declared more than once.
         DupDeclList redecls;
+
     };
 }
 

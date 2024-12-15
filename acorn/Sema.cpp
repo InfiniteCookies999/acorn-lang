@@ -458,6 +458,18 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
                 .end_error(ErrCode::SemaCouldNotResolveImport);
     };
 
+    auto report_invalid_import = [&logger, importn]() finline {
+        // TODO: better error description.
+        logger.begin_error(importn->loc, "Invalid import")
+            .end_error(ErrCode::SemaInvalidImport);
+    };
+
+    auto report_expect_module_identifier = [&logger](ImportStmt::KeyPart& key_part) finline {
+        logger.begin_error(key_part.error_loc, "Importing parent module must always name import as 'module' but found '%s'",
+                           key_part.name)
+                           .end_error(ErrCode::SemaParentModuleImportExpectModuleIdent);
+    };
+
     if (key.size() == 1 && importn->within_same_modl) {
         auto& modl = importn->file->modl;
         Identifier ident = key[0].name;
@@ -468,6 +480,17 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         } else {
             report_could_not_find(key[0]);
         }
+        return;
+    }
+
+    if (key.size() == 1 && importn->within_parent_modl) {
+        // import the module.
+        auto& modl = importn->file->modl;
+        if (key[0].name != context.module_identifier) {
+            report_expect_module_identifier(key[0]);
+            return;
+        }
+        add_namespace(&modl);
         return;
     }
     
@@ -494,6 +517,28 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
             logger.begin_error(key[0].error_loc, "Could not find mamespace '%s'", key[0].name)
                 .end_error(ErrCode::SemaCouldNotResolveImport);
         }
+        return;
+    }
+
+    if (key.size() == 2 && importn->within_parent_modl) {
+        auto& modl = importn->file->modl;
+
+        if (key[0].name != context.module_identifier) {
+            report_expect_module_identifier(key[0]);
+            return;
+        }
+
+        if (auto structn = modl.find_struct(key[1].name)) {
+            add_struct(structn);
+        } else {
+            logger.begin_error(key[1].error_loc, "Could not find struct '%s'", key[1].name)
+                .end_error(ErrCode::SemaCouldNotResolveImport);
+        }
+        return;
+    }
+
+    if (importn->within_same_modl || importn->within_parent_modl) {
+        report_invalid_import();
         return;
     }
 
@@ -529,9 +574,7 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         return;
     }
 
-    // TODO: better error description.
-    logger.begin_error(importn->loc, "Invalid import")
-        .end_error(ErrCode::SemaInvalidImport);
+    report_invalid_import();
 }
 
 bool acorn::Sema::check_function_decl(Func* func) {
@@ -2100,16 +2143,6 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
                 ref->set_funcs_ref(funcs);
                 return;
             }
-
-            auto& modl = search_nspace->get_module();
-            if (&modl != nspace) {
-                // The namespace is a sub namespace of a module. Want to search
-                // the module as well.
-                if (auto* funcs = modl.find_functions(ref->ident)) {
-                    ref->set_funcs_ref(funcs);
-                    return;
-                }
-            }
         }
 
         if (auto* funcs = search_nspace->find_functions(ref->ident)) {
@@ -2141,16 +2174,6 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
             if (auto* var = file->find_static_import_variable(ref->ident)) {
                 ref->set_var_ref(var);
                 return;
-            }
-
-            auto& modl = search_nspace->get_module();
-            if (&modl != nspace) {
-                // The namespace is a sub namespace of a module. Want to search
-                // the module as well.
-                if (auto* var = modl.find_variable(ref->ident)) {
-                    ref->set_var_ref(var);
-                    return;
-                }
             }
         }
 

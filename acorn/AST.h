@@ -285,8 +285,10 @@ namespace acorn {
 
         SourceFile* file;
 
-        bool is_static = false;
-        bool within_same_modl = false;
+        bool is_static          = false;
+        bool within_same_modl   = false;
+        bool within_parent_modl = false;
+
         struct KeyPart {
             Identifier name;
             SourceLoc  error_loc;

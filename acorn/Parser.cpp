@@ -143,6 +143,9 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
     if (cur_token.is('.')) {
         next_token();
         importn->within_same_modl = true;
+    } else if (cur_token.is(Token::DotDot)) {
+        next_token();
+        importn->within_parent_modl = true;
     }
 
     Token start_token = cur_token;

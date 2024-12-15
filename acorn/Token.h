@@ -109,6 +109,7 @@ namespace acorn {
             PostSubSub,
             RangeEq,
             RangeLt,
+            DotDot,
 
             IntLiteral,
             HexLiteral,

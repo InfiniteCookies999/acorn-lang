@@ -72,6 +72,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       length_identifier(Identifier::get("length")),
       access_identifier(Identifier::get("access")),
       namespace_identifier(Identifier::get("namespace")),
+      module_identifier(Identifier::get("module")),
 
       keyword_mapping({
           { "void"     , Token::KwVoid      },
