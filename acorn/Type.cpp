@@ -116,6 +116,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Float32:   return str("float32");
     case TypeKind::Float64:   return str("float64");
     case TypeKind::EmptyArray: return str("[]");
+    case TypeKind::Auto:      return "auto";
     case TypeKind::Range:     return static_cast<const RangeType*>(this)->to_string();
     case TypeKind::Pointer:   return static_cast<const PointerType*>(this)->to_string();
     case TypeKind::Array:     return static_cast<const ArrayType*>(this)->to_string();

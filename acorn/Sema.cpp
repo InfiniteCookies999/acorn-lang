@@ -898,17 +898,14 @@ void acorn::Sema::check_variable(Var* var) {
     }
     
     if (cur_scope && !var->is_param() && !var->is_field()) {
-        if (Var* prev_var = cur_scope->find_variable(var->name)) {
-            logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
-                  .add_line([prev_var](Logger& l) { prev_var->show_prev_declared_msg(l); })
-                  .end_error(ErrCode::SemaDuplicateLocVariableDecl);
-        } else {
-            cur_scope->variables.push_back(var);
-        }
+        add_variable_to_local_scope(var);
     }
 
     if (var->is_global) {
         cur_global_var = var;
+        if (!var->is_foldable) {
+            context.queue_gen(var);
+        }
     }
     var->is_being_checked = true;
     var->has_been_checked = true; // Set early to prevent circular checking.
@@ -943,13 +940,7 @@ void acorn::Sema::check_variable(Var* var) {
         return cleanup();
     }
 
-    if (var->parsed_type == context.auto_type) {
-        if (!var->assignment) {
-            error(var, "Must have assignment to determine auto type")
-                .end_error(ErrCode::SemaMustHaveAssignmentToDetAuto);    
-            return cleanup();
-        }
-
+    auto check_for_incomplete_type = [this, var]() finline {
         switch (var->assignment->type->get_kind()) {
         case TypeKind::Void:
         case TypeKind::NamespaceRef:
@@ -959,23 +950,67 @@ void acorn::Sema::check_variable(Var* var) {
             error(expand(var), "Cannot assign incomplete type '%s' to variable declared auto",
                   var->assignment->type)
                 .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
-            break;
+            return false;
         default:
-            break;
+            return true;
         }
-        if (var->assignment->type == context.funcs_ref_type) {
-            // TODO: In the future we will want to allow for selecting for
-            // overloaded functions somehow.
-            auto ref = static_cast<IdentRef*>(var->assignment);
-            auto func = (*ref->funcs_ref)[0];
+    };
 
-            llvm::SmallVector<Type*> param_types;
-            for (Var* param : func->params) {
-                param_types.push_back(param->type);
-            }
-            var->type = type_table.get_function_type(func->return_type, param_types);
+    auto report_error_auto_must_have_assignment = [this, var](Type* auto_type) finline {
+        error(var, "Must have assignment to determine auto %s", auto_type)
+                .end_error(ErrCode::SemaMustHaveAssignmentToDetAuto);
+    };
+
+    auto construct_function_type_from_func_ref = [this](Expr* expr) finline {
+        // TODO: In the future we will want to allow for selecting for
+        // overloaded functions somehow.
+        auto ref = static_cast<IdentRef*>(expr);
+        auto func = (*ref->funcs_ref)[0];
+
+        llvm::SmallVector<Type*> param_types;
+        for (Var* param : func->params) {
+            param_types.push_back(param->type);
+        }
+        return type_table.get_function_type(func->return_type, param_types);
+    };
+
+    if (var->parsed_type == context.auto_type) {
+        if (!var->assignment) {
+            report_error_auto_must_have_assignment(context.auto_type);
+            return cleanup();
+        }
+
+        if (!check_for_incomplete_type()) {
+            return cleanup();
+        }
+        
+        if (var->assignment->type == context.funcs_ref_type) {
+            var->type = construct_function_type_from_func_ref(var->assignment);
         } else {
             var->type = var->assignment->type;
+        }
+    } else if (var->parsed_type == context.auto_ptr_type) {
+        if (!var->assignment) {
+            report_error_auto_must_have_assignment(context.auto_ptr_type);
+            return cleanup();
+        }
+
+        if (!check_for_incomplete_type()) {
+            return cleanup();
+        }
+
+        if (var->assignment->type == context.funcs_ref_type) {
+            var->type = construct_function_type_from_func_ref(var->assignment);
+        } else {
+            var->type = var->assignment->type;
+        }
+
+        if (!var->type->is_pointer()) {
+            error(expand(var), "Variable with 'auto*' type expects assignment to be a pointer type but found '%s'",
+                  var->type)
+                .end_error(ErrCode::SemaAutoPtrExpectsPtrType);
+            var->type = nullptr;
+            return cleanup();
         }
     } else if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray) {
         // We have to handle this case as if it is speciial because
@@ -994,16 +1029,6 @@ void acorn::Sema::check_variable(Var* var) {
     var->is_foldable = var->type->is_number() &&
                        var->type->is_const() &&
                        var->assignment && var->assignment->is_foldable;
-
-    if (!var->is_foldable) {
-        // If the variable is a local variable to a function we need to tell the
-        // function that there will need to be stack allocation for te variable.
-        if (cur_func && !var->is_param() && !var->is_field() && !var->is_global) {
-            cur_func->vars_to_alloc.push_back(var);
-        } else if (var->is_global) {
-            context.queue_gen(var);
-        }
-    }
 
     if (var->type->is_struct_type()) {
         auto struct_type = static_cast<StructType*>(var->type);
@@ -1316,27 +1341,44 @@ void acorn::Sema::check_range_loop(RangeLoopStmt* loop) {
 void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
     
     SemScope sem_scope = push_scope();
-    check_node(loop->var);
+    loop->var->type = fixup_type(loop->var->parsed_type);
+    auto var_type = loop->var->type;
+    if (!var_type) {
+        return;
+    }
+
+    loop->var->is_foldable = false;
+    add_variable_to_local_scope(loop->var);
+
     check_node(loop->container);
 
-    if (loop->container->type && loop->var->type) {
+    if (loop->container->type) {
         if (loop->container->type->is_array()) {
             auto arr_type = static_cast<ArrayType*>(loop->container->type);
             auto elm_type = arr_type->get_elm_type();
 
-            bool types_match = has_valid_constness(loop->var->type, elm_type) && loop->var->type->is_ignore_const(elm_type);
-            if (!types_match) {
-                auto ptr_type = type_table.get_ptr_type(elm_type);
-                types_match = has_valid_constness(loop->var->type, ptr_type) && loop->var->type->is_ignore_const(ptr_type);
+            if (var_type == context.auto_type) {
+                loop->var->type = elm_type;
+            } else if (var_type == context.auto_ptr_type) {
+                loop->var->type = type_table.get_ptr_type(elm_type);
                 loop->references_memory = true;
-            }
+            } else {
+                bool types_match = has_valid_constness(var_type, elm_type) && var_type->is_ignore_const(elm_type);
+                if (!types_match) {
+                    auto ptr_type = type_table.get_ptr_type(elm_type);
+                    types_match = has_valid_constness(var_type, ptr_type) && var_type->is_ignore_const(ptr_type);
+                    loop->references_memory = true;
+                }
 
-            if (!types_match) {
-                error(loop->container, "Cannot assign type '%s' to variable type '%s'",
-                      elm_type, loop->var->type)
-                    .end_error(ErrCode::SemaCannotAssignIteratorElmTypeToVar);
+                if (!types_match) {
+                    error(loop->container, "Cannot assign type '%s' to variable type '%s'",
+                          elm_type, var_type)
+                        .end_error(ErrCode::SemaCannotAssignIteratorElmTypeToVar);
+                }
             }
         } else if (loop->container->type->is_range()) {
+            // TODO: deal with auto and auto*
+
             auto range_type = static_cast<RangeType*>(loop->container->type);
             if (loop->var->type->is_not(range_type->get_value_type())) {
                 error(loop->var, "Expected type '%s' for variable", range_type->get_value_type())
@@ -1695,6 +1737,19 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
                 .end_error(ErrCode::SemaNoLocalStructs);
         } else {
             check_node(stmt);
+        }
+    }
+}
+
+void acorn::Sema::add_variable_to_local_scope(Var* var) {
+    if (Var* prev_var = cur_scope->find_variable(var->name)) {
+        logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
+                .add_line([prev_var](Logger& l) { prev_var->show_prev_declared_msg(l); })
+                .end_error(ErrCode::SemaDuplicateLocVariableDecl);
+    } else {
+        cur_scope->variables.push_back(var);
+        if (!var->is_foldable) {
+            cur_func->vars_to_alloc.push_back(var);
         }
     }
 }

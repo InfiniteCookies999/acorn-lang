@@ -1347,7 +1347,7 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         }
 
         builder.CreateStore(ll_index_value, loop->var->ll_address);
-
+        
     } else if (loop->container->type->is_range()) {
 
         auto range_type = static_cast<RangeType*>(loop->container->type);

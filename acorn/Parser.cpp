@@ -1149,6 +1149,10 @@ acorn::Type* acorn::Parser::parse_type() {
     auto type = parse_base_type();
 
     if (type == context.auto_type) {
+        if (cur_token.is('*')) {
+            next_token();
+            return context.auto_ptr_type;
+        }
         return type;
     }
 
@@ -1219,7 +1223,15 @@ return t; }
     case Token::KwUSize:   ty(context.usize_type);
     case Token::KwFloat32: ty(context.float32_type);
     case Token::KwFloat64: ty(context.float64_type);
-    case Token::KwAuto:    ty(context.auto_type);
+    case Token::KwAuto: {
+        if (is_const) {
+            error(prev_token, "Auto cannot be const")
+                .add_line("If you want a constant auto type just 'const'")
+                .end_error(ErrCode::ParseAutoCannotBeConst);
+        }
+        next_token();
+        return context.auto_type;
+    }
     case Token::Identifier: {
         Token name_token = cur_token;
         next_token();

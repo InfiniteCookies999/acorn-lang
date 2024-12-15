@@ -108,6 +108,8 @@ namespace acorn {
         // Use this version only if the caller sets up and tears down its own sem_scope.
         void check_scope(ScopeStmt* scope, SemScope* sem_scope);
 
+        void add_variable_to_local_scope(Var* var);
+
         // Expression checking
         //--------------------------------------        
 
