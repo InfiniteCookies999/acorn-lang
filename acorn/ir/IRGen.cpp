@@ -382,10 +382,6 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     // to clean up the main scope's destructors.
     pop_scope();
 
-    if (is_main) {
-        ll_global_cleanup_call_bb = builder.GetInsertBlock();
-    }
-
     if (func->is_destructor) {
         // The function is a destructor so need to call the destructors
         // of any of the fields that have destructors themselves.
@@ -439,6 +435,10 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 
             ll_ret_value = builder.CreateLoad(ll_load_type, ll_ret_addr, "ret.val");
         }
+    }
+
+    if (is_main) {
+        ll_global_cleanup_call_bb = builder.GetInsertBlock();
     }
 
     gen_call_destructors(always_initialized_destructor_objects);

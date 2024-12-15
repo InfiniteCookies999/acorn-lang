@@ -258,28 +258,28 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(9);
 
             // Base types
-            expect(nodes[0]->type, type_to_string).to_be(context->int_type);
-            expect(nodes[0]->type->remove_all_const(), type_to_string).to_be(context->int_type);
-            expect(nodes[1]->type, type_to_string).to_be(context->int32_type);
-            expect(nodes[1]->type->remove_all_const(), type_to_string).to_be(context->int32_type);
-            expect(nodes[2]->type, type_to_string).to_be(context->uint32_type);
-            expect(nodes[2]->type->remove_all_const(), type_to_string).to_be(context->uint32_type);
+            expect(nodes[0]->parsed_type, type_to_string).to_be(context->int_type);
+            expect(nodes[0]->parsed_type->remove_all_const(), type_to_string).to_be(context->int_type);
+            expect(nodes[1]->parsed_type, type_to_string).to_be(context->int32_type);
+            expect(nodes[1]->parsed_type->remove_all_const(), type_to_string).to_be(context->int32_type);
+            expect(nodes[2]->parsed_type, type_to_string).to_be(context->uint32_type);
+            expect(nodes[2]->parsed_type->remove_all_const(), type_to_string).to_be(context->uint32_type);
 
             // Pointers
-            expect(nodes[3]->type, type_to_string).to_be(type_table.get_ptr_type(context->int_type));
-            expect(nodes[3]->type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(context->int_type));
-            expect(nodes[4]->type, type_to_string).to_be(type_table.get_ptr_type(context->uint32_type));
-            expect(nodes[4]->type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(context->uint32_type));
+            expect(nodes[3]->parsed_type, type_to_string).to_be(type_table.get_ptr_type(context->int_type));
+            expect(nodes[3]->parsed_type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(context->int_type));
+            expect(nodes[4]->parsed_type, type_to_string).to_be(type_table.get_ptr_type(context->uint32_type));
+            expect(nodes[4]->parsed_type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(context->uint32_type));
 
             // Types with constness
-            expect(nodes[5]->type, type_to_string).to_be(type_table.get_const_type(context->int_type));
-            expect(nodes[5]->type->remove_all_const(), type_to_string).to_be(context->int_type);
-            expect(nodes[6]->type, type_to_string).to_be(type_table.get_ptr_type(type_table.get_const_type(context->int_type)));
-            expect(nodes[6]->type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(context->int_type));
-            expect(nodes[7]->type, type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(context->int_type)));
-            expect(nodes[7]->type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(context->int_type)));
-            expect(nodes[8]->type, type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(type_table.get_const_type(context->int_type))));
-            expect(nodes[8]->type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(context->int_type)));
+            expect(nodes[5]->parsed_type, type_to_string).to_be(type_table.get_const_type(context->int_type));
+            expect(nodes[5]->parsed_type->remove_all_const(), type_to_string).to_be(context->int_type);
+            expect(nodes[6]->parsed_type, type_to_string).to_be(type_table.get_ptr_type(type_table.get_const_type(context->int_type)));
+            expect(nodes[6]->parsed_type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(context->int_type));
+            expect(nodes[7]->parsed_type, type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(context->int_type)));
+            expect(nodes[7]->parsed_type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(context->int_type)));
+            expect(nodes[8]->parsed_type, type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(type_table.get_const_type(context->int_type))));
+            expect(nodes[8]->parsed_type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(context->int_type)));
 
 
         });

@@ -496,7 +496,7 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type) {
 acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identifier name) {
     
     Var* var = new_declaration<Var, true>(modifiers, name, prev_token);
-    var->type = type;
+    var->parsed_type = type;
     
     if (cur_token.is('=')) {
         next_token(); // Consume '=' token.

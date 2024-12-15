@@ -211,6 +211,9 @@ namespace acorn {
         uint32_t field_idx = NotField;
         bool     is_global = false;
 
+        // This is the type that is parsed and does not change
+        // during semantic analysis.
+        Type* parsed_type;
         Type* type;
 
         Expr* assignment      = nullptr;

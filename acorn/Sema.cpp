@@ -870,9 +870,21 @@ void acorn::Sema::check_variable(Var* var) {
     var->has_been_checked = true; // Set early to prevent circular checking.
 
     if (var->assignment) {
-        if (var->assignment->is(NodeKind::Array) && var->type->is_array()) {
-            auto arr_type = as<ArrayType*>(var->type);
-            check_array(as<Array*>(var->assignment), arr_type->get_elm_type());
+        if (var->assignment->is(NodeKind::Array) && var->parsed_type->is_array()) {
+            auto arr_type = as<ArrayType*>(var->parsed_type);
+            // TODO: We fix up the element twice since we need to fix the element
+            //       type up first in order to resolve the assignment and then
+            //       again below when calling fixup_assign_det_arr_type.
+            //
+            //       But it is nessessary to do this first since fixup_assign_det_arr_type
+            //       assumes that the assignment has already been checked.
+            //
+            auto fixed_up_elm_type = fixup_type(arr_type->get_elm_type());
+            if (!fixed_up_elm_type) {
+                return cleanup();
+            }
+
+            check_array(as<Array*>(var->assignment), fixed_up_elm_type);
         } else {
             check_node(var->assignment);
         }
@@ -881,19 +893,19 @@ void acorn::Sema::check_variable(Var* var) {
         }
     }
 
-    if (var->type->get_kind() == TypeKind::AssignDeterminedArray && !var->assignment) {
+    if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray && !var->assignment) {
         error(var, "Must have assignment to determine array type's length")
             .end_error(ErrCode::SemaVarRequiresAssignForDetArrType);
         return cleanup();
     }
 
-    if (var->type->get_kind() == TypeKind::AssignDeterminedArray) {
+    if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray) {
         // We have to handle this case as if it is speciial because
         // in no other instance other than variable assignments is the
         // applicable.
-        var->type = fixup_assign_det_arr_type(var->type, var);
+        var->type = fixup_assign_det_arr_type(var->parsed_type, var);
     } else {
-        var->type = fixup_type(var->type);
+        var->type = fixup_type(var->parsed_type);
     }
 
     if (!var->type) {
@@ -2762,8 +2774,13 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
 }
 
 void acorn::Sema::check_cast(Cast* cast) {
-    cast->type = cast->explicit_cast_type;
-    
+    auto fixed_cast_type = fixup_type(cast->explicit_cast_type);
+    if (!fixed_cast_type) {
+        return;
+    }
+
+    cast->type = fixed_cast_type;
+
     check_and_verify_type(cast->value);
     if (!is_castable_to(cast->explicit_cast_type, cast->value)) {
         error(expand(cast), "Cannot cast from '%s' to '%s'",
