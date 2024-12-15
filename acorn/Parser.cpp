@@ -541,6 +541,19 @@ acorn::Struct* acorn::Parser::parse_struct() {
 
 acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) {
 
+    if (name != Identifier::Invalid) {
+        if (auto existing_import = file->find_import(name)) {
+            error(prev_token, "Name of struct '%s' conflicts with import", name)
+                .add_line([this, existing_import](auto& logger) {
+                    auto [line_number, _] =
+                        file->line_table.get_line_and_column_number(existing_import->loc.ptr);
+
+                    logger.fmt_print("import defined at line: %s%s%s", Color::BrightYellow, line_number, Color::BrightWhite);
+                 })
+                .end_error(ErrCode::ParseDataTypeNameConflictWithImport);
+        }
+    }
+
     auto structn = new_declaration<Struct, false>(modifiers, name, prev_token);
     structn->nspace = allocator.alloc_type<Namespace>();
     new (structn->nspace) Namespace(modl, ScopeLocation::Struct);

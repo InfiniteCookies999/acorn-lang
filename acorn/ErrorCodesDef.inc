@@ -42,6 +42,7 @@ X(ParseArrayIndexCannotBeNeg               , 20032)
 X(ParseArrayIndexAlreadyAssigned           , 20033)
 X(ParseElmTypeMustHaveArrLen               , 20034)
 X(ParseFuncParamTypeCannotBeVoid           , 20035)
+X(ParseDataTypeNameConflictWithImport      , 20036)
 
 X(SemaNotAllFuncPathReturn                 , 30000)
 X(SemaVariableCannotHaveVoidType           , 30001)
