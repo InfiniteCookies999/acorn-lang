@@ -41,6 +41,7 @@ namespace acorn {
             KwChar16,
             KwChar32,
             KwConst,
+            KwAuto,
             KwAs,
             KwIf,
             KwElIf,

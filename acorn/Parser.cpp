@@ -31,7 +31,8 @@ case Token::KwChar16:  \
 case Token::KwChar32:  \
 case Token::KwUSize:   \
 case Token::KwISize:   \
-case Token::KwBool
+case Token::KwBool:    \
+case Token::KwAuto
 
 #define ModifierTokens   \
      Token::KwNative:    \
@@ -1147,6 +1148,10 @@ acorn::Type* acorn::Parser::parse_type() {
     Token first_token = cur_token;
     auto type = parse_base_type();
 
+    if (type == context.auto_type) {
+        return type;
+    }
+
     while (cur_token.is('*')) {
         type = type_table.get_ptr_type(type);
         next_token();
@@ -1214,6 +1219,7 @@ return t; }
     case Token::KwUSize:   ty(context.usize_type);
     case Token::KwFloat32: ty(context.float32_type);
     case Token::KwFloat64: ty(context.float64_type);
+    case Token::KwAuto:    ty(context.auto_type);
     case Token::Identifier: {
         Token name_token = cur_token;
         next_token();

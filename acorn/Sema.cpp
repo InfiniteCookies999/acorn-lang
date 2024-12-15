@@ -943,7 +943,41 @@ void acorn::Sema::check_variable(Var* var) {
         return cleanup();
     }
 
-    if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray) {
+    if (var->parsed_type == context.auto_type) {
+        if (!var->assignment) {
+            error(var, "Must have assignment to determine auto type")
+                .end_error(ErrCode::SemaMustHaveAssignmentToDetAuto);    
+            return cleanup();
+        }
+
+        switch (var->assignment->type->get_kind()) {
+        case TypeKind::Void:
+        case TypeKind::NamespaceRef:
+        case TypeKind::EmptyArray:
+        case TypeKind::Null:
+        case TypeKind::Range:
+            error(expand(var), "Cannot assign incomplete type '%s' to variable declared auto",
+                  var->assignment->type)
+                .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
+            break;
+        default:
+            break;
+        }
+        if (var->assignment->type == context.funcs_ref_type) {
+            // TODO: In the future we will want to allow for selecting for
+            // overloaded functions somehow.
+            auto ref = static_cast<IdentRef*>(var->assignment);
+            auto func = (*ref->funcs_ref)[0];
+
+            llvm::SmallVector<Type*> param_types;
+            for (Var* param : func->params) {
+                param_types.push_back(param->type);
+            }
+            var->type = type_table.get_function_type(func->return_type, param_types);
+        } else {
+            var->type = var->assignment->type;
+        }
+    } else if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray) {
         // We have to handle this case as if it is speciial because
         // in no other instance other than variable assignments is the
         // applicable.

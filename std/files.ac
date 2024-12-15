@@ -110,7 +110,7 @@ struct FileHandle {
  * Reads an entire file into a string.
  */
 String read(const char* path) {
-    FileHandle handle = open(path, IO_FLAG_IN | IO_FLAG_SHARE);
+    auto handle = open(path, IO_FLAG_IN | IO_FLAG_SHARE);
 
 // TODO: eventually when we have proper error handling this should
 //       not be needed.

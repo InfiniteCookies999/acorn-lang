@@ -60,8 +60,8 @@ namespace acorn {
         Function,
         UnresolvedStructType,
         Struct,
-
         Range,
+        Auto,
         
     };
     
