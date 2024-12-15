@@ -159,7 +159,7 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
         Token ident_token = cur_token;
         next_token(); // Consuming the identifier.
 
-        importn->key.push_back(Identifier::get(ident_token.text()));
+        importn->key.push_back({ Identifier::get(ident_token.text()), ident_token.loc });
 
         more_to_import = cur_token.is('.');
         if (more_to_import) {

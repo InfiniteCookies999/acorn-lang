@@ -287,9 +287,14 @@ namespace acorn {
 
         bool is_static = false;
         bool within_same_modl = false;
+        struct KeyPart {
+            Identifier name;
+            SourceLoc  error_loc;
+        };
+
         // Last element is the thing imported. All other elements
         // are the path to that imported value.
-        llvm::SmallVector<Identifier, 4> key;
+        llvm::SmallVector<KeyPart, 4> key;
 
         // Discriminated union.
         enum {

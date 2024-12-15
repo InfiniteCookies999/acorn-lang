@@ -453,29 +453,29 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         }
     };
     
-    auto report_could_not_find = [&logger, importn](Identifier ident) finline {
-        logger.begin_error(importn->loc, "Could not find '%s' for import", ident)
+    auto report_could_not_find = [&logger, importn](ImportStmt::KeyPart& key_part) finline {
+        logger.begin_error(key_part.error_loc, "Could not find '%s' for import", key_part.name)
                 .end_error(ErrCode::SemaCouldNotResolveImport);
     };
 
     if (key.size() == 1 && importn->within_same_modl) {
         auto& modl = importn->file->modl;
-        Identifier ident = key[0];
+        Identifier ident = key[0].name;
         if (auto nspace = modl.find_namespace(ident)) {
             add_namespace(nspace);
         } else if (auto structn = modl.find_struct(ident)) {
             add_struct(structn);
         } else {
-            report_could_not_find(ident);
+            report_could_not_find(key[0]);
         }
         return;
     }
     
     if (key.size() == 1) {
-        if (auto modl = context.find_module(key[0])) {
+        if (auto modl = context.find_module(key[0].name)) {
             add_namespace(modl);
         } else {
-            logger.begin_error(importn->loc, "Could not find module '%s'", key[0])
+            logger.begin_error(key[0].error_loc, "Could not find module '%s'", key[0].name)
                 .end_error(ErrCode::SemaCouldNotResolveImport);
         }
         return;
@@ -483,25 +483,25 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
 
     if (key.size() == 2 && importn->within_same_modl) {
         auto& modl = importn->file->modl;
-        if (auto nspace = modl.find_namespace(key[0])) {
-            if (auto structn = nspace->find_struct(key[1])) {
+        if (auto nspace = modl.find_namespace(key[0].name)) {
+            if (auto structn = nspace->find_struct(key[1].name)) {
                 add_struct(structn);
             } else {
-                logger.begin_error(importn->loc, "Could not find struct '%s'", key[1])
+                logger.begin_error(key[1].error_loc, "Could not find struct '%s'", key[1].name)
                     .end_error(ErrCode::SemaCouldNotResolveImport);
             }
         } else {
-            logger.begin_error(importn->loc, "Could not find mamespace '%s'", key[0])
+            logger.begin_error(key[0].error_loc, "Could not find mamespace '%s'", key[0].name)
                 .end_error(ErrCode::SemaCouldNotResolveImport);
         }
         return;
     }
 
     if (key.size() == 2) {
-        if (auto modl = context.find_module(key[0])) {
-            if (auto nspace = modl->find_namespace(key[1])) {
+        if (auto modl = context.find_module(key[0].name)) {
+            if (auto nspace = modl->find_namespace(key[1].name)) {
                 add_namespace(nspace);
-            } else if (auto structn = modl->find_struct(key[1])) {
+            } else if (auto structn = modl->find_struct(key[1].name)) {
                 add_struct(structn);
             } else {
                 report_could_not_find(key[1]);
@@ -513,9 +513,9 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
     }
 
     if (key.size() == 3) {
-        if (auto modl = context.find_module(key[0])) {
-            if (auto nspace = modl->find_namespace(key[1])) {
-                if (auto structn = modl->find_struct(key[2])) {
+        if (auto modl = context.find_module(key[0].name)) {
+            if (auto nspace = modl->find_namespace(key[1].name)) {
+                if (auto structn = modl->find_struct(key[2].name)) {
                     add_struct(structn);
                 } else {
                     report_could_not_find(key[2]);

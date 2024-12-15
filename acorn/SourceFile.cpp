@@ -44,7 +44,8 @@ bool acorn::SourceFile::has_public_access(Decl* decl) const {
 }
 
 acorn::ImportStmt* acorn::SourceFile::try_add_import(ImportStmt* importn) {
-    auto [itr, success] = imports.try_emplace(importn->key.back(), importn);
+    auto final_key_part = importn->key.back();
+    auto [itr, success] = imports.try_emplace(final_key_part.name, importn);
     return success ? nullptr : itr->second;
 }
 
