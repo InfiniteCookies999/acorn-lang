@@ -134,6 +134,7 @@ X(SemaIntrinsicFuncParamDefValue           , 20087)
 X(SemaDestructorsCannotHaveParams          , 20088)
 X(SemaCopyConstructorExpectsOneParam       , 20089)
 X(SemaCopyConstructorExpectedStructPtrType , 20090)
+X(SemaCannotStaticImportStruct             , 20091)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

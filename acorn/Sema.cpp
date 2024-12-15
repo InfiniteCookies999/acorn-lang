@@ -444,9 +444,10 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         }
     };
 
-    auto add_struct = [importn](Struct* structn) finline {
+    auto add_struct = [&logger, importn](Struct* structn) finline {
         if (importn->is_static) {
-            // TODO: report error!
+            logger.begin_error(importn->loc, "Cannot static import a struct")
+                .end_error(ErrCode::SemaCannotStaticImportStruct);
         } else {
             importn->set_imported_struct(structn);
         }
