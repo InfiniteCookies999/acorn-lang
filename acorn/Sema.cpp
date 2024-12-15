@@ -2908,6 +2908,31 @@ void acorn::Sema::check_cast(Cast* cast) {
         return;
     }
 
+    auto report_error_incomplete_type = [this, cast, fixed_cast_type]() finline {
+        error(expand(cast), "Cannot cast incomplete type '%s'", fixed_cast_type)
+                .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
+    };
+
+    switch (fixed_cast_type->get_kind()) {
+    case TypeKind::Void:
+    case TypeKind::NamespaceRef:
+    case TypeKind::EmptyArray:
+    case TypeKind::Null:
+    case TypeKind::Range:
+    case TypeKind::Auto:
+        report_error_incomplete_type();
+        return;
+    case TypeKind::Pointer: {
+        if (fixed_cast_type == context.auto_ptr_type) {
+            report_error_incomplete_type();
+            return;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
     cast->type = fixed_cast_type;
 
     check_and_verify_type(cast->value);
