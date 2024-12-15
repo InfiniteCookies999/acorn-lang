@@ -222,15 +222,15 @@ struct Stat {
 #endif // __USE_TIME_BITS64
 };
 
-const uint32 __S_IFMT = 0170000;
+const __S_IFMT = 0170000'u32;
 
-const uint32 __S_IFDIR	= 0040000;	/* Directory.  */
-const uint32 __S_IFCHR	= 0020000;	/* Character device.  */
-const uint32 __S_IFBLK	= 0060000;	/* Block device.  */
-const uint32 __S_IFREG	= 0100000;	/* Regular file.  */
-const uint32 __S_IFIFO	= 0010000;	/* FIFO.  */
-const uint32 __S_IFLNK	= 0120000;	/* Symbolic link.  */
-const uint32 __S_IFSOCK	= 0140000;	/* Socket.  */
+const __S_IFDIR	 = 0040000'u32;	/* Directory.  */
+const __S_IFCHR	 = 0020000'u32;	/* Character device.  */
+const __S_IFBLK	 = 0060000'u32;	/* Block device.  */
+const __S_IFREG	 = 0100000'u32;	/* Regular file.  */
+const __S_IFIFO	 = 0010000'u32;	/* FIFO.  */
+const __S_IFLNK	 = 0120000'u32;	/* Symbolic link.  */
+const __S_IFSOCK = 0140000'u32;	/* Socket.  */
 
 bool __S_ISTYPE(uint32 mode, uint32 mask) {
     return (mode & __S_IFMT) == mask;
@@ -239,46 +239,46 @@ bool __S_ISTYPE(uint32 mode, uint32 mask) {
 native int32 stat(const char* path, Stat* buf);
 native int32 fstat(int32 fd, Stat* buf);
 
-const int32 CLOCK_REALTIME           = 0;
-const int32 CLOCK_MONOTONIC	         = 1;
-const int32 CLOCK_PROCESS_CPUTIME_ID = 2;
-const int32 CLOCK_THREAD_CPUTIME_ID	 = 3;
-const int32 CLOCK_MONOTONIC_RAW	     = 4;
-const int32 CLOCK_REALTIME_COARSE    = 5;
-const int32 CLOCK_MONOTONIC_COARSE   = 6;
-const int32 CLOCK_BOOTTIME           = 7;
-const int32 CLOCK_REALTIME_ALARM     = 8;
-const int32 CLOCK_BOOTTIME_ALARM     = 9;
-const int32 CLOCK_TAI                = 11;
-const int32 TIMER_ABSTIME            = 1;
+const CLOCK_REALTIME           = 0'i32;
+const CLOCK_MONOTONIC	       = 1'i32;
+const CLOCK_PROCESS_CPUTIME_ID = 2'i32;
+const CLOCK_THREAD_CPUTIME_ID  = 3'i32;
+const CLOCK_MONOTONIC_RAW      = 4'i32;
+const CLOCK_REALTIME_COARSE    = 5'i32;
+const CLOCK_MONOTONIC_COARSE   = 6'i32;
+const CLOCK_BOOTTIME           = 7'i32;
+const CLOCK_REALTIME_ALARM     = 8'i32;
+const CLOCK_BOOTTIME_ALARM     = 9'i32;
+const CLOCK_TAI                = 11'i32;
+const TIMER_ABSTIME            = 1'i32;
 
 native int32 clock_gettime(int32 clk_id, Timespec* tp);
 
 native int32 mkdir(const char* path, int32 mode);
 
 /* open/fcntl.  */
-const int32 O_ACCMODE     = 0003;
-const int32 O_RDONLY      =   00;
-const int32 O_WRONLY      =   01;
-const int32 O_RDWR	      =   02;
-const int32 O_CREAT	      = 0100; /* Not fcntl.  */
-const int32 O_EXCL        = 0200; /* Not fcntl.  */
-const int32 O_NOCTTY      = 0400; /* Not fcntl.  */
-const int32 O_TRUNC	      = 01000; /* Not fcntl.  */
-const int32 O_APPEND      = 02000;
-const int32 O_NONBLOCK    = 04000;
-const int32 O_NDELAY	  = O_NONBLOCK;
-const int32 O_SYNC        = 04010000;
-const int32 O_ASYNC	      = 020000;
-const int32 __O_LARGEFILE = 0100000;
+const O_ACCMODE     = 0003'i32;
+const O_RDONLY      =   00'i32;
+const O_WRONLY      =   01'i32;
+const O_RDWR	    =   02'i32;
+const O_CREAT	    = 0100'i32; /* Not fcntl.  */
+const O_EXCL        = 0200'i32; /* Not fcntl.  */
+const O_NOCTTY      = 0400'i32; /* Not fcntl.  */
+const O_TRUNC	    = 01000'i32; /* Not fcntl.  */
+const O_APPEND      = 02000'i32;
+const O_NONBLOCK    = 04000'i32;
+const O_NDELAY	    = O_NONBLOCK;
+const O_SYNC        = 04010000'i32;
+const O_ASYNC	    = 020000'i32;
+const __O_LARGEFILE = 0100000'i32;
 
-const int32 __O_DIRECTORY = 0200000;
-const int32 __O_NOFOLLOW  = 0400000;
-const int32 __O_CLOEXEC   = 02000000;
-const int32 __O_DIRECT    = 040000;
-const int32 __O_NOATIME   = 01000000;
-const int32 __O_PATH      = 010000000;
-const int32 __O_DSYNC     = 010000;
+const __O_DIRECTORY = 0200000'i32;
+const __O_NOFOLLOW  = 0400000'i32;
+const __O_CLOEXEC   = 02000000'i32;
+const __O_DIRECT    = 040000'i32;
+const __O_NOATIME   = 01000000'i32;
+const __O_PATH      = 010000000'i32;
+const __O_DSYNC     = 010000'i32;
 // TODO: bitwise operator requires explicit type. Sema
 // should allow for this.
 const int32 __O_TMPFILE   = (020000000'i32 | __O_DIRECTORY);

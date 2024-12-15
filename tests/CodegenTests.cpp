@@ -1353,6 +1353,12 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("AAAAA");
             });
+            test("Const auto assign value", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"auto_type/auto_type_test7.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("@");
+            });
         });
     });
 }

@@ -590,6 +590,15 @@ bool acorn::Sema::check_function_decl(Func* func) {
 
     check_modifier_incompatibilities(func);
 
+    if (func->return_type == context.auto_type ||
+        func->return_type == context.auto_ptr_type ||
+        func->return_type == context.const_auto_type) {
+        error(func, "Functions cannot have a return type of '%s'",
+              func->return_type)
+            .end_error(ErrCode::SemaFuncsCannotReturnAuto);
+        return false;
+    }
+
     if (func->return_type->get_kind() == TypeKind::AssignDeterminedArray) {
         error(func, "Functions cannot have return type '%s'", func->return_type)
             .end_error(ErrCode::SemaFuncsCannotHaveAssignDetArrType);
@@ -896,10 +905,6 @@ void acorn::Sema::check_variable(Var* var) {
             }
         }
     }
-    
-    if (cur_scope && !var->is_param() && !var->is_field()) {
-        add_variable_to_local_scope(var);
-    }
 
     if (var->is_global) {
         cur_global_var = var;
@@ -974,9 +979,9 @@ void acorn::Sema::check_variable(Var* var) {
         return type_table.get_function_type(func->return_type, param_types);
     };
 
-    if (var->parsed_type == context.auto_type) {
+    if (var->parsed_type == context.auto_type || var->parsed_type == context.const_auto_type) {
         if (!var->assignment) {
-            report_error_auto_must_have_assignment(context.auto_type);
+            report_error_auto_must_have_assignment(var->parsed_type);
             return cleanup();
         }
 
@@ -988,6 +993,9 @@ void acorn::Sema::check_variable(Var* var) {
             var->type = construct_function_type_from_func_ref(var->assignment);
         } else {
             var->type = var->assignment->type;
+        }
+        if (var->parsed_type == context.const_auto_type) {
+            var->type = type_table.get_const_type(var->type);
         }
     } else if (var->parsed_type == context.auto_ptr_type) {
         if (!var->assignment) {
@@ -1029,6 +1037,12 @@ void acorn::Sema::check_variable(Var* var) {
     var->is_foldable = var->type->is_number() &&
                        var->type->is_const() &&
                        var->assignment && var->assignment->is_foldable;
+
+    // This must go after checking is the variable is foldable because if
+    // it is not then it will not request allocation.
+    if (cur_scope && !var->is_param() && !var->is_field()) {
+        add_variable_to_local_scope(var);
+    }
 
     if (var->type->is_struct_type()) {
         auto struct_type = static_cast<StructType*>(var->type);
@@ -1362,6 +1376,8 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
             } else if (var_type == context.auto_ptr_type) {
                 loop->var->type = type_table.get_ptr_type(elm_type);
                 loop->references_memory = true;
+            } else if (var_type == context.const_auto_type) {
+                loop->var->type = type_table.get_const_type(elm_type);
             } else {
                 bool types_match = has_valid_constness(var_type, elm_type) && var_type->is_ignore_const(elm_type);
                 if (!types_match) {

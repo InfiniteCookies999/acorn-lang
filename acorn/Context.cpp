@@ -69,6 +69,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       char32_range_type(RangeType::create(allocator, char32_type)),
       auto_type(Type::create(allocator, TypeKind::Auto)),
       auto_ptr_type(type_table.get_ptr_type(auto_type)),
+      const_auto_type(type_table.get_const_type(auto_type)),
       
       main_identifier(Identifier::get("main")),
       length_identifier(Identifier::get("length")),

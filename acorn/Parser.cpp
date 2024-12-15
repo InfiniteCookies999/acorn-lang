@@ -249,7 +249,7 @@ acorn::Node* acorn::Parser::parse_statement() {
 
         [[fallthrough]];
     case TypeTokens: {
-        return parse_decl(modifiers, parse_type());
+        return parse_decl(modifiers, parse_type_for_decl());
     }
     case '~': {
         auto peek0 = peek_token(0);
@@ -490,7 +490,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
 }
 
 acorn::Var* acorn::Parser::parse_variable() {
-    return parse_variable(0, parse_type());
+    return parse_variable(0, parse_type_for_decl());
 }
 
 acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type) {
@@ -1143,6 +1143,27 @@ void acorn::Parser::parse_comptime_file_info() {
 
 // Expression parsing
 //--------------------------------------
+
+acorn::Type* acorn::Parser::parse_type_for_decl() {
+    if (cur_token.is(Token::KwConst)) {
+        if (peek_token(0).is(Token::Identifier)) {
+            switch (peek_token(1).kind) {
+            case Token::Identifier:
+            case '*':
+            case '!':
+            case '[':
+                return parse_type();
+            default:
+                next_token();
+                return context.const_auto_type;
+            }
+        }
+
+        return parse_type();
+    } else {
+        return parse_type();
+    }
+}
 
 acorn::Type* acorn::Parser::parse_type() {
     Token first_token = cur_token;

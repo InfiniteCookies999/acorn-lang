@@ -140,6 +140,7 @@ X(SemaParentModuleImportExpectModuleIdent  , 20092)
 X(SemaCannotAssignIncompleteTypeToAuto     , 20093)
 X(SemaMustHaveAssignmentToDetAuto          , 20094)
 X(SemaAutoPtrExpectsPtrType                , 20095)
+X(SemaFuncsCannotReturnAuto                , 20096)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

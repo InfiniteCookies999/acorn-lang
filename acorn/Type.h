@@ -62,7 +62,7 @@ namespace acorn {
         Struct,
         Range,
         Auto,
-        
+
     };
     
     class Type {

@@ -103,6 +103,7 @@ namespace acorn {
         //--------------------------------------
 
         Type* parse_type();
+        Type* parse_type_for_decl();
         Type* parse_base_type();
         Type* construct_type_from_identifier(Token name_token, bool is_const);
         Type* construct_array_type(Type* base_type, 
