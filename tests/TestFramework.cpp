@@ -65,7 +65,7 @@ void TestCase::run() {
         set_color(acorn::Color::White);
         failed_info_cb();
     }
-    std::cout << "\n";
+    std::cout << "\n" << std::flush;
 }
 
 TestSection::TestSection(const char* name, uint32_t depth, bool run_multithreaded)

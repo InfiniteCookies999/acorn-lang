@@ -124,6 +124,7 @@ void acorn::write_obj_file(Context& context, const wchar_t* file_path,
         return;
     }
 
+    // LLVM does not seem to have proper multithreading support for writing files.
     std::lock_guard lock(write_mtx);
     pass.run(ll_module);
     stream.flush();
