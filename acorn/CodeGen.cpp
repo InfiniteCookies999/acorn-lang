@@ -111,7 +111,7 @@ void acorn::write_obj_file(Context& context, const wchar_t* file_path,
     llvm::raw_fd_ostream stream(fixed_path, err_code, llvm::sys::fs::OF_None);
 
     if (err_code) {
-        report_error_could_not_open_object_file(err_code.message());
+        report_error_could_not_open_object_file(err_code.message().c_str());
         return;
     }
     

@@ -387,7 +387,7 @@ void acorn::Compiler::codegen() {
 void acorn::Compiler::link() {
     link_timer.start();
 
-#ifdef WIN_OS
+#if WIN_OS
     std::wstring msvc_bin_path, msvc_lib_path;
     if (!get_msvc_install_paths(context, allocator, true, msvc_bin_path, msvc_lib_path)) {
         if (!context.has_errors()) {
@@ -481,7 +481,7 @@ void acorn::Compiler::link() {
         const char* error_msg_line1 = "Failed to link with %s linker";
         const char* error_msg_line2 = "Make sure you have %s linker installed on your machine";
 
-#ifdef _WIN32
+#if WIN_OS
         const char* linker_tried = "msvc";
 #elif UNIX_OS
         const char* linker_tried = "clang";
