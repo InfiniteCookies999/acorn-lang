@@ -64,6 +64,18 @@ struct FileHandle {
 #endif
 
     int get_size() {
+        // TODO: eventually it would be nice if the functionality of this
+        // worked with larger file sizes. However, there are some limitations
+        // to overcome when working with larger memory. One of those limitations
+        // is simply malloc. If the user wants to allocate a buffer larger than
+        // 32 bytes on some systems with malloc it would fail. Additionally the
+        // read_buffer function would require additional consideration to allow
+        // reading in such large amounts of data.
+        //
+        // Then there is the additional question of if this should be directly
+        // supported or if the user should be forced to buffer the data, a more
+        // sensable approach when working with such large memory.
+
         // TODO: error handling!
 #if OS_GROUP_WINDOWS
         uint32 size = win32.GetFileSize(handle, null);
