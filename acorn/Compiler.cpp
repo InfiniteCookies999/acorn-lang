@@ -472,7 +472,8 @@ void acorn::Compiler::link() {
     };
 
     // TODO: Fix this so it doesn't change assume we are using clang.
-    std::wstring cmd = std::format(L"clang {} {} {} -o {}",
+    std::wstring cmd = std::format(L"clang {} {} {} {} -o {}",
+                                   context.should_emit_debug_info() ? L"-g" : L"",
                                    get_lib_paths(),
                                    get_libs(),
                                    absolute_obj_path,
