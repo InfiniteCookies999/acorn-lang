@@ -145,6 +145,7 @@ X(SemaFuncsCannotReturnAuto                , 20096)
 X(SemaCannotCastIncompleteType             , 20097)
 X(SemaCannotGetSizeOfUnsizedType           , 20098)
 X(SemaIncIncompleteExpr                    , 20099)
+X(SemaRangesHaveNoAddressForAuto           , 20100)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

@@ -1373,12 +1373,23 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
                 }
             }
         } else if (loop->container->type->is_range()) {
-            // TODO: deal with auto and auto*
-
+            
             auto range_type = static_cast<RangeType*>(loop->container->type);
-            if (loop->var->type->is_not(range_type->get_value_type())) {
-                error(loop->var, "Expected type '%s' for variable", range_type->get_value_type())
-                    .end_error(ErrCode::SemaCannotAssignIteratorElmTypeToVar);
+            auto value_type = range_type->get_value_type();
+
+            if (var_type == context.auto_type) {
+                loop->var->type = value_type;
+            } else if (var_type == context.auto_ptr_type) {
+                error(loop->var, "Variable cannot be declared 'auto*' because ranges have no address")
+                    .end_error(ErrCode::SemaRangesHaveNoAddressForAuto);
+            } else if (var_type == context.const_auto_type) {
+                loop->var->type = type_table.get_const_type(value_type);
+            } else {
+                bool types_match = has_valid_constness(var_type, value_type) && var_type->is_ignore_const(value_type);
+                if (!types_match) {
+                    error(loop->var, "Expected type '%s' for variable", value_type)
+                        .end_error(ErrCode::SemaCannotAssignIteratorElmTypeToVar);
+                }
             }
         } else {
             error(loop->container, "Cannot iterate over type '%s'", loop->container->type)
