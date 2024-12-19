@@ -158,7 +158,7 @@ X(GlobalFailedToFindCurrentPath            , 50005)
 X(GlobalFailedToCreateOutputDirectory      , 50006)
 X(GlobalFailedToInitializeLLVMNativeTarget , 50007)
 X(GlobalCouldNotFindEntryPointFunc         , 50008)
-X(GlobalFailedToMoveTempObjFile            , 50009)
+
 X(GlobalFailedToFindMSVCPathsForLinking    , 50010)
 X(GlobalFailedToDeleteObjFile              , 50011)
 X(GlobalCouldNotCheckIfSourceExists        , 50012)

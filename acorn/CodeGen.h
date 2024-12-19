@@ -17,7 +17,7 @@ namespace acorn {
 
     void set_llvm_module_target(llvm::Module& ll_module, llvm::TargetMachine* ll_target_machine);
 
-    void write_obj_file(Context& context, const char* file_path,
+    void write_obj_file(Context& context, const wchar_t* file_path,
                         llvm::Module& ll_module, llvm::TargetMachine* ll_target_machine);
 
 }

@@ -6,6 +6,7 @@
 #include <llvm/IR/IRBuilder.h>
 
 #include "../AST.h"
+#include "../Util.h"
 #include "GenTypes.h"
 
 #define emit_dbg(x) if (should_emit_debug_info) { x; }
@@ -19,8 +20,6 @@ namespace acorn {
     public:
 
         IRGenerator(Context& context);
-
-        static void clear_static_data();
 
         void gen_function(Func* func);
         void gen_global_variable(Var* var);
@@ -74,12 +73,6 @@ namespace acorn {
 
         llvm::SmallVector<llvm::BasicBlock*, 8> loop_break_stack;
         llvm::SmallVector<llvm::BasicBlock*, 8> loop_continue_stack;
-
-        static int                           global_counter;
-        static llvm::Function*               ll_global_init_function;
-        static llvm::SmallVector<Var*, 32>   globals_needing_destroyed;
-        static llvm::BasicBlock*             ll_global_init_call_bb;
-        static llvm::BasicBlock*             ll_global_cleanup_call_bb;
 
         struct DestructorObject {
             Type*        type;

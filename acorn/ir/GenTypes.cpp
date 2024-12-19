@@ -74,7 +74,7 @@ llvm::StructType* acorn::gen_struct_type(StructType* struct_type, llvm::LLVMCont
     }
 
     ll_struct_type->setBody(ll_field_types);
-    ll_struct_type->setName(structn->name.reduce());
+    ll_struct_type->setName(structn->name.to_string());
 
     struct_type->set_ll_struct_type(ll_struct_type);
     return ll_struct_type;

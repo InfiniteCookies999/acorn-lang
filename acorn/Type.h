@@ -325,7 +325,7 @@ namespace acorn {
         std::string to_string() const;
 
         Struct* get_struct() const {
-            return nstruct;
+            return structn;
         }
 
         void set_ll_struct_type(llvm::StructType* ll_type) {
@@ -338,11 +338,11 @@ namespace acorn {
 
     protected:
         StructType(bool is_const, Struct* nstruct)
-            : Type(TypeKind::Struct, is_const), nstruct(nstruct) {
+            : Type(TypeKind::Struct, is_const), structn(nstruct) {
         }
 
         llvm::StructType* ll_struct_type = nullptr;
-        Struct*           nstruct;
+        Struct*           structn;
     };
 }
 

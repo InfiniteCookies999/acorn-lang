@@ -16,6 +16,15 @@
 
 #include "Logger.h"
 #include "Context.h"
+#include "Util.h"
+
+#if WIN_OS
+#include <Windows.h>
+#include <fcntl.h>     // For _O_WRONLY
+#include <io.h>        // For _open_osfhandle
+#undef min
+#undef max
+#endif
 
 bool acorn::init_llvm_native_target() {
     if (llvm::InitializeNativeTarget())           return false;
@@ -57,17 +66,56 @@ void acorn::set_llvm_module_target(llvm::Module& ll_module, llvm::TargetMachine*
     ll_module.setDataLayout(ll_target_machine->createDataLayout());
 }
 
-void acorn::write_obj_file(Context& context, const char* file_path,
+static std::mutex write_mtx;
+void acorn::write_obj_file(Context& context, const wchar_t* file_path,
                            llvm::Module& ll_module, llvm::TargetMachine* ll_target_machine) {
     
-    std::error_code err_code;
-    llvm::raw_fd_ostream stream(file_path, err_code, llvm::sys::fs::OF_None);
+    auto report_error_could_not_open_object_file = [&context](const char* error_msg) {
+        Logger::global_error(context, "Could not open object file to write. Error %s", error_msg)
+            .end_error(ErrCode::GlobalFailedToWriteObjFile);
+    };
 
-    if (err_code) {
-        Logger::global_error(context, "Could not open object file to write. Error %s", err_code.message())
+#if WIN_OS && wide_funcs
+    // Have to do extra work when dealing with wide paths because raw_fd_ostream doesn't directly
+    // deal with them.
+
+    HANDLE handle = CreateFileW(file_path,
+                                GENERIC_WRITE,
+                                0,
+                                nullptr,
+                                CREATE_ALWAYS,
+                                FILE_ATTRIBUTE_NORMAL,
+                                nullptr);
+    
+    if (handle == INVALID_HANDLE_VALUE) {
+        std::string formated_error = std::format("code: %lu", GetLastError());;
+        report_error_could_not_open_object_file(formated_error.c_str());
+        return;
+    }
+
+    // Creates a C runtime file descriptor for the windows HANDLE.
+    int fd = _open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_WRONLY);
+    if (fd == -1) {
+        Logger::global_error(context, "Failed to convert windows file handle to C runtime file descriptor for writing object file")
             .end_error(ErrCode::GlobalFailedToWriteObjFile);
         return;
     }
+
+    llvm::raw_fd_ostream stream(fd, true);
+
+#else
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
+    std::string fixed_path = wconverter.to_bytes(file_path);
+
+    std::error_code err_code;
+    llvm::raw_fd_ostream stream(fixed_path, err_code, llvm::sys::fs::OF_None);
+
+    if (err_code) {
+        report_error_could_not_open_object_file(err_code.message());
+        return;
+    }
+    
+#endif
 
     llvm::legacy::PassManager pass;
     if (ll_target_machine->addPassesToEmitFile(pass, stream, nullptr, llvm::CodeGenFileType::ObjectFile)) {
@@ -76,8 +124,8 @@ void acorn::write_obj_file(Context& context, const char* file_path,
         return;
     }
 
+    std::lock_guard lock(write_mtx);
     pass.run(ll_module);
     stream.flush();
 
 }
-

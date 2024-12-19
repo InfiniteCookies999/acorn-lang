@@ -49,7 +49,7 @@ void acorn::DebugInfoEmitter::emit_function(Func* func) {
 
 	auto di_func = builder.createFunction(
 		di_scope,
-		func->name.reduce(),
+		func->name.to_string(),
 		func->ll_func->getName(), // Linkage name
 		di_unit->getFile(),
 		line_number,
@@ -134,7 +134,7 @@ void acorn::DebugInfoEmitter::emit_function_variable(Var* var, llvm::IRBuilder<>
 
 	auto di_var = builder.createAutoVariable(
 		di_scope,
-		var->name.reduce(),
+		var->name.to_string(),
 		di_unit->getFile(),
 		line_number,
 		emit_type(var->type),
@@ -165,7 +165,7 @@ void acorn::DebugInfoEmitter::emit_global_variable(Var* global) {
 
 	auto di_global = builder.createGlobalVariableExpression(
 		di_unit,
-		global->name.reduce(),
+		global->name.to_string(),
 		global->ll_address->getName(), // Linkage name
 		di_unit->getFile(),
 		line_number,
@@ -391,7 +391,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 
 		auto di_struct_type = builder.createStructType(
 			nullptr, // TODO: Scope?
-			structn->name.reduce(),
+			structn->name.to_string(),
 			di_unit->getFile(),
 			line_number,
 			size_in_bits,
@@ -414,7 +414,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 
 			return builder.createMemberType(
 				di_struct_type,
-				field->name.reduce(),
+				field->name.to_string(),
 				di_unit->getFile(),
 				line_number,
 				size_in_bits,

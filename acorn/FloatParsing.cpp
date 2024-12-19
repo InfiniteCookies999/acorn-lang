@@ -100,7 +100,7 @@ struct StretchyBuffer {
     size_t size = 0;
 };
 
-static StretchyBuffer digits_buffer;
+static thread_local StretchyBuffer digits_buffer;
 
 // TODO: improve allocations.
 class BigIntFD {

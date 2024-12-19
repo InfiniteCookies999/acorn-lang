@@ -14,6 +14,7 @@
 namespace llvm {
     class LLVMContext;
     class Module;
+    class BasicBlock;
 
     namespace Intrinsic {
         typedef unsigned ID;
@@ -93,6 +94,7 @@ namespace acorn {
         Identifier namespace_identifier;
         Identifier module_identifier;
 
+        // LLVM generation data.
         struct LLVMIntrinsicDefinition {
             Identifier               name;
             llvm::SmallVector<Type*> param_types;
@@ -102,9 +104,14 @@ namespace acorn {
         llvm::DenseMap<Identifier, llvm::Intrinsic::ID> ll_intrinsics_table;
         llvm::SmallVector< LLVMIntrinsicDefinition>     ll_valid_intrinsic_defs;
 
-        llvm::LLVMContext& get_ll_context() const { return ll_context; }
+        int                         global_counter            = 0;
+        llvm::Function*             ll_global_init_function   = nullptr;
+        llvm::SmallVector<Var*, 32> globals_needing_destroyed;
+        llvm::BasicBlock*           ll_global_init_call_bb    = nullptr;
+        llvm::BasicBlock*           ll_global_cleanup_call_bb = nullptr;
 
-        llvm::Module& get_ll_module() const { return ll_module; }
+        llvm::LLVMContext& get_ll_context() const { return ll_context; }
+        llvm::Module& get_ll_module()       const { return ll_module;  }
 
         Module* get_or_create_modl(llvm::StringRef mod_name);
         llvm::DenseMap<Identifier, Module*>& get_modules() { return modls; }

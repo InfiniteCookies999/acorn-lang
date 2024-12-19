@@ -1,17 +1,9 @@
 #include "IRGen.h"
 
 #include "../Context.h"
-#include "../Util.h"
 #include "../Logger.h"
 #include "DebugGen.h"
 #include "SourceFile.h"
-
-// Forward declaring static member fields.
-int                                  acorn::IRGenerator::global_counter = 0;
-llvm::Function*                      acorn::IRGenerator::ll_global_init_function = nullptr;
-llvm::SmallVector<acorn::Var*, 32>   acorn::IRGenerator::globals_needing_destroyed;
-llvm::BasicBlock*                    acorn::IRGenerator::ll_global_init_call_bb;
-llvm::BasicBlock*                    acorn::IRGenerator::ll_global_cleanup_call_bb;
 
 #define push_scope()                         \
 IRScope new_scope;                           \
@@ -29,15 +21,6 @@ acorn::IRGenerator::IRGenerator(Context& context)
       builder(ll_context),
       should_emit_debug_info(context.should_emit_debug_info())
 {
-}
-
-void acorn::IRGenerator::clear_static_data() {
-    global_counter = 0;
-    ll_global_init_function = nullptr;
-    globals_needing_destroyed.clear();
-    DebugInfoEmitter::clear_cache();
-    ll_global_init_call_bb = nullptr;
-    ll_global_cleanup_call_bb = nullptr;
 }
 
 void acorn::IRGenerator::gen_function(Func* func) {
@@ -71,11 +54,11 @@ void acorn::IRGenerator::gen_implicit_function(ImplicitFunc* implicit_func) {
 }
 
 void acorn::IRGenerator::add_return_to_global_init_function() {
-    if (!ll_global_init_function) {
+    if (!context.ll_global_init_function) {
         return;
     }
 
-    builder.SetInsertPoint(&ll_global_init_function->back());
+    builder.SetInsertPoint(&context.ll_global_init_function->back());
     builder.CreateRetVoid();
 }
 
@@ -224,11 +207,11 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
 
     auto ll_func_type = llvm::FunctionType::get(ll_ret_type, ll_param_types, false);
 
-    auto get_name = [func, &contx = context, is_main] {
+    auto get_name = [func, &context=this->context, is_main] {
         bool dont_fix_name = is_main || func->has_modifier(Modifier::Native);
         if (!func->linkname.empty())
             return llvm::Twine(func->linkname);
-        llvm::Twine ll_name = func->name.reduce();
+        llvm::Twine ll_name = func->name.to_string();
         return dont_fix_name ? ll_name : ll_name.concat(".acorn");
     };
 
@@ -280,7 +263,7 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     }
     
     for (Var* param : func->params) {
-        assign_param_info(param_idx++, llvm::Twine("in.") + param->name.reduce());
+        assign_param_info(param_idx++, llvm::Twine("in.") + param->name.to_string());
     }
 
     if (func->is_constructor && func->params.empty()) {
@@ -342,7 +325,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 
     // Setup takedown function dependencies.
     if (is_main) {
-        ll_global_init_call_bb = ll_entry;
+        context.ll_global_init_call_bb = ll_entry;
     }
 
     // Allocating and storing incoming variables.
@@ -474,7 +457,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     }
 
     if (is_main) {
-        ll_global_cleanup_call_bb = builder.GetInsertBlock();
+        context.ll_global_cleanup_call_bb = builder.GetInsertBlock();
     }
 
     gen_call_destructors(always_initialized_destructor_objects);
@@ -513,7 +496,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 }
 
 void acorn::IRGenerator::gen_variable_address(Var* var, llvm::Type* ll_alloc_type) {
-    var->ll_address = gen_alloca(ll_alloc_type, var->name.reduce());
+    var->ll_address = gen_alloca(ll_alloc_type, var->name.to_string());
 }
 
 llvm::AllocaInst* acorn::IRGenerator::gen_alloca(llvm::Type* ll_alloc_type, llvm::Twine ll_name) {
@@ -569,7 +552,7 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
         auto structn = struct_type->get_struct();
         if (structn->destructor) {
             context.queue_gen(structn->destructor);
-            globals_needing_destroyed.push_back(var);
+            context.globals_needing_destroyed.push_back(var);
         }
     } else if (var->type->is_array()) {
         auto arr_type = static_cast<ArrayType*>(var->type);
@@ -579,7 +562,7 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
             auto structn = struct_type->get_struct();
             if (structn->destructor) {
                 context.queue_gen(structn->destructor);
-                globals_needing_destroyed.push_back(var);
+                context.globals_needing_destroyed.push_back(var);
             }
         }
     }
@@ -587,9 +570,9 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
     // TODO: const: !>_<
     auto ll_linkage = var->has_modifier(Modifier::Native) ? llvm::GlobalValue::ExternalLinkage
                                                           : llvm::GlobalValue::InternalLinkage;
-    auto ll_name = var->linkname.empty() ? var->name.reduce() : var->linkname;
+    auto ll_name = var->linkname.empty() ? var->name.to_string() : var->linkname;
     auto ll_final_name = var->has_modifier(Modifier::Native) ? ll_name
-                                                             : "global." + ll_name + "." + llvm::Twine(global_counter++);
+                                                             : "global." + ll_name + "." + llvm::Twine(context.global_counter++);
     auto ll_address = gen_global_variable(ll_final_name,
                                           gen_type(var->type),
                                           false,
@@ -650,19 +633,19 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
 }
 
 void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
-    if (!ll_global_init_function) {
-        ll_global_init_function = gen_void_function_decl("__acorn.global_init");
+    if (!context.ll_global_init_function) {
+        context.ll_global_init_function = gen_void_function_decl("__acorn.global_init");
     
         // Move the insert point to the call location for the init globals function
         // from the main function.
-        builder.SetInsertPoint(ll_global_init_call_bb,
-                               ll_global_init_call_bb->getFirstInsertionPt());
-        builder.CreateCall(ll_global_init_function);
+        builder.SetInsertPoint(context.ll_global_init_call_bb,
+                               context.ll_global_init_call_bb->getFirstInsertionPt());
+        builder.CreateCall(context.ll_global_init_function);
 
-        gen_bblock("entry", ll_global_init_function);
+        gen_bblock("entry", context.ll_global_init_function);
     }
 
-    builder.SetInsertPoint(&ll_global_init_function->back());
+    builder.SetInsertPoint(&context.ll_global_init_function->back());
 
     if (!var->assignment && var->type->is_struct_type()) {
         auto struct_type = static_cast<StructType*>(var->type);
@@ -758,14 +741,14 @@ void acorn::IRGenerator::finish_incomplete_struct_type_global(llvm::Value* ll_ad
 }
 
 void acorn::IRGenerator::destroy_global_variables() {
-    if (globals_needing_destroyed.empty()) {
+    if (context.globals_needing_destroyed.empty()) {
         return;
     }
 
     auto ll_func = gen_void_function_decl("__acorn.global_cleanup");
 
     // Move the insert point to the call location for the cleanup globals function.
-    auto& ll_last_inst = ll_global_cleanup_call_bb->back();
+    auto& ll_last_inst = context.ll_global_cleanup_call_bb->back();
     
     if (!llvm::isa<llvm::ReturnInst>(ll_last_inst)) {
         acorn_fatal("Expected the main function to end in a return statement");
@@ -777,7 +760,7 @@ void acorn::IRGenerator::destroy_global_variables() {
     auto ll_entry = gen_bblock("entry", ll_func);
     builder.SetInsertPoint(ll_entry);
 
-    for (Var* var : globals_needing_destroyed) {
+    for (Var* var : context.globals_needing_destroyed) {
         gen_call_destructors(var->type, var->ll_address);
     }
 
@@ -876,7 +859,7 @@ void acorn::IRGenerator::gen_call_destructors(Type* type, llvm::Value* ll_addres
     auto gen_struct_destructor = [this, ll_address](StructType* struct_type) finline {
         auto structn = struct_type->get_struct();
         if (!structn->ll_destructor) {
-            auto name = llvm::Twine("~") + structn->name.reduce();
+            auto name = llvm::Twine("~") + structn->name.to_string();
             structn->ll_destructor =
                 gen_no_param_member_function_decl(structn, name + (structn->destructor ? ".acorn" : ".implicit.acorn"));
             if (structn->destructor) {
@@ -3000,7 +2983,7 @@ llvm::Function* acorn::IRGenerator::gen_no_param_member_function_decl(Struct* st
 
 void acorn::IRGenerator::gen_call_default_constructor(llvm::Value* ll_address, Struct* structn) {
     if (!structn->ll_default_constructor) {
-        llvm::Twine ll_name = structn->name.reduce();
+        llvm::Twine ll_name = structn->name.to_string();
         structn->ll_default_constructor =
             gen_no_param_member_function_decl(structn, ll_name + (structn->default_constructor ? ".acorn" : ".implicit.acorn"));
         if (structn->default_constructor) {
@@ -3182,7 +3165,7 @@ void acorn::IRGenerator::gen_branch_if_not_term_with_dbg_loc(llvm::BasicBlock* l
 }
 
 llvm::Twine acorn::IRGenerator::get_global_name(const char* name) {
-    return llvm::Twine(name) + llvm::Twine(global_counter++);
+    return llvm::Twine(name) + llvm::Twine(context.global_counter++);
 }
 
 llvm::GlobalVariable* acorn::IRGenerator::gen_const_global_variable(const llvm::Twine& name,
@@ -3364,7 +3347,7 @@ void acorn::IRGenerator::gen_call_copy_constructor(llvm::Value* ll_to_address,
         auto ll_param_types = llvm::SmallVector<llvm::Type*>{ builder.getPtrTy(), builder.getPtrTy() };
         auto ll_func_type   = llvm::FunctionType::get(builder.getVoidTy(), ll_param_types, false);
 
-        auto ll_name = llvm::Twine("copy.") + structn->name.reduce();
+        auto ll_name = llvm::Twine("copy.") + structn->name.to_string();
         auto ll_func = llvm::Function::Create(
             ll_func_type,
             llvm::GlobalValue::InternalLinkage,

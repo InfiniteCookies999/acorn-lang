@@ -1,5 +1,4 @@
-#include "Process.h"
-
+#include "ProcessExec.h"
 
 #include "Logger.h"
 
@@ -7,12 +6,6 @@
 #include <Windows.h>
 #undef min
 #undef max
-
-#if defined(_UNICODE) || defined(UNICODE)
-#define wide_funcs 1
-#else
-#define wide_funcs 0
-#endif
 
 #if wide_funcs
 #define create_proc CreateProcessW
@@ -24,7 +17,6 @@
 #include <sys/wait.h>
 #include <poll.h>
 #endif 
-
 
 #include <codecvt>
 

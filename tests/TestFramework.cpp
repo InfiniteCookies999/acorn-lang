@@ -1,19 +1,26 @@
 #include "TestFramework.h"
 
 #include <iomanip>
+#include <atomic>
+#include <mutex>
+
 #include "Util.h"
 
 // Forward declaring.
-TestCase* current_test = nullptr;
-llvm::SmallVector<IError> intercepted_error_codes;
+thread_local TestCase* current_test = nullptr;
+thread_local llvm::SmallVector<IError> intercepted_error_codes;
 TestCase* single_run_case = nullptr;
 
-static TestSection*                    current_section = nullptr;
-static uint32_t                        current_depth   = 0;
+static thread_local TestSection*       current_section = nullptr;
+static thread_local uint32_t           current_depth   = 0;
 static llvm::SmallVector<TestSection*> sections;
 
-static int num_failed_tests = 0;
-static int num_tests_ran    = 0;
+static std::atomic<int> num_failed_tests = 0;
+static std::atomic<int> num_tests_ran    = 0;
+
+static std::mutex test_print_mutex;
+
+thread_local int thread_id;
 
 static void set_color(acorn::Color color) {
     acorn::set_color(acorn::Stream::StdOut, color);
@@ -24,12 +31,13 @@ TestCase::TestCase(const char* name, uint32_t depth, const std::function<void()>
 }
 
 void TestCase::run() {
-    std::cout << std::string(4 * depth, ' ') << "(Test) '" << name << "'";
     try {
         cb();
     } catch (TestCaseFailedException e) {
         
     }
+    std::lock_guard lock(test_print_mutex);
+    std::cout << std::string(4 * depth, ' ') << "(Test) '" << name << "'";
     if (!failed()) {
         set_color(acorn::Color::BrightGreen);
         std::cout << std::setw(50 - 4 * depth - strlen(name)) << "passed";
@@ -60,8 +68,8 @@ void TestCase::run() {
     std::cout << "\n";
 }
 
-TestSection::TestSection(const char* name, uint32_t depth)
-    : name(name), depth(depth) {
+TestSection::TestSection(const char* name, uint32_t depth, bool run_multithreaded)
+    : name(name), depth(depth), run_multithreaded(run_multithreaded) {
 }
 
 void TestSection::add_sub_section(TestSection* section) {
@@ -77,19 +85,54 @@ void TestSection::run() {
     for (TestSection* sub_section : sub_sections) {
         sub_section->run();
     }
-    for (TestCase* test : tests) {
-        current_test = test;
-        test->run();
-        ++num_tests_ran;
-        if (test->failed()) {
-            ++num_failed_tests;
+
+    if (run_multithreaded) {
+        unsigned number_of_supported_threads = std::thread::hardware_concurrency();
+
+        unsigned number_of_threads = 0;
+        unsigned maximum_threads   = number_of_supported_threads < 1 ? 1 : number_of_supported_threads;
+    
+        std::atomic<int> test_idx = 0;
+        std::vector<std::thread> test_threads;
+        for(int thr_id = 0; thr_id < maximum_threads; thr_id++) {
+            test_threads.push_back(std::thread([&test_idx, &tests=this->tests, thr_id] {
+                thread_id = thr_id;
+            
+                while (true) {
+                    auto idx = test_idx.fetch_add(1);
+                    if (idx >= tests.size()) {
+                        break;
+                    }
+
+                    TestCase* test = tests[idx];
+                    current_test = test;
+                    test->run();
+                    ++num_tests_ran;
+                    if (test->failed()) {
+                        ++num_failed_tests;
+                    }
+                }
+            }));
+        }
+
+        for (std::thread& thread : test_threads) {
+            thread.join();
+        }
+    } else {
+        for (TestCase* test : tests) {
+            current_test = test;
+            test->run();
+            ++num_tests_ran;
+            if (test->failed()) {
+                ++num_failed_tests;
+            }
         }
     }
 }
 
-void section(const char* name, const std::function<void()>& cb) {
+void section(const char* name, const std::function<void()>& cb, bool run_multithreaded) {
     TestSection* prev_section = current_section;
-    TestSection* new_section = new TestSection(name, current_depth);
+    TestSection* new_section = new TestSection(name, current_depth, run_multithreaded);
     if (prev_section) {
         prev_section->add_sub_section(new_section);
     }
@@ -110,12 +153,12 @@ void test(const char* name, const std::function<void()>& cb, bool only_run_this)
     }
 }
 
-void error_interceptor(acorn::ErrCode error_code, std::string file, int line_number) {
+static void error_interceptor(acorn::ErrCode error_code, std::string file, int line_number) {
     intercepted_error_codes.push_back({ error_code, std::move(file), line_number });
 }
 
 acorn::Compiler* mock_compiler_instance(acorn::PageAllocator& allocator) {
-    acorn::Identifier::clear_cache();
+    // DO NOT clear the identifier cache here.
     auto compiler_instance = new acorn::Compiler(allocator);
     compiler_instance->set_error_code_interceptor(error_interceptor);
     return compiler_instance;

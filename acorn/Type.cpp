@@ -267,5 +267,5 @@ acorn::StructType* acorn::StructType::create(PageAllocator& allocator,
 }
 
 std::string acorn::StructType::to_string() const {
-    return nstruct->name.reduce().str();
+    return structn->name.to_string().str();
 }

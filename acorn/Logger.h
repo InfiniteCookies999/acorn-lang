@@ -126,7 +126,7 @@ namespace acorn {
         }
 
         static void print(Stream stream, Identifier identifier) {
-            print(stream, identifier.reduce());
+            print(stream, identifier.to_string());
         }
 
         static void print(Stream stream, llvm::StringRef s) {

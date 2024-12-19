@@ -17,7 +17,7 @@
 #include "ir/DebugGen.h"
 #include "CodeGen.h"
 #include "link/Linking.h"
-#include "Process.h"
+#include "ProcessExec.h"
 #include "SourceFile.h"
 #include "FloatParsing.h"
 
@@ -380,21 +380,14 @@ void acorn::Compiler::sema_and_irgen() {
 
 void acorn::Compiler::codegen() {
     codegen_timer.start();
-    write_obj_file(context, "__acorn_tmp_object.o", *ll_module, ll_target_machine);
-    std::error_code ec;
-    fs::rename("__acorn_tmp_object.o", absolute_obj_path, ec);
-    if (ec) {
-        Logger::global_error(context,
-                             "Failed to move temporary object file to output directory. Error: %s", ec.message())
-            .end_error(ErrCode::GlobalFailedToMoveTempObjFile);
-    }
+    write_obj_file(context, absolute_obj_path.c_str(), *ll_module, ll_target_machine);
     codegen_timer.stop();
 }
 
 void acorn::Compiler::link() {
     link_timer.start();
 
-#ifdef _WIN32
+#ifdef WIN_OS
     std::wstring msvc_bin_path, msvc_lib_path;
     if (!get_msvc_install_paths(context, allocator, true, msvc_bin_path, msvc_lib_path)) {
         if (!context.has_errors()) {

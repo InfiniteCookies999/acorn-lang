@@ -17,6 +17,14 @@
 #define MAC_OS  (defined(__APPLE__) && defined(__MACH__))
 #define UNIX_OS (defined(__unix__) || defined(__unix) || defined(__linux__) || MAC_OS)
 
+#if WIN_OS
+#if defined(_UNICODE) || defined(UNICODE)
+#define wide_funcs 1
+#else
+#define wide_funcs 0
+#endif
+#endif
+
 #define IS_64_BITS (defined(__x86_64__) || defined(__AMD64__) || _WIN64 || defined(__aarch64__) || defined(__arm64__))
 
 namespace acorn {

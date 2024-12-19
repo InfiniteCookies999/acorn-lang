@@ -716,7 +716,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
                 for (const auto& intrinsic_def : options) {
                     std::string func_decl = intrinsic_def.return_type->to_string();
                     func_decl += " ";
-                    func_decl += intrinsic_def.name.reduce();
+                    func_decl += intrinsic_def.name.to_string();
                     func_decl += "(";
                     for (size_t i = 0; i < intrinsic_def.param_types.size(); i++) {
                         func_decl += intrinsic_def.param_types[i]->to_string();
@@ -2698,7 +2698,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
                                              const llvm::SmallVector<Expr*>& args) const {
     
     auto function_decl_to_string = [](const Func* canidate) {
-        std::string str = canidate->name.reduce().str();
+        std::string str = canidate->name.to_string().str();
         str += "(";
         size_t count = 0;
         for (Var* param : canidate->params) {
@@ -3467,7 +3467,7 @@ void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, con
     // Calculate the maximum name length to format the display better.
     size_t max_name_length = 0;
     for (const auto& dep : dep_chain) {
-        max_name_length = std::max(max_name_length, dep->name.reduce().size());
+        max_name_length = std::max(max_name_length, dep->name.to_string().size());
     }
 
     for (auto itr = dep_chain.begin(); itr != dep_chain.end(); ++itr) {
@@ -3475,8 +3475,8 @@ void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, con
         Decl* dep_rhs = (itr + 1) != dep_chain.end() ? *(itr + 1) : start_dep;
 
         logger.add_line([dep_lhs, dep_rhs, max_name_length](Logger& logger) {
-            size_t lhs_pad = max_name_length - dep_lhs->name.reduce().size();
-            size_t rhs_pad = max_name_length - dep_rhs->name.reduce().size();
+            size_t lhs_pad = max_name_length - dep_lhs->name.to_string().size();
+            size_t rhs_pad = max_name_length - dep_rhs->name.to_string().size();
 
             logger.fmt_print("  '%s'%s deps-on '%s'.   %s",
                              dep_lhs->name,

@@ -76,7 +76,7 @@ if (e1 > e) { e = e1; }           \
         }
         case NodeKind::DotOperator: {
             DotOperator* dot = static_cast<DotOperator*>(node);
-            e += dot->ident.reduce().size();
+            e += dot->ident.to_string().size();
             break;
         }
         case NodeKind::SizeOf: {

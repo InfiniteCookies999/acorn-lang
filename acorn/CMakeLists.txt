@@ -17,7 +17,7 @@ add_library (acorn   "Logger.h" "Logger.cpp" "Lexer.h" "Lexer.cpp" "Source.h" "T
                      "ir/GenTypes.h" "ir/GenTypes.cpp"  "ir/GenOperator.cpp" "PageAllocator.cpp"
                      "Sema.h" "Sema.cpp" "SourceExpansion.h" "SourceExpansion.cpp" "SourceFile.h"
                      "Timer.h" "Timer.cpp"  "link/Linking.h" "link/Linking.cpp" "Util.cpp" "CodeGen.h" "CodeGen.cpp"
-                     "Process.h" "Process.cpp" "TypeTable.h" "TypeTable.cpp" "Errors.h" "ErrorCodesDef.inc" "Errors.cpp"
+                     "ProcessExec.h" "ProcessExec.cpp" "TypeTable.h" "TypeTable.cpp" "Errors.h" "ErrorCodesDef.inc" "Errors.cpp"
                      "Namespace.h" "Namespace.cpp" "SourceFile.cpp" "FloatParsing.h" "FloatParsing.cpp" "ir/DebugGen.h" "ir/DebugGen.cpp")
 # We add these include directories to the target so that targets that use the library also have
 # access to the source files.

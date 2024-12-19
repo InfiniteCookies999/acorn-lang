@@ -6,21 +6,26 @@
 #include <iostream>
 #include <llvm/ADT/SmallVector.h>
 #include <concepts>
+#include <thread>
+//#include <process.h>
 #include <sstream>
+
+// Process.h
 
 #include "Compiler.h"
 #include "Logger.h"
 
 class TestCase;
 
-extern TestCase* current_test;
+extern thread_local TestCase* current_test;
 extern TestCase* single_run_case;
 struct IError {
     acorn::ErrCode code;
     std::string    file;
     int            line_number;
 };
-extern llvm::SmallVector<IError> intercepted_error_codes;
+extern thread_local llvm::SmallVector<IError> intercepted_error_codes;
+extern thread_local int thread_id;
 
 class TestCaseFailedException : std::exception {
 public:
@@ -54,7 +59,7 @@ private:
 
 class TestSection {
 public:
-    TestSection(const char* name, uint32_t depth);
+    TestSection(const char* name, uint32_t depth, bool run_multithreaded);
 
     void add_sub_section(TestSection* section);
 
@@ -67,9 +72,11 @@ private:
     uint32_t depth;
     llvm::SmallVector<TestSection*> sub_sections;
     llvm::SmallVector<TestCase*>    tests;
+    llvm::SmallVector<std::thread>  test_threads;
+    bool run_multithreaded = false;
 };
 
-void section(const char* name, const std::function<void()>& cb);
+void section(const char* name, const std::function<void()>& cb, bool run_multithreaded = false);
 void test(const char* name, const std::function<void()>& cb, bool run_only_this = false);
 
 template<typename T>
@@ -163,7 +170,6 @@ private:
         current_test->set_fail(failed_info_cb, cpp_file, line);
         throw TestCaseFailedException();
     }
-
 };
 
 template<typename T>

@@ -6,8 +6,11 @@
 
 #include <string_view>
 #include <unordered_map>
+#include <mutex>
 
 namespace acorn {
+
+    class Context;
 
     // A useful class for quickly determining if two identifiers in the language
     // are the same by comparing an integer rather than a string.
@@ -29,18 +32,22 @@ namespace acorn {
 
         uint32_t get_id() const { return id; }
 
-        llvm::StringRef reduce() const { return name_mapping[id]; }
+        llvm::StringRef to_string() const {
+            return name_mapping[id];
+        }
 
         static void clear_cache();
 
     private:
+        static std::mutex                                mtx;
         static llvm::StringMap<uint32_t>                 mapped_identifiers;
         static llvm::DenseMap<uint32_t, llvm::StringRef> name_mapping;
         static uint32_t                                  id_counter;
-
+        
         Identifier(uint32_t id)
             : id(id) {
         }
+
         uint32_t id;
         
     };

@@ -26,7 +26,7 @@ std::string node_kind_to_string(NodeKind kind) {
 }
 
 std::string identifier_to_string(Identifier identifier) {
-    return identifier.reduce().str();
+    return identifier.to_string().str();
 }
 
 std::string type_to_string(Type* type) {
@@ -280,7 +280,6 @@ void test_parser() {
             expect(nodes[7]->parsed_type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(context->int_type)));
             expect(nodes[8]->parsed_type, type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(type_table.get_const_type(context->int_type))));
             expect(nodes[8]->parsed_type->remove_all_const(), type_to_string).to_be(type_table.get_ptr_type(type_table.get_ptr_type(context->int_type)));
-
 
         });
         test("function parsing", [&] {
