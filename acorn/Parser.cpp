@@ -480,6 +480,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
             add_node_to_scope(func->scope, parse_statement());
         }
         expect('}', "for function body");
+        func->scope->end_loc = prev_token.loc;
     } else if (func->has_modifier(Modifier::Native)) {
         expect(';');
     }
@@ -1009,10 +1010,12 @@ acorn::SwitchStmt* acorn::Parser::parse_switch() {
 
         expect(':');
 
-        ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
+        // Use the previous token so it associates the scope start with the ':' token.
+        ScopeStmt* scope = new_node<ScopeStmt>(prev_token);
         while (cur_token.is_not('}') && cur_token.is_not(Token::KwCase) && cur_token.is_not(Token::EOB)) {
             add_node_to_scope(scope, parse_statement());
         }
+        scope->end_loc = prev_token.loc;
 
         if (cond) {
             switchn->cases.emplace_back(cond, scope);
@@ -1045,6 +1048,8 @@ acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
         // Single statement scope.
         add_node_to_scope(scope, parse_statement());
     }
+
+    scope->end_loc = prev_token.loc;
     return scope;
 }
 

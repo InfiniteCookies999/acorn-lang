@@ -121,11 +121,6 @@ CommandLineProcessor::Flag& CommandLineProcessor::add_flag(llvm::StringRef flag_
     return flags.back();
 }
 
-template<class... Ts>
-struct overloaded : Ts... { using Ts::operator()...; };
-template<class... Ts>
-overloaded(Ts...) -> overloaded<Ts...>;
-
 int CommandLineProcessor::process(llvm::StringRef flag_name, int idx) {
     
     for (Flag& flag : flags) {

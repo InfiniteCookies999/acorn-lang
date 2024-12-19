@@ -2,6 +2,7 @@
 
 #include "../Logger.h"
 #include "../Util.h"
+#include "DebugGen.h"
 
 llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     Expr* lhs = bin_op->lhs, *rhs = bin_op->rhs;
@@ -13,13 +14,14 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
                                               builder.CreateLoad(gen_type(lhs->type), ll_address),
                                               gen_rvalue(rhs));
         builder.CreateStore(ll_value, ll_address);
+        emit_dbg(di_emitter->emit_location(builder, bin_op->loc));
         return nullptr;
     };
 
     switch (bin_op->op) {
     case '=': {
         auto ll_address = gen_node(lhs);
-        gen_assignment(ll_address, lhs->type, rhs, lhs);
+        gen_assignment(ll_address, lhs->type, rhs, lhs, true);
         return ll_address;
     }
     case Token::AddEq:   return apply_op_eq('+');
@@ -307,6 +309,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
             }
         }
         builder.CreateStore(ll_value, ll_addr);
+        emit_dbg(di_emitter->emit_location(builder, unary_op->loc));
         return is_post ? ll_org : ll_value;
     };
 

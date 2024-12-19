@@ -397,6 +397,8 @@ namespace acorn {
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {
         ScopeStmt() : Node(NodeKind::ScopeStmt) {
         }
+
+        SourceLoc end_loc;
     };
     
 

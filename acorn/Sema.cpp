@@ -1345,6 +1345,10 @@ void acorn::Sema::check_range_loop(RangeLoopStmt* loop) {
     }
 
     if (loop->inc) {
+        if (is_incomplete_statement(loop->inc)) {
+            error(loop->inc, "Loop increment is an incomplete expression")
+                .end_error(ErrCode::SemaIncIncompleteExpr);
+        }
         check_node(loop->inc);
     }
 
@@ -1690,67 +1694,12 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
             break;
         }
 
-        switch (stmt->kind) {
-        case NodeKind::ReturnStmt:
-        case NodeKind::Var:
-        case NodeKind::Func:
-        case NodeKind::Struct:
-        case NodeKind::FuncCall:
-        case NodeKind::IfStmt:
-        case NodeKind::ScopeStmt:
-        case NodeKind::PredicateLoopStmt:
-        case NodeKind::RangeLoopStmt:
-        case NodeKind::IteratorLoopStmt:
-        case NodeKind::BreakStmt:
-        case NodeKind::ContinueStmt:
-        case NodeKind::SwitchStmt:
-            break;
-        case NodeKind::BinOp: {
-            BinOp* bin_op = static_cast<BinOp*>(stmt);
-
-            switch (bin_op->op) {
-            case '=':
-            case Token::AddEq:
-            case Token::SubEq:
-            case Token::MulEq:
-            case Token::DivEq:
-            case Token::ModEq:
-            case Token::AndEq:
-            case Token::OrEq:
-            case Token::CaretEq:
-            case Token::TildeEq:
-            case Token::LtLtEq:
-            case Token::GtGtEq:
-                goto ContinueToCheckNodeLab;
-            default:
-                break;
-            }
-
-            goto IncompleteStatementLab;
-        }
-        case NodeKind::UnaryOp: {
-            UnaryOp* unary_op = static_cast<UnaryOp*>(stmt);
-
-            if (unary_op->op == Token::AddAdd || unary_op->op == Token::SubSub ||
-                unary_op->op == Token::PostAddAdd || unary_op->op == Token::PostSubSub) {
-                goto ContinueToCheckNodeLab;
-            }
-
-            goto IncompleteStatementLab;
-        }
-        case NodeKind::VarList: {
-            acorn_fatal("Variable list used as scope node");
-            break;
-        }
-        default:
-        IncompleteStatementLab:
+        if (is_incomplete_statement(stmt)) {
             error(stmt, "Incomplete statement")
                 .end_error(ErrCode::SemaIncompleteStmt);
             continue;
         }
-
-    ContinueToCheckNodeLab:
-        
+                
         if (stmt->is(NodeKind::Func)) {
             error(stmt, "Functions cannot be declared within another function")
                 .end_error(ErrCode::SemaNoLocalFuncs);
@@ -3396,6 +3345,64 @@ bool acorn::Sema::is_incomplete_type(Type* type) {
     }
     default:
         return false;
+    }
+}
+
+bool acorn::Sema::is_incomplete_statement(Node* stmt) {
+    switch (stmt->kind) {
+    case NodeKind::ReturnStmt:
+    case NodeKind::Var:
+    case NodeKind::Func:
+    case NodeKind::Struct:
+    case NodeKind::FuncCall:
+    case NodeKind::IfStmt:
+    case NodeKind::ScopeStmt:
+    case NodeKind::PredicateLoopStmt:
+    case NodeKind::RangeLoopStmt:
+    case NodeKind::IteratorLoopStmt:
+    case NodeKind::BreakStmt:
+    case NodeKind::ContinueStmt:
+    case NodeKind::SwitchStmt:
+        return false;
+    case NodeKind::BinOp: {
+        BinOp* bin_op = static_cast<BinOp*>(stmt);
+
+        switch (bin_op->op) {
+        case '=':
+        case Token::AddEq:
+        case Token::SubEq:
+        case Token::MulEq:
+        case Token::DivEq:
+        case Token::ModEq:
+        case Token::AndEq:
+        case Token::OrEq:
+        case Token::CaretEq:
+        case Token::TildeEq:
+        case Token::LtLtEq:
+        case Token::GtGtEq:
+            return false;
+        default:
+            break;
+        }
+
+        return true;
+    }
+    case NodeKind::UnaryOp: {
+        UnaryOp* unary_op = static_cast<UnaryOp*>(stmt);
+
+        if (unary_op->op == Token::AddAdd || unary_op->op == Token::SubSub ||
+            unary_op->op == Token::PostAddAdd || unary_op->op == Token::PostSubSub) {
+            return false;
+        }
+
+        return true;
+    }
+    case NodeKind::VarList: {
+        acorn_fatal("Variable list used as scope node");
+        return false;
+    }
+    default:
+        return true;
     }
 }
 

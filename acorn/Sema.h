@@ -172,6 +172,7 @@ namespace acorn {
         void check_modifiable(Expr* expr);
         bool is_lvalue(Expr* expr);
         bool is_incomplete_type(Type* type);
+        bool is_incomplete_statement(Node* stmt);
         void check_division_by_zero(PointSourceLoc error_loc, Expr* expr);
         void create_cast(Expr* expr, Type* to_type);
         bool check_condition(Expr* cond);

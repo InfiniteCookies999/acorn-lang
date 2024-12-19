@@ -6,20 +6,31 @@
 #include "Logger.h"
 #include "Namespace.h"
 
+namespace llvm {
+    class DICompileUnit;
+}
+
 namespace acorn {
     class Module;
+    class DebugInfoEmitter;
     
     class SourceFile : public Namespace {
     public:
-        std::wstring path;
-        Buffer       buffer;
-        LineTable    line_table;
-        Logger       logger;
-        Module&      modl;
+        // Non-full path used for error reporting.
+        std::wstring      path;
+        // The full path to the file.
+        std::wstring      full_path;
+        Buffer            buffer;
+        LineTable         line_table;
+        Logger            logger;
+        Module&           modl;
+        DebugInfoEmitter* di_emitter;
 
         SourceFile(const SourceFile&) = delete;
 
         SourceFile(SourceFile&&) = default;
+
+        SourceFile(Context& context, std::wstring path, std::wstring full_path, Buffer buffer, Module& modl);
 
         void set_namespace(Namespace* nspace) {
             this->nspace = nspace;
@@ -51,8 +62,6 @@ namespace acorn {
 
         FuncList* find_static_import_functions(Identifier name);
         Var* find_static_import_variable(Identifier name);
-
-        SourceFile(Context& context, std::wstring path, Buffer buffer, Module& modl);
 
     private:
         uint32_t default_access = Modifier::Private;

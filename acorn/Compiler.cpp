@@ -14,6 +14,7 @@
 #include "Sema.h"
 #include "Util.h"
 #include "ir/IRGen.h"
+#include "ir/DebugGen.h"
 #include "CodeGen.h"
 #include "link/Linking.h"
 #include "Process.h"
@@ -215,12 +216,13 @@ void acorn::Compiler::initialize_codegen() {
     }
 
     set_llvm_module_target(*ll_module, ll_target_machine);
-    
+
     codegen_timer.stop();
 }
 
 void acorn::Compiler::sema_and_irgen() {
 
+    sema_timer.start();
     for (auto& entry : context.get_modules()) {
         Sema::check_nodes_wrong_scopes(*entry.second);
     }
@@ -257,9 +259,24 @@ void acorn::Compiler::sema_and_irgen() {
         Sema::check_all_other_duplicates(*entry.second, context);
     }
 
+    sema_timer.stop();
+
     if (context.has_errors()) {
         return;
     }
+
+    ir_timer.start();
+    if (context.should_emit_debug_info()) {
+        // The debug builder requires one builder per file so we actually
+        // have to create an emitter per file.
+        for (auto& [_, modl] : context.get_modules()) {
+            for (auto file : modl->get_source_files()) {
+                file->di_emitter = allocator.alloc_type<DebugInfoEmitter>();
+                new (file->di_emitter) DebugInfoEmitter(context, file);
+            }
+        }
+    }
+    ir_timer.stop();
 
     auto check_decl = [this](Decl* decl) finline {
         sema_timer.start();
@@ -280,6 +297,7 @@ void acorn::Compiler::sema_and_irgen() {
         } else {
             acorn_fatal("Unreachable: Missing check case");
         }
+
         sema_timer.stop();
     };
 
@@ -311,10 +329,12 @@ void acorn::Compiler::sema_and_irgen() {
     //       the existing requests. This should probably use a queue strategy
     //       and just keep generating anything in the queue until everything is
     //       finished.
+    ir_timer.start();
     IRGenerator generator(context);
     generator.finish_incomplete_global_variables();
     generator.destroy_global_variables();
     generator.gen_implicit_structs_functions();
+    ir_timer.stop();
 
     // Checking any declarations that were not checked.
     for (Decl* decl : context.get_unchecked()) {
@@ -324,14 +344,40 @@ void acorn::Compiler::sema_and_irgen() {
     if (context.has_errors()) {
         return;
     }
-    
-    llvm::verifyModule(*ll_module, &llvm::errs());
-    
+
+    if (context.should_emit_debug_info()) {
+        ir_timer.start();
+        auto& ll_module  = context.get_ll_module();
+        auto& ll_context = context.get_ll_context();
+
+#ifdef _WIN32
+        ll_module.addModuleFlag(llvm::Module::Warning, "CodeView", 1);
+#endif
+        ll_module.addModuleFlag(llvm::Module::Warning, "Debug Info Version", llvm::DEBUG_METADATA_VERSION);
+        llvm::NamedMDNode* ll_ident_md = ll_module.getOrInsertNamedMetadata("llvm.ident");
+        ll_ident_md->addOperand(llvm::MDNode::get(ll_context, {llvm::MDString::get(ll_context, "acorn compiler")}));
+        
+        for (auto& [_, modl] : context.get_modules()) {
+            for (auto file : modl->get_source_files()) {
+                file->di_emitter->finalize();
+            }
+        }
+        ir_timer.stop();
+    }
+
+    // This should be matching the PIC level specified when creating the target machine.
+    ll_module->addModuleFlag(llvm::Module::Min, "PIC Level", 2);
+
     if (should_show_llvm_ir) {
         // Do not use ll_module->dump() because if DLLVM_ENABLE_DUMP flag is turned
         // off then it will cause a linker issue.
         ll_module->print(llvm::outs(), nullptr);
         llvm::outs() << "\n";
+    }
+
+    if (llvm::verifyModule(*ll_module, &llvm::errs())) {
+        context.inc_error_count();
+        return;
     }
 }
 
@@ -398,8 +444,9 @@ void acorn::Compiler::link() {
         return libs;
     };
 
-    std::wstring cmd = std::format(L"\"{}\" /NOLOGO /OUT:{} {} {} {}",
+    std::wstring cmd = std::format(L"\"{}\" /NOLOGO {} /OUT:{} {} {} {}",
                                    msvc_bin_path + L"\\link.exe",
+                                   context.should_emit_debug_info() ? L"/DEBUG" : L"",
                                    absolute_exe_path,
                                    absolute_obj_path,
                                    get_lib_paths(),
@@ -593,8 +640,8 @@ acorn::Buffer acorn::Compiler::read_file_to_buffer(const std::filesystem::path& 
 }
 
 void acorn::Compiler::parse_file(Module& modl, 
-                                  const fs::path& path, 
-                                  const fs::path& root_path) {
+                                 const fs::path& path, 
+                                 const fs::path& root_path) {
     auto buffer = read_file_to_buffer(path);
 
     size_t root_path_size = root_path.generic_wstring().size();
@@ -602,10 +649,12 @@ void acorn::Compiler::parse_file(Module& modl,
         // If it exists we need to add one to get rid of the '/'.
         ++root_path_size;
     }
+    // Short path for debugging.
     std::wstring wpath = path.generic_wstring().substr(root_path_size);
+    std::wstring wfull_path = fs::absolute(wpath).generic_wstring();
 
     SourceFile* file = allocator.alloc_type<SourceFile>();
-    new (file) SourceFile(context, std::move(wpath), buffer, modl);
+    new (file) SourceFile(context, std::move(wpath), std::move(wfull_path),  buffer, modl);
     if (error_code_interceptor) {
         file->logger.set_error_code_interceptor(error_code_interceptor);
     }

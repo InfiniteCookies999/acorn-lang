@@ -8,8 +8,11 @@
 #include "../AST.h"
 #include "GenTypes.h"
 
+#define emit_dbg(x) if (should_emit_debug_info) { x; }
+
 namespace acorn {
     
+    class DebugInfoEmitter;
     class Context;
     
     class IRGenerator {
@@ -46,6 +49,8 @@ namespace acorn {
         llvm::LLVMContext& ll_context;
         llvm::Module&      ll_module;
         llvm::IRBuilder<>  builder;
+        DebugInfoEmitter*  di_emitter;
+        bool               should_emit_debug_info;
 
         Func*           cur_func;
         Struct*         cur_struct;
@@ -138,7 +143,7 @@ namespace acorn {
         void process_destructor_state(Type* type, llvm::Value* ll_address);
 
         llvm::Value* gen_return(ReturnStmt* ret);
-        llvm::Value* gen_if(IfStmt* ifs);
+        llvm::Value* gen_if(IfStmt* ifs, llvm::BasicBlock* ll_end_bb = nullptr);
         llvm::Value* gen_predicate_loop(PredicateLoopStmt* loop);
         llvm::Value* gen_range_loop(RangeLoopStmt* loop);
         llvm::Value* gen_iterator_loop(IteratorLoopStmt* loop);
@@ -147,10 +152,11 @@ namespace acorn {
         llvm::Value* gen_switch(SwitchStmt* switchn);
         llvm::Value* gen_switch_non_foldable(SwitchStmt* switchn);
         llvm::Value* gen_switch_foldable(SwitchStmt* switchn);
-        llvm::Value* gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr);
+        llvm::Value* gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr, Node* lvalue = nullptr);
         llvm::Value* gen_this(This* thisn);
         llvm::Value* gen_sizeof(SizeOf* sof);
-        llvm::Value* gen_scope(ScopeStmt* scope);
+        void gen_scope(ScopeStmt* scope);
+        llvm::Value* gen_scope_with_dbg_scope(ScopeStmt* scope);
 
         llvm::Value* gen_variable(Var* var);
         llvm::Value* gen_number(Number* number);
@@ -160,13 +166,15 @@ namespace acorn {
                                            llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
-        llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr);
+        llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue = nullptr);
         llvm::Value* gen_function_decl_call(Func* called_func,
+                                            SourceLoc call_loc,
                                             llvm::SmallVector<Expr*>& args,
                                             llvm::Value* ll_dest_addr,
-                                            llvm::Value* ll_in_this);
+                                            llvm::Value* ll_in_this,
+                                            Node* lvalue);
         llvm::Value* gen_function_call_arg(Expr* arg);
-        llvm::Value* gen_function_type_call(FuncCall* call, llvm::Value* ll_dest_addr);
+        llvm::Value* gen_function_type_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue);
         void gen_call_return_aggr_type_temporary(Type* return_type,
                                                  bool uses_aggr_param,
                                                  llvm::Value*& ll_dest_addr);
@@ -175,7 +183,7 @@ namespace acorn {
         llvm::Value* gen_string(String* string);
         llvm::Value* gen_null();
         llvm::Value* gen_cast(Cast* cast);
-        llvm::Value* gen_array(Array* arr, llvm::Value* ll_dest_addr);
+        llvm::Value* gen_array(Array* arr, llvm::Value* ll_dest_addr, Node* lvalue = nullptr);
         llvm::Constant* gen_constant_array(Array* arr, ArrayType* arr_type, llvm::ArrayType* ll_arr_type);
         llvm::Value* gen_memory_access(MemoryAccess* mem_access);
         llvm::Value* gen_dot_operator(DotOperator* dot);
@@ -183,8 +191,9 @@ namespace acorn {
         void gen_assignment(llvm::Value* ll_address,
                             Type* to_type,
                             Expr* value,
-                            Expr* to_expr_for_assign_op = nullptr);
-        void gen_default_value(llvm::Value* ll_address, Type* type);
+                            Node* lvalue = nullptr,
+                            bool is_assign_op = false);
+        void gen_default_value(llvm::Value* ll_address, Type* type, Node* lvalue = nullptr);
         llvm::Constant* gen_zero(Type* type);
         llvm::Constant* gen_one(Type* type);
         llvm::Value* gen_cast(Type* to_type, Type* from_type, llvm::Value* ll_value);
@@ -192,6 +201,7 @@ namespace acorn {
         llvm::Value* gen_condition(Expr* cond);
 
         llvm::BasicBlock* gen_bblock(const char* name, llvm::Function* ll_func = nullptr);
+        void insert_bblock_at_end(llvm::BasicBlock* ll_bb);
 
         llvm::Function* gen_no_param_member_function_decl(Struct* structn, llvm::Twine name);
         void gen_call_default_constructor(llvm::Value* ll_address, Struct* structn);
@@ -221,13 +231,14 @@ namespace acorn {
         //
         // if a > 47 {
         //     ...
-        //     return
+        //     return;
         // }
         // // Code that may be not be reached because of the return jump.
-        // int a = 5
+        // int a = 5;
         // ...
         // 
         void gen_branch_if_not_term(llvm::BasicBlock* ll_bb);
+        void gen_branch_if_not_term_with_dbg_loc(llvm::BasicBlock* ll_bb, SourceLoc branch_loc);
         llvm::Twine get_global_name(const char* name);
         llvm::GlobalVariable* gen_const_global_variable(const llvm::Twine& name,
                                                         llvm::Type* ll_type,
@@ -263,14 +274,19 @@ namespace acorn {
                              StructType* struct_type);
         void gen_copy_array(llvm::Value* ll_to_address,
                             llvm::Value* ll_from_address,
-                            ArrayType* arr_type);
+                            ArrayType* arr_type,
+                            Node* lvalue = nullptr);
         void gen_call_copy_constructor(llvm::Value* ll_to_address,
                                        llvm::Value* ll_from_address,
-                                       Struct* structn);
+                                       Struct* structn,
+                                       Node* lvalue = nullptr);
         void gen_call_array_copy_constructors(llvm::Value* ll_to_address,
                                               llvm::Value* ll_from_address,
                                               ArrayType* arr_type,
-                                              Struct* structn);
+                                              Struct* structn,
+                                              Node* lvalue = nullptr);
+
+        void gen_nop();
 
     };
 }

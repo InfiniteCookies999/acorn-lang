@@ -2,9 +2,10 @@
 
 #include "Module.h"
 
-acorn::SourceFile::SourceFile(Context& context, std::wstring path, Buffer buffer, Module& modl)
+acorn::SourceFile::SourceFile(Context& context, std::wstring path, std::wstring full_path, Buffer buffer, Module& modl)
     : logger(context, *this),
       path(std::move(path)),
+      full_path(std::move(full_path)),
       line_table(buffer.content, buffer.length),
       buffer(buffer),
       modl(modl),
