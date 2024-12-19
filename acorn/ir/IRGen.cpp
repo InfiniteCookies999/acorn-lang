@@ -301,8 +301,7 @@ llvm::Type* acorn::IRGenerator::gen_function_return_type(Func* func, bool is_mai
         auto ll_aggr_type = gen_type(func->return_type);
         uint64_t aggr_mem_size = sizeof_type_in_bytes(ll_aggr_type) * 8;
         if (aggr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
-            // The array can fit into an integer.
-
+            // The aggregate can fit into an integer.
             auto ll_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size)));
             func->ll_aggr_int_ret_type = ll_type;
             return ll_type;
@@ -1932,7 +1931,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
                     ll_in_this = builder.CreateLoad(builder.getPtrTy(), ll_in_this);
                 } else if (dot_operator->site->is(NodeKind::FuncCall)) {
                     auto dot_operator_call = static_cast<FuncCall*>(dot_operator->site);
-                    ll_in_this = gen_handle_returned_struct_obj(dot_operator_call, ll_in_this);
+                    ll_in_this = gen_handle_returned_aggregate_obj(dot_operator_call, ll_in_this, "tmp.struct");
                 }
             } else {
                 ll_in_this = ll_this;
@@ -2124,8 +2123,24 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
 llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue) {
     auto func_type = static_cast<FunctionType*>(call->site->type);
     auto return_type = func_type->get_return_type();
-    bool uses_aggr_param = return_type->is_aggregate();
     auto& param_types = func_type->get_param_types();
+
+    bool uses_aggr_param = false;
+    llvm::Type* ll_ret_type;
+    if (return_type->is_aggregate()) {
+        auto ll_aggr_type = gen_type(return_type);
+        uint64_t aggr_mem_size = sizeof_type_in_bytes(ll_aggr_type) * 8;
+        if (aggr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
+            // The aggregate can fit into an integer.
+            auto ll_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size)));
+            ll_ret_type = ll_type;
+        } else {
+            uses_aggr_param = true;
+            ll_ret_type = llvm::Type::getVoidTy(ll_context);
+        }
+    } else {
+        ll_ret_type = gen_type(return_type);
+    }
 
     llvm::SmallVector<llvm::Value*> ll_args;
     size_t ll_num_args = call->args.size();
@@ -2151,9 +2166,6 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
     }
 
     auto ll_site = gen_rvalue(call->site);
-
-    auto ll_ret_type = !uses_aggr_param ? gen_type(func_type->get_return_type())
-                                        : llvm::Type::getVoidTy(ll_context);
         
     llvm::SmallVector<llvm::Type*> ll_param_types;
     ll_param_types.reserve(ll_num_args);
@@ -2553,21 +2565,7 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
 
     if (mem_access->site->is(NodeKind::FuncCall)) {
         auto call = static_cast<FuncCall*>(mem_access->site);
-        bool uses_aggr_int_ret = false;
-        if (!call->site->type->is_function_type()) {
-            uses_aggr_int_ret = call->called_func->ll_aggr_int_ret_type;
-        }
-
-        if (uses_aggr_int_ret) {
-            // Because the function returned an integer rather than the array we
-            // must create a temporary array, cast the int into the array, then
-            // access its memory.
-            Type* arr_type = call->called_func->return_type;
-            auto ll_tmp_array = gen_unseen_alloca(arr_type, "tmp.arr");
-            process_destructor_state(arr_type, ll_tmp_array);
-            builder.CreateStore(ll_memory, ll_tmp_array);
-            ll_memory = ll_tmp_array;
-        }
+        ll_memory = gen_handle_returned_aggregate_obj(call, ll_memory, "tmp.arr");
     }
 
     if (mem_access_ptr) {
@@ -2590,7 +2588,7 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
         
         if (site->is(NodeKind::FuncCall)) {
             auto call = static_cast<FuncCall*>(site);
-            ll_struct_address = gen_handle_returned_struct_obj(call, ll_struct_address);
+            ll_struct_address = gen_handle_returned_aggregate_obj(call, ll_struct_address, "tmp.struct");
         }
 
         // Automatically dereferencing pointers.
@@ -3415,24 +3413,20 @@ void acorn::IRGenerator::gen_call_array_copy_constructors(llvm::Value* ll_to_add
     });
 }
 
-llvm::Value* acorn::IRGenerator::gen_handle_returned_struct_obj(FuncCall* call, llvm::Value* ll_ret) {
-    bool uses_aggr_int_ret = false;
-    if (!call->site->type->is_function_type()) {
-        uses_aggr_int_ret = call->called_func->ll_aggr_int_ret_type;
-    }
-
+llvm::Value* acorn::IRGenerator::gen_handle_returned_aggregate_obj(FuncCall* call, llvm::Value* ll_ret, const char* tmp_obj_name) {
+    
     // Note: We do not need to allocate the object if the function call
     //       returns a parameter aggregate value because gen_function_call
     //       will create an allocation in that case for us.
-    if (uses_aggr_int_ret) {
+    if (ll_ret->getType()->isIntegerTy()) {
         // Because the function returned an integer rather than the struct we
         // must create a temporary struct, and then cast the int into the struct
         // type.
-        Type* struct_type = call->called_func->return_type;
-        auto ll_tmp_struct = gen_unseen_alloca(struct_type, "tmp.struct");
-        process_destructor_state(struct_type, ll_tmp_struct);
-        builder.CreateStore(ll_ret, ll_tmp_struct);
-        return ll_tmp_struct;
+        Type* aggr_type = call->type;
+        auto ll_tmp_aggr = gen_unseen_alloca(aggr_type, tmp_obj_name);
+        process_destructor_state(aggr_type, ll_tmp_aggr);
+        builder.CreateStore(ll_ret, ll_tmp_aggr);
+        return ll_tmp_aggr;
     }
 
     return ll_ret;
