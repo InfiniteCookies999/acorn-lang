@@ -963,6 +963,18 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("ABCDabcd");
             });
+            test("Struct ret struct call tmp struct mem func inline (sm struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs27.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("@");
+            });
+            test("Struct ret struct call tmp struct mem func inline (bg struct)", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"structs/structs28.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCD");
+            });
         });
         section("member functions", [&] {
             test("Member function sets field", [&] {

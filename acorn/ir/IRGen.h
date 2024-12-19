@@ -287,6 +287,8 @@ namespace acorn {
                                               Struct* structn,
                                               Node* lvalue = nullptr);
 
+        llvm::Value* gen_handle_returned_struct_obj(FuncCall* call, llvm::Value* ll_ret);
+
         void gen_nop();
 
     };

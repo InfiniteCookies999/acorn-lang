@@ -1926,9 +1926,13 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
             if (call->site->is(NodeKind::DotOperator)) {
                 auto dot_operator = static_cast<DotOperator*>(call->site);
                 ll_in_this = gen_node(dot_operator->site);
+                
                 if (dot_operator->site->type->is_pointer()) {
                     // The function call auto-dereferences the pointer.
                     ll_in_this = builder.CreateLoad(builder.getPtrTy(), ll_in_this);
+                } else if (dot_operator->site->is(NodeKind::FuncCall)) {
+                    auto dot_operator_call = static_cast<FuncCall*>(dot_operator->site);
+                    ll_in_this = gen_handle_returned_struct_obj(dot_operator_call, ll_in_this);
                 }
             } else {
                 ll_in_this = ll_this;
@@ -2586,24 +2590,7 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
         
         if (site->is(NodeKind::FuncCall)) {
             auto call = static_cast<FuncCall*>(site);
-            bool uses_aggr_int_ret = false;
-            if (!call->site->type->is_function_type()) {
-                uses_aggr_int_ret = call->called_func->ll_aggr_int_ret_type;
-            }
-
-            // Note: We do not need to allocate the object if the function call
-            //       returns a parameter aggregate value because gen_function_call
-            //       will create an allocation in that case for us.
-            if (uses_aggr_int_ret) {
-                // Because the function returned an integer rather than the struct we
-                // must create a temporary struct, cast the int into the struct, then
-                // access its fields.
-                Type* struct_type = call->called_func->return_type;
-                auto ll_tmp_struct = gen_unseen_alloca(struct_type, "tmp.struct");
-                process_destructor_state(struct_type, ll_tmp_struct);
-                builder.CreateStore(ll_struct_address, ll_tmp_struct);
-                ll_struct_address = ll_tmp_struct;
-            }
+            ll_struct_address = gen_handle_returned_struct_obj(call, ll_struct_address);
         }
 
         // Automatically dereferencing pointers.
@@ -3426,6 +3413,29 @@ void acorn::IRGenerator::gen_call_array_copy_constructors(llvm::Value* ll_to_add
                                    [this, structn, lvalue](auto ll_to_elm, auto ll_from_elm) {
         gen_call_copy_constructor(ll_to_elm, ll_from_elm, structn, lvalue);
     });
+}
+
+llvm::Value* acorn::IRGenerator::gen_handle_returned_struct_obj(FuncCall* call, llvm::Value* ll_ret) {
+    bool uses_aggr_int_ret = false;
+    if (!call->site->type->is_function_type()) {
+        uses_aggr_int_ret = call->called_func->ll_aggr_int_ret_type;
+    }
+
+    // Note: We do not need to allocate the object if the function call
+    //       returns a parameter aggregate value because gen_function_call
+    //       will create an allocation in that case for us.
+    if (uses_aggr_int_ret) {
+        // Because the function returned an integer rather than the struct we
+        // must create a temporary struct, and then cast the int into the struct
+        // type.
+        Type* struct_type = call->called_func->return_type;
+        auto ll_tmp_struct = gen_unseen_alloca(struct_type, "tmp.struct");
+        process_destructor_state(struct_type, ll_tmp_struct);
+        builder.CreateStore(ll_ret, ll_tmp_struct);
+        return ll_tmp_struct;
+    }
+
+    return ll_ret;
 }
 
 void acorn::IRGenerator::gen_nop() {
