@@ -894,6 +894,14 @@ void acorn::Sema::check_variable(Var* var) {
 
     check_modifier_incompatibilities(var);
 
+    // This must go up top before returning due to any errors because otherwise
+    // future variables will not be able to find the reference of the variable
+    // leading to bad error messages.
+    bool needs_added_to_local_scope = !var->is_global && !var->is_param() && !var->is_field();
+    if (needs_added_to_local_scope) {
+        add_variable_to_local_scope(var);
+    }
+
     // Reporting errors if the variable is local to a function and has
     // modifiers.
     if (!var->is_global && !var->is_field() && var->modifiers) {
@@ -1035,10 +1043,12 @@ void acorn::Sema::check_variable(Var* var) {
                        var->type->is_const() &&
                        var->assignment && var->assignment->is_foldable;
 
-    // This must go after checking is the variable is foldable because if
-    // it is not then it will not request allocation.
-    if (cur_scope && !var->is_param() && !var->is_field()) {
-        add_variable_to_local_scope(var);
+    // Make sure to keep this below the code that checks if the variable is
+    // foldable!
+    if (needs_added_to_local_scope) {
+        if (!var->is_foldable) {
+            cur_func->vars_to_alloc.push_back(var);
+        }
     }
 
     if (var->type->is(context.void_type)) {
@@ -1343,6 +1353,9 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
 
     loop->var->is_foldable = false;
     add_variable_to_local_scope(loop->var);
+    if (!loop->var->is_foldable) {
+        cur_func->vars_to_alloc.push_back(loop->var);
+    }
 
     check_node(loop->container);
 
@@ -1705,9 +1718,6 @@ void acorn::Sema::add_variable_to_local_scope(Var* var) {
                 .end_error(ErrCode::SemaDuplicateLocVariableDecl);
     } else {
         cur_scope->variables.push_back(var);
-        if (!var->is_foldable) {
-            cur_func->vars_to_alloc.push_back(var);
-        }
     }
 }
 
