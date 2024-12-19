@@ -13,11 +13,7 @@ acorn::Logger& acorn::Decl::get_logger() const { return file->logger; }
 acorn::Module& acorn::Decl::get_module() const { return file->modl; }
 
 void acorn::Decl::show_location_msg(Logger& logger) const {
-    auto [line_number, column_number] =
-        file->line_table.get_line_and_column_number(loc.ptr);
-    
-    logger.fmt_print("%s%s%s:", Color::BrightCyan, file->path, Color::BrightWhite);
-    logger.fmt_print("%s%s%s", Color::BrightYellow, line_number, Color::BrightWhite);
+    print_source_location(logger, file, loc);
 }
 
 const char* acorn::Modifier::to_string(uint32_t modifier) {

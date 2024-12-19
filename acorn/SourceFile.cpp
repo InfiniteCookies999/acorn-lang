@@ -2,9 +2,10 @@
 
 #include "Module.h"
 
-acorn::SourceFile::SourceFile(Context& context, std::wstring path, Buffer buffer, Module& modl)
+acorn::SourceFile::SourceFile(Context& context, std::wstring path, std::wstring full_path, Buffer buffer, Module& modl)
     : logger(context, *this),
       path(std::move(path)),
+      full_path(std::move(full_path)),
       line_table(buffer.content, buffer.length),
       buffer(buffer),
       modl(modl),
@@ -44,7 +45,8 @@ bool acorn::SourceFile::has_public_access(Decl* decl) const {
 }
 
 acorn::ImportStmt* acorn::SourceFile::try_add_import(ImportStmt* importn) {
-    auto [itr, success] = imports.try_emplace(importn->key.back(), importn);
+    auto final_key_part = importn->key.back();
+    auto [itr, success] = imports.try_emplace(final_key_part.name, importn);
     return success ? nullptr : itr->second;
 }
 

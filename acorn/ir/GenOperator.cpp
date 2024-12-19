@@ -2,6 +2,7 @@
 
 #include "../Logger.h"
 #include "../Util.h"
+#include "DebugGen.h"
 
 llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     Expr* lhs = bin_op->lhs, *rhs = bin_op->rhs;
@@ -13,13 +14,14 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
                                               builder.CreateLoad(gen_type(lhs->type), ll_address),
                                               gen_rvalue(rhs));
         builder.CreateStore(ll_value, ll_address);
+        emit_dbg(di_emitter->emit_location(builder, bin_op->loc));
         return nullptr;
     };
 
     switch (bin_op->op) {
     case '=': {
         auto ll_address = gen_node(lhs);
-        gen_assignment(ll_address, lhs->type, rhs, lhs);
+        gen_assignment(ll_address, lhs->type, rhs, lhs, true);
         return ll_address;
     }
     case Token::AddEq:   return apply_op_eq('+');
@@ -163,7 +165,7 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
 
             ll_off = builder.CreateIntCast(ll_off, gen_ptrsize_int_type(), true);
             if (mem_type->is_pointer()) {
-                auto elm_type = as<PointerType*>(mem_type)->get_elm_type();
+                auto elm_type = static_cast<PointerType*>(mem_type)->get_elm_type();
                 return builder.CreateInBoundsGEP(gen_type(elm_type), ll_mem, ll_off, "ptr.add");
             }
 
@@ -179,7 +181,7 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
     case '-': {
         if (bin_op->rhs->type->is_pointer()) {
             // Subtracting a pointer from a pointer
-            auto ptr_type = as<PointerType*>(bin_op->rhs->type);
+            auto ptr_type = static_cast<PointerType*>(bin_op->rhs->type);
             auto ll_elm_type = gen_type(ptr_type->get_elm_type());
             return builder.CreatePtrDiff(ll_elm_type, ll_lhs, ll_rhs, "ptrs.sub");
         } else if (bin_op->type->is_pointer()) {
@@ -195,7 +197,7 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
             auto ll_neg  = builder.CreateSub(ll_zero, ll_off, "neg");
             ll_neg = builder.CreateIntCast(ll_neg, gen_ptrsize_int_type(), true);
             if (mem_type->is_pointer()) {
-                auto elm_type = as<PointerType*>(mem_type)->get_elm_type();
+                auto elm_type = static_cast<PointerType*>(mem_type)->get_elm_type();
                 return builder.CreateInBoundsGEP(gen_type(elm_type), ll_mem, ll_neg, "ptr.sub");
             }
 
@@ -288,7 +290,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         if (add) {
             if (type->is_pointer()) {
                 // Pointer arithmetic
-                auto elm_type = as<PointerType*>(type)->get_elm_type();
+                auto elm_type = static_cast<PointerType*>(type)->get_elm_type();
                 ll_value = builder.CreateInBoundsGEP(gen_type(elm_type), ll_value, gen_isize(1), "ptr.inc");
             } else {
                 if (type->is_signed())
@@ -298,7 +300,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         } else {
             if (type->is_pointer()) {
                 // Pointer arithmetic
-                auto elm_type = as<PointerType*>(type)->get_elm_type();
+                auto elm_type = static_cast<PointerType*>(type)->get_elm_type();
                 ll_value = builder.CreateInBoundsGEP(gen_type(elm_type), ll_value, gen_isize(-1), "ptr.dec");
             } else {
                 if (type->is_signed())
@@ -307,6 +309,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
             }
         }
         builder.CreateStore(ll_value, ll_addr);
+        emit_dbg(di_emitter->emit_location(builder, unary_op->loc));
         return is_post ? ll_org : ll_value;
     };
 
@@ -352,7 +355,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
             // the address of the pointer).
             return ll_ptr;
         } else if (expr->is(NodeKind::UnaryOp)) {
-            auto unary_op = as<UnaryOp*>(expr);
+            auto unary_op = static_cast<UnaryOp*>(expr);
             auto op = unary_op->op;
             if (op == Token::AddAdd || op == Token::SubSub ||
                 op == Token::PostAddAdd || op == Token::PostSubSub) {

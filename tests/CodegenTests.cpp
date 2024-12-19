@@ -1316,5 +1316,49 @@ void test_codegen() {
                 expect(result, std::identity()).to_be("called");
             });
         });
+        section("auto type", [&] {
+            test("Auto type assign numbers", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"auto_type/auto_type_test1.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("@@");
+            });
+            test("Auto type assign function reference", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"auto_type/auto_type_test2.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("from foo");
+            });
+            test("Auto type assign for field", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"auto_type/auto_type_test3.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("A");
+            });
+            test("Auto ptr type assign variable address", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"auto_type/auto_type_test4.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("@");
+            });
+            test("Auto variable for iterator loop", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"auto_type/auto_type_test5.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("ABCDE");
+            });
+            test("Auto ptr variable for iterator loop", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"auto_type/auto_type_test6.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("AAAAA");
+            });
+            test("Const auto assign value", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"auto_type/auto_type_test7.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("@");
+            });
+        });
     });
 }

@@ -190,6 +190,9 @@ case c1:                                        \
         } else if (*ptr == '.' && *(ptr + 1) == '<') {
             ptr += 2;
             return new_token(ptr - 3, 3, Token::RangeLt);
+        } else if (*ptr == '.') {
+            ptr += 1;
+            return new_token(ptr - 2, 2, Token::DotDot);
         }
         return new_token(ptr - 1, 1, '.');
     }

@@ -18,6 +18,10 @@ Common options (for more options use -more-options):
     -o <name>
         Sets the name of the executable.
 
+    -d, -debug, -debug-info
+        Emits debug information so the code may be stepped
+        through by a debugger.
+
     -more-options
         Show more options that can be ran with acorn.
 
@@ -55,10 +59,13 @@ Options:
     -r, -rel, -release
         Compile in release mode.
 
+    -stand-alone
+        Compile the project without the standard library.
+
     -show-times
         Display how long different stages took.
 
-    -show-llvm-ir
+    -show-llvm-ir, -show-llvm
         Displays the LLVM IR generated from source code.
         !! Warning !! This can generate a huge amount of
         output depending on what is compiled.
@@ -98,12 +105,14 @@ int main(int argc, char* argv[]) {
     
     processor.add_flag("release", { "r", "rel" }, &acorn::Compiler::set_released_build);
     processor.add_flag("show-times", &acorn::Compiler::set_should_show_times);
-    processor.add_flag("show-llvm-ir", &acorn::Compiler::set_should_show_llvm_ir);
+    processor.add_flag("show-llvm-ir", { "show-llvm" }, &acorn::Compiler::set_should_show_llvm_ir);
     processor.add_flag("show-error-codes", &acorn::Compiler::set_should_show_error_codes);
     processor.add_flag("nshow-wrote-to-msg", &acorn::Compiler::set_dont_show_wrote_to_msg);
     processor.add_flag("run", &acorn::Compiler::set_run_program);
     processor.add_flag("run-seperate", { "run-seperate-window"}, &acorn::Compiler::set_run_program_seperate_window);
     processor.add_flag("show-linker-command", { "show-linker-cmd" }, &acorn::Compiler::set_show_linker_command);
+    processor.add_flag("stand-alone", &acorn::Compiler::set_stand_alone);
+    processor.add_flag("debug-info", { "debug", "d" }, &acorn::Compiler::set_should_emit_debug_info);
 
     processor.add_flag("output-name", { "out-name", "o" }, [](CommandConsumer& consumer) {
         consumer.next_eql_pair(&acorn::Compiler::set_output_name, "Missing output program name");

@@ -4,9 +4,13 @@
 #include <unordered_map>
 #include <string>
 
+#include "Source.h"
+
 namespace acorn {
 
     struct Number;
+    class SourceFile;
+    class Logger;
 
     enum class ErrCode {
 #define X(name, val) name = val,
@@ -25,6 +29,8 @@ namespace acorn {
     }
 
     std::string get_error_msg_for_value_not_fit_type(Number* number);
+
+    void print_source_location(Logger& logger, SourceFile* file, SourceLoc location);
 
 }
 

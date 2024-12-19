@@ -23,6 +23,7 @@ namespace llvm {
 namespace acorn {
 
     class Type;
+    class DebugInfoEmitter;
 
     class Context {
     public:
@@ -80,6 +81,9 @@ namespace acorn {
         Type* char_range_type;
         Type* char16_range_type;
         Type* char32_range_type;
+        Type* auto_type;
+        Type* auto_ptr_type;
+        Type* const_auto_type;
 
         // Used to identifier the entry point of
         // the program.
@@ -87,6 +91,7 @@ namespace acorn {
         Identifier length_identifier;
         Identifier access_identifier;
         Identifier namespace_identifier;
+        Identifier module_identifier;
 
         struct LLVMIntrinsicDefinition {
             Identifier               name;
@@ -176,6 +181,14 @@ namespace acorn {
             show_error_codes = true;
         }
 
+        bool should_emit_debug_info() const {
+            return emit_debug_info;
+        }
+
+        void set_should_emit_debug_info() {
+            emit_debug_info = true;
+        }
+
         // Returns true if it exceeds the maximum allowed number
         // of errors.
         bool inc_error_count();
@@ -191,10 +204,11 @@ namespace acorn {
         llvm::SmallVector<Func*> canidate_main_funcs;
         Func* main_func = nullptr;
 
-        std::atomic<size_t> error_count                    = 0;
-        size_t              max_error_count                = 30;
+        std::atomic<size_t> error_count        = 0;
+        size_t              max_error_count    = 30;
         size_t              max_call_err_funcs = 3;
-        bool                show_error_codes               = false;
+        bool                show_error_codes   = false;
+        bool                emit_debug_info    = false;
 
         llvm::LLVMContext& ll_context;
         llvm::Module&      ll_module;

@@ -211,6 +211,9 @@ namespace acorn {
         uint32_t field_idx = NotField;
         bool     is_global = false;
 
+        // This is the type that is parsed and does not change
+        // during semantic analysis.
+        Type* parsed_type;
         Type* type;
 
         Expr* assignment      = nullptr;
@@ -282,11 +285,18 @@ namespace acorn {
 
         SourceFile* file;
 
-        bool is_static = false;
-        bool within_same_modl = false;
+        bool is_static          = false;
+        bool within_same_modl   = false;
+        bool within_parent_modl = false;
+
+        struct KeyPart {
+            Identifier name;
+            SourceLoc  error_loc;
+        };
+
         // Last element is the thing imported. All other elements
         // are the path to that imported value.
-        llvm::SmallVector<Identifier, 4> key;
+        llvm::SmallVector<KeyPart, 4> key;
 
         // Discriminated union.
         enum {
@@ -387,6 +397,8 @@ namespace acorn {
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {
         ScopeStmt() : Node(NodeKind::ScopeStmt) {
         }
+
+        SourceLoc end_loc;
     };
     
 

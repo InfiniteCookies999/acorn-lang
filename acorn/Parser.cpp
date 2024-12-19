@@ -31,7 +31,8 @@ case Token::KwChar16:  \
 case Token::KwChar32:  \
 case Token::KwUSize:   \
 case Token::KwISize:   \
-case Token::KwBool
+case Token::KwBool:    \
+case Token::KwAuto
 
 #define ModifierTokens   \
      Token::KwNative:    \
@@ -92,7 +93,7 @@ void acorn::Parser::add_global_node(Node* node) {
 
     if (node->is(NodeKind::Func)) {
             
-        auto func = as<Func*>(node);
+        auto func = static_cast<Func*>(node);
         if (func->name != Identifier::Invalid) {
             context.add_unchecked_decl(func);
             file->add_function(func);
@@ -102,16 +103,16 @@ void acorn::Parser::add_global_node(Node* node) {
             context.add_canidate_main_function(func);
         }
     } else if (node->is(NodeKind::VarList)) {
-        auto vlist = as<VarList*>(node);
+        auto vlist = static_cast<VarList*>(node);
         for (auto var : vlist->list) {
             process_variable(var);
         }
         vlist->list.clear();
     } else if (node->is(NodeKind::Var)) {
-        process_variable(as<Var*>(node));
+        process_variable(static_cast<Var*>(node));
     } else if (node->is(NodeKind::Struct)) {
 
-        auto structn = as<Struct*>(node);
+        auto structn = static_cast<Struct*>(node);
         if (structn->name != Identifier::Invalid) {
             context.add_unchecked_decl(structn);
             file->add_struct(structn);
@@ -143,6 +144,9 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
     if (cur_token.is('.')) {
         next_token();
         importn->within_same_modl = true;
+    } else if (cur_token.is(Token::DotDot)) {
+        next_token();
+        importn->within_parent_modl = true;
     }
 
     Token start_token = cur_token;
@@ -159,7 +163,7 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
         Token ident_token = cur_token;
         next_token(); // Consuming the identifier.
 
-        importn->key.push_back(Identifier::get(ident_token.text()));
+        importn->key.push_back({ Identifier::get(ident_token.text()), ident_token.loc });
 
         more_to_import = cur_token.is('.');
         if (more_to_import) {
@@ -245,7 +249,7 @@ acorn::Node* acorn::Parser::parse_statement() {
 
         [[fallthrough]];
     case TypeTokens: {
-        return parse_decl(modifiers, parse_type());
+        return parse_decl(modifiers, parse_type_for_decl());
     }
     case '~': {
         auto peek0 = peek_token(0);
@@ -476,6 +480,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
             add_node_to_scope(func->scope, parse_statement());
         }
         expect('}', "for function body");
+        func->scope->end_loc = prev_token.loc;
     } else if (func->has_modifier(Modifier::Native)) {
         expect(';');
     }
@@ -486,7 +491,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
 }
 
 acorn::Var* acorn::Parser::parse_variable() {
-    return parse_variable(0, parse_type());
+    return parse_variable(0, parse_type_for_decl());
 }
 
 acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type) {
@@ -496,7 +501,7 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type) {
 acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identifier name) {
     
     Var* var = new_declaration<Var, true>(modifiers, name, prev_token);
-    var->type = type;
+    var->parsed_type = type;
     
     if (cur_token.is('=')) {
         next_token(); // Consume '=' token.
@@ -541,6 +546,19 @@ acorn::Struct* acorn::Parser::parse_struct() {
 
 acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) {
 
+    if (name != Identifier::Invalid) {
+        if (auto existing_import = file->find_import(name)) {
+            error(prev_token, "Name of struct '%s' conflicts with import", name)
+                .add_line([this, existing_import](auto& logger) {
+                    auto [line_number, _] =
+                        file->line_table.get_line_and_column_number(existing_import->loc.ptr);
+
+                    logger.fmt_print("import defined at line: %s%s%s", Color::BrightYellow, line_number, Color::BrightWhite);
+                 })
+                .end_error(ErrCode::ParseDataTypeNameConflictWithImport);
+        }
+    }
+
     auto structn = new_declaration<Struct, false>(modifiers, name, prev_token);
     structn->nspace = allocator.alloc_type<Namespace>();
     new (structn->nspace) Namespace(modl, ScopeLocation::Struct);
@@ -573,15 +591,15 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
     };
     
     if (node->is(NodeKind::Var)) {
-        process_var(as<Var*>(node));
+        process_var(static_cast<Var*>(node));
     } else if (node->is(NodeKind::VarList)) {
-        auto vlist = as<VarList*>(node);
+        auto vlist = static_cast<VarList*>(node);
         for (auto var : vlist->list) {
             process_var(var);
         }
         vlist->list.clear();
     } else if (node->is(NodeKind::Func)) {
-        auto func = as<Func*>(node);
+        auto func = static_cast<Func*>(node);
         if (func->name != Identifier::Invalid) {
             if (func->is_destructor) {
                 structn->destructor = func;
@@ -759,7 +777,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
     auto add_statement = [this](Node* stmt) finline {
         if (cur_func) {
             if (stmt->is(NodeKind::VarList)) {
-                auto vlist = as<VarList*>(stmt);
+                auto vlist = static_cast<VarList*>(stmt);
                 for (auto var : vlist->list) {
                     cur_func->scope->push_back(var);
                 }
@@ -801,7 +819,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
                     } else if (node && node->is(NodeKind::VarList)) {
                         // We still have to clear the variable list because we called
                          // parse_statement.
-                        auto vlist = as<VarList*>(node);
+                        auto vlist = static_cast<VarList*>(node);
                         vlist->list.clear();
                     }
                 }
@@ -825,7 +843,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
                 } else if (node && node->is(NodeKind::VarList)) {
                     // We still have to clear the variable list because we called
                     // parse_statement.
-                    auto vlist = as<VarList*>(node);
+                    auto vlist = static_cast<VarList*>(node);
                     vlist->list.clear();
                 }
             }
@@ -862,11 +880,11 @@ acorn::Node* acorn::Parser::parse_loop() {
     case Token::Identifier: {
         Node* expr = parse_ident_decl_or_expr(true);
         if (expr->is(NodeKind::Var)) {
-            Var* var = as<Var*>(expr);
+            Var* var = static_cast<Var*>(expr);
             return loop_with_var(var);
         } else {
             auto loop = new_node<PredicateLoopStmt>(loop_token);
-            loop->cond = as<Expr*>(expr);
+            loop->cond = static_cast<Expr*>(expr);
             loop->scope = parse_scope();
             return loop;
         }
@@ -992,10 +1010,12 @@ acorn::SwitchStmt* acorn::Parser::parse_switch() {
 
         expect(':');
 
-        ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
+        // Use the previous token so it associates the scope start with the ':' token.
+        ScopeStmt* scope = new_node<ScopeStmt>(prev_token);
         while (cur_token.is_not('}') && cur_token.is_not(Token::KwCase) && cur_token.is_not(Token::EOB)) {
             add_node_to_scope(scope, parse_statement());
         }
+        scope->end_loc = prev_token.loc;
 
         if (cond) {
             switchn->cases.emplace_back(cond, scope);
@@ -1028,6 +1048,8 @@ acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
         // Single statement scope.
         add_node_to_scope(scope, parse_statement());
     }
+
+    scope->end_loc = prev_token.loc;
     return scope;
 }
 
@@ -1035,7 +1057,7 @@ void acorn::Parser::add_node_to_scope(ScopeStmt* scope, Node* node) {
     if (!node) return;
         
     if (node->is(NodeKind::VarList)) {
-        auto vlist = as<VarList*>(node);
+        auto vlist = static_cast<VarList*>(node);
         for (auto var : vlist->list) {
             scope->push_back(var);
         }
@@ -1127,9 +1149,38 @@ void acorn::Parser::parse_comptime_file_info() {
 // Expression parsing
 //--------------------------------------
 
+acorn::Type* acorn::Parser::parse_type_for_decl() {
+    if (cur_token.is(Token::KwConst)) {
+        if (peek_token(0).is(Token::Identifier)) {
+            switch (peek_token(1).kind) {
+            case Token::Identifier:
+            case '*':
+            case '!':
+            case '[':
+                return parse_type();
+            default:
+                next_token();
+                return context.const_auto_type;
+            }
+        }
+
+        return parse_type();
+    } else {
+        return parse_type();
+    }
+}
+
 acorn::Type* acorn::Parser::parse_type() {
     Token first_token = cur_token;
     auto type = parse_base_type();
+
+    if (type == context.auto_type) {
+        if (cur_token.is('*')) {
+            next_token();
+            return context.auto_ptr_type;
+        }
+        return type;
+    }
 
     while (cur_token.is('*')) {
         type = type_table.get_ptr_type(type);
@@ -1198,6 +1249,15 @@ return t; }
     case Token::KwUSize:   ty(context.usize_type);
     case Token::KwFloat32: ty(context.float32_type);
     case Token::KwFloat64: ty(context.float64_type);
+    case Token::KwAuto: {
+        if (is_const) {
+            error(prev_token, "Auto cannot be const")
+                .add_line("If you want a constant auto type just 'const'")
+                .end_error(ErrCode::ParseAutoCannotBeConst);
+        }
+        next_token();
+        return context.auto_type;
+    }
     case Token::Identifier: {
         Token name_token = cur_token;
         next_token();
@@ -1258,7 +1318,7 @@ acorn::Type* acorn::Parser::construct_array_type(Type* base_type,
         bool resolvable = length_expr->is(NodeKind::Number);
         Number* number;
         if (resolvable) {
-            number = as<Number*>(length_expr);
+            number = static_cast<Number*>(length_expr);
             resolvable &= number->type->is_integer() && number->type->get_number_of_bits() <= 32 &&
                           number->value_s32 > 0;
         }
@@ -1452,7 +1512,7 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         lhs->uses_expanded_loc = true;
         lhs->expanded_loc = PointSourceLoc{
             s,
-            as<uint16_t>(e - s),
+            static_cast<uint16_t>(e - s),
             op.loc.ptr,
             op.loc.length
         };
@@ -1576,7 +1636,7 @@ acorn::Expr* acorn::Parser::fold_float(Token op, Number* lhs, Number* rhs, Type*
         lhs->uses_expanded_loc = true;
         lhs->expanded_loc = PointSourceLoc{
             s,
-            as<uint16_t>(e - s),
+            static_cast<uint16_t>(e - s),
             op.loc.ptr,
             op.loc.length
         };
@@ -1642,8 +1702,8 @@ acorn::Expr* acorn::Parser::report_underflow(Token op, Expr* lhs, Expr* rhs, Typ
 acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
 
     auto fold_int_by_side = [op, this, lhs, rhs](Expr* side) -> Expr* finline {
-        Number* lnum = as<Number*>(lhs);
-        Number* rnum = as<Number*>(rhs);
+        Number* lnum = static_cast<Number*>(lhs);
+        Number* rnum = static_cast<Number*>(rhs);
         Type* to_type = side->type;
         switch (to_type->get_kind()) {
         case TypeKind::UInt8: case TypeKind::Char:
@@ -1687,8 +1747,8 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
             }
         }
     } else if (lhs->type->is_float()) {
-        Number* lnum = as<Number*>(lhs);
-        Number* rnum = as<Number*>(rhs);
+        Number* lnum = static_cast<Number*>(lhs);
+        Number* rnum = static_cast<Number*>(rhs);
         if (lhs->type == rhs->type) {
             if (lhs->type == context.float32_type) {
                 return fold_float<float>(op, lnum, rnum, lhs->type, lnum->value_f32, rnum->value_f32);
@@ -1708,8 +1768,8 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
             return new_binary_op(op, lhs, rhs);
         }
     } else if (rhs->type->is_float()) {
-        Number* lnum = as<Number*>(lhs);
-        Number* rnum = as<Number*>(rhs);
+        Number* lnum = static_cast<Number*>(lhs);
+        Number* rnum = static_cast<Number*>(rhs);
         if (lhs->type == rhs->type) {
             if (lhs->type == context.float32_type) {
                 return fold_float<float>(op, lnum, rnum, lhs->type, lnum->value_f32, rnum->value_f32);
@@ -1881,7 +1941,7 @@ acorn::Expr* acorn::Parser::parse_term() {
         if (unary_token.kind == '+' && expr->is(NodeKind::Number)) {
             return expr; // + has no effect on value.
         } else if (unary_token.kind == '-' && expr->is(NodeKind::Number)) {
-            Number* num = as<Number*>(expr);
+            Number* num = static_cast<Number*>(expr);
 
             switch (num->type->get_kind()) {
             case TypeKind::UInt64: num->value_u64 = -num->value_u64; break;
@@ -1903,7 +1963,7 @@ acorn::Expr* acorn::Parser::parse_term() {
             return expr;
         } else if (unary_token.kind == '~' && expr->is(NodeKind::Number) &&
                    expr->type->is_integer()) {
-            Number* num = as<Number*>(expr);
+            Number* num = static_cast<Number*>(expr);
             
             switch (num->type->get_kind()) {
             case TypeKind::UInt64: num->value_u64 = ~num->value_u64; break;
@@ -2362,7 +2422,7 @@ acorn::Expr* acorn::Parser::parse_array() {
                     
                         Token number_token = cur_token;
                     
-                        auto number = as<Number*>(parse_expr());
+                        auto number = static_cast<Number*>(parse_expr());
 
                         next_token(); // Consume ]
                         next_token(); // Consume =

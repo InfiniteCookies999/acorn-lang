@@ -21,11 +21,6 @@
 
 namespace acorn {
 
-    template<typename T, typename V>
-    T as(V&& v) {
-        return static_cast<T>(v);
-    }
-
     template<typename P>
     bool read_entire_file(const P& path, char*& buffer, size_t& length, PageAllocator& allocator) {
         std::ifstream stream(path, std::ios::binary);
@@ -38,8 +33,8 @@ namespace acorn {
         std::streamsize tlength = stream.tellg();
         stream.seekg(0, std::ios::beg);
 
-        length = as<size_t>(tlength);
-        buffer = as<char*>(allocator.allocate(length + 1));
+        length = static_cast<size_t>(tlength);
+        buffer = static_cast<char*>(allocator.allocate(length + 1));
 
         stream.read(buffer, length);
         buffer[length] = 0; // Null terminate.

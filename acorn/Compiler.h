@@ -21,6 +21,8 @@ namespace llvm {
 
 namespace acorn {
     
+    class DebugInfoEmitter;
+
     struct Source {
         std::wstring    path;
         llvm::StringRef mod_name;
@@ -47,6 +49,7 @@ namespace acorn {
         void set_show_linker_command()           { show_linker_command = true;              }
         void set_max_error_count(int max_errors) { context.set_max_error_count(max_errors); }
         void set_max_call_err_funcs(int max_errors) { context.set_max_call_err_funcs(max_errors); }
+        void set_should_emit_debug_info()        { context.set_should_emit_debug_info();    }
 
         void set_output_name(std::wstring output_name);
         void set_output_directory(std::wstring output_directory);

@@ -18,23 +18,23 @@ if (e1 > e) { e = e1; }           \
 
         switch (node->kind) {
         case NodeKind::BinOp: {
-            BinOp* bin_op = as<BinOp*>(node);
+            BinOp* bin_op = static_cast<BinOp*>(node);
             get(bin_op->lhs);
             get(bin_op->rhs);
             break;
         }
         case NodeKind::UnaryOp: {
-            UnaryOp* unary_op = as<UnaryOp*>(node);
+            UnaryOp* unary_op = static_cast<UnaryOp*>(node);
             get(unary_op->expr);
             break;
         }
         case NodeKind::Var: {
-            Var* var = as<Var*>(node);
+            Var* var = static_cast<Var*>(node);
             get(var->assignment);
             break;
         }
         case NodeKind::FuncCall: {
-            FuncCall* call = as<FuncCall*>(node);
+            FuncCall* call = static_cast<FuncCall*>(node);
             get(call->site);
             if (!call->args.empty()) {
                 auto loc = expand(call->args.back());
@@ -48,17 +48,17 @@ if (e1 > e) { e = e1; }           \
         }
         case NodeKind::Cast: {
             // Include the closing )
-            auto cast = as<Cast*>(node);
+            auto cast = static_cast<Cast*>(node);
             get(cast->value);
             break;
         }
         case NodeKind::NamedValue: {
-            NamedValue* named_value = as<NamedValue*>(node);
+            NamedValue* named_value = static_cast<NamedValue*>(node);
             get(named_value->assignment);
             break;
         }
         case NodeKind::Array: {
-            Array* arr = as<Array*>(node);
+            Array* arr = static_cast<Array*>(node);
             if (!arr->elms.empty()) {
                 get(arr->elms.back());
             }
@@ -67,7 +67,7 @@ if (e1 > e) { e = e1; }           \
             break;
         }
         case NodeKind::MemoryAccess: {
-            MemoryAccess* mem_access = as<MemoryAccess*>(node);
+            MemoryAccess* mem_access = static_cast<MemoryAccess*>(node);
             get(mem_access->site);
             get(mem_access->index);
             // Include the closing ]
@@ -75,7 +75,7 @@ if (e1 > e) { e = e1; }           \
             break;
         }
         case NodeKind::DotOperator: {
-            DotOperator* dot = as<DotOperator*>(node);
+            DotOperator* dot = static_cast<DotOperator*>(node);
             e += dot->ident.reduce().size();
             break;
         }
@@ -143,7 +143,7 @@ acorn::PointSourceLoc acorn::expand(Node* node) {
     
     return PointSourceLoc{
         s,
-        as<uint16_t>(e - s),
+        static_cast<uint16_t>(e - s),
         node->uses_expanded_loc ? node->expanded_loc.ptr    : node->loc.ptr,
         node->uses_expanded_loc ? node->expanded_loc.length : node->loc.length
     };

@@ -108,6 +108,8 @@ namespace acorn {
         // Use this version only if the caller sets up and tears down its own sem_scope.
         void check_scope(ScopeStmt* scope, SemScope* sem_scope);
 
+        void add_variable_to_local_scope(Var* var);
+
         // Expression checking
         //--------------------------------------        
 
@@ -169,6 +171,8 @@ namespace acorn {
         bool has_valid_constness(Type* to_type, Type* from_type) const;
         void check_modifiable(Expr* expr);
         bool is_lvalue(Expr* expr);
+        bool is_incomplete_type(Type* type);
+        bool is_incomplete_statement(Node* stmt);
         void check_division_by_zero(PointSourceLoc error_loc, Expr* expr);
         void create_cast(Expr* expr, Type* to_type);
         bool check_condition(Expr* cond);
@@ -197,7 +201,6 @@ namespace acorn {
         [[nodiscard]] Logger& error(Node* node, const char* fmt, TArgs... args) {
             return error(node->loc, fmt, std::forward<TArgs>(args)...);
         }
-
     };
 }
 

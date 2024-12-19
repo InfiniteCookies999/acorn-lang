@@ -41,6 +41,7 @@ namespace acorn {
             KwChar16,
             KwChar32,
             KwConst,
+            KwAuto,
             KwAs,
             KwIf,
             KwElIf,
@@ -109,6 +110,7 @@ namespace acorn {
             PostSubSub,
             RangeEq,
             RangeLt,
+            DotDot,
 
             IntLiteral,
             HexLiteral,

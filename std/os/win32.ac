@@ -5,60 +5,60 @@
 // ------------------------------------------------
 // Win32: winnt.h
 
-const uint32 GENERIC_READ    = 0x80000000'u32;
-const uint32 GENERIC_WRITE   = 0x40000000'u32;
-const uint32 GENERIC_EXECUTE = 0x20000000'u32;
-const uint32 GENERIC_ALL     = 0x10000000'u32;
+const GENERIC_READ    = 0x80000000'u32;
+const GENERIC_WRITE   = 0x40000000'u32;
+const GENERIC_EXECUTE = 0x20000000'u32;
+const GENERIC_ALL     = 0x10000000'u32;
 
-const uint32 FILE_APPEND_DATA = 0x0004'u32; 
+const FILE_APPEND_DATA = 0x0004'u32; 
 
-const uint32 FILE_SHARE_READ                      = 0x00000001'u32;
-const uint32 FILE_SHARE_WRITE                     = 0x00000002'u32;
-const uint32 FILE_SHARE_DELETE                    = 0x00000004'u32;
-const uint32 FILE_ATTRIBUTE_READONLY              = 0x00000001'u32;
-const uint32 FILE_ATTRIBUTE_HIDDEN                = 0x00000002'u32;
-const uint32 FILE_ATTRIBUTE_SYSTEM                = 0x00000004'u32;
-const uint32 FILE_ATTRIBUTE_DIRECTORY             = 0x00000010'u32;
-const uint32 FILE_ATTRIBUTE_ARCHIVE               = 0x00000020'u32;
-const uint32 FILE_ATTRIBUTE_DEVICE                = 0x00000040'u32;
-const uint32 FILE_ATTRIBUTE_NORMAL                = 0x00000080'u32;
-const uint32 FILE_ATTRIBUTE_TEMPORARY             = 0x00000100'u32;
-const uint32 FILE_ATTRIBUTE_SPARSE_FILE           = 0x00000200'u32;
-const uint32 FILE_ATTRIBUTE_REPARSE_POINT         = 0x00000400'u32;
-const uint32 FILE_ATTRIBUTE_COMPRESSED            = 0x00000800'u32;
-const uint32 FILE_ATTRIBUTE_OFFLINE               = 0x00001000'u32;
-const uint32 FILE_ATTRIBUTE_NOT_CONTENT_INDEXED   = 0x00002000'u32;
-const uint32 FILE_ATTRIBUTE_ENCRYPTED             = 0x00004000'u32;
-const uint32 FILE_ATTRIBUTE_INTEGRITY_STREAM      = 0x00008000'u32;
-const uint32 FILE_ATTRIBUTE_VIRTUAL               = 0x00010000'u32;
-const uint32 FILE_ATTRIBUTE_NO_SCRUB_DATA         = 0x00020000'u32;
-const uint32 FILE_ATTRIBUTE_EA                    = 0x00040000'u32;
-const uint32 FILE_ATTRIBUTE_PINNED                = 0x00080000'u32;
-const uint32 FILE_ATTRIBUTE_UNPINNED              = 0x00100000'u32;
-const uint32 FILE_ATTRIBUTE_RECALL_ON_OPEN        = 0x00040000'u32;
-const uint32 FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x00400000'u32;
+const FILE_SHARE_READ                      = 0x00000001'u32;
+const FILE_SHARE_WRITE                     = 0x00000002'u32;
+const FILE_SHARE_DELETE                    = 0x00000004'u32;
+const FILE_ATTRIBUTE_READONLY              = 0x00000001'u32;
+const FILE_ATTRIBUTE_HIDDEN                = 0x00000002'u32;
+const FILE_ATTRIBUTE_SYSTEM                = 0x00000004'u32;
+const FILE_ATTRIBUTE_DIRECTORY             = 0x00000010'u32;
+const FILE_ATTRIBUTE_ARCHIVE               = 0x00000020'u32;
+const FILE_ATTRIBUTE_DEVICE                = 0x00000040'u32;
+const FILE_ATTRIBUTE_NORMAL                = 0x00000080'u32;
+const FILE_ATTRIBUTE_TEMPORARY             = 0x00000100'u32;
+const FILE_ATTRIBUTE_SPARSE_FILE           = 0x00000200'u32;
+const FILE_ATTRIBUTE_REPARSE_POINT         = 0x00000400'u32;
+const FILE_ATTRIBUTE_COMPRESSED            = 0x00000800'u32;
+const FILE_ATTRIBUTE_OFFLINE               = 0x00001000'u32;
+const FILE_ATTRIBUTE_NOT_CONTENT_INDEXED   = 0x00002000'u32;
+const FILE_ATTRIBUTE_ENCRYPTED             = 0x00004000'u32;
+const FILE_ATTRIBUTE_INTEGRITY_STREAM      = 0x00008000'u32;
+const FILE_ATTRIBUTE_VIRTUAL               = 0x00010000'u32;
+const FILE_ATTRIBUTE_NO_SCRUB_DATA         = 0x00020000'u32;
+const FILE_ATTRIBUTE_EA                    = 0x00040000'u32;
+const FILE_ATTRIBUTE_PINNED                = 0x00080000'u32;
+const FILE_ATTRIBUTE_UNPINNED              = 0x00100000'u32;
+const FILE_ATTRIBUTE_RECALL_ON_OPEN        = 0x00040000'u32;
+const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x00400000'u32;
 
 // ------------------------------------------------
 // Win32: processenv.h
 
-const uint32 STD_INPUT_HANDLE  = -10'u32;
-const uint32 STD_OUTPUT_HANDLE = -11'u32;
-const uint32 STD_ERROR_HANDLE  = -12'u32;
+const STD_INPUT_HANDLE  = -10'u32;
+const STD_OUTPUT_HANDLE = -11'u32;
+const STD_ERROR_HANDLE  = -12'u32;
 
 native dllimport void* GetStdHandle(uint32 nStdHandle);
 
 // ------------------------------------------------
 // Win32: fileapi.h
 
-const uint32 CREATE_NEW        = 1'u32;
-const uint32 CREATE_ALWAYS     = 2'u32;
-const uint32 OPEN_EXISTING     = 3'u32;
-const uint32 OPEN_ALWAYS       = 4'u32;
-const uint32 TRUNCATE_EXISTING = 5'u32;
+const CREATE_NEW        = 1'u32;
+const CREATE_ALWAYS     = 2'u32;
+const OPEN_EXISTING     = 3'u32;
+const OPEN_ALWAYS       = 4'u32;
+const TRUNCATE_EXISTING = 5'u32;
 
-const uint32 INVALID_FILE_SIZE        = 0xFFFFFFFF'u32;
-const uint32 INVALID_SET_FILE_POINTER = -1'u32;
-const uint32 INVALID_FILE_ATTRIBUTES  = -1'u32;
+const INVALID_FILE_SIZE        = 0xFFFFFFFF'u32;
+const INVALID_SET_FILE_POINTER = -1'u32;
+const INVALID_FILE_ATTRIBUTES  = -1'u32;
 
 native dllimport int32 WriteFile(void*       hFile,
                                  const void* lpBuffer,
