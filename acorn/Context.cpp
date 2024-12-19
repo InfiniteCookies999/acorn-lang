@@ -309,6 +309,10 @@ void acorn::Context::queue_gen(Decl* decl) {
     decls_gen_queue.push_back(decl);
 }
 
+void acorn::Context::queue_gen_implicit_function(ImplicitFunc* implicit_func) {
+    decls_gen_queue.push_back(implicit_func);
+}
+
 void acorn::Context::add_canidate_main_function(Func* main_func) {
     std::lock_guard<std::mutex> lock(main_function_mtx);
     canidate_main_funcs.push_back(main_func);

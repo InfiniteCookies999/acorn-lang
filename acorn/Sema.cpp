@@ -908,9 +908,6 @@ void acorn::Sema::check_variable(Var* var) {
 
     if (var->is_global) {
         cur_global_var = var;
-        if (!var->is_foldable) {
-            context.queue_gen(var);
-        }
     }
     var->is_being_checked = true;
     var->has_been_checked = true; // Set early to prevent circular checking.
@@ -1044,24 +1041,6 @@ void acorn::Sema::check_variable(Var* var) {
         add_variable_to_local_scope(var);
     }
 
-    if (var->type->is_struct_type()) {
-        auto struct_type = static_cast<StructType*>(var->type);
-        auto structn = struct_type->get_struct();
-        if (structn->default_constructor) {
-            context.queue_gen(structn->default_constructor);
-        }
-    } else if (var->type->is_array()) {
-        auto arr_type = static_cast<ArrayType*>(var->type);
-        auto base_type = arr_type->get_base_type();
-        if (base_type->is_struct_type()) {
-            auto struct_type = static_cast<StructType*>(base_type);
-            auto structn = struct_type->get_struct();
-            if (structn->default_constructor) {
-                context.queue_gen(structn->default_constructor);
-            }
-        }
-    }
-
     if (var->type->is(context.void_type)) {
         error(var, "Variables cannot have type 'void'")
             .end_error(ErrCode::SemaVariableCannotHaveVoidType);
@@ -1162,7 +1141,6 @@ void acorn::Sema::check_struct(Struct* structn) {
                 error(structn->destructor, "Destructors are expected to not have any parameters")
                     .end_error(ErrCode::SemaDestructorsCannotHaveParams);
             }
-            context.queue_gen(structn->destructor);
         }
     }
     if (structn->copy_constructor) {
@@ -1182,8 +1160,6 @@ void acorn::Sema::check_struct(Struct* structn) {
                         .end_error(ErrCode::SemaCopyConstructorExpectedStructPtrType);
                 }
             }
-            // TODO: May want to make this only generate if needed.
-            context.queue_gen(structn->copy_constructor);
         }
     }
 
@@ -1545,8 +1521,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
         initializer->is_foldable = false;
         initializer->called_constructor = found_constructor;
         initializer->type = structn->struct_type;
-        context.queue_gen(found_constructor);
-
+        
         return;
     }
     
@@ -2426,8 +2401,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     call->is_foldable = false;
     call->called_func = called_func;
     call->type = called_func->return_type;
-    context.queue_gen(call->called_func);
-
+    
 }
 
 void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_type) {
@@ -3172,7 +3146,6 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
                 }
             }
 
-            context.queue_gen(func);
             return true;
         }
 

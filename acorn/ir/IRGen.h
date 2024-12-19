@@ -24,10 +24,9 @@ namespace acorn {
 
         void gen_function(Func* func);
         void gen_global_variable(Var* var);
-        void finish_incomplete_global_variables();
-        void finish_incomplete_global_variable(Var* var);
+        void gen_implicit_function(ImplicitFunc* implicit_func);
+        void add_return_to_global_init_function();
         void destroy_global_variables();
-        void gen_implicit_structs_functions();
 
         llvm::Value* gen_node(Node* node);
 
@@ -77,9 +76,8 @@ namespace acorn {
         llvm::SmallVector<llvm::BasicBlock*, 8> loop_continue_stack;
 
         static int                           global_counter;
-        static llvm::SmallVector<Var*, 32>   incomplete_global_variables;
+        static llvm::Function*               ll_global_init_function;
         static llvm::SmallVector<Var*, 32>   globals_needing_destroyed;
-        static llvm::SmallVector<Struct*, 4> structs_needing_implicit_functions;
         static llvm::BasicBlock*             ll_global_init_call_bb;
         static llvm::BasicBlock*             ll_global_cleanup_call_bb;
 
@@ -129,6 +127,7 @@ namespace acorn {
 
         void gen_global_variable_decl(Var* var);
         void gen_global_variable_body(Var* var);
+        void finish_incomplete_global_variable(Var* var);
         bool gen_constant_struct_for_global(StructType* struct_type, llvm::Constant*& ll_constant_struct);
         llvm::Constant* gen_constant_array_for_global(Array* arr);
 
@@ -263,6 +262,8 @@ namespace acorn {
         llvm::AllocaInst* gen_unseen_alloca(llvm::Type* ll_type, llvm::Twine ll_name);
 
         bool is_decayed_array(Expr* arr);
+
+        ImplicitFunc* create_implicit_function(ImplicitFunc::Kind kind, Struct* structn);
 
         void copy_struct_field_if_has_copy_constructor(Var* field,
                                                        llvm::Value* ll_to_struct_address,

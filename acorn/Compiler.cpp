@@ -302,10 +302,12 @@ void acorn::Compiler::sema_and_irgen() {
     };
 
     while (!context.decl_queue_empty()) {
-        Decl* decl = context.decl_queue_next();
+        Node* decl = context.decl_queue_next();
         
         // Semantic analysis.
-        check_decl(decl);
+        if (decl->is_not(NodeKind::ImplicitFunc)) {
+            check_decl(static_cast<Decl*>(decl));
+        }
 
         // Code generation.
         ir_timer.start();
@@ -316,6 +318,8 @@ void acorn::Compiler::sema_and_irgen() {
             generator.gen_function(static_cast<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {
             generator.gen_global_variable(static_cast<Var*>(decl));
+        } else if (decl->is(NodeKind::ImplicitFunc)) {
+            generator.gen_implicit_function(static_cast<ImplicitFunc*>(decl));
         } else {
             acorn_fatal("Unreachable: Missing generation case");
         }
@@ -323,17 +327,10 @@ void acorn::Compiler::sema_and_irgen() {
 
     }
 
-    // TODO: further work needs to be done to make sure this is correct.
-    //       These functionss rely on calling other functions which may
-    //       end up causing more requested to be generated while processing
-    //       the existing requests. This should probably use a queue strategy
-    //       and just keep generating anything in the queue until everything is
-    //       finished.
     ir_timer.start();
     IRGenerator generator(context);
-    generator.finish_incomplete_global_variables();
+    generator.add_return_to_global_init_function();
     generator.destroy_global_variables();
-    generator.gen_implicit_structs_functions();
     ir_timer.stop();
 
     // Checking any declarations that were not checked.

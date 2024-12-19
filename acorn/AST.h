@@ -38,6 +38,7 @@ namespace acorn {
     enum class NodeKind {
         
         Func,
+        ImplicitFunc,
         Var,
         VarList,
         Struct,
@@ -196,6 +197,19 @@ namespace acorn {
 
         Var* find_parameter(Identifier name) const;
 
+    };
+
+    struct ImplicitFunc : Node {
+        ImplicitFunc() : Node(NodeKind::ImplicitFunc) {
+        }
+
+        enum class Kind {
+            DefaultConstructor,
+            CopyConstructor,
+            Destructor
+        } kind;
+
+        Struct* structn;
     };
 
     struct Var : Decl {

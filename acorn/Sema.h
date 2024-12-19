@@ -53,6 +53,7 @@ namespace acorn {
         Struct* cur_struct = nullptr;
 
         bool is_comptime_if_cond = false;
+        bool should_request_gen_queue;
 
         // How many nested loops currently within.
         int loop_depth = 0;

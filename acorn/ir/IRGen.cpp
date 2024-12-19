@@ -8,9 +8,8 @@
 
 // Forward declaring static member fields.
 int                                  acorn::IRGenerator::global_counter = 0;
-llvm::SmallVector<acorn::Var*, 32>   acorn::IRGenerator::incomplete_global_variables;
+llvm::Function*                      acorn::IRGenerator::ll_global_init_function = nullptr;
 llvm::SmallVector<acorn::Var*, 32>   acorn::IRGenerator::globals_needing_destroyed;
-llvm::SmallVector<acorn::Struct*, 4> acorn::IRGenerator::structs_needing_implicit_functions;
 llvm::BasicBlock*                    acorn::IRGenerator::ll_global_init_call_bb;
 llvm::BasicBlock*                    acorn::IRGenerator::ll_global_cleanup_call_bb;
 
@@ -34,9 +33,8 @@ acorn::IRGenerator::IRGenerator(Context& context)
 
 void acorn::IRGenerator::clear_static_data() {
     global_counter = 0;
-    incomplete_global_variables.clear();
+    ll_global_init_function = nullptr;
     globals_needing_destroyed.clear();
-    structs_needing_implicit_functions.clear();
     DebugInfoEmitter::clear_cache();
     ll_global_init_call_bb = nullptr;
     ll_global_cleanup_call_bb = nullptr;
@@ -57,6 +55,28 @@ void acorn::IRGenerator::gen_global_variable(Var* var) {
     gen_global_variable_decl(var);
     gen_global_variable_body(var);
 
+}
+
+void acorn::IRGenerator::gen_implicit_function(ImplicitFunc* implicit_func) {
+    di_emitter = implicit_func->structn->file->di_emitter;
+    if (implicit_func->kind == ImplicitFunc::Kind::DefaultConstructor) {
+        gen_implicit_default_constructor(implicit_func->structn);
+    } else if (implicit_func->kind == ImplicitFunc::Kind::Destructor) {
+        gen_implicit_destructor(implicit_func->structn);
+    } else if (implicit_func->kind == ImplicitFunc::Kind::CopyConstructor) {
+        gen_implicit_copy_constructor(implicit_func->structn);
+    } else {
+        acorn_fatal("Unreachable. Uknown implicit function");
+    }
+}
+
+void acorn::IRGenerator::add_return_to_global_init_function() {
+    if (!ll_global_init_function) {
+        return;
+    }
+
+    builder.SetInsertPoint(&ll_global_init_function->back());
+    builder.CreateRetVoid();
 }
 
 llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
@@ -174,6 +194,8 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     if (func->ll_func) {
         return; // Return early because the declaration has already been generated.
     }
+
+    context.queue_gen(func);
 
     if (func->has_modifier(Modifier::Native)) {
         if (func->ll_intrinsic_id != llvm::Intrinsic::not_intrinsic) {
@@ -539,6 +561,30 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
         return; // Return early because the declaration has already been generated.
     }
 
+    context.queue_gen(var);
+
+    // Have to check for a destructor because unless the global variable
+    // is reassigned it will not request generation for the destructor.
+    if (var->type->is_struct_type()) {
+        auto struct_type = static_cast<StructType*>(var->type);
+        auto structn = struct_type->get_struct();
+        if (structn->destructor) {
+            context.queue_gen(structn->destructor);
+            globals_needing_destroyed.push_back(var);
+        }
+    } else if (var->type->is_array()) {
+        auto arr_type = static_cast<ArrayType*>(var->type);
+        auto base_type = arr_type->get_base_type();
+        if (base_type->is_struct_type()) {
+            auto struct_type = static_cast<StructType*>(base_type);
+            auto structn = struct_type->get_struct();
+            if (structn->destructor) {
+                context.queue_gen(structn->destructor);
+                globals_needing_destroyed.push_back(var);
+            }
+        }
+    }
+
     // TODO: const: !>_<
     auto ll_linkage = var->has_modifier(Modifier::Native) ? llvm::GlobalValue::ExternalLinkage
                                                           : llvm::GlobalValue::InternalLinkage;
@@ -554,10 +600,6 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
 
     if (var->has_modifier(Modifier::DllImport)) {
         ll_address->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
-    }
-
-    if (var->type->needs_destruction()) {
-        globals_needing_destroyed.push_back(var);
     }
 
     var->ll_address = ll_address;
@@ -592,7 +634,7 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
 
             ll_global->setInitializer(ll_constant_struct);
             if (!all_values_initialized) {
-                incomplete_global_variables.push_back(var);
+                finish_incomplete_global_variable(var);
             }
         } else {
             ll_global->setInitializer(gen_zero(var->type));
@@ -604,7 +646,30 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
         ll_global->setInitializer(gen_constant_value());
     } else {
         ll_global->setInitializer(gen_zero(var->type));
-        incomplete_global_variables.push_back(var);
+        finish_incomplete_global_variable(var);
+    }
+}
+
+void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
+    if (!ll_global_init_function) {
+        ll_global_init_function = gen_void_function_decl("__acorn.global_init");
+    
+        // Move the insert point to the call location for the init globals function
+        // from the main function.
+        builder.SetInsertPoint(ll_global_init_call_bb,
+                               ll_global_init_call_bb->getFirstInsertionPt());
+        builder.CreateCall(ll_global_init_function);
+
+        gen_bblock("entry", ll_global_init_function);
+    }
+
+    builder.SetInsertPoint(&ll_global_init_function->back());
+
+    if (!var->assignment && var->type->is_struct_type()) {
+        auto struct_type = static_cast<StructType*>(var->type);
+        finish_incomplete_struct_type_global(var->ll_address, struct_type);
+    } else {
+        gen_assignment(var->ll_address, var->type, var->assignment);
     }
 }
 
@@ -693,39 +758,6 @@ void acorn::IRGenerator::finish_incomplete_struct_type_global(llvm::Value* ll_ad
     }
 }
 
-void acorn::IRGenerator::finish_incomplete_global_variables() {
-    if (incomplete_global_variables.empty()) {
-        return;
-    }
-
-    auto ll_func = gen_void_function_decl("__acorn.global_init");
-
-    // Move the insert point to the call location for the init globals function.
-    builder.SetInsertPoint(ll_global_init_call_bb,
-                           ll_global_init_call_bb->getFirstInsertionPt());
-    builder.CreateCall(ll_func);
-
-    auto ll_entry = gen_bblock("entry.block", ll_func);
-    builder.SetInsertPoint(ll_entry);
-    
-    for (Var* var : incomplete_global_variables) {
-        finish_incomplete_global_variable(var);
-    }
-
-    builder.CreateRetVoid();
-
-}
-
-void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
-    di_emitter = var->file->di_emitter;
-    if (!var->assignment && var->type->is_struct_type()) {
-        auto struct_type = static_cast<StructType*>(var->type);
-        finish_incomplete_struct_type_global(var->ll_address, struct_type);
-    } else {
-        gen_assignment(var->ll_address, var->type, var->assignment);
-    }
-}
-
 void acorn::IRGenerator::destroy_global_variables() {
     if (globals_needing_destroyed.empty()) {
         return;
@@ -740,11 +772,10 @@ void acorn::IRGenerator::destroy_global_variables() {
         acorn_fatal("Expected the main function to end in a return statement");
     }
 
-    //ll_last_inst.insertBefore(builder.CreateCall(ll_func));
     builder.SetInsertPoint(&ll_last_inst);
     builder.CreateCall(ll_func);
 
-    auto ll_entry = gen_bblock("entry.block", ll_func);
+    auto ll_entry = gen_bblock("entry", ll_func);
     builder.SetInsertPoint(ll_entry);
 
     for (Var* var : globals_needing_destroyed) {
@@ -755,30 +786,14 @@ void acorn::IRGenerator::destroy_global_variables() {
 
 }
 
-void acorn::IRGenerator::gen_implicit_structs_functions() {
-    for (Struct* structn : structs_needing_implicit_functions) {
-        if (structn->ll_default_constructor) {
-            gen_implicit_default_constructor(structn);
-        }
-        if (structn->ll_destructor) {
-            gen_implicit_destructor(structn);
-        }
-        if (structn->ll_copy_constructor) {
-            gen_implicit_copy_constructor(structn);
-        }
-    }
-}
-
 void acorn::IRGenerator::gen_implicit_default_constructor(Struct* structn) {
     
-    di_emitter = structn->file->di_emitter;
     cur_struct = structn;
-
     ll_cur_func = structn->ll_default_constructor;
 
     auto ll_struct_type = gen_struct_type(structn->struct_type);
 
-    auto ll_entry = gen_bblock("entry.block", ll_cur_func);
+    auto ll_entry = gen_bblock("entry", ll_cur_func);
     builder.SetInsertPoint(ll_entry);
 
     auto ll_this = ll_cur_func->getArg(0);
@@ -800,12 +815,11 @@ void acorn::IRGenerator::gen_implicit_default_constructor(Struct* structn) {
 void acorn::IRGenerator::gen_implicit_destructor(Struct* structn) {
 
     cur_struct = structn;
-
     ll_cur_func = structn->ll_destructor;
 
     auto ll_struct_type = gen_struct_type(structn->struct_type);
 
-    auto ll_entry = gen_bblock("entry.block", ll_cur_func);
+    auto ll_entry = gen_bblock("entry", ll_cur_func);
     builder.SetInsertPoint(ll_entry);
 
     auto ll_this = ll_cur_func->getArg(0);
@@ -823,12 +837,11 @@ void acorn::IRGenerator::gen_implicit_destructor(Struct* structn) {
 void acorn::IRGenerator::gen_implicit_copy_constructor(Struct* structn) {
 
     cur_struct = structn;
-
     ll_cur_func = structn->ll_copy_constructor;
 
     auto ll_struct_type = gen_struct_type(structn->struct_type);
 
-    auto ll_entry = gen_bblock("entry.block", ll_cur_func);
+    auto ll_entry = gen_bblock("entry", ll_cur_func);
     builder.SetInsertPoint(ll_entry);
 
     auto ll_this                = ll_cur_func->getArg(0);
@@ -869,9 +882,11 @@ void acorn::IRGenerator::gen_call_destructors(Type* type, llvm::Value* ll_addres
                 gen_no_param_member_function_decl(structn, name + (structn->destructor ? ".acorn" : ".implicit.acorn"));
             if (structn->destructor) {
                 structn->destructor->ll_func = structn->ll_destructor;
+                context.queue_gen(structn->destructor);
             } else if (!structn->has_requested_gen_implicits) {
                 structn->has_requested_gen_implicits = true;
-                structs_needing_implicit_functions.push_back(structn);
+                auto implicit_func = create_implicit_function(ImplicitFunc::Kind::Destructor, structn);
+                context.queue_gen_implicit_function(implicit_func);
             }
         }
     };
@@ -953,7 +968,7 @@ void acorn::IRGenerator::process_destructor_state(Type* type, llvm::Value* ll_ad
 // Ex. the IR generation becomes:
 // 
 // define void @foo.acorn(ptr %aggr.ret.addr) {
-// entry.block: 
+// entry: 
 //   call void @llvm.memset.p0.i64(ptr align 8 %aggr.ret.addr, i8 0, i64 32, i1 false)
 //   %0 = getelementptr inbound nuw %A, ptr %aggr.ret.addr, i32 0, i32 0
 //   store i64 5, ptr %0, align 8
@@ -988,7 +1003,7 @@ void acorn::IRGenerator::process_destructor_state(Type* type, llvm::Value* ll_ad
 // Ex. the IR generation becomes:
 // 
 // define void @foo.acorn(ptr %aggr.ret.addr, i1 %in.t) {
-// entry.block:
+// entry:
 //   %t = alloca i1, align 1
 //   store i1 %in.t, ptr %t, align 1
 //   %a1 = alloca %A, align 8                 ; local variable 1
@@ -1030,7 +1045,7 @@ void acorn::IRGenerator::process_destructor_state(Type* type, llvm::Value* ll_ad
 // Ex. the IR generation becomes:
 // 
 // define void @foo.acorn(ptr %aggr.ret.addr) {
-// entry.block:
+// entry:
 //   call void @llvm.memcpy.p0.p0.i64(ptr align 8 %aggr.ret.addr, ptr align 8 @global.a.0, i64 32, i1 false)
 //   ret void
 // }
@@ -1257,7 +1272,7 @@ llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs, llvm::BasicBlock* ll_end_bb
             // The codegen becomes:
             //
             // define @main() {
-            // entry.block:
+            // entry:
             //   ...
             //   %gt = icmp ...
             //   br i1 %gt, label %if.then, label %if.else
@@ -3000,9 +3015,11 @@ void acorn::IRGenerator::gen_call_default_constructor(llvm::Value* ll_address, S
             gen_no_param_member_function_decl(structn, ll_name + (structn->default_constructor ? ".acorn" : ".implicit.acorn"));
         if (structn->default_constructor) {
             structn->default_constructor->ll_func = structn->ll_default_constructor;
+            context.queue_gen(structn->default_constructor);
         } else if (!structn->has_requested_gen_implicits) {
             structn->has_requested_gen_implicits = true;
-            structs_needing_implicit_functions.push_back(structn);
+            auto implicit_func = create_implicit_function(ImplicitFunc::Kind::DefaultConstructor, structn);
+            context.queue_gen_implicit_function(implicit_func);
         }
     }
     builder.CreateCall(structn->ll_default_constructor, ll_address);
@@ -3253,6 +3270,15 @@ bool acorn::IRGenerator::is_decayed_array(Expr* arr) {
     return ref->is_var_ref() && ref->var_ref->is_param() && ref->type->is_array();
 }
 
+acorn::ImplicitFunc* acorn::IRGenerator::create_implicit_function(ImplicitFunc::Kind kind, Struct* structn) {
+    auto implicit_func = context.get_allocator().alloc_type<ImplicitFunc>();
+    new (implicit_func) ImplicitFunc();
+    implicit_func->kind = kind;
+    implicit_func->structn = structn;
+    context.queue_gen_implicit_function(implicit_func);
+    return implicit_func;
+}
+
 void acorn::IRGenerator::copy_struct_field_if_has_copy_constructor(Var* field,
                                                                    llvm::Value* ll_to_struct_address,
                                                                    llvm::Value* ll_from_struct_address, 
@@ -3356,9 +3382,11 @@ void acorn::IRGenerator::gen_call_copy_constructor(llvm::Value* ll_to_address,
         structn->ll_copy_constructor = ll_func;
         if (structn->copy_constructor) {
             structn->copy_constructor->ll_func = ll_func;
+            context.queue_gen(structn->copy_constructor);
         } else if (!structn->has_requested_gen_implicits) {
             structn->has_requested_gen_implicits = true;
-            structs_needing_implicit_functions.push_back(structn);
+            auto implicit_func = create_implicit_function(ImplicitFunc::Kind::CopyConstructor, structn);
+            context.queue_gen_implicit_function(implicit_func);
         }
     }
 
