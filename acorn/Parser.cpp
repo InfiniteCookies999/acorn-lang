@@ -608,10 +608,8 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
             } else if (func->is_copy_constructor) {
                 structn->copy_constructor = func;
                 func->structn = structn;
+                func->is_constructor = true;
                 structn->needs_copy_call = true;
-                // Need to add to the list of constructors still because
-                // the user may want to manually call the copy constructor.
-                structn->constructors.push_back(func);
             } else if (func->name == cur_struct->name) {
                 func->is_constructor = true;
                 if (func->params.empty()) {

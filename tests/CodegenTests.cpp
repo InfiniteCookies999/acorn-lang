@@ -703,6 +703,24 @@ void test_codegen() {
 
                 expect(result, std::identity()).to_be("abbccddeef");
             });
+            test("Iterator loop over array of arrays", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test13.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Pizza!");
+            });
+            test("Iterator loop over array of structs", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test14.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Pizza!");
+            });
+            test("Iterator loop over array of structs with copy constructors", [&] {
+                auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test15.ac"));
+                if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+                expect(result, std::identity()).to_be("Pizza!");
+            });
         });
         section("logical conjunctions", [&] {
             test("Logical and bin op", [&] {

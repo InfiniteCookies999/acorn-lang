@@ -1418,8 +1418,6 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
 
     push_scope();
 
-    // TODO: This is broken for things like arrays of structs because
-    //       it should be properly copying when working with objects.
     if (loop->container->type->is_array()) {
 
         // Calculate beginning and end of the array for determining
@@ -1477,15 +1475,22 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         // Store the pointer value into the variable.
         auto ll_ptr_index3 = builder.CreateLoad(ll_ptr_type, ll_arr_itr_ptr);
         auto ll_index_value = ll_ptr_index3;
-        if (!loop->references_memory) {
+        if (!loop->references_memory && !loop->var->type->is_aggregate()) {
             ll_index_value = builder.CreateLoad(ll_elm_type, ll_ptr_index3);
         }
 
-        
         emit_dbg(di_emitter->emit_function_variable(loop->var, builder));
-        builder.CreateStore(ll_index_value, loop->var->ll_address);
-        emit_dbg(di_emitter->emit_location(builder, loop->var->loc));
-        
+        if (loop->var->type->is_struct_type()) {
+            auto struct_type = static_cast<StructType*>(loop->var->type);
+            gen_copy_struct(loop->var->ll_address, ll_index_value, struct_type);
+            emit_dbg(di_emitter->emit_location(builder, loop->var->loc));
+        } else if (loop->var->type->is_array()) {
+            auto elm_arr_type = static_cast<ArrayType*>(loop->var->type);
+            gen_copy_array(loop->var->ll_address, ll_index_value, elm_arr_type, loop->var);
+        } else {
+            builder.CreateStore(ll_index_value, loop->var->ll_address);
+            emit_dbg(di_emitter->emit_location(builder, loop->var->loc));
+        }
     } else if (loop->container->type->is_range()) {
 
         auto range_type = static_cast<RangeType*>(loop->container->type);
@@ -3359,6 +3364,9 @@ void acorn::IRGenerator::gen_copy_array(llvm::Value* ll_to_address,
         ll_from_address, ll_alignment,
         total_linear_length * sizeof_type_in_bytes(ll_base_type)
     );
+    if (should_emit_debug_info && lvalue) {
+        di_emitter->emit_location(builder, lvalue->loc);
+    }
 }
 
 void acorn::IRGenerator::gen_call_copy_constructor(llvm::Value* ll_to_address,
