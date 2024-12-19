@@ -44,6 +44,7 @@ X(ParseElmTypeMustHaveArrLen               , 20034)
 X(ParseFuncParamTypeCannotBeVoid           , 20035)
 X(ParseDataTypeNameConflictWithImport      , 20036)
 X(ParseAutoCannotBeConst                   , 20037)
+X(ParseMustUseElif                         , 20038)
 
 X(SemaNotAllFuncPathReturn                 , 30000)
 X(SemaVariableCannotHaveVoidType           , 30001)

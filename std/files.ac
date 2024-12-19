@@ -233,7 +233,7 @@ FileHandle open(const char* path, uint32 flags) {
 
     if (flags & IO_FLAG_APPEND) != 0 {
         access_flags |= win32.FILE_APPEND_DATA;
-    } else if (flags & IO_FLAG_OUT) != 0 {
+    } elif (flags & IO_FLAG_OUT) != 0 {
         access_flags |= win32.GENERIC_WRITE;
     }
 

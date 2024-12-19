@@ -752,6 +752,15 @@ acorn::IfStmt* acorn::Parser::parse_if() {
         ifs->elseif = parse_if();
     } else if (cur_token.is(Token::KwElse)) {
         next_token(); // Consuming else token.
+        if (cur_token.is(Token::KwIf)) {
+            // We do not want the user to use 'else if'.
+            SourceLoc error_loc = {
+                .ptr = prev_token.loc.ptr,
+                .length = static_cast<uint16_t>((cur_token.loc.ptr + cur_token.loc.length) - prev_token.loc.ptr)
+            };
+            error(error_loc, "Must use 'elif' for else if statements")
+                .end_error(ErrCode::ParseMustUseElif);
+        }
         ifs->elseif = parse_scope();
     }
 
