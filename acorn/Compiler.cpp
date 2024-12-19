@@ -649,7 +649,7 @@ void acorn::Compiler::parse_file(Module& modl,
     }
     // Short path for debugging.
     std::wstring wpath = path.generic_wstring().substr(root_path_size);
-    std::wstring wfull_path = fs::absolute(wpath).generic_wstring();
+    std::wstring wfull_path = fs::absolute(path).generic_wstring();
 
     SourceFile* file = allocator.alloc_type<SourceFile>();
     new (file) SourceFile(context, std::move(wpath), std::move(wfull_path),  buffer, modl);
