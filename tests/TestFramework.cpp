@@ -89,16 +89,39 @@ void TestSection::run() {
     if (run_multithreaded) {
         unsigned number_of_supported_threads = std::thread::hardware_concurrency();
 
+        number_of_supported_threads = static_cast<unsigned>(number_of_supported_threads * 0.7);
+
         unsigned number_of_threads = 0;
         unsigned maximum_threads   = number_of_supported_threads < 1 ? 1 : number_of_supported_threads;
     
         std::atomic<int> test_idx = 0;
         std::vector<std::thread> test_threads;
+
+        static std::atomic<bool> fatal_encountered = false;
+        acorn::fatal_interceptor = [&test_threads]() {
+            
+            auto current_thread_id = std::this_thread::get_id();
+
+            // Ensuring all threads are safely joined before
+            // fatal finishes.
+            //
+            fatal_encountered = true;
+            for (std::thread& thr : test_threads) {
+                if (thr.joinable() && current_thread_id != thr.get_id()) {
+                    thr.join();
+                }
+            }
+        };
+
         for(int thr_id = 0; thr_id < maximum_threads; thr_id++) {
             test_threads.push_back(std::thread([&test_idx, &tests=this->tests, thr_id] {
                 thread_id = thr_id;
             
                 while (true) {
+                    if (fatal_encountered) {
+                        break;
+                    }
+
                     auto idx = test_idx.fetch_add(1);
                     if (idx >= tests.size()) {
                         break;
@@ -106,7 +129,10 @@ void TestSection::run() {
 
                     TestCase* test = tests[idx];
                     current_test = test;
-                    test->run();
+                    try {
+                        test->run();
+                    } catch (acorn::FatalException e) {
+                    }
                     ++num_tests_ran;
                     if (test->failed()) {
                         ++num_failed_tests;
@@ -116,7 +142,9 @@ void TestSection::run() {
         }
 
         for (std::thread& thread : test_threads) {
-            thread.join();
+            if (!fatal_encountered) {
+                thread.join();
+            }
         }
     } else {
         for (TestCase* test : tests) {

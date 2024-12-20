@@ -33,6 +33,7 @@ namespace acorn {
         uint32_t get_id() const { return id; }
 
         llvm::StringRef to_string() const {
+            std::lock_guard lock(mtx);
             return name_mapping[id];
         }
 

@@ -51,6 +51,10 @@ acorn::Compiler::Compiler(PageAllocator& allocator)
     set_output_name(L"program");
 }
 
+bool acorn::Compiler::pre_initialize_target_machine() {
+    return initialize_target_machine();
+}
+
 int acorn::Compiler::run(SourceVector& sources) {
 #define go(f) { f; if (context.has_errors()) return 1; }
 
@@ -88,6 +92,20 @@ void acorn::Compiler::set_output_name(std::wstring output_name) {
 
 void acorn::Compiler::set_output_directory(std::wstring output_directory) {
     this->output_directory = output_directory;
+}
+
+bool acorn::Compiler::initialize_target_machine() {
+    if (!init_llvm_native_target()) {
+        Logger::global_error(context, "Failed to initialize LLVM native target")
+            .end_error(ErrCode::GlobalFailedToInitializeLLVMNativeTarget);
+        return false;
+    }
+
+    if (!ll_target_machine) {
+        ll_target_machine = create_llvm_target_machine(context, release_build);
+    }
+
+    return ll_target_machine != nullptr;
 }
 
 static std::ostream& operator<<(std::ostream& os, acorn::Timer& timer) {
@@ -202,16 +220,7 @@ void acorn::Compiler::initialize_codegen() {
     absolute_obj_path = absolute_output_directory + L"/" + obj_name;
     absolute_exe_path = absolute_output_directory + L"/" + exe_name;
 
-    if (!init_llvm_native_target()) {
-        Logger::global_error(context, "Failed to initialize LLVM native target")
-            .end_error(ErrCode::GlobalFailedToInitializeLLVMNativeTarget);
-        return;
-    }
-
-    if (!ll_target_machine) {
-        ll_target_machine = create_llvm_target_machine(context, release_build);
-    }
-    if (!ll_target_machine) {
+    if (!initialize_target_machine()) {
         return;
     }
 

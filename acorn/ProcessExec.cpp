@@ -199,11 +199,10 @@ bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
                 acorn_fatal("Failed process poll");
             }
 
-            if (poll_set.revents & POLLHUP) {
-                break;
-            }
-
-            if ((poll_set.revents & POLLIN)) {
+            // Must check for more data before checking for
+            // POLLHUP because it is possible for POLLIN and
+            // POLLUP to occure at the same time!
+            if (poll_set.revents & POLLIN) {
                 char buffer[1024];
                 ssize_t count = read(pipes[0], buffer, sizeof(buffer) - 1);
                 if (count > 0) {
@@ -214,6 +213,10 @@ bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
                 } else {
                     acorn_fatal("Failed to read process");
                 }
+            }
+
+            if (poll_set.revents & POLLHUP) {
+                break;
             }
         }
 

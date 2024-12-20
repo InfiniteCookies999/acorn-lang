@@ -9,7 +9,7 @@ acorn::TypeTable::TypeTable(PageAllocator& allocator, Context& context)
 }
 
 acorn::Type* acorn::TypeTable::get_const_type(Type* type) {
-    std::scoped_lock<std::mutex> lock(const_types_mtx);
+    std::lock_guard lock(const_types_mtx);
 
     auto itr = const_types.find(type);
     if (itr != const_types.end()) {
@@ -50,7 +50,7 @@ acorn::Type* acorn::TypeTable::get_const_type(Type* type) {
 }
 
 acorn::Type* acorn::TypeTable::get_ptr_type(Type* elm_type) {
-    std::scoped_lock<std::mutex> lock(ptr_types_mtx);
+    std::lock_guard lock(ptr_types_mtx);
 
     auto itr = ptr_types.find(elm_type);
     if (itr != ptr_types.end()) {
@@ -108,7 +108,7 @@ acorn::Type* acorn::TypeTable::get_ptr_type(Type* elm_type) {
 }
 
 acorn::Type* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length) {
-    std::scoped_lock<std::mutex> lock(arr_types_mtx);
+    std::lock_guard lock(arr_types_mtx);
     
     auto itr = arr_types.find({ elm_type, length });
     if (itr != arr_types.end()) {
@@ -165,7 +165,7 @@ acorn::Type* acorn::TypeTable::get_range_type(Type* value_type) {
 }
 
 acorn::Type* acorn::TypeTable::get_function_type(Type* return_type, llvm::SmallVector<Type*> param_types) {
-    std::scoped_lock<std::mutex> lock(func_types_mtx);
+    std::lock_guard lock(func_types_mtx);
     
     FunctionTypeKey cmp_key = FunctionTypeKey(return_type, param_types);
 

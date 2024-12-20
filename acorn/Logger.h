@@ -16,6 +16,11 @@
 
 namespace acorn {
 
+    // It is fine for this to not be per thread we intend this to be
+    // used to cleanup any active threads when encountering a fatal
+    // error.
+    extern std::function<void()> fatal_interceptor;
+
 #define acorn_fatal(msg)          Logger::fatal_internal(__FILE__, __LINE__, (msg))
 #define acorn_fatal_fmt(fmt, ...) Logger::fatal_internal(__FILE__, __LINE__, (fmt), __VA_ARGS__)
 #define acorn_assert(cond, msg) if (!(cond)) { acorn_fatal(msg); }
@@ -26,6 +31,12 @@ namespace acorn {
 
     class Logger;
     class GlobalLogger;
+
+    
+    class FatalException : std::exception {
+    public:
+        const char* what() { return "failed"; }
+    };
 
     // The abstract logger uses CRTP which has a compiler limitation
     // that the compilers cannot determine that L derives from

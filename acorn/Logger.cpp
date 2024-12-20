@@ -21,6 +21,9 @@
 using enum acorn::Color;
 using enum acorn::Stream;
 
+// Forward declaring
+std::function<void()> acorn::fatal_interceptor;
+
 static size_t count_digits(size_t number) {
     size_t digits = 0;
     do {
@@ -34,9 +37,9 @@ static size_t count_digits(size_t number) {
 // on the same thread we are trying to print an error message we encounter
 // a fatal error which needs to print. This would result in a recursive
 // deadlock using a normal mutex.
-using mtx_type = std::recursive_mutex;
-static mtx_type mtx;
+static std::recursive_mutex mtx;
 
+static std::atomic<bool> fatal_state_encountered = false;
 
 // Explicit instantiation.
 template class acorn::AbstractLogger<acorn::Logger>;
@@ -134,6 +137,13 @@ acorn::Logger& acorn::Logger::begin_error(PointSourceLoc location, const std::fu
 }
 
 void acorn::GlobalLogger::end_error(ErrCode error_code) {
+    
+    if (fatal_state_encountered) {
+        // Do not want to print other error messages when fatal errors occure
+        // because we want fatal errors to appear as the last message!
+        return;
+    }
+
     mtx.lock();
 
     int facing_length = 0;
@@ -169,7 +179,7 @@ void acorn::GlobalLogger::end_error(ErrCode error_code) {
 }
 
 void acorn::Logger::debug(const std::function<void()>& print_cb) {
-    std::lock_guard<mtx_type> lock(mtx);
+    std::lock_guard lock(mtx);
 
     fmt_print(Stream::StdOut, "(%sDebug%s): ", Color::BrightBlue, Color::White);
     print_cb();
@@ -177,13 +187,12 @@ void acorn::Logger::debug(const std::function<void()>& print_cb) {
 }
 
 void acorn::Logger::info(const std::function<void()>& print_cb) {
-    std::lock_guard<mtx_type> lock(mtx);
+    std::lock_guard lock(mtx);
 
     fmt_print(Stream::StdOut, "%s--%s ", Color::BrightCyan, Color::White);
     print_cb();
     print(Stream::StdOut, ".\n");
 }
-
 
 void acorn::Logger::fatal_internal(const char* cpp_file, int line, const std::function<void()>& print_cb) {
     std::string relative_file(cpp_file);
@@ -192,14 +201,28 @@ void acorn::Logger::fatal_internal(const char* cpp_file, int line, const std::fu
         relative_file = relative_file.substr(pos + 1);
     }
 
-    std::lock_guard<mtx_type> lock(mtx);
-    fmt_print(StdErr, "\n[%sInternal Error%s] ", BrightRed, White);
-    fmt_print(StdErr, "@ (%s:%s) ", relative_file, line);
-    print_cb();
-    print(StdErr, "\n\n");
+    // The mutex is recursive so if a thread happenings to fatal error while
+    // writing it's own fatal error message then it will re-enter and write
+    // the second error instead.
+    {
+        std::lock_guard lock(mtx);
+        fmt_print(StdErr, "\n[%sInternal Error%s] ", BrightRed, White);
+        fmt_print(StdErr, "@ (%s:%s) ", relative_file, line);
+        print_cb();
+        print(StdErr, "\n\n");
+    }
+
+    if (fatal_state_encountered) {
+        throw FatalException();
+    }
+    
+    fatal_state_encountered = true;
+
+    if (fatal_interceptor) {
+        fatal_interceptor();
+    }
     exit(1);
 }
-
 
 
 static const long long CUTOFF_LIMIT = 30;
@@ -485,6 +508,13 @@ void acorn::Logger::print_header(ErrCode error_code, const std::string& line_num
 }
 
 void acorn::Logger::end_error(ErrCode error_code) {
+
+    if (fatal_state_encountered) {
+        // Do not want to print other error messages when fatal errors occure
+        // because we want fatal errors to appear as the last message!
+        return;
+    }
+
     if (error_code_interceptor) {
         mtx.lock();
         if (context.inc_error_count()) {

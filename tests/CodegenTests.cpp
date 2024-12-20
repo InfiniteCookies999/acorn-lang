@@ -1428,6 +1428,20 @@ void test_codegen() {
 #endif
     }
 
+    // Creating a fake compiler just to initialize the target machine because
+    // the target machine is global memory and we do not want some race condition
+    // for it. We cannot just call a static function to initialize it because in
+    // normal execution flow of the program it would report an error.
+    PageAllocator allocator(get_system_page_size());
+    auto compiler = new acorn::Compiler(allocator);
+    compiler->pre_initialize_target_machine();
+    if (compiler->has_errors()) {
+        // Exit before even running the tests we could not initialize
+        // the target machine.
+        exit(1);
+    }
+    delete compiler;
+
     section("codegen", [&] {
         misc_tests();
         global_variable_tests();

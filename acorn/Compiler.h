@@ -36,6 +36,7 @@ namespace acorn {
 
         Compiler(PageAllocator& allocator);
 
+        bool pre_initialize_target_machine();
         int run(SourceVector& sources);
 
         void set_released_build()                { release_build = true;                    }
@@ -108,6 +109,8 @@ namespace acorn {
 
         PageAllocator& allocator;
         Context&       context;
+
+        bool initialize_target_machine();
 
         void show_time_table();
 
