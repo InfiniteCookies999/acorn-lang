@@ -212,14 +212,21 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
     }
     case '*':
         if (bin_op->type->is_integer())
-            return builder.CreateMul(ll_lhs, ll_rhs, "mul");
+            if (bin_op->type->is_signed())
+                return builder.CreateNSWMul(ll_lhs, ll_rhs, "mul");
+            else return builder.CreateMul(ll_lhs, ll_rhs, "mul");
         else return builder.CreateFMul(ll_lhs, ll_rhs, "mul");
     case '/':
         if (bin_op->type->is_integer())
-            return builder.CreateSDiv(ll_lhs, ll_rhs, "div");
+            if (bin_op->type->is_signed())
+                return builder.CreateSDiv(ll_lhs, ll_rhs, "div");
+            else return builder.CreateUDiv(ll_lhs, ll_rhs, "div");
         else return builder.CreateFDiv(ll_lhs, ll_rhs, "div");
-    case '%':
-        return builder.CreateSRem(ll_lhs, ll_rhs, "rem");
+    case '%': {
+        if (bin_op->type->is_signed())
+            return builder.CreateSRem(ll_lhs, ll_rhs, "rem");
+        else return builder.CreateURem(ll_lhs, ll_rhs, "rem");
+    }
     // Bitwise Operators
     // -------------------------------------------
     case '|':

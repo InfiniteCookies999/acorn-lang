@@ -11,6 +11,18 @@
  */
 const char* DIGIT_TO_BASE64_TABLE = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz?=";
 
+/*
+ * Fills a buffer with the digits of the `value` in the given `base`.
+ * This function does NOT null terminate the buffer.
+ * 
+ * 
+ * @param value         the value whose digits fill the buffer.
+ * @param end_of_buffer the pointer to the end of the pre-allocated.
+ * @param base          the numeric base of the value.
+ *
+ * @return              the pointer to the start of the character string
+ *                      containing the digits.
+ */
 char* uint64_to_chars(uint64 value, char* end_of_buffer, int base) {
     char* ptr = end_of_buffer;
 
@@ -20,7 +32,7 @@ char* uint64_to_chars(uint64 value, char* end_of_buffer, int base) {
     }
 
     uint64 b = as(uint64) base;
-    loop value > 0 {
+    loop value != 0 {
         uint64 digit = value % b;
         value /= b;
 

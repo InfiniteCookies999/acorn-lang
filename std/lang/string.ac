@@ -69,3 +69,70 @@ struct String {
         }
     }
 }
+
+/*
+ * Converts a 64 bit unsigned integer to a string containing
+ * the digits in the `base`.
+ *
+ * @value the value to convert to a String.
+ * @base  the numeric base of the value. Defaults to 10.
+ */
+String to_string(uint64 value, int base = 10) {
+    const BUFFER_SIZE = 21;
+    char[BUFFER_SIZE] buffer;
+
+    char* ptr = uint64_to_chars(value, buffer + BUFFER_SIZE - 1, base);
+    int length = as(int)(buffer + BUFFER_SIZE) - as(int)ptr;
+
+    return String{ ptr, length };
+}
+
+/*
+ * Converts a 64 bit integer to a string containing the digits
+ * in the `base`.
+ *
+ * @value the value to convert to a String.
+ * @base  the numeric base of the value. Defaults to 10.
+ */
+String to_string(int64 value, int base = 10) {
+    
+    bool is_negative = value < 0;
+    uint64 value_u64;
+    if is_negative {
+        // Casting to a 64 bit unsigned first because it should be garenteed
+        // to have well defined behavior but not signed.
+        value_u64 = -(as(uint64) value);
+    } else {
+        value_u64 = as(uint64) value;
+    }
+
+    const BUFFER_SIZE = 21 + 1;
+    char[BUFFER_SIZE] buffer;
+
+    char* ptr = uint64_to_chars(value_u64, buffer + BUFFER_SIZE - 1, base);
+    int length = as(int)(buffer + BUFFER_SIZE) - as(int)ptr;
+
+    if is_negative {
+        --ptr;
+        *ptr = '-';
+        ++length;
+    }
+
+    return String{ ptr, length };   
+}
+
+String to_string(int value, int base = 10) {
+    return to_string(as(int64) value, base);
+}
+
+String to_string(bool b) {
+    if b {
+        return String{ "true", 4 };
+    } else {
+        return String{ "false", 5 };
+    }
+}
+
+String to_string(char c) {
+    return String{ &c, 1 };
+}

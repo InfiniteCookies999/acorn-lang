@@ -14,8 +14,8 @@ int strlen(const char* s) {
 prv native("strlen") isize _strlen(const char* s);
 
 /*
- * Copies count amount of bytes from the src
- * to the dest.
+ * Copies count amount of bytes from the `src`
+ * to the `dest`.
  *
  * Warning: This is not a safe function. Use with caution.
  */
@@ -25,7 +25,7 @@ void memcpy(void* dest, const void* src, int count) {
 prv native("memcpy") void _memcpy(void* dest, const void* src, usize count);
 
 /*
- * Sets n copies of the value to the dest.
+ * Sets `n` copies of the value to the dest.
  *
  * @param n is the number of bytes and value is a byte value.
  *
