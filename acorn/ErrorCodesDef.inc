@@ -146,6 +146,8 @@ X(SemaCannotCastIncompleteType             , 20097)
 X(SemaCannotGetSizeOfUnsizedType           , 20098)
 X(SemaIncIncompleteExpr                    , 20099)
 X(SemaRangesHaveNoAddressForAuto           , 20100)
+X(SemaDefaultCaseMustGoLast                , 20101)
+X(SemaDuplicateSwitchCase                  , 20102)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

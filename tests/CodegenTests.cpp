@@ -125,7 +125,7 @@ static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file
 
     std::string result;
     int exit_code;
-        
+
 #if WIN_OS
 std::wstring program_path{ L"program" };
 #elif UNIX_OS
@@ -766,6 +766,36 @@ static void switch_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("case > 5");
+    });
+    test("Switch joined cases fall through", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches4.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("case 4 & 5");
+    });
+    test("Switch joined cases fall through last", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches5.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("case 4 & 5");
+    });
+    test("Switch joined with default fallthrough", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches6.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("default case");
+    });
+    test("Switch non foldable joined cases fall through", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("case 4 & 5");
+    });
+    test("Switch default only", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches8.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("default case");
     });
 }
 

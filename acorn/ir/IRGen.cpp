@@ -1592,13 +1592,61 @@ llvm::Value* acorn::IRGenerator::gen_switch(SwitchStmt* switchn) {
 llvm::Value* acorn::IRGenerator::gen_switch_non_foldable(SwitchStmt* switchn) {
 
     auto ll_end_bb = gen_bblock("sw.end");
-
-    size_t count = 0;
+    
+    llvm::SmallVector<std::pair<llvm::BasicBlock*, llvm::BasicBlock*>, 64> ll_case_blocks;
+    size_t case_count = 0;
     for (SwitchCase scase : switchn->cases) {
-        bool is_last = count == switchn->cases.size() - 1;
+        bool is_last = case_count == switchn->cases.size() - 1;
 
-        auto ll_then_bb = gen_bblock("sw.then", ll_cur_func);
-        auto ll_else_bb = (!is_last || switchn->default_scope) ? gen_bblock("sw.else", ll_cur_func) : ll_end_bb;
+        llvm::BasicBlock* ll_then_bb = nullptr;
+        if (scase.scope != switchn->default_scope) {
+            ll_then_bb = gen_bblock("sw.then", ll_cur_func);
+        } else {
+            // There is no then case of a default case the "then" case
+            // is really just the previous block's else.
+            ll_then_bb = &ll_cur_func->back();
+        }
+        
+        llvm::BasicBlock* ll_else_bb = nullptr;
+        if (!is_last) {
+            bool is_next_default = switchn->default_scope && !is_last && !switchn->cases[case_count + 1].cond;
+            ll_else_bb = gen_bblock(is_next_default ? "sw.default" : "sw.else", ll_cur_func);
+        } else {
+            ll_else_bb = ll_end_bb;
+        }
+
+        ll_case_blocks.emplace_back(ll_then_bb, ll_else_bb);
+
+        ++case_count;
+    }
+
+    auto gen_case_then_block = [this, ll_end_bb, &ll_case_blocks]
+        (SwitchCase scase, size_t case_count, bool is_last) finline {
+        if (!scase.scope->empty()) {
+            gen_scope_with_dbg_scope(scase.scope);
+            gen_branch_if_not_term_with_dbg_loc(ll_end_bb, scase.scope->end_loc);
+        } else if (!is_last) {
+            auto ll_next_then_bb = std::get<0>(ll_case_blocks[case_count + 1]);
+            gen_branch_if_not_term_with_dbg_loc(ll_next_then_bb, scase.scope->end_loc);
+        } else {
+            // The user created an empty case at the end of the switch for some reason. Whatever, just
+            // jump to the end basic block.
+            gen_branch_if_not_term_with_dbg_loc(ll_end_bb, scase.scope->end_loc);
+        }
+    };
+
+    case_count = 0;
+    for (SwitchCase scase : switchn->cases) {
+
+        bool is_last = case_count == switchn->cases.size() - 1;
+
+        if (scase.scope == switchn->default_scope) {
+            gen_case_then_block(scase, case_count, is_last);
+            continue;
+        }
+
+        auto ll_then_bb = std::get<0>(ll_case_blocks[case_count]);
+        auto ll_else_bb = std::get<1>(ll_case_blocks[case_count]);
 
         // Jump to either the then or else block depending on the condition.
         if (scase.cond->type->is_ignore_const(context.bool_type)) {
@@ -1619,26 +1667,14 @@ llvm::Value* acorn::IRGenerator::gen_switch_non_foldable(SwitchStmt* switchn) {
         //       of each case instead.
         // 
         emit_dbg(di_emitter->emit_location(builder, switchn->loc));
-        
+
         builder.SetInsertPoint(ll_then_bb);
-        gen_scope_with_dbg_scope(scase.scope);
+        gen_case_then_block(scase, case_count, is_last);
 
-        // Jump to end after the else conidtion block.
-        // 
-        // Need to use gen_branch_if_not_term because our scope may
-        // have ended in a return statement or some other form of jump.
-        gen_branch_if_not_term_with_dbg_loc(ll_end_bb, scase.scope->end_loc);
+        // Continue to generating the next case.
+        builder.SetInsertPoint(ll_else_bb);
 
-        if (!is_last) {
-            builder.SetInsertPoint(ll_else_bb);
-        } else if (switchn->default_scope) {
-            builder.SetInsertPoint(ll_else_bb);
-            gen_scope(switchn->default_scope);
-            gen_branch_if_not_term(ll_end_bb);
-        }
-
-        ++count;
-
+        ++case_count;
     }
 
     builder.SetInsertPoint(ll_end_bb);
@@ -1653,53 +1689,55 @@ llvm::Value* acorn::IRGenerator::gen_switch_foldable(SwitchStmt* switchn) {
 
     auto ll_end_bb = gen_bblock("sw.end");
 
-    size_t num_cases = switchn->cases.size() + switchn->default_scope ? 1 : 0;
+    size_t num_cases = switchn->cases.size() + (switchn->default_scope ? 1 : 0);
     auto ll_default_bb = switchn->default_scope ? gen_bblock("sw.default") : ll_end_bb;
     auto ll_switch = builder.CreateSwitch(gen_rvalue(switchn->on), 
                                           ll_default_bb, 
                                           static_cast<unsigned int>(num_cases));
+
+    // Allow breaking on the switch.
     emit_dbg(di_emitter->emit_location(builder, switchn->loc));
-    
-    auto gen_case_scope = [this, ll_end_bb](llvm::BasicBlock* ll_case_bb, ScopeStmt* scope) finline {
-        builder.SetInsertPoint(ll_case_bb);
-        // Insert a new lexical debug scope per switch scope because we want to treat
-        // the variables within the scopes as self contained.
-        gen_scope_with_dbg_scope(scope);
-        gen_branch_if_not_term_with_dbg_loc(ll_end_bb, scope->end_loc);
-    };
 
-    bool inserted_default_scope = false;
+    llvm::SmallVector<llvm::BasicBlock*, 64> ll_case_blocks;
     for (SwitchCase scase : switchn->cases) {
-
-        if (switchn->default_scope &&
-            switchn->default_scope->loc.ptr < scase.scope->loc.ptr &&
-            !inserted_default_scope) {
-            // Inserting the default case where it appears within the code.
-            insert_bblock_at_end(ll_default_bb);
-            inserted_default_scope = true;
-        }
-
-        auto ll_case_bb = gen_bblock("sw.case", ll_cur_func);
-
-        auto ll_case_value = llvm::cast<llvm::ConstantInt>(gen_rvalue(scase.cond));
-        ll_switch->addCase(ll_case_value, ll_case_bb);
-
-        gen_case_scope(ll_case_bb, scase.scope);
-
+        bool is_default_scope = scase.scope == switchn->default_scope;
+        auto ll_case_bb = is_default_scope ? ll_default_bb
+                                           : gen_bblock("sw.case", ll_cur_func);
+        ll_case_blocks.push_back(ll_case_bb);
     }
-    if (!inserted_default_scope && switchn->default_scope) {
-        // Exists at the very end of the blocks.
+
+    // The default scope is forced to be at the end so we can
+    // just safely add it here.
+    if (switchn->default_scope) {
         insert_bblock_at_end(ll_default_bb);
     }
 
-    if (switchn->default_scope) {
-        gen_case_scope(ll_default_bb, switchn->default_scope);
+    size_t case_count = 0;
+    for (SwitchCase scase : switchn->cases) {
+    
+        auto ll_case_bb = ll_case_blocks[case_count];
+        builder.SetInsertPoint(ll_case_bb);
+
+        if (scase.cond) {
+            auto ll_case_value = llvm::cast<llvm::ConstantInt>(gen_rvalue(scase.cond));
+            ll_switch->addCase(ll_case_value, ll_case_bb);
+        }
+
+        if (!scase.scope->empty()) {
+            // Insert a new lexical debug scope per switch scope because we want to treat
+            // the variables within the scopes as self contained.
+            gen_scope_with_dbg_scope(scase.scope);
+            gen_branch_if_not_term_with_dbg_loc(ll_end_bb, scase.scope->end_loc);
+        } else if (case_count + 1 != switchn->cases.size()) {
+            auto ll_next_then_bb = ll_case_blocks[case_count + 1];
+            gen_branch_if_not_term_with_dbg_loc(ll_next_then_bb, scase.scope->end_loc);
+        } else {
+            gen_branch_if_not_term_with_dbg_loc(ll_end_bb, scase.scope->end_loc);
+        }
+
+        ++case_count;
     }
 
-    // Need to check for terminator here because it is possible
-    // all the branches terminate.
-    gen_branch_if_not_term(ll_end_bb);
-    
     builder.SetInsertPoint(ll_end_bb);
 
     // Make sure the end block goes after all the other blocks!

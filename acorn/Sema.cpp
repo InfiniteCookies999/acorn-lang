@@ -1471,38 +1471,69 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
         pop_scope();
     };
 
-    if (switchn->default_scope) {
-        check_case_scope(switchn->default_scope);
-    } else {
+    if (!switchn->default_scope) {
         all_paths_return = false;
     }
 
-    for (SwitchCase scase : switchn->cases) {
-        check_node(scase.cond);
-        if (scase.cond->type) {
-            bool is_bool_type = scase.cond->type->is_ignore_const(context.bool_type);
-            if (!is_bool_type &&
-                !switchn->on->type->is_ignore_const(scase.cond->type)) {
-                error(expand(scase.cond), "Cannot compare case type '%s' to type '%s'",
-                      scase.cond->type, switchn->on->type)
-                    .end_error(ErrCode::SemaCannotCompareCaseType);
-            }
+    // TODO: If the user has a crazy amount of cases it might be better to just
+    // use a hashmap.
+    llvm::SmallVector<llvm::Constant*, 64> ll_values;
 
-            if (scase.cond->is(NodeKind::Bool)) {
-                auto bool_cond = static_cast<Bool*>(scase.cond);
-                error(scase.cond, "Cannot compare to %s", bool_cond->value ? "true" : "false")
-                    .end_error(ErrCode::SemaCaseCannotBeBoolLiteral);
+    size_t case_count = 0;
+    for (SwitchCase scase : switchn->cases) {
+
+        if (scase.cond) {
+            check_node(scase.cond);
+            if (scase.cond->type) {
+                bool is_bool_type = scase.cond->type->is_ignore_const(context.bool_type);
+                if (!is_bool_type &&
+                    !switchn->on->type->is_ignore_const(scase.cond->type)) {
+                    error(expand(scase.cond), "Cannot compare case type '%s' to type '%s'",
+                          scase.cond->type, switchn->on->type)
+                        .end_error(ErrCode::SemaCannotCompareCaseType);
+                    ll_values.push_back(nullptr); // Need to still add nullptr to keep indices correct.
+                } else if (scase.cond->is_foldable) {
+                    auto ll_value = gen_constant(expand(scase.cond), scase.cond);
+                    for (size_t i = 0; i < ll_values.size(); i++) {
+                        auto ll_prior_value = ll_values[i];
+                        if (ll_prior_value == ll_value) {
+                            auto& prior_case = switchn->cases[i];
+                            error(expand(scase.cond), "Duplicate value for switch")
+                                .add_line([file=this->file, cond= prior_case.cond](Logger& l) {
+                                    l.print("Previous case at: ");
+                                    print_source_location(l, file, cond->loc);
+                                })
+                                .end_error(ErrCode::SemaDuplicateSwitchCase);
+                            break;
+                        }
+                    }
+                    
+                    ll_values.push_back(ll_value);
+                } else {
+                    ll_values.push_back(nullptr); // Need to still add nullptr to keep indices correct.
+                }
+
+                if (scase.cond->is(NodeKind::Bool)) {
+                    auto bool_cond = static_cast<Bool*>(scase.cond);
+                    error(scase.cond, "Cannot compare to %s", bool_cond->value ? "true" : "false")
+                        .end_error(ErrCode::SemaCaseCannotBeBoolLiteral);
+                }
+                
+                if (!scase.cond->is_foldable || is_bool_type) {
+                    switchn->all_conds_foldable = false;
+                }
             }
-        
-            if (!scase.cond->is_foldable || is_bool_type) {
-                switchn->all_conds_foldable = false;
-            }
+        } else if (case_count != switchn->cases.size() - 1) {
+            error(scase.scope, "Default case must go at end of switch")
+                .end_error(ErrCode::SemaDefaultCaseMustGoLast);
         }
         check_case_scope(scase.scope);
+
+        ++case_count;
     }
 
     cur_scope->all_paths_return = all_paths_return;
-    cur_scope->found_terminal = all_paths_return;
+    cur_scope->found_terminal   = all_paths_return;
 }
 
 void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {

@@ -1024,13 +1024,15 @@ acorn::SwitchStmt* acorn::Parser::parse_switch() {
         }
         scope->end_loc = prev_token.loc;
 
-        if (cond) {
-            switchn->cases.emplace_back(cond, scope);
-        } else if (switchn->default_scope) {
-            error(case_token, "Duplicate default case for switch")
-                .end_error(ErrCode::ParseDuplicateDefaultCaseForSwitch);
-        } else {
-            switchn->default_scope = scope;
+        switchn->cases.emplace_back(cond, scope);
+
+        if (!cond) {
+            if (switchn->default_scope) {
+                error(case_token, "Duplicate default case for switch")
+                    .end_error(ErrCode::ParseDuplicateDefaultCaseForSwitch);
+            } else {
+                switchn->default_scope = scope;
+            }
         }
     }
 
