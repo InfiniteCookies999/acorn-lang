@@ -962,36 +962,7 @@ acorn::IteratorLoopStmt* acorn::Parser::parse_iterator_loop(Token loop_token, Va
 acorn::LoopControlStmt* acorn::Parser::parse_loop_control() {
     auto loop_control = new_node<LoopControlStmt>(cur_token);
     loop_control->kind = cur_token.is(Token::KwContinue) ? NodeKind::ContinueStmt : NodeKind::BreakStmt;
-
-    next_token();
-    
-    if (cur_token.is('[')) {
-        next_token();
-
-        if (cur_token.is_not(Token::IntLiteral)) {
-            if (loop_control->is(NodeKind::BreakStmt)) {
-                error("Expected integer literal for break loop count")
-                    .end_error(ErrCode::ParseLoopControlCountNotInt);
-            } else {
-                error("Expected integer literal for continue loop count")
-                    .end_error(ErrCode::ParseLoopControlCountNotInt);
-            }
-        } else {
-            if (cur_token.text()[0] == '-') {
-                error("Loop count cannot be negative")
-                    .end_error(ErrCode::ParseLoopControlCountNeg);
-            }
-            
-            auto number = parse_int_literal();
-            loop_control->loop_count = number->value_s32 + 1;
-            loop_control->loop_count_expr = number;
-        }
-
-        const char* for_msg = loop_control->is(NodeKind::BreakStmt) ? "for break statement"
-                                                                    : "for continue statement";
-        expect(']', for_msg);
-    }
-
+    next_token(); // Consuming 'break' or 'continue' token.
     return loop_control;
 }
 

@@ -689,18 +689,6 @@ static void loop_tests() {
 
         expect(result, std::identity()).to_be("FaBen");
     });
-    test("Loop break statement depth 2", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test7.ac"));
-        if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-        expect(result, std::identity()).to_be("abcde");
-    });
-    test("Loop control statement depth 2", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"loops/loops_control_test8.ac"));
-        if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-        expect(result, std::identity()).to_be("abbccddeef");
-    });
     test("Iterator loop over array of arrays", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test13.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());

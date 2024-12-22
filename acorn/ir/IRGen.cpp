@@ -1299,6 +1299,7 @@ llvm::Value* acorn::IRGenerator::gen_predicate_loop(PredicateLoopStmt* loop) {
     builder.SetInsertPoint(ll_cond_bb);
 
     push_scope();
+    ir_scope->is_loop_scope = true;
 
     if (loop->cond) {
         gen_cond_branch_for_loop(loop->cond, ll_body_bb, ll_end_bb);
@@ -1344,6 +1345,7 @@ llvm::Value* acorn::IRGenerator::gen_range_loop(RangeLoopStmt* loop) {
     // Emit early so it thinks the variable node is effectively part of the loop scope.
     emit_dbg(di_emitter->emit_scope_start(loop->scope->loc));
     push_scope();
+    ir_scope->is_loop_scope = true;
 
     if (loop->init_node) {
         gen_node(loop->init_node);
@@ -1399,6 +1401,7 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
     loop_continue_stack.push_back(ll_inc_bb);
 
     push_scope();
+    ir_scope->is_loop_scope = true;
 
     if (loop->container->type->is_array()) {
 
@@ -1563,19 +1566,20 @@ void acorn::IRGenerator::gen_cond_branch_for_loop(Expr* cond, llvm::BasicBlock* 
 llvm::Value* acorn::IRGenerator::gen_loop_control(LoopControlStmt* loop_control) {
     auto& target_stack = loop_control->is(NodeKind::BreakStmt) ? loop_break_stack : loop_continue_stack;
 
-    size_t index = target_stack.size() - static_cast<size_t>(loop_control->loop_count);
-
     // Calling destructors for every loop scope the break or continue
     // jumps out of.
-    int scope_count = loop_control->loop_count + 1;
-    auto ir_scope_itr = ir_scope;
-    while (scope_count != 0) {
-        gen_call_destructors(ir_scope_itr->objects_needing_destroyed);
-        ir_scope_itr = ir_scope_itr->parent;
-        --scope_count;
+    auto scope_itr = ir_scope;
+    while (scope_itr) {
+        gen_call_destructors(scope_itr->objects_needing_destroyed);
+
+        if (scope_itr->is_loop_scope) {
+            break;
+        }
+
+        scope_itr = scope_itr->parent;
     }
 
-    llvm::BasicBlock* target_bb = target_stack[index];
+    llvm::BasicBlock* target_bb = target_stack.back();
     builder.CreateBr(target_bb);
     emit_dbg(di_emitter->emit_location(builder, loop_control->loc));
 

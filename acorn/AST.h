@@ -387,10 +387,6 @@ namespace acorn {
     struct LoopControlStmt : Node {
         LoopControlStmt() : Node(NodeKind::InvalidExpr) {
         }
-
-        // How many loops to break/continue from.
-        int     loop_count = 1;
-        Number* loop_count_expr = nullptr;
     };
 
     struct SwitchCase {

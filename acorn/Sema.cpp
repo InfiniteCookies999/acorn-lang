@@ -1427,18 +1427,6 @@ void acorn::Sema::check_loop_control(LoopControlStmt* loop_control) {
         }
         return;
     }
-
-    if (loop_control->loop_count > loop_depth) {
-        Node* error_node = loop_control->loop_count_expr ? static_cast<Node*>(loop_control->loop_count_expr)
-                                                         : static_cast<Node*>(loop_control);
-        if (loop_control->is(NodeKind::BreakStmt)) {
-            error(error_node, "number of requested breaks exceeds the loop nesting depth")
-                .end_error(ErrCode::SemaLoopControlLoopCountExceedsLoopDepth);
-        } else {
-            error(error_node, "number of requested continues exceeds the loop nesting depth")
-                .end_error(ErrCode::SemaLoopControlLoopCountExceedsLoopDepth);
-        }
-    }
 }
 
 void acorn::Sema::check_loop_scope(ScopeStmt* scope, SemScope* sem_scope) {

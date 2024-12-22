@@ -87,6 +87,8 @@ namespace acorn {
             // list.
             //
             llvm::SmallVector<DestructorObject> objects_needing_destroyed;
+            // Is the current scope the scope of a loop.
+            bool is_loop_scope = false;
         }* ir_scope = nullptr;
 
         // Objects which have destructors and need to be destroyed
