@@ -148,6 +148,7 @@ X(SemaIncIncompleteExpr                    , 20099)
 X(SemaRangesHaveNoAddressForAuto           , 20100)
 X(SemaDefaultCaseMustGoLast                , 20101)
 X(SemaDuplicateSwitchCase                  , 20102)
+X(SemaSwitchRangeNotFoldable               , 20103)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

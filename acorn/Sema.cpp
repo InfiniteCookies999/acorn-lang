@@ -1425,7 +1425,6 @@ void acorn::Sema::check_loop_control(LoopControlStmt* loop_control) {
             error(loop_control, "continue statements may only be used in loops")
                 .end_error(ErrCode::SemaLoopControlOnlyInLoops);
         }
-        return;
     }
 }
 
@@ -1463,9 +1462,314 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
         all_paths_return = false;
     }
 
+    struct CmpNumber {
+        union {
+            int64_t  value_s64;
+            uint64_t value_u64;
+            float    value_f32;
+            double   value_f64;
+        };
+
+        enum class Kind {
+            SIGNED_INT,
+            UNSIGNED_INT,
+            FLOAT,
+            DOUBLE,
+            EMPTY
+        } kind;
+
+        CmpNumber()
+            : kind(Kind::EMPTY) {
+        }
+        
+        static CmpNumber get(llvm::Constant* ll_value, Type* type) {
+            CmpNumber number;
+            switch (type->get_kind()) {
+            case TypeKind::Int:
+            case TypeKind::Int8:
+            case TypeKind::Int16:
+            case TypeKind::Int32:
+            case TypeKind::Int64:
+            case TypeKind::ISize:
+                number.value_s64 = static_cast<int64_t>(llvm::cast<llvm::ConstantInt>(ll_value)->getZExtValue());
+                number.kind = Kind::SIGNED_INT;
+                break;
+            case TypeKind::UInt8:
+            case TypeKind::UInt16:
+            case TypeKind::UInt32:
+            case TypeKind::UInt64:
+            case TypeKind::USize:
+            case TypeKind::Char:
+            case TypeKind::Char16:
+            case TypeKind::Char32:
+                number.value_u64 = llvm::cast<llvm::ConstantInt>(ll_value)->getZExtValue();
+                number.kind = Kind::UNSIGNED_INT;
+                break;
+            case TypeKind::Float32:
+                number.value_f32 = llvm::cast<llvm::ConstantFP>(ll_value)->getValueAPF().convertToFloat();
+                number.kind = Kind::FLOAT;
+                break;
+            case TypeKind::Float64:
+                number.value_f64 = llvm::cast<llvm::ConstantFP>(ll_value)->getValueAPF().convertToDouble();
+                number.kind = Kind::DOUBLE;
+                break;
+            default:
+                acorn_fatal("Unreachable. Not a foldable type");
+            }
+            return number;
+        }
+
+        static CmpNumber get(Number* value) {
+            CmpNumber number;
+            switch (value->type->get_kind()) {
+            case TypeKind::Int:
+            case TypeKind::Int8:
+            case TypeKind::Int16:
+            case TypeKind::Int32:
+            case TypeKind::Int64:
+            case TypeKind::ISize:
+                number.value_s64 = value->value_s64;
+                number.kind = Kind::SIGNED_INT;
+                break;
+            case TypeKind::UInt8:
+            case TypeKind::UInt16:
+            case TypeKind::UInt32:
+            case TypeKind::UInt64:
+            case TypeKind::USize:
+            case TypeKind::Char:
+            case TypeKind::Char16:
+            case TypeKind::Char32:
+                number.value_u64 = value->value_s64;
+                number.kind = Kind::UNSIGNED_INT;
+                break;
+            case TypeKind::Float32:
+                number.value_f32 = value->value_f32;
+                number.kind = Kind::FLOAT;
+                break;
+            case TypeKind::Float64:
+                number.value_f64 = value->value_f64;
+                number.kind = Kind::DOUBLE;
+                break;
+            default:
+                acorn_fatal("Unreachable. Not a foldable type");
+            }
+            return number;
+        }
+
+        static CmpNumber get_signed_int(int64_t value) {
+            CmpNumber number;
+            number.value_s64 = value;
+            number.kind = Kind::SIGNED_INT;
+            return number;
+        }
+
+        static CmpNumber get_unsigned_int(uint64_t value) {
+            CmpNumber number;
+            number.value_u64 = value;
+            number.kind = Kind::UNSIGNED_INT;
+            return number;
+        }
+    };
+
     // TODO: If the user has a crazy amount of cases it might be better to just
     // use a hashmap.
-    llvm::SmallVector<llvm::Constant*, 64> ll_values;
+    llvm::SmallVector<CmpNumber, 64> prior_values;
+
+    auto is_value_in_range = []
+        (BinOp* range, CmpNumber value, CmpNumber cmp_lhs, CmpNumber cmp_rhs) finline {
+
+        switch (range->op) {
+        case Token::RangeEq: {
+            if (value.kind == CmpNumber::Kind::SIGNED_INT) {
+                return value.value_s64 >= cmp_lhs.value_s64 && value.value_s64 <= cmp_rhs.value_s64;
+            } else {
+                return value.value_u64 >= cmp_lhs.value_u64 && value.value_u64 <= cmp_rhs.value_u64;
+            }
+        }
+        case Token::RangeLt: {
+            if (value.kind == CmpNumber::Kind::SIGNED_INT) {
+                return value.value_s64 >= cmp_lhs.value_s64 && value.value_s64 < cmp_rhs.value_s64;
+            } else {
+                return value.value_u64 >= cmp_lhs.value_u64 && value.value_u64 < cmp_rhs.value_u64;
+            }
+        }
+        default:
+            acorn_fatal("Unreachable. Unknown range operator");
+            return false;
+        }
+    };
+
+    auto report_error_for_duplicate = [this](SwitchCase scase, SwitchCase prior_case) finline{
+            error(expand(scase.cond), "Duplicate value for switch")
+                    .add_line([file = this->file, cond = prior_case.cond](Logger& l) {
+                        l.print("Previous case at: ");
+                        print_source_location(l, file, cond->loc);
+                    })
+                    .end_error(ErrCode::SemaDuplicateSwitchCase);
+    };
+
+    auto add_foldable_value = [this, &prior_values, switchn, &is_value_in_range, &report_error_for_duplicate]
+        (CmpNumber value, SwitchCase scase) {
+
+        for (size_t i = 0; i < prior_values.size(); i++) {
+            auto& prior_case = switchn->cases[i];
+            if (prior_case.cond && prior_case.cond->type->is_range()) {
+                
+                auto range      = static_cast<BinOp*>(prior_case.cond);
+                auto range_type = static_cast<RangeType*>(prior_case.cond->type);
+                auto value_type = range_type->get_value_type();
+
+                if (!switchn->on->type->is_ignore_const(value_type)) {
+                    // They are not the same type is we do not want to check for duplicates.
+                    continue;
+                } else if (!prior_case.cond->is_foldable) {
+                    // We can only check for duplicates if the range is foldable.
+                    continue;
+                }
+
+                auto ll_int_type = llvm::Type::getIntNTy(context.get_ll_context(), value_type->get_number_of_bits());
+                
+                auto cmp_lhs = CmpNumber::get(static_cast<Number*>(range->lhs));
+                auto cmp_rhs = CmpNumber::get(static_cast<Number*>(range->rhs));
+                
+                if (is_value_in_range(range, value, cmp_lhs, cmp_rhs)) {
+                    report_error_for_duplicate(scase, prior_case);
+                    break;
+                }
+            } else {
+#define cmp(v)                                      \
+if (prior_value.value_s64 == value.value_s64) {     \
+    report_error_for_duplicate(scase, prior_case);  \
+}
+                auto prior_value = prior_values[i];
+
+                if (prior_value.kind == CmpNumber::Kind::EMPTY) {
+                    continue;
+                }
+
+                switch (prior_value.kind) {
+                case CmpNumber::Kind::SIGNED_INT:   cmp(value_s64); break;
+                case CmpNumber::Kind::UNSIGNED_INT: cmp(value_u64); break;
+                case CmpNumber::Kind::FLOAT:        cmp(value_f32); break;
+                case CmpNumber::Kind::DOUBLE:       cmp(value_f64); break;
+                default:
+                    acorn_fatal("unreachable");
+                }
+            }
+#undef cmp
+        }
+
+        prior_values.push_back(value);
+    };
+
+    auto check_for_range_duplicates = [this, switchn, &prior_values, is_value_in_range, &report_error_for_duplicate]
+        (SwitchCase scase, Type* value_type) finline {
+
+        auto report_error = [this, scase](SwitchCase prior_case) finline {
+            error(expand(scase.cond), "Duplicate value for switch")
+                    .add_line([file = this->file, cond = prior_case.cond](Logger& l) {
+                        l.print("Previous case at: ");
+                        print_source_location(l, file, cond->loc);
+                    })
+                    .end_error(ErrCode::SemaDuplicateSwitchCase);
+        };
+
+        auto range = static_cast<BinOp*>(scase.cond);
+        uint64_t total_range_values = get_total_range_values(range);
+
+        if (total_range_values > 255) {
+            // If there are too many values we want to use an if chain
+            // so as to not explode the compiler. The if version of the
+            // switch can then check if the value is between two values.
+            switchn->all_conds_foldable = false;
+        }
+
+        auto lhs = CmpNumber::get(static_cast<Number*>(range->lhs));
+        auto rhs = CmpNumber::get(static_cast<Number*>(range->rhs));
+
+        for (size_t i = 0; i < prior_values.size(); i++) {
+            auto& prior_case = switchn->cases[i];
+
+            if (prior_case.cond && prior_case.cond->type->is_range()) {
+                // TODO: This logic could be optimized to store the start and end into the ll_values
+                // and then check ranges that way.
+
+                auto cmp_range      = static_cast<BinOp*>(prior_case.cond);
+                auto cmp_range_type = static_cast<RangeType*>(prior_case.cond->type);
+                auto cmp_value_type = cmp_range_type->get_value_type();
+
+                if (!switchn->on->type->is_ignore_const(cmp_value_type)) {
+                    // They are not the same type is we do not want to check for duplicates.
+                    continue;
+                } else if (!prior_case.cond->is_foldable) {
+                    // We can only check for duplicates if the range is foldable.
+                    continue;
+                }
+
+                auto cmp_lhs = CmpNumber::get(static_cast<Number*>(cmp_range->lhs));
+                auto cmp_rhs = CmpNumber::get(static_cast<Number*>(cmp_range->rhs));
+                                
+                bool found_error = false;
+                switch (cmp_range->op) {
+                case Token::RangeEq: {
+
+                    // end1 >= start2 and start1 <= end2
+                    // or
+                    // end2 >= start1 and start2 <= end1
+                    if (rhs.kind == CmpNumber::Kind::SIGNED_INT) {
+                        if (rhs.value_s64 >= cmp_lhs.value_s64 && lhs.value_s64 <= cmp_rhs.value_s64) {
+                            report_error_for_duplicate(scase, prior_case);
+                            found_error = true;
+                        }
+                    } else {
+                        if (rhs.value_u64 >= cmp_lhs.value_u64 && lhs.value_u64 <= cmp_rhs.value_u64) {
+                            report_error_for_duplicate(scase, prior_case);
+                            found_error = true;
+                        }
+                    }
+
+                    break;
+                }
+                case Token::RangeLt: {
+                                    
+                    // end1 > start2 and start1 < end2
+                    // or
+                    // end2 > start1 and start2 < end1
+                    if (rhs.kind == CmpNumber::Kind::SIGNED_INT) {
+                        if (rhs.value_s64 > cmp_lhs.value_s64 && lhs.value_s64 < cmp_rhs.value_s64) {
+                            report_error_for_duplicate(scase, prior_case);
+                            found_error = true;
+                        }
+                    } else {
+                        if (rhs.value_u64 > cmp_lhs.value_u64 && lhs.value_u64 < cmp_rhs.value_u64) {
+                            report_error_for_duplicate(scase, prior_case);
+                            found_error = true;
+                        }
+                    }
+
+                    break;
+                }
+                default:
+                    acorn_fatal("Unreachable. Unknown range operator");
+                    break;
+                }
+
+                if (found_error) {
+                    break;
+                }
+            } else {
+                auto prior_value = prior_values[i];
+                if (prior_value.kind == CmpNumber::Kind::EMPTY) {
+                    continue;
+                }
+
+                if (is_value_in_range(range, prior_value, lhs, rhs)) {
+                    report_error_for_duplicate(scase, prior_case);
+                    break;
+                }
+            }
+        }
+    };
 
     size_t case_count = 0;
     for (SwitchCase scase : switchn->cases) {
@@ -1474,31 +1778,40 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
             check_node(scase.cond);
             if (scase.cond->type) {
                 bool is_bool_type = scase.cond->type->is_ignore_const(context.bool_type);
-                if (!is_bool_type &&
+                
+                if (scase.cond->type->is_range()) {
+                    
+                    auto range_type = static_cast<RangeType*>(scase.cond->type);
+                    auto value_type = range_type->get_value_type();
+
+                    if (!switchn->on->type->is_ignore_const(value_type)) {
+                        error(expand(scase.cond), "Cannot compare case type '%s' to range value type '%s'",
+                              scase.cond->type, value_type)
+                            .end_error(ErrCode::SemaCannotCompareCaseType);
+                        prior_values.push_back({}); // Need to still add empty to keep indices correct.
+                    } else if (scase.cond->is_foldable) {
+                        check_for_range_duplicates(scase, value_type);
+                    } else {
+                        // TODO: We should allow for this?
+                        error(expand(scase.cond), "Ranges in switch statements must be able to be determined at compile time")
+                            .end_error(ErrCode::SemaSwitchRangeNotFoldable);
+                    }
+
+                    prior_values.push_back({});
+                    // End of range case.
+                } else if (!is_bool_type &&
                     !switchn->on->type->is_ignore_const(scase.cond->type)) {
+
                     error(expand(scase.cond), "Cannot compare case type '%s' to type '%s'",
                           scase.cond->type, switchn->on->type)
                         .end_error(ErrCode::SemaCannotCompareCaseType);
-                    ll_values.push_back(nullptr); // Need to still add nullptr to keep indices correct.
+                    prior_values.push_back({}); // Need to still add empty to keep indices correct.
+                
                 } else if (scase.cond->is_foldable) {
                     auto ll_value = gen_constant(expand(scase.cond), scase.cond);
-                    for (size_t i = 0; i < ll_values.size(); i++) {
-                        auto ll_prior_value = ll_values[i];
-                        if (ll_prior_value == ll_value) {
-                            auto& prior_case = switchn->cases[i];
-                            error(expand(scase.cond), "Duplicate value for switch")
-                                .add_line([file=this->file, cond= prior_case.cond](Logger& l) {
-                                    l.print("Previous case at: ");
-                                    print_source_location(l, file, cond->loc);
-                                })
-                                .end_error(ErrCode::SemaDuplicateSwitchCase);
-                            break;
-                        }
-                    }
-                    
-                    ll_values.push_back(ll_value);
+                    add_foldable_value(CmpNumber::get(ll_value, scase.cond->type), scase);
                 } else {
-                    ll_values.push_back(nullptr); // Need to still add nullptr to keep indices correct.
+                    prior_values.push_back({}); // Need to still add empty to keep indices correct.
                 }
 
                 if (scase.cond->is(NodeKind::Bool)) {
@@ -1510,10 +1823,13 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
                 if (!scase.cond->is_foldable || is_bool_type) {
                     switchn->all_conds_foldable = false;
                 }
+            } else {
+                prior_values.push_back({}); // Need to still add empty to keep indices correct.
             }
         } else if (case_count != switchn->cases.size() - 1) {
             error(scase.scope, "Default case must go at end of switch")
                 .end_error(ErrCode::SemaDefaultCaseMustGoLast);
+            prior_values.push_back({}); // Need to still add empty to keep indices correct.
         }
         check_case_scope(scase.scope);
 

@@ -1656,6 +1656,31 @@ llvm::Value* acorn::IRGenerator::gen_switch_non_foldable(SwitchStmt* switchn) {
         if (scase.cond->type->is_ignore_const(context.bool_type)) {
             // It is an operation that results in a boolean so branch on that condition.
             gen_branch_on_condition(static_cast<Expr*>(scase.cond), ll_then_bb, ll_else_bb);
+        } else if (scase.cond->type->is_range()) {
+            auto ll_value = gen_rvalue(switchn->on);
+            auto range = static_cast<BinOp*>(scase.cond);
+            auto range_type = static_cast<RangeType*>(range->type);
+            auto value_type = range_type->get_value_type();
+
+            llvm::Value* ll_lhs = nullptr, *ll_rhs = nullptr;
+            if (value_type->is_signed()) {
+                ll_lhs = builder.CreateICmpSGE(ll_value, gen_rvalue(range->lhs), "gte");
+                if (range->op == Token::RangeEq) {
+                    ll_rhs = builder.CreateICmpSLE(ll_value, gen_rvalue(range->rhs), "lte");
+                } else {
+                    ll_rhs = builder.CreateICmpSLT(ll_value, gen_rvalue(range->rhs), "lt");
+                }
+            } else {
+                ll_lhs = builder.CreateICmpUGE(ll_value, gen_rvalue(range->lhs), "gte");
+                if (range->op == Token::RangeEq) {
+                    ll_rhs = builder.CreateICmpULE(ll_value, gen_rvalue(range->rhs), "lte");
+                } else {
+                    ll_rhs = builder.CreateICmpULT(ll_value, gen_rvalue(range->rhs), "lt");
+                }
+            }
+            auto ll_cond = builder.CreateOr(ll_lhs, ll_rhs, "or");
+
+            builder.CreateCondBr(ll_cond, ll_then_bb, ll_else_bb);
         } else {
             auto ll_cond = gen_equal(gen_rvalue(switchn->on), gen_rvalue(scase.cond));
             builder.CreateCondBr(ll_cond, ll_then_bb, ll_else_bb);
@@ -1702,44 +1727,72 @@ llvm::Value* acorn::IRGenerator::gen_switch_foldable(SwitchStmt* switchn) {
     // Allow breaking on the switch.
     emit_dbg(di_emitter->emit_location(builder, switchn->loc));
 
-    llvm::SmallVector<llvm::BasicBlock*, 64> ll_case_blocks;
-    for (SwitchCase scase : switchn->cases) {
-        bool is_default_scope = scase.scope == switchn->default_scope;
-        auto ll_case_bb = is_default_scope ? ll_default_bb
-                                           : gen_bblock("sw.case", ll_cur_func);
-        ll_case_blocks.push_back(ll_case_bb);
-    }
-
     // The default scope is forced to be at the end so we can
     // just safely add it here.
     if (switchn->default_scope) {
         insert_bblock_at_end(ll_default_bb);
     }
 
-    size_t case_count = 0;
-    for (SwitchCase scase : switchn->cases) {
-    
-        auto ll_case_bb = ll_case_blocks[case_count];
-        builder.SetInsertPoint(ll_case_bb);
+    auto add_cases = [this, ll_switch](SwitchCase scase, llvm::BasicBlock* ll_case_bb) finline {
+        if (scase.cond->type->is_range()) {
+            auto range = static_cast<BinOp*>(scase.cond);
+            auto range_type = static_cast<RangeType*>(scase.cond->type);
+            auto value_type = range_type->get_value_type();
 
-        if (scase.cond) {
+            auto ll_int_type = llvm::Type::getIntNTy(context.get_ll_context(), value_type->get_number_of_bits());
+            iterate_over_range_values(range, [ll_int_type, ll_case_bb, ll_switch, value_type](uint64_t value) {
+                auto ll_case_value = llvm::ConstantInt::get(ll_int_type, value, value_type->is_signed());
+                ll_switch->addCase(ll_case_value, ll_case_bb);
+            });
+        } else {
             auto ll_case_value = llvm::cast<llvm::ConstantInt>(gen_rvalue(scase.cond));
             ll_switch->addCase(ll_case_value, ll_case_bb);
         }
+    };
 
-        if (!scase.scope->empty()) {
-            // Insert a new lexical debug scope per switch scope because we want to treat
-            // the variables within the scopes as self contained.
-            gen_scope_with_dbg_scope(scase.scope);
-            gen_branch_if_not_term_with_dbg_loc(ll_end_bb, scase.scope->end_loc);
-        } else if (case_count + 1 != switchn->cases.size()) {
-            auto ll_next_then_bb = ll_case_blocks[case_count + 1];
-            gen_branch_if_not_term_with_dbg_loc(ll_next_then_bb, scase.scope->end_loc);
-        } else {
-            gen_branch_if_not_term_with_dbg_loc(ll_end_bb, scase.scope->end_loc);
+    for (size_t case_count = 0; case_count < switchn->cases.size(); case_count++) {
+        
+        SwitchCase scase = switchn->cases[case_count];
+        
+        bool is_last = case_count == switchn->cases.size() - 1;
+        
+        auto ll_case_bb = gen_bblock("sw.case", ll_cur_func);
+
+        if (scase.scope->empty() && !is_last) {
+            // As long as the cases are empty we can just generate the
+            // cases to point at a single sw.case block.
+            do {
+
+                add_cases(scase, ll_case_bb);
+
+                scase = switchn->cases[++case_count];
+                is_last = case_count == switchn->cases.size() - 1;
+                if (!scase.scope->empty() || is_last) {
+                    break;
+                }
+            } while (true);
         }
 
-        ++case_count;
+        bool is_default_scope = scase.scope == switchn->default_scope;
+
+        if (is_default_scope) {
+            auto ll_original_bb = ll_case_bb;
+            ll_case_bb->replaceAllUsesWith(ll_default_bb);
+            ll_case_bb = ll_default_bb;
+            ll_original_bb->removeFromParent();
+        }
+
+        if (!is_default_scope) {
+            add_cases(scase, ll_case_bb);
+        }
+
+        builder.SetInsertPoint(ll_case_bb);
+
+        // Insert a new lexical debug scope per switch scope because we want to treat
+        // the variables within the scopes as self contained.
+        gen_scope_with_dbg_scope(scase.scope);
+        gen_branch_if_not_term_with_dbg_loc(ll_end_bb, scase.scope->end_loc);
+
     }
 
     builder.SetInsertPoint(ll_end_bb);

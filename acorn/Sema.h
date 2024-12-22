@@ -56,7 +56,7 @@ namespace acorn {
         bool should_request_gen_queue;
 
         // How many nested loops currently within.
-        int loop_depth = 0;
+        int loop_depth   = 0;
 
         // A structure to keep track of current scope information
         // to help report errors.

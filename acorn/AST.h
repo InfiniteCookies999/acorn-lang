@@ -30,6 +30,7 @@ namespace acorn {
     class StructType;
     struct ComptimeIfStmt;
     struct Struct;
+    struct BinOp;
 
     const size_t MAX_FUNC_PARAMS = 64;
 
@@ -414,6 +415,10 @@ namespace acorn {
 
     // Expressions
     //--------------------------------------
+
+    void iterate_over_range_values(BinOp* range, const std::function<void(uint64_t)>& cb);
+
+    uint64_t get_total_range_values(BinOp* range);
 
     struct Expr : Node {
         Expr(NodeKind kind) : Node(kind) {

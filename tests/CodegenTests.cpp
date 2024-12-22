@@ -707,7 +707,7 @@ static void loop_tests() {
 
         expect(result, std::identity()).to_be("Pizza!");
     });
-}//93
+}
 
 static void logical_bin_ops_tests() {
     test("Logical and bin op", [&] {
@@ -784,6 +784,54 @@ static void switch_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("default case");
+    });
+    test("Switch with range captures lowest value", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("range case");
+    });
+    test("Switch with range captures middle value", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches10.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("range case");
+    });
+    test("Switch with range captures end value", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches11.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("range case");
+    });
+    test("Switch with range lt not captures end value", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches12.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("end");
+    });
+    test("Switch with range (bg range no-fold) captures lowest value", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches13.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("range case");
+    });
+    test("Switch with range (bg range no-fold) captures middle value", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches14.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("range case");
+    });
+    test("Switch with range (bg range no-fold) captures end value", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches15.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("range case");
+    });
+    test("Switch with range (bg range no-fold) lt not captures end value", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches16.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("range case");
     });
 }
 
