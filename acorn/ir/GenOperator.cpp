@@ -375,6 +375,9 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
             // we recieve is just the pointer value itself so there is nothing
             // to dereference.
             return ll_ptr;
+        } else if (expr->is(NodeKind::This)) {
+            // We store the 'this' pointer by value not by address.
+            return ll_ptr;
         }
 
         return builder.CreateLoad(gen_type(expr->type), ll_ptr);

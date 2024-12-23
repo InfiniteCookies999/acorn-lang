@@ -77,6 +77,7 @@ namespace acorn {
         struct DestructorObject {
             Type*        type;
             llvm::Value* ll_address;
+            SourceLoc    loc;
         };
 
         struct IRScope {

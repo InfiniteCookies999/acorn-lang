@@ -1367,6 +1367,18 @@ static void destructors_tests() {
 
         expect(result, std::identity()).to_be("called");
     });
+    test("Destructor reassign with initializer destroys copy and original", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test31.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("created created before before before ");
+    });
+    test("Destructor reassign with call destroys copy and original", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test32.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("created created before before before ");
+    });
 }
 
 static void copy_constructor_tests() {

@@ -2357,6 +2357,9 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             return;
         }
 
+        // This is a hack, get_integer_type was not meant to work with pointers
+        // but since it's first check is if the types are equal ignoring const
+        // it can still work with pointers.
         auto result_type = get_integer_type(false);
         if (!(result_type ||
              (rhs->type->is_pointer() && lhs->type->get_kind() == TypeKind::Null) ||
@@ -2459,12 +2462,6 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
     case '*': {
         if (!expr->type->is_pointer()) {
             error_no_applies();
-            return;
-        }
-
-        if (expr->is(NodeKind::This)) {
-            error(expand(unary_op), "Cannot dereference 'this' ptr")
-                .end_error(ErrCode::SemaCannotDereferenceThisPtr);
             return;
         }
 

@@ -128,7 +128,7 @@ X(SemaFieldHasDllimportModifier            , 20079)
 X(SemaMemberFuncHasNativeModifier          , 20080)
 X(SemaMemberFuncHasDllimportModifier       , 20081)
 X(SemaThisNotInStruct                      , 20082)
-X(SemaCannotDereferenceThisPtr             , 20083)
+
 X(SemaNativeFunctionsCannotReturnArrays    , 20084)
 X(SemaNativeFunctionsCannotReturnStructs   , 20085)
 X(SemaInvalidIntrinsicDecl                 , 20086)

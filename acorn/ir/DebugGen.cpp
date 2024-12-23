@@ -127,6 +127,10 @@ void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction, S
 	ll_instruction->setDebugLoc(di_location);
 }
 
+void acorn::DebugInfoEmitter::emit_location_at_last_statement(llvm::IRBuilder<>& ir_builder) {
+	emit_location(ir_builder, last_stmt->loc);
+}
+
 void acorn::DebugInfoEmitter::emit_function_variable(Var* var, llvm::IRBuilder<>& ir_builder) {
 	auto di_scope = di_lexical_scopes.back();
 	

@@ -97,6 +97,7 @@ acorn::Type* acorn::TypeTable::get_ptr_type(Type* elm_type) {
             ptr_type->non_const_version = itr->second;
         } else {
             auto new_non_const_ptr_type = PointerType::create(allocator, non_const_elm_type);
+            new_non_const_ptr_type->non_const_version = new_non_const_ptr_type;
             ptr_types.insert({ non_const_elm_type, new_non_const_ptr_type });
             ptr_type->non_const_version = new_non_const_ptr_type;
         }
