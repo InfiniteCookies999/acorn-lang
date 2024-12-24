@@ -1379,6 +1379,18 @@ static void destructors_tests() {
 
         expect(result, std::identity()).to_be("created created before before before ");
     });
+    test("Destructor temp obj for implicit param ptr", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test33.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("hello! called");
+    });
+    test("Destructor temp obj from func call for implicit param ptr", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test34.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("hello! called");
+    });
 }
 
 static void copy_constructor_tests() {
@@ -1495,6 +1507,51 @@ static void auto_type_tests() {
     });
 }
 
+static void test_implicit_ptrs() {
+    test("Implicit pointer passing integer values", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test1.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@ABBB");
+    });
+    test("Implicit pointer passing struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test2.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCDCDCD");
+    });
+    test("Implicit pointer passing from func call ret (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test3.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@");
+    });
+    test("Implicit pointer passing from func call ret (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test4.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Implicit pointer passing an array", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test5.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCDABCDABCDABCD");
+    });
+    test("Implicit pointer passing an array from func call (sm array)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test6.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("@");
+    });
+    test("Implicit pointer passing an array from func call (bg array)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCD");
+    });
+}
+
 void test_codegen() {
 
     executable_path = get_executable_path();
@@ -1537,5 +1594,6 @@ void test_codegen() {
         destructors_tests();
         copy_constructor_tests();
         auto_type_tests();
+        test_implicit_ptrs();
     }, true);
 }

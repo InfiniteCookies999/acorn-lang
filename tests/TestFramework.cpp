@@ -198,6 +198,8 @@ acorn::Logger& mock_logger(acorn::Logger& logger) {
 }
 
 void run_tests() {
+    std::ios::sync_with_stdio(false);
+
     if (single_run_case) {
         current_test = single_run_case;
         single_run_case->run();

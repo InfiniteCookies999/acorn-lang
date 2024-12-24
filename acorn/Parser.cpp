@@ -433,6 +433,11 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type) {
 
 acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Identifier name, bool is_copy_constructor) {
     
+    // -- Debug
+    // if (name != Identifier::Invalid) {
+    //     Logger::debug("parsing function: %s", name);
+    // }
+
     Func* func = new_declaration<Func, true>(modifiers, name, prev_token);
     func->return_type = type;
     func->is_copy_constructor = is_copy_constructor;
@@ -446,8 +451,15 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
         bool more_params = false, full_reported = false;
         uint32_t param_idx = 0;
         do {
-            Var* param = parse_variable();
+            Type* type = parse_type_for_decl();
+            bool has_implicit_ptr = cur_token.is('^');
+            if (has_implicit_ptr) {
+                next_token(); // Consuming '^' token.
+                type = type_table.get_ptr_type(type);
+            }
+            Var* param = parse_variable(0, type);
             param->param_idx = param_idx++;
+            param->has_implicit_ptr = has_implicit_ptr;
 
             if (func->params.size() != MAX_FUNC_PARAMS) {
                 func->params.push_back(param);
@@ -1162,23 +1174,23 @@ acorn::Type* acorn::Parser::parse_type() {
         return type;
     }
 
-    while (cur_token.is('*')) {
-        type = type_table.get_ptr_type(type);
-        next_token();
-    }
+    while (cur_token.is('*') || cur_token.is('[')) {
+        if (cur_token.is('*')) {
+            type = type_table.get_ptr_type(type);
+            next_token();
+        } else {
+            llvm::SmallVector<Expr*, 8> arr_lengths;
+            while (cur_token.is('[')) {
+                next_token();
 
-    llvm::SmallVector<Expr*, 8> arr_lengths;
-    while (cur_token.is('[')) {
-        next_token();
+                arr_lengths.push_back(cur_token.is_not(']') ? parse_expr()
+                                                            : nullptr);
 
-        arr_lengths.push_back(cur_token.is_not(']') ? parse_expr()
-                                                    : nullptr);
-        
-        expect(']');
-    }
+                expect(']');
+            }
 
-    if (!arr_lengths.empty()) {
-        type = construct_array_type(type, arr_lengths);
+            type = construct_array_type(type, arr_lengths);
+        }
     }
 
     type = parse_optional_function_type(type);

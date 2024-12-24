@@ -171,6 +171,7 @@ namespace acorn {
                                             llvm::Value* ll_in_this,
                                             Node* lvalue);
         llvm::Value* gen_function_call_arg(Expr* arg);
+        llvm::Value* gen_function_call_arg_for_implicit_ptr(Expr* arg);
         llvm::Value* gen_function_type_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue);
         void gen_call_return_aggr_type_temporary(Type* return_type,
                                                  bool uses_aggr_param,

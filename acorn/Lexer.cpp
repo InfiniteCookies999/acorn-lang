@@ -247,6 +247,7 @@ void acorn::Lexer::eat_single_line_comment() {
 }
 
 void acorn::Lexer::eat_multiline_comment() {
+    
     ptr += 2; // Skip '/*'
 
     int depth = 1;

@@ -152,6 +152,13 @@ String read(const char* path) {
 }
 
 /*
+ * Reads an entire file into a string.
+ */
+String read(String^ path) {
+    return read(path.buffer);
+}
+
+/*
  * Returns true if the file system has a file or
  * directory at the given path.
  */
@@ -162,6 +169,14 @@ bool exists(const char* path) {
 #elif OS_GROUP_UNIX
     return unix.access(path, unix.F_OK) == 0;
 #endif
+}
+
+/*
+ * Returns true if the file system has a file or
+ * directory at the given path.
+ */
+bool exists(String^ path) {
+    return exists(path.buffer);
 }
 
 /*
@@ -183,6 +198,14 @@ bool file_exists(const char* path) {
 }
 
 /*
+ * Returns true if the file system has a file but
+ * is not a directory at the given path.
+ */
+bool file_exists(String^ path) {
+    return file_exists(path.buffer);
+}
+
+/*
  * Returns true if the file system has a directory
  * at the given path.
  */
@@ -201,6 +224,14 @@ bool directory_exists(const char* path) {
 }
 
 /*
+ * Returns true if the file system has a directory
+ * at the given path.
+ */
+bool directory_exists(String^ path) {
+    return directory_exists(path.buffer);
+}
+
+/*
  * Creates the directory at the given path. Returns
  * true if created.
  */
@@ -215,6 +246,14 @@ bool mkdir(const char* path) {
 #elif OS_GROUP_UNIX
     return unix.mkdir(path, 0775) == 0;
 #endif
+}
+
+/*
+ * Creates the directory at the given path. Returns
+ * true if created.
+ */
+bool mkdir(String^ path) {
+    return mkdir(path.buffer);
 }
 
 FileHandle open(const char* path, uint32 flags) {
@@ -301,4 +340,8 @@ FileHandle open(const char* path, uint32 flags) {
 
     return FileHandle{ handle };
 #endif
+}
+
+FileHandle open(String^ path, uint32 flags) {
+    return open(path.buffer, flags);
 }

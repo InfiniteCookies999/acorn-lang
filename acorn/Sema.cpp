@@ -2993,11 +2993,21 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         }
         
         if (!is_assignable_to(param->type, arg_value)) {
-            if constexpr (for_score_gathering) {
-                ++not_assignable_types;
-                continue;
-            } else {
-                return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
+            bool not_assignable = true;
+            if (param->has_implicit_ptr) {
+                auto ptr_type = static_cast<PointerType*>(param->type);
+                if (ptr_type->get_elm_type()->is(arg_value->type)) {
+                    not_assignable = false;
+                }
+            }
+            
+            if (not_assignable) {
+                if constexpr (for_score_gathering) {
+                    ++not_assignable_types;
+                    continue;
+                } else {
+                    return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
+                }
             }
         }
 

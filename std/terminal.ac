@@ -17,7 +17,7 @@ void print(const char* s) {
     print(s, strlen(s));
 }
 
-void print(String* s) {
+void print(String^ s) {
     print(s.buffer, s.length);
 }
 
@@ -81,7 +81,7 @@ void println(bool b) {
     print("\n");
 }
 
-void println(String* s) {
+void println(String^ s) {
     print(s);
     print("\n");
 }

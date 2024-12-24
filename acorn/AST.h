@@ -234,6 +234,7 @@ namespace acorn {
         Expr* assignment      = nullptr;
         bool has_been_checked = false;
         bool is_foldable      = false;
+        bool has_implicit_ptr = false;
 
         // If the variable is foldable then this contains the
         // generated value of the variable.

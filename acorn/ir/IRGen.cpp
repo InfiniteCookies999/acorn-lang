@@ -154,7 +154,9 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
         // store the value `5` to.
         //
         UnaryOp* unary_op = static_cast<UnaryOp*>(node);
-        if (unary_op->op == '*') {
+        if (unary_op->op == '*' &&
+            !node->type->is_array() // Do not load an array because they must be treated like lvalues.
+            ) {
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
     } else if (node->kind == NodeKind::MemoryAccess) {
@@ -2022,6 +2024,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
 }
 
 llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
+    
     if (arg->is(NodeKind::IdentRef)) {
         auto ref = static_cast<IdentRef*>(arg);
         if (ref->is_var_ref() &&
@@ -2034,7 +2037,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
     }
         
     if (arg->type->is_struct_type()) {
-            
+        
         auto struct_type = static_cast<StructType*>(arg->type);
         auto ll_struct_type = gen_struct_type(struct_type);
         uint64_t aggr_mem_size_bytes = sizeof_type_in_bytes(ll_struct_type);
@@ -2078,6 +2081,39 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
     }
 
     return gen_rvalue(arg);
+}
+
+llvm::Value* acorn::IRGenerator::gen_function_call_arg_for_implicit_ptr(Expr* arg) {
+    if (arg->cast_type) {
+        // The cast type was not needed anyway since this function effectively handles
+        // the "casting".
+        arg->cast_type = nullptr;
+
+        if (arg->kind == NodeKind::IdentRef ||
+            arg->kind == NodeKind::DotOperator) {
+            auto ref = static_cast<IdentRef*>(arg);
+            return gen_node(arg);
+        } else if (arg->kind == NodeKind::UnaryOp) {
+            // Read the description under gen_rvalue for why this can be considered
+            // an lvalue.
+            auto unary_op = static_cast<UnaryOp*>(arg);
+            if (unary_op->op == '*') {
+                return gen_node(arg);
+            }
+        } else if (arg->kind == NodeKind::MemoryAccess) {
+            return gen_node(arg);
+        }
+
+        // It is an rvalue so we need to create a temporary to pass it to the function.
+        auto ll_tmp_address = gen_unseen_alloca(arg->type, "tmp.imp.ptr.arg");
+        process_destructor_state(arg->type, ll_tmp_address);
+        gen_assignment(ll_tmp_address, arg->type, arg);
+
+        return ll_tmp_address;
+    } else {
+        // Well must already be the pointer!
+        return gen_rvalue(arg);
+    }
 }
 
 llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
@@ -2129,9 +2165,19 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         if (arg->is(NodeKind::NamedValue)) {
             auto named_arg = static_cast<NamedValue*>(arg);
             size_t arg_idx = arg_offset + named_arg->mapped_idx;
-            ll_args[arg_idx] = gen_function_call_arg(named_arg->assignment);
+            Var* param = called_func->params[named_arg->mapped_idx];
+            if (param->has_implicit_ptr) {
+                ll_args[arg_idx] = gen_function_call_arg(named_arg->assignment);
+            } else {
+                ll_args[arg_idx] = gen_function_call_arg_for_implicit_ptr(named_arg->assignment);
+            }
         } else {
-            ll_args[arg_offset + i] = gen_function_call_arg(arg);
+            Var* param = called_func->params[i];
+            if (!param->has_implicit_ptr) {
+                ll_args[arg_offset + i] = gen_function_call_arg(arg);
+            } else {
+                ll_args[arg_offset + i] = gen_function_call_arg_for_implicit_ptr(arg);
+            }
         }
     }
 
