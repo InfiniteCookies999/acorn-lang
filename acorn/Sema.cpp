@@ -1094,19 +1094,26 @@ void acorn::Sema::check_struct(Struct* structn) {
     structn->is_being_checked = true;
     structn->has_been_checked = true; // Set early to prevent circular checking.
 
-    auto process_field_struct_type_state = [this,structn](StructType* field_struct_type) finline {
+    auto process_field_struct_type_state = [this, structn](SourceLoc field_loc, StructType* field_struct_type) finline {
         auto field_struct = field_struct_type->get_struct();
-                
-        structn->needs_destruction |= field_struct->needs_destruction;
+        
+        structn->needs_destruction       |= field_struct->needs_destruction;
         structn->fields_need_destruction |= field_struct->needs_destruction;
 
-        structn->needs_copy_call |= field_struct->needs_copy_call;
+        structn->needs_copy_call       |= field_struct->needs_copy_call;
         structn->fields_need_copy_call |= field_struct->needs_copy_call;
 
-        structn->needs_move_call |= field_struct->needs_move_call;
+        structn->needs_move_call       |= field_struct->needs_move_call;
         structn->fields_need_move_call |= field_struct->needs_move_call;
 
         structn->needs_default_call |= field_struct->needs_default_call;
+
+        if (field_struct->is_being_checked) {
+            display_circular_dep_error(field_loc,
+                                       cur_struct,
+                                       "Circular struct dependency results in infinite storage requirement for struct",
+                                       ErrCode::SemaCircularStructDeclDependency);
+        }
     };
 
     uint32_t field_count = 0;
@@ -1129,12 +1136,12 @@ void acorn::Sema::check_struct(Struct* structn) {
             structn->fields_have_errors = true;
         } else {
             if (field->type->is_struct_type()) {
-                process_field_struct_type_state(static_cast<StructType*>(field->type));
+                process_field_struct_type_state(field->loc, static_cast<StructType*>(field->type));
             } else if (field->type->is_array()) {
                 auto arr_type = static_cast<ArrayType*>(field->type);
                 auto base_type = arr_type->get_base_type();
                 if (base_type->is_struct_type()) {
-                    process_field_struct_type_state(static_cast<StructType*>(base_type));
+                    process_field_struct_type_state(field->loc, static_cast<StructType*>(base_type));
                 }
             }
         }
@@ -1146,11 +1153,6 @@ void acorn::Sema::check_struct(Struct* structn) {
     structn->needs_default_call |= structn->fields_have_assignments || structn->default_constructor;
 
     structn->is_being_checked = false;
-
-    // Note: We need to check these after is_being_checked has been set to false because
-    //       otherwise the function declaration checking will think there is a circular
-    //       dependency with the struct type since the constructor's can reference the
-    //       struct type.
 
     if (structn->destructor) {
         if (structn->destructor->has_checked_declaration || check_function_decl(structn->destructor)) {
@@ -3393,17 +3395,10 @@ void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) 
 }
 
 bool acorn::Sema::ensure_struct_checked(SourceLoc error_loc, Struct* structn) {
-    if (structn->is_being_checked) {
-        logger.begin_error(error_loc,
-                           "Circular dependency while checking struct declaration '%s'",
-                           structn->name);
-        logger.add_line([structn](Logger& logger) {
-            logger.print("Struct declared at: ");
-            structn->show_location_msg(logger);
-        });
-        logger.end_error(ErrCode::SemaCircularStructDeclDependency);
-        return false;
+    if (cur_struct) {
+        cur_struct->dependency = structn;
     }
+
     if (!structn->has_been_checked) {
         Sema sema(context, structn->file, structn->get_logger());
         sema.check_struct(structn);

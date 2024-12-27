@@ -135,7 +135,7 @@ namespace acorn {
         //
         // This is used to help display information about circular
         // dependencies.
-        Var* dependency = nullptr;
+        Decl* dependency = nullptr;
 
         bool has_modifier(uint32_t modifier) {
             return (modifiers & modifier) != 0;

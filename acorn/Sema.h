@@ -50,7 +50,7 @@ namespace acorn {
 
         Func*   cur_func;
         Var*    cur_global_var = nullptr;
-        Struct* cur_struct = nullptr;
+        Struct* cur_struct     = nullptr;
 
         bool is_comptime_if_cond = false;
         bool should_request_gen_queue;
