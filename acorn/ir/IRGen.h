@@ -113,6 +113,7 @@ namespace acorn {
         void gen_implicit_default_constructor(Struct* structn);
         void gen_implicit_destructor(Struct* structn);
         void gen_implicit_copy_constructor(Struct* structn);
+        void gen_implicit_move_constructor(Struct* structn);
 
         void gen_function_decl(Func* func);
         llvm::Type* gen_function_return_type(Func* func, bool is_main);
@@ -190,7 +191,8 @@ namespace acorn {
                             Type* to_type,
                             Expr* value,
                             Node* lvalue = nullptr,
-                            bool is_assign_op = false);
+                            bool is_assign_op = false,
+                            bool try_move = false);
         void gen_default_value(llvm::Value* ll_address, Type* type, Node* lvalue = nullptr);
         llvm::Constant* gen_zero(Type* type);
         llvm::Constant* gen_one(Type* type);
@@ -262,12 +264,16 @@ namespace acorn {
 
         bool is_decayed_array(Expr* arr);
 
-        ImplicitFunc* create_implicit_function(ImplicitFunc::Kind kind, Struct* structn);
+        ImplicitFunc* create_implicit_function(ImplicitFunc::ImplicitKind implicit_kind, Struct* structn);
 
-        void copy_struct_field_if_has_copy_constructor(Var* field,
-                                                       llvm::Value* ll_to_struct_address,
-                                                       llvm::Value* ll_from_struct_address,
-                                                       llvm::Type* ll_struct_type);
+        void copy_struct_field_constructor(Var* field,
+                                           llvm::Value* ll_to_struct_address,
+                                           llvm::Value* ll_from_struct_address,
+                                           llvm::Type* ll_struct_type);
+        void try_move_then_copy_struct_field_constructor(Var* field,
+                                                         llvm::Value* ll_to_struct_address,
+                                                         llvm::Value* ll_from_struct_address,
+                                                         llvm::Type* ll_struct_type);
 
         void gen_copy_struct(llvm::Value* ll_to_address,
                              llvm::Value* ll_from_address,
@@ -285,6 +291,23 @@ namespace acorn {
                                               ArrayType* arr_type,
                                               Struct* structn,
                                               Node* lvalue = nullptr);
+        
+        void gen_call_array_move_constructors(llvm::Value* ll_to_address,
+                                              llvm::Value* ll_from_address,
+                                              ArrayType* arr_type,
+                                              Struct* structn,
+                                              Node* lvalue = nullptr);
+        void gen_call_move_constructor(llvm::Value* ll_to_address,
+                                       llvm::Value* ll_from_address,
+                                       Struct* structn,
+                                       Node* lvalue = nullptr);
+
+        void gen_abstract_double_array_loop(llvm::Value* ll_to_address,
+                                            llvm::Value* ll_from_address,
+                                            ArrayType* arr_type,
+                                            Struct* structn,
+                                            const std::function<void(llvm::Value*, llvm::Value*)>& gen_cb,
+                                            Node* lvalue = nullptr);
 
         llvm::Value* gen_handle_returned_aggregate_obj(FuncCall* call, llvm::Value* ll_ret, const char* tmp_obj_name);
 

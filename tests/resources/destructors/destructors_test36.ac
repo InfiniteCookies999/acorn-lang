@@ -1,0 +1,78 @@
+
+#if OS_GROUP_WINDOWS
+
+native dllimport void* GetStdHandle(uint32 nStdHandle);
+
+native dllimport int32 WriteFile(void*       hFile,
+                                 const void* lpBuffer,
+                                 uint32      nNumberOfBytesToWrite,
+                                 uint32*     lpNumberOfBytesWritten,
+                                 void*       lpOverlapped);
+
+#elif OS_GROUP_UNIX
+
+native isize write(int32 fd, const void* buf, usize count);
+
+#endif
+
+void write_val(int64 val) {
+
+#if OS_GROUP_WINDOWS
+    void* handle = GetStdHandle(-11);
+    uint32 written;
+    char c = as(char) val;
+    WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    char c = as(char) val;
+    write(1, &c, 1);
+#endif
+
+}
+
+void print(const char* s, int length) {
+#if OS_GROUP_WINDOWS
+    void* handle = GetStdHandle(-11);
+    uint32 written;
+    WriteFile(handle, s, as(uint32) length, &written, null);
+#elif OS_GROUP_UNIX
+    write(1, s, as(usize) length);
+#endif
+}
+
+struct A {
+    int64 v1 = 65;
+    int64 v2 = 66;
+    int64 v3 = 67;
+    int64 v4 = 68;
+
+    ~A() {
+        print("called", 6);
+        v1 = 35;
+        v1 = 36;
+        v1 = 37;
+        v1 = 38;
+    }
+}
+
+A foo(bool t) {
+    A a;
+
+    if t {
+        return a;
+    }
+    
+    return A{};
+}
+
+void main() {
+    A a1 = foo(true);
+    write_val(a1.v1);
+    write_val(a1.v2);
+    write_val(a1.v3);
+    write_val(a1.v4);
+    A a2 = foo(false);
+    write_val(a2.v1);
+    write_val(a2.v2);
+    write_val(a2.v3);
+    write_val(a2.v4);
+}

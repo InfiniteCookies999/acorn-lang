@@ -789,6 +789,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_this(static_cast<This*>(node));
     case NodeKind::SizeOf:
         return check_sizeof(static_cast<SizeOf*>(node));
+    case NodeKind::MoveObj:
+        return check_moveobj(static_cast<MoveObj*>(node), false);
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -936,6 +938,8 @@ void acorn::Sema::check_variable(Var* var) {
             }
 
             check_array(static_cast<Array*>(var->assignment), fixed_up_elm_type);
+        } else if (var->assignment->is(NodeKind::MoveObj)) {
+            check_moveobj(static_cast<MoveObj*>(var->assignment), true);
         } else {
             check_node(var->assignment);
         }
@@ -1099,6 +1103,9 @@ void acorn::Sema::check_struct(Struct* structn) {
         structn->needs_copy_call |= field_struct->needs_copy_call;
         structn->fields_need_copy_call |= field_struct->needs_copy_call;
 
+        structn->needs_move_call |= field_struct->needs_move_call;
+        structn->fields_need_move_call |= field_struct->needs_move_call;
+
         structn->needs_default_call |= field_struct->needs_default_call;
     };
 
@@ -1153,24 +1160,31 @@ void acorn::Sema::check_struct(Struct* structn) {
             }
         }
     }
-    if (structn->copy_constructor) {
-        if (structn->copy_constructor->has_checked_declaration || check_function_decl(structn->copy_constructor)) {
+    auto check_move_or_copy_has_correct_param_type = [this, structn](Func* constructor, bool is_copy) finline {
+        if (constructor->has_checked_declaration || check_function_decl(constructor)) {
             auto struct_ptr_type = type_table.get_ptr_type(structn->struct_type);
-            if (structn->copy_constructor->params.size() != 1) {
-                error(structn->copy_constructor,
-                      "Copy constructor expected to have expactly one parameter of type '%s'",
-                      struct_ptr_type)
+            if (constructor->params.size() != 1) {
+                error(constructor,
+                      "%s constructor expected to have expactly one parameter of type '%s'",
+                      is_copy ? "Copy" : "Move", struct_ptr_type)
                     .end_error(ErrCode::SemaCopyConstructorExpectsOneParam);
             } else {
-                auto param1 = structn->copy_constructor->params[0];
+                auto param1 = constructor->params[0];
                 if (param1->type->is_not(struct_ptr_type)) {
                     error(param1,
-                          "Copy constructor parameter expected to be of type '%s'",
-                          struct_ptr_type)
-                        .end_error(ErrCode::SemaCopyConstructorExpectedStructPtrType);
+                          "%s constructor parameter expected to be of type '%s'",
+                          is_copy ? "Copy" : "Move", struct_ptr_type)
+                        .end_error(is_copy ? ErrCode::SemaCopyConstructorExpectedStructPtrType
+                                           : ErrCode::SemaMoveConstructorExpectedStructPtrType);
                 }
             }
         }
+    };
+    if (structn->copy_constructor) {
+        check_move_or_copy_has_correct_param_type(structn->copy_constructor, true);
+    }
+    if (structn->move_constructor) {
+        check_move_or_copy_has_correct_param_type(structn->move_constructor, false);
     }
 
     cur_struct = prev_struct;
@@ -1232,6 +1246,7 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
             }
         } else {
             cur_func->cannot_use_aggr_ret_var = true;
+            cur_func->aggr_ret_var = nullptr;
         }
 
     } else {
@@ -2001,6 +2016,23 @@ void acorn::Sema::check_sizeof(SizeOf* sof) {
     sof->type = context.int_type;
 }
 
+void acorn::Sema::check_moveobj(MoveObj* move_obj, bool has_destination_address) {
+    check_and_verify_type(move_obj->value);
+
+    if (!is_lvalue(move_obj->value)) {
+        error(expand(move_obj), "moveobj expects the value to have an address")
+            .end_error(ErrCode::SemaMoveObjValueMustHaveAddress);
+    }
+
+    if (!has_destination_address) {
+        error(expand(move_obj), "moveobj must be assigned to an address")
+            .end_error(ErrCode::SemaMoveObjMustBeAssignedToAddress);
+    }
+
+    move_obj->type = move_obj->value->type;
+    move_obj->is_foldable = false;
+}
+
 acorn::Sema::SemScope acorn::Sema::push_scope() {
     SemScope sem_scope;
     sem_scope.parent = cur_scope;
@@ -2244,7 +2276,14 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     };
 
     check_and_verify_type(lhs);
-    check_and_verify_type(rhs);
+    if (bin_op->op == '=' && rhs->is(NodeKind::MoveObj)) {
+        check_moveobj(static_cast<MoveObj*>(rhs), true);
+        if (!rhs->type) {
+            return;
+        }
+    } else {
+        check_and_verify_type(rhs);
+    }
 
     if (!lhs->is_foldable || !rhs->is_foldable) {
         bin_op->is_foldable = false;
@@ -2698,7 +2737,11 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     
     bool args_have_errors = false;
     for (Expr* arg : call->args) {
-        check_node(arg);
+        if (arg->is(NodeKind::MoveObj)) {
+            check_moveobj(static_cast<MoveObj*>(arg), true);
+        } else {
+            check_node(arg);
+        }
         if (!arg->type) args_have_errors = true;
     }
     if (args_have_errors) return;
@@ -2887,7 +2930,7 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm:
     // We just want to define enough to definitely place the next score
     // value above any of the mismatched types.
     const uint32_t MAX_ARGS_SCORE_CAP          = MAX_FUNC_PARAMS * 4;
-    const uint32_t MAX_NOT_ASSIGNABLE_CAP      = MAX_ARGS_SCORE_CAP *2;
+    const uint32_t MAX_NOT_ASSIGNABLE_CAP      = MAX_ARGS_SCORE_CAP * 2;
 
     const uint32_t INCORRECT_PARAM_NAME_OR_ORD = MAX_NOT_ASSIGNABLE_CAP * 2;
     const uint32_t INCORRECT_NUM_ARGS_CAP      = MAX_NOT_ASSIGNABLE_CAP * 2;
@@ -2994,7 +3037,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         
         if (!is_assignable_to(param->type, arg_value)) {
             bool not_assignable = true;
-            if (param->has_implicit_ptr) {
+            if (param->has_implicit_ptr && arg_value->is_not(NodeKind::MoveObj)) {
                 auto ptr_type = static_cast<PointerType*>(param->type);
                 if (ptr_type->get_elm_type()->is(arg_value->type)) {
                     not_assignable = false;
@@ -3186,8 +3229,22 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
 
         auto param_type = get_param_type(param, i);
         if (!is_assignable_to(param_type, arg_value)) {
-            err_line("Wrong type for arg %s. Expected '%s' but found '%s'",
-                     i + 1, param_type, arg_value->type);
+            bool is_assignable = false;
+            if (param->has_implicit_ptr) {
+                auto ptr_type = static_cast<PointerType*>(param->type);
+                if (arg_value->type->is(ptr_type->get_elm_type())) {
+                    is_assignable = true;
+                    if (arg_value->is(NodeKind::MoveObj)) {
+                        err_line("Cannot implicitly convert arg %s using moveobj to pointer type '%s'",
+                                 i + 1, param_type);
+                    }
+                }
+            }
+
+            if (!is_assignable) {
+                err_line("Wrong type for arg %s. Expected '%s' but found '%s'",
+                         i + 1, param_type, arg_value->type);
+            }
         }
     }
 

@@ -1,0 +1,59 @@
+
+#if OS_GROUP_WINDOWS
+
+native dllimport void* GetStdHandle(uint32 nStdHandle);
+
+native dllimport int32 WriteFile(void*       hFile,
+                                 const void* lpBuffer,
+                                 uint32      nNumberOfBytesToWrite,
+                                 uint32*     lpNumberOfBytesWritten,
+                                 void*       lpOverlapped);
+
+#elif OS_GROUP_UNIX
+
+native isize write(int32 fd, const void* buf, usize count);
+
+#endif
+
+void print(const char* s, int length) {
+#if OS_GROUP_WINDOWS
+    void* handle = GetStdHandle(-11);
+    uint32 written;
+    WriteFile(handle, s, as(uint32) length, &written, null);
+#elif OS_GROUP_UNIX
+    write(1, s, as(usize) length);
+#endif
+}
+
+void write_val(int val) {
+
+#if OS_GROUP_WINDOWS
+    void* handle = GetStdHandle(-11);
+    uint32 written;
+    char c = as(char) val;
+    WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    char c = as(char) val;
+    write(1, &c, 1);
+#endif
+
+}
+
+struct A {
+    int v;
+
+    moveobj A(A* o) {
+        print("called", 6);
+        v = o.v;
+        o.v = 35;
+    }
+}
+
+void main() {
+    A a1 = A{};
+    a1.v = 64;
+    A a2;
+    a2 = moveobj(a1);
+    write_val(a1.v);
+    write_val(a2.v);
+}

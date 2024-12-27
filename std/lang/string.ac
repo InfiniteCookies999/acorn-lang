@@ -19,6 +19,13 @@ struct String {
         memcpy(this.buffer, o.buffer, length + 1);
     }
 
+    moveobj String(String* o) {
+        this.length = o.length;
+        this.buffer = o.buffer;
+        o.length = 0;
+        o.buffer = DEFAULT_STRING;
+    }
+
     /*
      * Creates a String from a null terminated
      * character buffer.
@@ -101,6 +108,8 @@ struct String {
     ~String() {
         if buffer != DEFAULT_STRING { // Make sure it is not just referencing the global memory.
             free(buffer);
+            length = 0;
+            buffer = DEFAULT_STRING;
         }
     }
 }

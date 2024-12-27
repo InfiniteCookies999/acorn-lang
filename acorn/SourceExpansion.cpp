@@ -89,6 +89,11 @@ if (e1 > e) { e = e1; }           \
             go_until(e, '{', '}');
             break;
         }
+        case NodeKind::MoveObj: {
+            // Include the closing )
+            go_until(e, '(', ')');
+            break;
+        }
         case NodeKind::Number:
         case NodeKind::IdentRef:
         case NodeKind::String:

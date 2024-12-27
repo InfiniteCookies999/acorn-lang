@@ -1391,6 +1391,18 @@ static void destructors_tests() {
 
         expect(result, std::identity()).to_be("hello! called");
     });
+    test("Multiple return destructor called for both paths with local var (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test35.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("called@called@calledcalled");
+    });
+    test("Multiple return destructor called for both paths with local var (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test36.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("calledABCDcalledABCDcalledcalled");
+    });
 }
 
 static void copy_constructor_tests() {
@@ -1452,6 +1464,12 @@ static void copy_constructor_tests() {
         auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test10.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
+        expect(result, std::identity()).to_be("called");
+    });
+    test("Copy constructor called implicitly when has field with move constructor and explitit copy constructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test11.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
         expect(result, std::identity()).to_be("called");
     });
 }
@@ -1552,6 +1570,81 @@ static void test_implicit_ptrs() {
     });
 }
 
+static void move_constructors_tests() {
+    test("Return multiple local variable calls move constructor (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test1.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("calledcalled");
+    });
+    test("Return multiple local variable calls move constructor (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test2.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("calledcalled");
+    });
+    test("Return multiple local variable and inline return only one calls move constructor (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test3.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("!!!called");
+    });
+    test("Return multiple local variable and inline return only one calls move constructor (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test4.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("!!!called");
+    });
+    test("Single local variable variable does not call move constructor (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test5.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("end");
+    });
+    test("Global multiple return does not call move constructor (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("end");
+    });
+    test("Global multiple return does not call move constructor (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test8.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("end");
+    });
+    test("Explicit call to moveobj call move constructor for initial assign", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("called#@");
+    });
+    test("Explicit call to moveobj call move constructor for assign op", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test10.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("called#@");
+    });
+    test("Call to move constructor when using moveobj on call argument", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test11.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("called@#");
+    });
+    test("Move constructor called implicitly when has field with move constructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test12.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("called");
+    });
+    test("Move constructor called implicitly when has field with move constructor and explitit move constructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test13.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("called");
+    });
+}
+
 void test_codegen() {
 
     executable_path = get_executable_path();
@@ -1595,5 +1688,6 @@ void test_codegen() {
         copy_constructor_tests();
         auto_type_tests();
         test_implicit_ptrs();
+        move_constructors_tests();
     }, true);
 }

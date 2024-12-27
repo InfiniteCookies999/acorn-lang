@@ -15,7 +15,7 @@ Usage: acorn <options> <sources>
 
 Common options (for more options use -more-options):
  
-    -o <name>
+    -o=<name>, -out-name, -output-name
         Sets the name of the executable.
 
     -d, -debug, -debug-info
@@ -27,12 +27,12 @@ Common options (for more options use -more-options):
 
 Sources:
     Sources may either be a path to a file or a directory
-    in which case all .acorn files within the directory and
+    in which case all .ac files within the directory and
     sub-directories will be included.
 
 Examples:
     acorn .        # Compile files in the current directory
-    acorn dir      # Compile all the filder under dir
+    acorn dir      # Compile all the files under dir
     acorn main.ac  # Compile the file main.ac
 )";
 
@@ -62,6 +62,12 @@ Options:
     -stand-alone
         Compile the project without the standard library.
 
+    -L<library path>
+        Add a search path for libraries.
+
+    -l<library name>
+        Add a library.
+
     -show-times
         Display how long different stages took.
 
@@ -70,20 +76,14 @@ Options:
         !! Warning !! This can generate a huge amount of
         output depending on what is compiled.
 
-     -show-error-codes
+    -show-error-codes
         When an error occures it also displays the error code.
 
-     -nshow-wrote-to-msg
+    -nshow-wrote-to-msg
         Stops showing the message about where the compiled
         program was written to.
-
-     -L<library path>
-        Add a search path for libraries.
-
-     -l<library name>
-        Add a library.
-
-     -show-linker-command, -show-linker-cmd
+    
+    -show-linker-command, -show-linker-cmd
         Shows the command that is ran to perform linking.
 
     -max-errors=<count>

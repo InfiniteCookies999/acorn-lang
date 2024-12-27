@@ -276,12 +276,25 @@ acorn::Node* acorn::Parser::parse_statement() {
         if (peek0.is(Token::Identifier)) {
             auto ident = Identifier::get(peek0.text());
             if (cur_struct->name == ident && peek_token(1).is('(')) {
-                next_token(); // Consuming the 'moveobj' token.
+                next_token(); // Consuming the 'copyobj' token.
                 next_token(); // Consuming the identifier token.
                 return parse_function(modifiers, context.void_type, cur_struct->name, true);
             }
         }
     
+        return parse_assignment_and_expr();
+    }
+    case Token::KwMoveobj: {
+        auto peek0 = peek_token(0);
+        if (peek0.is(Token::Identifier)) {
+            auto ident = Identifier::get(peek0.text());
+            if (cur_struct->name == ident && peek_token(1).is('(')) {
+                next_token(); // Consuming the 'moveobj' token.
+                next_token(); // Consuming the identifier token.
+                return parse_function(modifiers, context.void_type, cur_struct->name, false, true);
+            }
+        }
+
         return parse_assignment_and_expr();
     }
     case '{':
@@ -431,7 +444,11 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type) {
     return parse_function(modifiers, type, expect_identifier());
 }
 
-acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Identifier name, bool is_copy_constructor) {
+acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
+                                           Type* type,
+                                           Identifier name,
+                                           bool is_copy_constructor,
+                                           bool is_move_constructor) {
     
     // -- Debug
     // if (name != Identifier::Invalid) {
@@ -441,6 +458,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type, Ident
     Func* func = new_declaration<Func, true>(modifiers, name, prev_token);
     func->return_type = type;
     func->is_copy_constructor = is_copy_constructor;
+    func->is_move_constructor = is_move_constructor;
 
     Func* prev_func = cur_func;
     cur_func = func;
@@ -622,6 +640,11 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
                 func->structn = structn;
                 func->is_constructor = true;
                 structn->needs_copy_call = true;
+            } else if (func->is_move_constructor) {
+                structn->move_constructor = func;
+                func->structn = structn;
+                func->is_constructor = true;
+                structn->needs_move_call = true;
             } else if (func->name == cur_struct->name) {
                 func->is_constructor = true;
                 if (func->params.empty()) {
@@ -2030,6 +2053,14 @@ acorn::Expr* acorn::Parser::parse_term() {
         sof->type_with_size = parse_type();
         expect(')');
         return sof;
+    }
+    case Token::KwMoveobj: {
+        MoveObj* move_obj = new_node<MoveObj>(cur_token);
+        next_token();
+        expect('(');
+        move_obj->value = parse_expr();
+        expect(')');
+        return move_obj;
     }
     default:
         error("Expected an expression")

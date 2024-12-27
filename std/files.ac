@@ -54,15 +54,31 @@ struct FileHandle {
     int32 handle;
 #endif
 
+    bool auto_close;
+
 #if OS_GROUP_WINDOWS
-    FileHandle(void* handle) {
+    FileHandle(void* handle, bool auto_close = true) {
         this.handle = handle;
+        this.auto_close = auto_close;
     }
 #elif OS_GROUP_UNIX
-    FileHandle(int32 handle) {
+    FileHandle(int32 handle, bool auto_close = true) {
         this.handle = handle;
+        this.auto_close = auto_close;
     }
 #endif
+
+    moveobj FileHandle(FileHandle* file_handle) {
+        this.handle     = file_handle.handle;
+        this.auto_close = file_handle.auto_close;
+        
+#if OS_GROUP_WINDOWS
+        file_handle.handle = null;
+#elif OS_GROUP_UNIX
+        file_handle.handle = 0;
+#endif
+        file_handle.auto_close = false;
+    }
 
     int get_size() {
         // TODO: eventually it would be nice if the functionality of this
@@ -107,6 +123,12 @@ struct FileHandle {
         }
         return as(int) bytes_read;
 #endif
+    }
+
+    ~FileHandle() {
+        if auto_close {
+            close();
+        }
     }
 
     void close() {
