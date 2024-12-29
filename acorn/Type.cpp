@@ -80,7 +80,7 @@ bool acorn::Type::needs_destruction() const {
     } else if (kind == TypeKind::Array) {
         auto arr_type = static_cast<const ArrayType*>(this);
         auto base_type = arr_type->get_base_type();
-        if (base_type->is_struct_type()) {
+        if (base_type->is_struct()) {
             auto struct_type = static_cast<const StructType*>(base_type);
             auto structn = struct_type->get_struct();
             return structn->needs_destruction;

@@ -15,6 +15,7 @@ namespace acorn {
     class TypeTable;
     class SourceFile;
     class FunctionType;
+    class PointerType;
 
     class Sema {
     public:
@@ -25,6 +26,7 @@ namespace acorn {
         static bool find_main_function(Context& context);
 
         static void check_for_duplicate_functions(Namespace* nspace, Context& context);
+        static void check_for_duplicate_functions(const FuncList& funcs, Context& context);
         static bool check_for_duplicate_match(const Func* func1, const Func* func2);
         static void check_all_other_duplicates(Module& modl, Context& context);
         static void report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code);
@@ -126,7 +128,8 @@ namespace acorn {
                                        size_t non_named_args_offset,
                                        FuncList& candidates);
         Func* find_best_call_candidate(FuncList& candidates,
-                                       llvm::SmallVector<Expr*>& args);
+                                       llvm::SmallVector<Expr*>& args,
+                                       bool& selected_implicitly_converts_ptr_arg);
         uint32_t get_function_call_score(const Func* candidate, const llvm::SmallVector<Expr*>& args) const;
         enum class CallCompareStatus {
             INCORRECT_ARGS,
@@ -144,7 +147,8 @@ namespace acorn {
         CallCompareStatus compare_as_call_candidate(const Func* candidate,
                                                     const llvm::SmallVector<Expr*>& args,
                                                     uint32_t& mimatched_types,
-                                                    uint32_t& not_assignable_types) const;
+                                                    uint32_t& not_assignable_types,
+                                                    bool& implicitly_converts_ptr_arg) const;
         bool has_correct_number_of_args(const Func* candidate, 
                                         const llvm::SmallVector<Expr*>& args) const;
         void display_call_mismatch_info(PointSourceLoc error_loc,
@@ -175,12 +179,15 @@ namespace acorn {
         bool is_lvalue(Expr* expr);
         bool is_incomplete_type(Type* type);
         bool is_incomplete_statement(Node* stmt);
+        bool may_implicitly_convert_return_ptr(Type* to_type, FuncCall* call) const;
+        bool may_implicitly_convert_ptr(PointerType* ptr_type, Expr* from_expr) const;
         void check_division_by_zero(PointSourceLoc error_loc, Expr* expr);
         void create_cast(Expr* expr, Type* to_type);
         bool check_condition(Expr* cond);
         bool is_condition(Type* type) const;
         void check_modifier_incompatibilities(Decl* decl);
         void display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code);
+        void report_error_cannot_use_variable_before_assigned(SourceLoc error_loc, Var* var);
 
         Struct* find_struct(Identifier name);
 

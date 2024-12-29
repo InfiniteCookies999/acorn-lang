@@ -311,25 +311,28 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
     nspace->set_duplicates_checked();
 
     for (const auto& [_, funcs] : nspace->get_functions()) {
-        for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
-            Func* func = *itr;
-            Sema analyzer(context, func->file, func->get_logger());
-            analyzer.check_function_decl(func);
-        }
+        check_for_duplicate_functions(funcs, context);
     }
 
-    for (const auto& [_, funcs] : nspace->get_functions()) {
-        for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
-            for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
-                if (check_for_duplicate_match(*itr, *itr2)) {
-                    break;
-                }
+    for (const auto& [_, structn] : nspace->get_structs()) {
+        check_for_duplicate_functions(structn->nspace, context);
+        check_for_duplicate_functions(structn->constructors, context);
+    }
+}
+
+void acorn::Sema::check_for_duplicate_functions(const FuncList& funcs, Context& context) {
+    for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
+        Func* func = *itr;
+        Sema analyzer(context, func->file, func->get_logger());
+        analyzer.check_function_decl(func);
+    }
+    
+    for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
+        for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
+            if (check_for_duplicate_match(*itr, *itr2)) {
+                break;
             }
         }
-    }
-
-    for (auto [_, structn] : nspace->get_structs()) {
-        check_for_duplicate_functions(structn->nspace, context);
     }
 }
 
@@ -383,7 +386,7 @@ bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2
             return false;
         }
     }
-    report_redeclaration(func1, func2, "function", ErrCode::SemaDuplicateGlobalFunc);
+    report_redeclaration(func1, func2, func1->is_constructor ? "constructor" : "function", ErrCode::SemaDuplicateGlobalFunc);
     return true;
 }
 
@@ -586,7 +589,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
     func->is_checking_declaration = true;
 
     // -- debug
-    // Logger::debug("checking function declaration: %s", func->name.reduce());
+    // Logger::debug("checking function declaration: %s", func->name);
 
     check_modifier_incompatibilities(func);
 
@@ -840,7 +843,7 @@ void acorn::Sema::check_function(Func* func) {
         if (func->return_type->is_array()) {
             error(func, "Native functions cannot return arrays")
                 .end_error(ErrCode::SemaNativeFunctionsCannotReturnArrays);
-        } else if (func->return_type->is_struct_type()) {
+        } else if (func->return_type->is_struct()) {
             error(func, "Native functions cannot return structs")
                 .end_error(ErrCode::SemaNativeFunctionsCannotReturnStructs);
         }
@@ -1069,8 +1072,20 @@ void acorn::Sema::check_variable(Var* var) {
     }
 
     if (var->assignment && !is_assignable_to(var->type, var->assignment)) {
-        error(expand(var), get_type_mismatch_error(var->type, var->assignment).c_str())
-            .end_error(ErrCode::SemaVariableTypeMismatch);
+        bool is_assignable_to = false;
+        
+        if (var->assignment->is(NodeKind::FuncCall)) {
+            FuncCall* call = static_cast<FuncCall*>(var->assignment);
+            if (may_implicitly_convert_return_ptr(var->type, call)) {
+                is_assignable_to = true;
+                call->implicitly_converts_return = true;
+            }
+        }
+
+        if (!is_assignable_to) {
+            error(expand(var), get_type_mismatch_error(var->type, var->assignment).c_str())
+                .end_error(ErrCode::SemaVariableTypeMismatch);
+        }
     } else if (var->assignment) {
         create_cast(var->assignment, var->type);
 
@@ -1135,12 +1150,12 @@ void acorn::Sema::check_struct(Struct* structn) {
         if (!field->type) {
             structn->fields_have_errors = true;
         } else {
-            if (field->type->is_struct_type()) {
+            if (field->type->is_struct()) {
                 process_field_struct_type_state(field->loc, static_cast<StructType*>(field->type));
             } else if (field->type->is_array()) {
                 auto arr_type = static_cast<ArrayType*>(field->type);
                 auto base_type = arr_type->get_base_type();
-                if (base_type->is_struct_type()) {
+                if (base_type->is_struct()) {
                     process_field_struct_type_state(field->loc, static_cast<StructType*>(base_type));
                 }
             }
@@ -2308,6 +2323,25 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         check_modifiable(bin_op->lhs);
 
         switch (bin_op->op) {
+        case '=': {
+            if (!is_assignable_to(bin_op->lhs->type, bin_op->rhs)) {
+                bool is_assignable_to = false;
+        
+                if (bin_op->rhs->is(NodeKind::FuncCall)) {
+                    FuncCall* call = static_cast<FuncCall*>(bin_op->rhs);
+                    if (may_implicitly_convert_return_ptr(bin_op->lhs->type, call)) {
+                        is_assignable_to = true;
+                        call->implicitly_converts_return = true;
+                    }
+                }
+
+                if (!is_assignable_to) {
+                    error(expand(bin_op->lhs), get_type_mismatch_error(bin_op->lhs->type, bin_op->rhs).c_str())
+                        .end_error(ErrCode::SemaVariableTypeMismatch);
+                }
+            }
+            break;
+        }
         case Token::AddEq: case Token::SubEq: case Token::MulEq: {
             if (!get_add_sub_mul_type(true)) return;
             break;
@@ -2643,6 +2677,9 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         }
 
         if (!var_ref->type) {
+            if (!var_ref->is_global && !var_ref->is_field() && var_ref->is_being_checked) {
+                report_error_cannot_use_variable_before_assigned(ref->loc, var_ref);
+            }
             break;
         }
         
@@ -2718,13 +2755,13 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
     if (dot->ident == context.length_identifier && dot->site->type->is_array()) {
         dot->is_array_length = true;
         dot->type = context.int_type;
-    } else if (dot->site->type->is_struct_type()) {
+    } else if (dot->site->type->is_struct()) {
         auto struct_type = static_cast<StructType*>(dot->site->type);
         check_struct_ident_ref(struct_type);
     } else if (dot->site->type->is_pointer()) {
         auto ptr_type = static_cast<PointerType*>(dot->site->type);
         auto elm_type = ptr_type->get_elm_type();
-        if (elm_type->is_struct_type()) {
+        if (elm_type->is_struct()) {
             auto struct_type = static_cast<StructType*>(elm_type);
             check_struct_ident_ref(struct_type);
         } else {
@@ -2776,7 +2813,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         is_funcs_ref = false;
     }
 
-    if (call->site->type->is_function_type()) {
+    if (call->site->type->is_function()) {
         check_function_type_call(call, static_cast<FunctionType*>(call->site->type));
         return;
     }
@@ -2903,7 +2940,8 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         }
     }
 
-    auto called_func = find_best_call_candidate(candidates, args);
+    bool selected_implicitly_converts_ptr_arg = false;
+    auto called_func = find_best_call_candidate(candidates, args, selected_implicitly_converts_ptr_arg);
     if (!called_func) {
         display_call_mismatch_info(expand(call_node), candidates, args);
         return nullptr;
@@ -2911,6 +2949,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
 
     // Creating casts from the argument to the parameter.
     for (size_t i = 0; i < args.size(); i++) {
+
         auto arg_value = args[i];
         Var* param;
         if (arg_value->is(NodeKind::NamedValue)) {
@@ -2922,6 +2961,15 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         } else {
             param = called_func->params[i];
         }
+
+        if (selected_implicitly_converts_ptr_arg && arg_value->is(NodeKind::FuncCall)) {
+            auto arg_call = static_cast<FuncCall*>(arg_value);
+            if (may_implicitly_convert_return_ptr(param->type, arg_call)) {
+                arg_call->implicitly_converts_return = true;
+                continue; // Do not continue to creating the cast.
+            }
+        }
+
         create_cast(arg_value, param->type);
     }
 
@@ -2941,7 +2989,12 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm:
     
     uint32_t mimatched_types = 0;
     uint32_t not_assignable_types = 0;
-    auto status = compare_as_call_candidate<true>(candidate, args, mimatched_types, not_assignable_types);
+    bool implicitly_converts_ptr_arg = false;
+    auto status = compare_as_call_candidate<true>(candidate, 
+                                                  args, 
+                                                  mimatched_types, 
+                                                  not_assignable_types, 
+                                                  implicitly_converts_ptr_arg);
     switch (status) {
     case CallCompareStatus::INCORRECT_ARGS:
         return INCORRECT_NUM_ARGS_CAP;
@@ -2961,35 +3014,41 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm:
 }
 
 acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
-                                                   llvm::SmallVector<Expr*>& args) {
+                                                   llvm::SmallVector<Expr*>& args,
+                                                   bool& selected_implicitly_converts_ptr_arg) {
     
     Func* selected = nullptr;
     uint32_t best_mimatched_types = 0;
 
-
     // TODO: select if has fewer default values?
 
-    auto select = [&selected, &best_mimatched_types](Func* canidate,
-                                                     uint32_t mimatched_types) finline{
+    auto select = [&selected, &best_mimatched_types, &selected_implicitly_converts_ptr_arg]
+        (Func* canidate, uint32_t mimatched_types, bool implicitly_converts_ptr_arg) finline{
         selected = canidate;
         best_mimatched_types = mimatched_types;
+        selected_implicitly_converts_ptr_arg = implicitly_converts_ptr_arg;
     };
     for (Func* canidate : candidates) {
 
         uint32_t mimatched_types = 0;
         uint32_t not_assignable_types = 0;
-        auto status = compare_as_call_candidate<false>(canidate, args, mimatched_types, not_assignable_types);
+        bool implicitly_converts_ptr_arg = false;
+        auto status = compare_as_call_candidate<false>(canidate, 
+                                                       args, 
+                                                       mimatched_types, 
+                                                       not_assignable_types, 
+                                                       implicitly_converts_ptr_arg);
         if (status != CallCompareStatus::SUCCESS) {
             continue;
         }
 
         if (!selected) {
-            select(canidate, mimatched_types);
+            select(canidate, mimatched_types, implicitly_converts_ptr_arg);
             continue;
         }
 
         if (best_mimatched_types > mimatched_types) {
-            select(canidate, mimatched_types);
+            select(canidate, mimatched_types, implicitly_converts_ptr_arg);
         }
     }
     return selected;
@@ -2999,7 +3058,8 @@ template<bool for_score_gathering>
 acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func* candidate,
                                                                       const llvm::SmallVector<Expr*>& args,
                                                                       uint32_t& mimatched_types,
-                                                                      uint32_t& not_assignable_types) const {
+                                                                      uint32_t& not_assignable_types,
+                                                                      bool& implicitly_converts_ptr_arg) const {
     if (!has_correct_number_of_args(candidate, args)) {
         return CallCompareStatus::INCORRECT_ARGS;
     }
@@ -3038,15 +3098,26 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         }
         
         if (!is_assignable_to(param->type, arg_value)) {
-            bool not_assignable = true;
+
+            bool is_assignable = false;
             if (param->has_implicit_ptr && arg_value->is_not(NodeKind::MoveObj)) {
                 auto ptr_type = static_cast<PointerType*>(param->type);
-                if (ptr_type->get_elm_type()->is(arg_value->type)) {
-                    not_assignable = false;
+                if (may_implicitly_convert_ptr(ptr_type, arg_value)) {
+                    if (arg_value->is_not(NodeKind::MoveObj)) {
+                        is_assignable = true;
+                    }
                 }
             }
             
-            if (not_assignable) {
+            if (!is_assignable && arg_value->is(NodeKind::FuncCall)) {
+                auto arg_call = static_cast<FuncCall*>(arg_value);
+                if (may_implicitly_convert_return_ptr(param->type, arg_call)) {
+                    implicitly_converts_ptr_arg = true;
+                    is_assignable = true;
+                }
+            }
+            
+            if (!is_assignable) {
                 if constexpr (for_score_gathering) {
                     ++not_assignable_types;
                     continue;
@@ -3234,12 +3305,19 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
             bool is_assignable = false;
             if (param->has_implicit_ptr) {
                 auto ptr_type = static_cast<PointerType*>(param->type);
-                if (arg_value->type->is(ptr_type->get_elm_type())) {
+                if (may_implicitly_convert_ptr(ptr_type, arg_value)) {
                     is_assignable = true;
                     if (arg_value->is(NodeKind::MoveObj)) {
                         err_line("Cannot implicitly convert arg %s using moveobj to pointer type '%s'",
                                  i + 1, param_type);
                     }
+                }
+            }
+            
+            if (!is_assignable && arg_value->is(NodeKind::FuncCall)) {
+                auto arg_call = static_cast<FuncCall*>(arg_value);
+                if (may_implicitly_convert_return_ptr(param_type, arg_call)) {
+                    is_assignable = true;
                 }
             }
 
@@ -3381,10 +3459,14 @@ void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) 
         cur_global_var->dependency = var;
         
         if (var->is_being_checked) {
-            display_circular_dep_error(error_loc, 
-                                       cur_global_var,
-                                       "Global variables form a circular dependency", 
-                                       ErrCode::SemaGlobalCircularDependency);
+            if (cur_global_var->dependency == cur_global_var) {
+                report_error_cannot_use_variable_before_assigned(error_loc, cur_global_var);
+            } else {
+                display_circular_dep_error(error_loc, 
+                                           cur_global_var,
+                                           "Global variables form a circular dependency", 
+                                           ErrCode::SemaGlobalCircularDependency);
+            }
         }
     }
     
@@ -3618,7 +3700,7 @@ bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type,
         if (!has_valid_constness(to_base_type, from_base_type)) {
             return false;
         }
-    } else if (to_type->is_pointer() && expr->is(NodeKind::Null)) {
+    } else if (to_type->is_pointer() && expr && expr->is(NodeKind::Null)) {
         // Ignore this case because null can assign to all pointers
         // so we do not want to decense the pointers.
     } else if (!has_valid_constness(to_type, from_type)) {
@@ -3794,6 +3876,26 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) {
     }
 }
 
+bool acorn::Sema::may_implicitly_convert_return_ptr(Type* to_type, FuncCall* call) const {
+    if (call->called_func && call->called_func->has_implicit_return_ptr) {
+        auto ptr_type  = static_cast<PointerType*>(call->type);
+        auto from_type = ptr_type->get_elm_type();
+        if (try_remove_const_for_compare(to_type, from_type, nullptr)) {
+            return to_type->is(from_type);
+        }
+    }
+    return false;
+}
+
+bool acorn::Sema::may_implicitly_convert_ptr(PointerType* ptr_type, Expr* from_expr) const {
+    auto to_type   = ptr_type->get_elm_type();
+    auto from_type = from_expr->type;
+    if (try_remove_const_for_compare(to_type, from_type, from_expr)) {
+        return to_type->is(from_type);
+    }
+    return false;
+}
+
 void acorn::Sema::check_division_by_zero(PointSourceLoc error_loc, Expr* expr) {
     if (!expr->is_foldable) return;
 
@@ -3884,6 +3986,11 @@ void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, con
     logger.end_error(error_code);
 }
 
+void acorn::Sema::report_error_cannot_use_variable_before_assigned(SourceLoc error_loc, Var* var) {
+    error(error_loc, "Cannot use variable '%s' before it has been assigned", var->name)
+        .end_error(ErrCode::SemaCannotUseVariableBeforeAssigned);
+}
+
 acorn::Struct* acorn::Sema::find_struct(Identifier name) {
 
     if (auto found_struct = file->get_namespace()->find_struct(name)) {
@@ -3923,7 +4030,7 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
         expr->is(NodeKind::Number) && expr->is_foldable && expr->type->is_integer()) {
    
         return get_error_msg_for_value_not_fit_type(static_cast<Number*>(expr));
-    } else if (to_type->is_function_type() && expr->type->get_kind() == TypeKind::FuncsRef) {
+    } else if (to_type->is_function() && expr->type->get_kind() == TypeKind::FuncsRef) {
         
         auto ref = static_cast<IdentRef*>(expr);
         auto func = (*ref->funcs_ref)[0];

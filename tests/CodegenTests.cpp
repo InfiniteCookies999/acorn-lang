@@ -1106,6 +1106,12 @@ static void member_function_tests() {
 
         expect(result, std::identity()).to_be("A"); 
     });
+    test("Member function returns pointer to 'this' with repeated calls", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@"); 
+    });
 }
 
 static void multi_variables_on_one_line_tests() {
@@ -1527,43 +1533,79 @@ static void auto_type_tests() {
 
 static void test_implicit_ptrs() {
     test("Implicit pointer passing integer values", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test1.ac"));
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/param_implicit_ptrs_test1.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("@ABBB");
     });
     test("Implicit pointer passing struct", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test2.ac"));
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/param_implicit_ptrs_test2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("ABCDCDCD");
     });
     test("Implicit pointer passing from func call ret (sm struct)", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test3.ac"));
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/param_implicit_ptrs_test3.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("@");
     });
     test("Implicit pointer passing from func call ret (bg struct)", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test4.ac"));
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/param_implicit_ptrs_test4.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("ABCD");
     });
     test("Implicit pointer passing an array", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test5.ac"));
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/param_implicit_ptrs_test5.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
     
         expect(result, std::identity()).to_be("ABCDABCDABCDABCD");
     });
     test("Implicit pointer passing an array from func call (sm array)", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test6.ac"));
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/param_implicit_ptrs_test6.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
     
         expect(result, std::identity()).to_be("@");
     });
     test("Implicit pointer passing an array from func call (bg array)", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/implicit_ptrs_test7.ac"));
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/param_implicit_ptrs_test7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Implicit return pointer stores to integer", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test1.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("@@@");
+    });
+    test("Implicit return pointer stores to struct (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test2.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("@@@");
+    });
+    test("Implicit return pointer stores to struct (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test3.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCDABCDABCD");
+    });
+    test("Implicit return pointer for call arg to integer", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test4.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("@");
+    });
+    test("Implicit return pointer for call arg to struct (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test5.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("@");
+    });
+    test("Implicit return pointer for call arg to struct (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test6.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
     
         expect(result, std::identity()).to_be("ABCD");

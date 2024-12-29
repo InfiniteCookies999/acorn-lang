@@ -1,6 +1,6 @@
 #file(access=pub)
 
-prv const DEFAULT_STRING = "\0";
+prv char DEFAULT_CHAR = '\0';
 
 struct String {
     char* buffer;
@@ -10,7 +10,7 @@ struct String {
      * Creates a String with a length of 0.
      */
     String() {
-        buffer = DEFAULT_STRING;
+        buffer = &DEFAULT_CHAR;
     }
 
     copyobj String(String* o) {
@@ -23,7 +23,7 @@ struct String {
         this.length = o.length;
         this.buffer = o.buffer;
         o.length = 0;
-        o.buffer = DEFAULT_STRING;
+        o.buffer = &DEFAULT_CHAR;
     }
 
     /*
@@ -46,7 +46,7 @@ struct String {
      */
     String(const char* buffer, int length) {
         this.length = length;
-        this.buffer = malloc(length + 1); // +1 for null terminator.
+        this.buffer = as(char*) malloc(length + 1); // +1 for null terminator.
         memcpy(this.buffer, buffer, length);
         this.buffer[length] = '\0';
     }
@@ -105,11 +105,189 @@ struct String {
         return String{ this.buffer + begin_idx, sublength };
     }
 
+    /*
+     * Replaces all occurences of the `old_char` in this string
+     * with the `new_char`.
+     */
+    String^ replace(char old_char, char new_char) {
+        loop int i : 0..<length {
+            if buffer[i] == old_char {
+                buffer[i] = new_char;
+            }
+        }
+        return this;
+    }
+
+    /*
+     * Replaces all occurences of `sub_str` in this string
+     * with the new string `replace_str`.
+     */
+    String^ replace(const String^ sub_str, const String^ replace_str) {
+        return replace(sub_str.buffer    , sub_str.length,
+                       replace_str.buffer, replace_str.length);
+    }
+
+    /*
+     * Replaces all occurences of `sub_str` in this string
+     * with the new string `replace_str`.
+     */
+    String^ replace(const char* sub_str, const String^ replace_str) {
+        return replace(sub_str           , strlen(sub_str),
+                       replace_str.buffer, replace_str.length);
+    }
+
+    /*
+     * Replaces all occurences of `sub_str` in this string
+     * with the new string `replace_str`.
+     */
+    String^ replace(const String^ sub_str, const char* replace_str) {
+        return replace(sub_str.buffer, sub_str.length,
+                       replace_str   , strlen(replace_str));
+    }
+
+    /*
+     * Replaces all occurences of `sub_str` in this string
+     * with the new string `replace_str`.
+     */
+    String^ replace(const char* sub_str, const char* replace_str) {
+        return replace(sub_str    , strlen(sub_str),
+                       replace_str, strlen(replace_str));
+    }
+
+    String^ replace(const char* sub_str    , int sub_length,
+                    const char* replace_str, int replace_length) {
+        
+        if sub_length == 1 && replace_length == 1 {
+            // Taking the faster path of replacing characters
+            // instead of full strings if we can.
+            return replace(*sub_str, *replace_str);
+        }
+
+        if this.length == 0 {
+            return this;
+        }
+
+        int[64] tmp_buffer;
+        int*    ext_buffer;
+        int     ext_buffer_capacity = 0;
+        int     index_count = 0;
+
+        char* head = this.buffer;
+        char* end  = this.buffer + this.length;
+        
+        loop head + sub_length - 1 < end {
+            int remaining = as(int) (end - head);
+            int index = find_first_of(head, remaining, sub_str, sub_length);
+            if index == -1  break; // No more remaining substrings to replace.
+
+            // Have to add the offset of the head since we only search for indexes
+            // starting at the head but we want indexes relative to this.buffer's
+            // memory since replacements take place after iterating through the
+            // string.
+            int offset = as(int)(head - this.buffer);
+            index += offset;
+            if index_count >= tmp_buffer.length {
+                // Out of temporary memory so must allocate memory!
+
+                int min_capacity = index_count+1 - tmp_buffer.length;
+                int* new_ext_buffer;
+                if ext_buffer_capacity == 0 {
+                    ext_buffer_capacity = 1;
+                    new_ext_buffer = as(int*) malloc(ext_buffer_capacity * sizeof(int));
+                    
+                    ext_buffer = new_ext_buffer;
+                } elif ext_buffer_capacity < min_capacity {
+                    int ext_buffer_length = ext_buffer_capacity;
+                    ext_buffer_capacity *= 2;
+                    new_ext_buffer = as(int*) malloc(ext_buffer_capacity * sizeof(int));
+                
+                    // Not the first allocation so have to copy over.
+                    memcpy(new_ext_buffer, ext_buffer, ext_buffer_length * sizeof(int));
+                    free(ext_buffer);
+                
+                    ext_buffer = new_ext_buffer;
+                }
+
+                ext_buffer[index_count - tmp_buffer.length] = index;
+            } else {
+                tmp_buffer[index_count] = index;
+            }
+
+            ++index_count;
+
+            head = this.buffer + index + sub_length;
+        }
+
+        if index_count == 0 {
+            // There is nothing to replace!
+            return this;
+        }
+
+        int new_string_length = this.length + (replace_length * index_count) - (sub_length * index_count);
+        char* new_buffer = as(char*) malloc(new_string_length + 1); // +1 for null termination.
+
+        int new_buffer_offset = 0, buffer_offset = 0;
+        loop int i : 0..<index_count {
+            int index;
+            if i < tmp_buffer.length {
+                index = tmp_buffer[i];
+            } else {
+                index = ext_buffer[i - tmp_buffer.length];
+            }
+
+            int length_before_index = index - buffer_offset;
+            if length_before_index > 0 {
+                memcpy(new_buffer  + new_buffer_offset,
+                       this.buffer + buffer_offset,
+                       length_before_index);
+                new_buffer_offset += length_before_index;
+                buffer_offset     += length_before_index;
+            }
+
+            memcpy(new_buffer + new_buffer_offset, replace_str, replace_length);
+            new_buffer_offset += replace_length;
+            buffer_offset     += sub_length;
+        }
+
+        // There still might be stuff at the end!
+        int length_before_index = length - buffer_offset;
+        if length_before_index > 0 {
+            memcpy(new_buffer  + new_buffer_offset,
+                   this.buffer + buffer_offset,
+                   length_before_index);
+        }
+
+        // Null terminating.
+        new_buffer[new_string_length] = '\0';
+
+        free(this.buffer);
+        this.buffer = new_buffer;
+        this.length = new_string_length;
+
+        free(ext_buffer);
+
+        return this;
+    }
+
+    /*
+     * Removes all occurrences substring `s` from this String.
+     */
+    String^ remove(const char* s) {
+        return replace(s, "");
+    }
+
+    /*
+     * Removes all occurrences substring `s` from this String.
+     */
+    String^ remove(const String^ s) {
+        return replace(s.buffer, s.length, "", 0);
+    }
+
     ~String() {
-        if buffer != DEFAULT_STRING { // Make sure it is not just referencing the global memory.
+        if buffer != &DEFAULT_CHAR { // Make sure it is not just referencing the global memory.
             free(buffer);
             length = 0;
-            buffer = DEFAULT_STRING;
+            buffer = &DEFAULT_CHAR;
         }
     }
 }
@@ -179,4 +357,47 @@ String to_string(bool b) {
 
 String to_string(char c) {
     return String{ &c, 1 };
+}
+
+int find_first_of(const char* s, int s_length, const char* sub, int sub_length) {
+    if s_length == 0 {
+        return -1;
+    }
+    if sub_length == 1 {
+        return find_first_of(s, s_length, *sub);
+    }
+
+    auto head = s;
+    auto end  = s + s_length;
+    
+    loop head + sub_length - 1 < end {
+        if *head == *sub {
+            // Possible start of substring.
+            auto tail = head + 1;
+            bool matches = true;
+            loop int i : 1..<sub_length {
+                if *tail != *(sub + i) {
+                    matches = false;
+                    break;
+                }
+                ++tail;
+            }
+            if matches {
+                return as(int) (head - s);
+            }
+        }
+
+        ++head;
+    }
+
+    return -1;
+}
+
+int find_first_of(const char* s, int s_length, char c) {
+    loop int i : 0..<s_length {
+        if s[i] == c {
+            return i;
+        }
+    }
+    return -1;
 }

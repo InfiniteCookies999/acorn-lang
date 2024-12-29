@@ -170,6 +170,7 @@ namespace acorn {
                                             llvm::SmallVector<Expr*>& args,
                                             llvm::Value* ll_dest_addr,
                                             llvm::Value* ll_in_this,
+                                            bool apply_implicit_return_ptr,
                                             Node* lvalue);
         llvm::Value* gen_function_call_arg(Expr* arg);
         llvm::Value* gen_function_call_arg_for_implicit_ptr(Expr* arg);
@@ -263,6 +264,7 @@ namespace acorn {
         llvm::AllocaInst* gen_unseen_alloca(llvm::Type* ll_type, llvm::Twine ll_name);
 
         bool is_decayed_array(Expr* arr);
+        bool is_pointer_lvalue(Expr* expr);
 
         ImplicitFunc* create_implicit_function(ImplicitFunc::ImplicitKind implicit_kind, Struct* structn);
 

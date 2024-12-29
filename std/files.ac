@@ -176,7 +176,7 @@ String read(const char* path) {
 /*
  * Reads an entire file into a string.
  */
-String read(String^ path) {
+String read(const String^ path) {
     return read(path.buffer);
 }
 
@@ -197,7 +197,7 @@ bool exists(const char* path) {
  * Returns true if the file system has a file or
  * directory at the given path.
  */
-bool exists(String^ path) {
+bool exists(const String^ path) {
     return exists(path.buffer);
 }
 
@@ -223,7 +223,7 @@ bool file_exists(const char* path) {
  * Returns true if the file system has a file but
  * is not a directory at the given path.
  */
-bool file_exists(String^ path) {
+bool file_exists(const String^ path) {
     return file_exists(path.buffer);
 }
 
@@ -249,7 +249,7 @@ bool directory_exists(const char* path) {
  * Returns true if the file system has a directory
  * at the given path.
  */
-bool directory_exists(String^ path) {
+bool directory_exists(const String^ path) {
     return directory_exists(path.buffer);
 }
 
@@ -274,7 +274,7 @@ bool mkdir(const char* path) {
  * Creates the directory at the given path. Returns
  * true if created.
  */
-bool mkdir(String^ path) {
+bool mkdir(const String^ path) {
     return mkdir(path.buffer);
 }
 
@@ -364,6 +364,6 @@ FileHandle open(const char* path, uint32 flags) {
 #endif
 }
 
-FileHandle open(String^ path, uint32 flags) {
+FileHandle open(const String^ path, uint32 flags) {
     return open(path.buffer, flags);
 }

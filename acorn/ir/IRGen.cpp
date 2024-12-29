@@ -536,7 +536,7 @@ llvm::AllocaInst* acorn::IRGenerator::gen_alloca(llvm::Type* ll_alloc_type, llvm
 llvm::Type* acorn::IRGenerator::gen_function_param_type(Var* param) const {
     if (param->type->is_array()) {
         return llvm::PointerType::get(ll_context, 0);
-    } else if (param->type->is_struct_type()) {
+    } else if (param->type->is_struct()) {
         auto struct_type = static_cast<StructType*>(param->type);
         
         auto ll_aggr_type = gen_type(struct_type);
@@ -564,7 +564,7 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
 
     // Have to check for a destructor because unless the global variable
     // is reassigned it will not request generation for the destructor.
-    if (var->type->is_struct_type()) {
+    if (var->type->is_struct()) {
         auto struct_type = static_cast<StructType*>(var->type);
         auto structn = struct_type->get_struct();
         if (structn->destructor) {
@@ -574,7 +574,7 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
     } else if (var->type->is_array()) {
         auto arr_type = static_cast<ArrayType*>(var->type);
         auto base_type = arr_type->get_base_type();
-        if (base_type->is_struct_type()) {
+        if (base_type->is_struct()) {
             auto struct_type = static_cast<StructType*>(base_type);
             auto structn = struct_type->get_struct();
             if (structn->destructor) {
@@ -622,7 +622,7 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
     };
 
     if (!var->assignment) {
-        if (var->type->is_struct_type()) {
+        if (var->type->is_struct()) {
             // Initialize as many fields as possible then post-pone the initialization
             // of the rest of the values in the initialize function.
 
@@ -664,7 +664,7 @@ void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
 
     builder.SetInsertPoint(&context.ll_global_init_function->back());
 
-    if (!var->assignment && var->type->is_struct_type()) {
+    if (!var->assignment && var->type->is_struct()) {
         auto struct_type = static_cast<StructType*>(var->type);
         finish_incomplete_struct_type_global(var->ll_address, struct_type);
     } else {
@@ -682,7 +682,7 @@ bool acorn::IRGenerator::gen_constant_struct_for_global(StructType* struct_type,
     llvm::SmallVector<llvm::Constant*, 16> ll_field_values;
             
     for (Var* field : structn->fields) {
-        if (field->type->is_struct_type()) {
+        if (field->type->is_struct()) {
             auto field_struct_type = static_cast<StructType*>(field->type);
             llvm::Constant* ll_constant;
             all_values_initialized &= gen_constant_struct_for_global(field_struct_type, ll_constant);
@@ -744,7 +744,7 @@ void acorn::IRGenerator::finish_incomplete_struct_type_global(llvm::Value* ll_ad
 
     unsigned field_idx = 0;
     for (Var* field : structn->fields) {
-        if (field->type->is_struct_type()) {
+        if (field->type->is_struct()) {
             auto field_struct_type = static_cast<StructType*>(field->type);
             finish_incomplete_struct_type_global(nullptr, field_struct_type, [=, this]() -> llvm::Value* {
                 return builder.CreateStructGEP(ll_struct_type, get_struct_address(), field_idx);
@@ -921,7 +921,7 @@ void acorn::IRGenerator::gen_call_destructors(Type* type, llvm::Value* ll_addres
         emit_dbg(di_emitter->emit_location_at_last_statement(builder));
     };
 
-    if (type->is_struct_type()) {
+    if (type->is_struct()) {
         auto struct_type = static_cast<StructType*>(type);
         auto structn = struct_type->get_struct();
         gen_struct_destructor(struct_type);
@@ -1170,7 +1170,7 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
                     // the aggregate value as an integer but if it has a copy constructor
                     // then the copy constructor still needs called.
                     if (!cur_func->aggr_ret_var) {
-                        if (cur_func->return_type->is_struct_type()) {
+                        if (cur_func->return_type->is_struct()) {
                             auto struct_type = static_cast<StructType*>(cur_func->return_type);
                             auto structn = struct_type->get_struct();
 
@@ -1184,7 +1184,7 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
                             auto arr_type = static_cast<ArrayType*>(cur_func->return_type);
                             auto base_type = arr_type->get_base_type();
 
-                            if (base_type->is_struct_type()) {
+                            if (base_type->is_struct()) {
                                 auto ll_arr_type = gen_type(arr_type);
                                 auto struct_type = static_cast<StructType*>(base_type);
                                 auto structn = struct_type->get_struct();
@@ -1531,7 +1531,7 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         }
 
         emit_dbg(di_emitter->emit_function_variable(loop->var, builder));
-        if (loop->var->type->is_struct_type()) {
+        if (loop->var->type->is_struct()) {
             auto struct_type = static_cast<StructType*>(loop->var->type);
             gen_copy_struct(loop->var->ll_address, ll_index_value, struct_type);
             emit_dbg(di_emitter->emit_location(builder, loop->var->loc));
@@ -1874,6 +1874,7 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
                                       initializer->values,
                                       nullptr,
                                       ll_dest_addr,
+                                      false,
                                       lvalue);
     }
 
@@ -1954,7 +1955,7 @@ llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
     if (var->is_foldable) return nullptr; // Nothing to generate since the variable doesn't have an address.
 
     if (var != cur_func->aggr_ret_var) {
-        process_destructor_state(var->type, var->ll_address);
+         process_destructor_state(var->type, var->ll_address);
     }
 
     if (should_emit_debug_info) {
@@ -2025,8 +2026,8 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
 
 llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue) {
     
-    bool call_func_type = call->site->type->is_function_type();
-    if (call->site->type->is_function_type()) {
+    bool call_func_type = call->site->type->is_function();
+    if (call->site->type->is_function()) {
         return gen_function_type_call(call, ll_dest_addr, lvalue);
     } else {
         Func* called_func = call->called_func;
@@ -2060,7 +2061,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
                 auto dot_operator = static_cast<DotOperator*>(call->site);
                 ll_in_this = gen_node(dot_operator->site);
                 
-                if (dot_operator->site->type->is_pointer()) {
+                if (dot_operator->site->type->is_pointer() && is_pointer_lvalue(dot_operator->site)) {
                     // The function call auto-dereferences the pointer.
                     ll_in_this = builder.CreateLoad(builder.getPtrTy(), ll_in_this);
                 } else if (dot_operator->site->is(NodeKind::FuncCall)) {
@@ -2072,7 +2073,13 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
             }
         }
 
-        return gen_function_decl_call(called_func, call->loc, call->args, ll_dest_addr, ll_in_this, lvalue);
+        return gen_function_decl_call(called_func,
+                                      call->loc,
+                                      call->args,
+                                      ll_dest_addr,
+                                      ll_in_this,
+                                      call->implicitly_converts_return,
+                                      lvalue);
     }
 }
 
@@ -2096,7 +2103,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
         }
     }
     
-    if (arg->type->is_struct_type()) {
+    if (arg->type->is_struct()) {
         
         if (arg->is(NodeKind::MoveObj)) {
             auto move_obj = static_cast<MoveObj*>(arg);
@@ -2152,6 +2159,34 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
         return finish_aggregate_arg(ll_tmp_arg);
     }
 
+    if (arg->is(NodeKind::FuncCall)) {
+        auto arg_call = static_cast<FuncCall*>(arg);
+        if (arg_call->implicitly_converts_return) {
+            auto ptr_type = static_cast<PointerType*>(arg_call->type);
+            auto elm_type = ptr_type->get_elm_type();
+            
+            auto ll_ret = gen_rvalue(arg);
+
+            if (elm_type->is_aggregate()) {
+                 
+                uint64_t aggr_mem_size_bytes = sizeof_type_in_bytes(gen_type(elm_type));
+                uint64_t aggr_mem_size_bits = aggr_mem_size_bytes * 8;
+
+                bool uses_optimized_int_passing = aggr_mem_size_bits <= ll_module.getDataLayout().getPointerSizeInBits();
+                if (uses_optimized_int_passing) {
+                    // The aggregate can fit into an integer.
+                    auto ll_int_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size_bits)));
+                    return builder.CreateLoad(ll_int_type, ll_ret, "opt.int.tmp.arg");
+                } else {
+                    // Can just pass the pointer along since it uses an aggregate argument.
+                    return ll_ret;
+                }
+            } else {   
+                return builder.CreateLoad(gen_type(elm_type), ll_ret);
+            }
+        }
+    }
+
     return gen_rvalue(arg);
 }
 
@@ -2193,6 +2228,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
                                                         llvm::SmallVector<Expr*>& args,
                                                         llvm::Value* ll_dest_addr,
                                                         llvm::Value* ll_in_this,
+                                                        bool apply_implicit_return_ptr,
                                                         Node* lvalue) {
     
     bool uses_aggr_param = called_func->uses_aggr_param;
@@ -2296,7 +2332,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     // debug_info += "]\n";
     // Logger::debug(debug_info.c_str());
 
-    auto ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
+    llvm::Value* ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
     emit_dbg(di_emitter->emit_location(builder, call_loc));
 
     if (!ll_ret->getType()->isVoidTy()) {
@@ -2304,7 +2340,22 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     }
 
     if (ll_dest_addr && !uses_aggr_param) {
-        builder.CreateStore(ll_ret, ll_dest_addr);
+        if (apply_implicit_return_ptr) {
+            auto ptr_type = static_cast<PointerType*>(called_func->return_type);
+            auto elm_type = ptr_type->get_elm_type();
+            if (elm_type->is_struct()) {
+                auto struct_type = static_cast<StructType*>(elm_type);
+                gen_copy_struct(ll_dest_addr, ll_ret, struct_type);
+            } else if (elm_type->is_array()) {
+                auto arr_type = static_cast<ArrayType*>(elm_type);
+                gen_copy_array(ll_dest_addr, ll_ret, arr_type);
+            } else {
+                ll_ret = builder.CreateLoad(gen_type(elm_type), ll_ret);
+                builder.CreateStore(ll_ret, ll_dest_addr);
+            }
+        } else {
+            builder.CreateStore(ll_ret, ll_dest_addr);
+        }
     }
 
     if (uses_aggr_param) {
@@ -2789,11 +2840,7 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
         }
 
         // Automatically dereferencing pointers.
-        if (site->type->is_pointer() &&
-            site->is_not(NodeKind::Cast) &&     // Casting call 'gen_rvalue' so there is no address to load.
-            site->is_not(NodeKind::FuncCall) && // There is no address to load.
-            site->is_not(NodeKind::This)        // The 'this' pointer has no address.
-            ) {
+        if (site->type->is_pointer() && is_pointer_lvalue(site)) {
             ll_struct_address = builder.CreateLoad(builder.getPtrTy(), ll_struct_address);
         }
 
@@ -2804,12 +2851,12 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
     if (dot->is_array_length) {
         auto arr_type = static_cast<ArrayType*>(dot->site->type);
         return builder.getInt32(arr_type->get_length());
-    } else if (dot->site->type->is_struct_type()) {
+    } else if (dot->site->type->is_struct()) {
         return gen_struct_type_access(static_cast<StructType*>(dot->site->type));
     } else if (dot->site->type->is_pointer()) {
         auto ptr_type = static_cast<PointerType*>(dot->site->type);
         auto elm_type = ptr_type->get_elm_type();
-        if (elm_type->is_struct_type()) {
+        if (elm_type->is_struct()) {
             return gen_struct_type_access(static_cast<StructType*>(elm_type));
         } else {
             return gen_ident_reference(dot);
@@ -2913,7 +2960,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
         auto ll_tmp_obj = gen_unseen_alloca(to_type, "tmp.obj");
         gen_cb(ll_tmp_obj);
         
-        if (to_type->is_struct_type()) {
+        if (to_type->is_struct()) {
             auto struct_type = static_cast<StructType*>(to_type);
             gen_copy_struct(ll_address, ll_tmp_obj, struct_type);
         } else {
@@ -2951,7 +2998,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
             auto initializer = static_cast<StructInitializer*>(value);
             gen_struct_initializer(initializer, ll_address, lvalue);
         }
-    } else if (to_type->is_struct_type()) {
+    } else if (to_type->is_struct()) {
         if (value->is(NodeKind::MoveObj)) {
             try_move = true;
             auto move_obj = static_cast<MoveObj*>(value);
@@ -2988,7 +3035,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
         auto copy_or_move_array_of_structs = [this, to_type, try_move, ll_address, lvalue](llvm::Value* ll_from_addr) finline {
             auto arr_type = static_cast<ArrayType*>(to_type);
             auto elm_type = arr_type->get_elm_type();
-            if (elm_type->is_struct_type()) {
+            if (elm_type->is_struct()) {
                 auto struct_type = static_cast<StructType*>(elm_type);
                 auto structn = struct_type->get_struct();
                 if (try_move && structn->needs_move_call) {
@@ -3526,6 +3573,12 @@ bool acorn::IRGenerator::is_decayed_array(Expr* arr) {
     return ref->is_var_ref() && ref->var_ref->is_param() && ref->type->is_array();
 }
 
+bool acorn::IRGenerator::is_pointer_lvalue(Expr* expr) {
+    return expr->is_not(NodeKind::Cast) &&     // Casting call 'gen_rvalue' so there is no address to load.
+           expr->is_not(NodeKind::FuncCall) && // There is no address to load.
+           expr->is_not(NodeKind::This);       // The 'this' pointer has no address.
+}
+
 acorn::ImplicitFunc* acorn::IRGenerator::create_implicit_function(ImplicitFunc::ImplicitKind implicit_kind, Struct* structn) {
     auto implicit_func = context.get_allocator().alloc_type<ImplicitFunc>();
     new (implicit_func) ImplicitFunc();
@@ -3543,7 +3596,7 @@ void acorn::IRGenerator::copy_struct_field_constructor(Var* field,
     auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_to_struct_address, field->field_idx);
     auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->field_idx);
 
-    if (field->type->is_struct_type()) {
+    if (field->type->is_struct()) {
         gen_copy_struct(ll_to_field_addr, ll_from_field_addr, static_cast<StructType*>(field->type));
     } else if (field->type->is_array()) {
         gen_copy_array(ll_to_field_addr, ll_from_field_addr, static_cast<ArrayType*>(field->type));
@@ -3561,7 +3614,7 @@ void acorn::IRGenerator::try_move_then_copy_struct_field_constructor(Var* field,
     auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_to_struct_address, field->field_idx);
     auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->field_idx);
     
-    if (field->type->is_struct_type()) {
+    if (field->type->is_struct()) {
         auto field_struct_type = static_cast<StructType*>(field->type);
         auto structn = field_struct_type->get_struct();
         if (structn->needs_move_call) {
@@ -3572,7 +3625,7 @@ void acorn::IRGenerator::try_move_then_copy_struct_field_constructor(Var* field,
     } else if (field->type->is_array()) {
         auto arr_type = static_cast<ArrayType*>(field->type);
         auto base_type = arr_type->get_base_type();
-        if (base_type->is_struct_type()) {
+        if (base_type->is_struct()) {
             auto field_struct_type = static_cast<StructType*>(base_type);
             auto structn = field_struct_type->get_struct();
             if (structn->needs_move_call) {
@@ -3617,7 +3670,7 @@ void acorn::IRGenerator::gen_copy_array(llvm::Value* ll_to_address,
                                         Node* lvalue) {
     
     auto base_type = arr_type->get_base_type();
-    if (base_type->is_struct_type()) {
+    if (base_type->is_struct()) {
         auto struct_type = static_cast<StructType*>(base_type);
         auto structn = struct_type->get_struct();
         if (structn->needs_copy_call) {

@@ -215,7 +215,7 @@ acorn::Node* acorn::Parser::parse_statement() {
             auto ident = Identifier::get(cur_token.text());
             if (cur_struct->name == ident && peek_token(0).is('(')) {
                 next_token(); // Consuming the identifier token.
-                return parse_function(0, context.void_type, cur_struct->name);
+                return parse_function(0, context.void_type, false, cur_struct->name);
             }
         }
 
@@ -230,7 +230,7 @@ acorn::Node* acorn::Parser::parse_statement() {
             auto ident = Identifier::get(cur_token.text());
             if (cur_struct->name == ident && peek_token(0).is('(')) {
                 next_token(); // Consuming the identifier token.
-                return parse_function(modifiers, context.void_type, cur_struct->name);
+                return parse_function(modifiers, context.void_type, false, cur_struct->name);
             }
         } else if (cur_token.is('~') && peek_token(0).is(Token::Identifier)) {
             auto peek0 = peek_token(0);
@@ -241,7 +241,7 @@ acorn::Node* acorn::Parser::parse_statement() {
                 next_token(); // Consuming the identifier token.
                 auto text = peek0.text();
                 auto name = Identifier::get(llvm::StringRef(text.data() - 1, text.size() + 1));
-                auto destructor = parse_function(modifiers, context.void_type, ident);
+                auto destructor = parse_function(modifiers, context.void_type, false, ident);
                 destructor->is_destructor = true;
                 return destructor;
             }
@@ -261,7 +261,7 @@ acorn::Node* acorn::Parser::parse_statement() {
                 next_token(); // Consuming the identifier token.
                 auto text = peek0.text();
                 auto name = Identifier::get(llvm::StringRef(text.data() - 1, text.size() + 1));
-                auto destructor = parse_function(0, context.void_type, name);
+                auto destructor = parse_function(0, context.void_type, false, name);
                 destructor->is_destructor = true;
                 return destructor;
             }
@@ -278,7 +278,7 @@ acorn::Node* acorn::Parser::parse_statement() {
             if (cur_struct->name == ident && peek_token(1).is('(')) {
                 next_token(); // Consuming the 'copyobj' token.
                 next_token(); // Consuming the identifier token.
-                return parse_function(modifiers, context.void_type, cur_struct->name, true);
+                return parse_function(modifiers, context.void_type, false, cur_struct->name, true);
             }
         }
     
@@ -291,7 +291,7 @@ acorn::Node* acorn::Parser::parse_statement() {
             if (cur_struct->name == ident && peek_token(1).is('(')) {
                 next_token(); // Consuming the 'moveobj' token.
                 next_token(); // Consuming the identifier token.
-                return parse_function(modifiers, context.void_type, cur_struct->name, false, true);
+                return parse_function(modifiers, context.void_type, false, cur_struct->name, false, true);
             }
         }
 
@@ -331,7 +331,8 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
         (peek1.is('*') && peek2.is(Token::Identifier)) ||  // ident* ident
         (peek1.is('*') && peek2.is('[')) || // ident*[
         (peek1.is('!') && peek2.is('(')) || // ident!(
-        (peek1.is('*') && peek2.is('!'))    // ident*!
+        (peek1.is('*') && peek2.is('!')) || // ident*!
+        (peek1.is('^'))                     // ident^
         ) {
 
         if (!is_for_expr) {
@@ -344,7 +345,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
         Token name_token = cur_token;
         next_token();
 
-        bool encountered_null_index = false;
+        bool is_garenteed_type = false;
         
         llvm::SmallVector<Expr*, 8> indexes;
         llvm::SmallVector<Token> bracket_tokens;
@@ -355,15 +356,19 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
                 indexes.push_back(parse_expr());
             } else {
                 indexes.push_back(nullptr);
-                encountered_null_index = true;
+                is_garenteed_type = true;
             }
             expect(']');
         }
+        if (cur_token.is('*') || cur_token.is('^') || cur_token.is('!')) {
+            is_garenteed_type = true;
+        }
 
-        if (cur_token.is(Token::Identifier) || encountered_null_index) {
+        if (cur_token.is(Token::Identifier) || is_garenteed_type) {
             // Variable declarations.
             auto type = construct_type_from_identifier(name_token, false);
             type = construct_array_type(type, indexes);
+            type = parse_optional_array_and_ptr_types(type);
             type = parse_optional_function_type(type);
             if (!is_for_expr) {
                 return parse_decl(0, type);
@@ -404,6 +409,9 @@ acorn::Node* acorn::Parser::parse_decl(uint32_t modifiers, Type* type) {
             expect(';');
             return stmt;
         }
+    } else if (cur_token.is('^')) {
+        next_token();
+        return parse_function(modifiers, type, true, expect_identifier());
     } else {
         expect_identifier("for declaration");
         if (cur_token.is('=')) {
@@ -411,7 +419,7 @@ acorn::Node* acorn::Parser::parse_decl(uint32_t modifiers, Type* type) {
             expect(';');
             return stmt;
         } else if (cur_token.is('(')) {
-            return parse_function(modifiers, type, Identifier());
+            return parse_function(modifiers, type, false, Identifier());
         } else if (cur_token.is_keyword() && peek_token(0).is('=')) {
             next_token(); // Consuming the extra keyword.
             auto stmt = parse_variable(modifiers, type, Identifier());
@@ -419,7 +427,7 @@ acorn::Node* acorn::Parser::parse_decl(uint32_t modifiers, Type* type) {
             return stmt;
         } else if (cur_token.is_keyword() && peek_token(0).is('(')) {
             next_token(); // Consuming the extra keyword.
-            return parse_function(modifiers, type, Identifier());
+            return parse_function(modifiers, type, false, Identifier());
         } else {
             skip_recovery();
         }
@@ -441,11 +449,16 @@ D* acorn::Parser::new_declaration(uint32_t modifiers, Identifier name, Token loc
 }
 
 acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type) {
-    return parse_function(modifiers, type, expect_identifier());
+    bool has_implicit_return_ptr = cur_token.is('^');
+    if (has_implicit_return_ptr) {
+        next_token();
+    }
+    return parse_function(modifiers, type, has_implicit_return_ptr, expect_identifier());
 }
 
 acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
                                            Type* type,
+                                           bool has_implicit_return_ptr,
                                            Identifier name,
                                            bool is_copy_constructor,
                                            bool is_move_constructor) {
@@ -455,8 +468,13 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     //     Logger::debug("parsing function: %s", name);
     // }
 
+    if (has_implicit_return_ptr) {
+        type = type_table.get_ptr_type(type);
+    }
+
     Func* func = new_declaration<Func, true>(modifiers, name, prev_token);
     func->return_type = type;
+    func->has_implicit_return_ptr = has_implicit_return_ptr;
     func->is_copy_constructor = is_copy_constructor;
     func->is_move_constructor = is_move_constructor;
 
@@ -920,7 +938,9 @@ acorn::Node* acorn::Parser::parse_loop() {
         return loop_with_var(var);
     }
     case Token::Identifier: {
+        allow_struct_initializer = false;
         Node* expr = parse_ident_decl_or_expr(true);
+        allow_struct_initializer = true;
         if (expr->is(NodeKind::Var)) {
             Var* var = static_cast<Var*>(expr);
             return loop_with_var(var);
@@ -1172,6 +1192,7 @@ acorn::Type* acorn::Parser::parse_type_for_decl() {
             case '*':
             case '!':
             case '[':
+            case '^':
                 return parse_type();
             default:
                 next_token();
@@ -1197,25 +1218,7 @@ acorn::Type* acorn::Parser::parse_type() {
         return type;
     }
 
-    while (cur_token.is('*') || cur_token.is('[')) {
-        if (cur_token.is('*')) {
-            type = type_table.get_ptr_type(type);
-            next_token();
-        } else {
-            llvm::SmallVector<Expr*, 8> arr_lengths;
-            while (cur_token.is('[')) {
-                next_token();
-
-                arr_lengths.push_back(cur_token.is_not(']') ? parse_expr()
-                                                            : nullptr);
-
-                expect(']');
-            }
-
-            type = construct_array_type(type, arr_lengths);
-        }
-    }
-
+    type = parse_optional_array_and_ptr_types(type);
     type = parse_optional_function_type(type);
 
     if (type->is(context.const_void_type)) {
@@ -1382,6 +1385,29 @@ acorn::Type* acorn::Parser::parse_optional_function_type(Type* base_type) {
         return type_table.get_function_type(base_type, param_types);
     }
     return base_type;
+}
+
+acorn::Type* acorn::Parser::parse_optional_array_and_ptr_types(Type* type) {
+    while (cur_token.is('*') || cur_token.is('[')) {
+        if (cur_token.is('*')) {
+            type = type_table.get_ptr_type(type);
+            next_token();
+        } else {
+            llvm::SmallVector<Expr*, 8> arr_lengths;
+            while (cur_token.is('[')) {
+                next_token();
+
+                arr_lengths.push_back(cur_token.is_not(']') ? parse_expr()
+                                                            : nullptr);
+
+                expect(']');
+            }
+
+            type = construct_array_type(type, arr_lengths);
+        }
+    }
+
+    return type;
 }
 
 acorn::Expr* acorn::Parser::parse_assignment_and_expr() {

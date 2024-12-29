@@ -65,7 +65,7 @@ namespace acorn {
 
         Node* parse_statement();
         Node* parse_ident_decl_or_expr(bool is_for_expr);
-        Node* parse_decl(uint32_t modifiers, Type*);
+        Node* parse_decl(uint32_t modifiers, Type* type);
 
         template<typename D, bool uses_linkname>
         D* new_declaration(uint32_t modifiers, Identifier name, Token loc_token);
@@ -73,6 +73,7 @@ namespace acorn {
         Func* parse_function(uint32_t modifiers, Type* type);
         Func* parse_function(uint32_t modifiers,
                              Type* type,
+                             bool has_implicit_return_ptr,
                              Identifier name,
                              bool is_copy_constructor = false,
                              bool is_move_constructor = false);
@@ -106,13 +107,14 @@ namespace acorn {
         // Expression parsing
         //--------------------------------------
 
-        Type* parse_type();
+        Type* parse_type();        
         Type* parse_type_for_decl();
         Type* parse_base_type();
         Type* construct_type_from_identifier(Token name_token, bool is_const);
         Type* construct_array_type(Type* base_type, 
                                    const llvm::SmallVector<Expr*, 8>& arr_lengths);
         Type* parse_optional_function_type(Type* base_type);
+        Type* parse_optional_array_and_ptr_types(Type* type);
 
         Expr* parse_assignment_and_expr();
         Expr* parse_assignment_and_expr(Expr* lhs);
