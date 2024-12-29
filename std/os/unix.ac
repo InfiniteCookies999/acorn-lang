@@ -6,10 +6,10 @@ native void _exit(int32 status);
 
 native isize write(int32 fd, const void* buf, usize count);
 
-const int32 R_OK = 4'i32;
-const int32 W_OK = 2'i32;
-const int32 X_OK = 1'i32;
-const int32 F_OK = 0'i32;
+const R_OK = 4'i32;
+const W_OK = 2'i32;
+const X_OK = 1'i32;
+const F_OK = 0'i32;
 
 native int32 access(const char* pathname, int32 mode);
 
