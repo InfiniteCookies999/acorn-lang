@@ -89,6 +89,11 @@ Options:
     -nshow-error-location, -nshow-error-loc, -nshow-err-loc
         Stops displaying the visual location where an error
         occurred and only the error description instead.
+
+    -nshow-spell-checking
+        Stops performing spell checking when an identifier is
+        not found and it tries to find an identifier with a
+        closely matching string.
     
     -show-linker-command, -show-linker-cmd
         Shows the command that is ran to perform linking.
@@ -117,6 +122,7 @@ int main(int argc, char* argv[]) {
     processor.add_flag("nshow-wrote-to-msg", &acorn::Compiler::set_dont_show_wrote_to_msg);
     processor.add_flag("nshow-colors", &acorn::Compiler::set_dont_show_colors);
     processor.add_flag("nshow-error-location", { "nshow-error-loc", "nshow-err-loc" }, &acorn::Compiler::set_dont_show_error_location);
+    processor.add_flag("nshow-spell-checking", &acorn::Compiler::set_dont_show_spell_checking);
     processor.add_flag("run", &acorn::Compiler::set_run_program);
     processor.add_flag("run-seperate", { "run-seperate-window"}, &acorn::Compiler::set_run_program_seperate_window);
     processor.add_flag("show-linker-command", { "show-linker-cmd" }, &acorn::Compiler::set_show_linker_command);

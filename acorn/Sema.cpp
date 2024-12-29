@@ -9,6 +9,7 @@
 #include "ir/IRGen.h"
 #include "Module.h"
 #include "SourceFile.h"
+#include "SpellChecking.h"
 
 /* Utility for returning from check functions if an error occures */
 #define nvalid(n) !(n->type)
@@ -255,9 +256,19 @@ acorn::Type* acorn::Sema::fixup_unresolved_struct_type(Type* type) {
     auto found_struct = find_struct(name);
 
     if (!found_struct) {
-        error(unresolved_struct_type->get_error_location(),
-              "Could not find struct type '%s'", name)
-            .end_error(ErrCode::SemaCouldNotFindStructType);
+        ErrorSpellChecker spell_checker(context.should_show_spell_checking());
+        spell_checker.add_searches(file->get_namespace()->get_structs());
+        spell_checker.add_searches(file->get_structs());
+        for (auto& [import_key, importn] : file->get_imports()) {
+            if (importn->is_imported_struct()) {
+                spell_checker.add_search(import_key);
+            }
+        }
+
+        logger.begin_error(unresolved_struct_type->get_error_location(),
+                           "Could not find struct type '%s'", name);
+        spell_checker.search(logger, name);
+        logger.end_error(ErrCode::SemaCouldNotFindStructType);
         return nullptr;
     }
 
@@ -464,9 +475,29 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         }
     };
     
-    auto report_could_not_find = [&logger, importn](ImportStmt::KeyPart& key_part) finline {
-        logger.begin_error(key_part.error_loc, "Could not find '%s' for import", key_part.name)
-                .end_error(ErrCode::SemaCouldNotResolveImport);
+    auto report_could_not_find = [&logger](ImportStmt::KeyPart& key_part,
+                                           const char* fmt,
+                                           ErrorSpellChecker& spell_checker) finline{
+        logger.begin_error(key_part.error_loc, fmt, key_part.name);
+        spell_checker.search(logger, key_part.name);
+        logger.end_error(ErrCode::SemaCouldNotResolveImport);
+    };
+
+    auto report_could_not_find_general = [&report_could_not_find](ImportStmt::KeyPart& key_part,
+                                                                  ErrorSpellChecker& spell_checker) finline {
+        report_could_not_find(key_part, "Could not find '%s'", spell_checker);
+    };
+    auto report_could_not_find_struct = [&report_could_not_find](ImportStmt::KeyPart& key_part,
+                                                                 ErrorSpellChecker& spell_checker) finline {
+        report_could_not_find(key_part, "Could not find struct '%s'", spell_checker);
+    };
+    auto report_could_not_find_namespace = [&report_could_not_find](ImportStmt::KeyPart& key_part,
+                                                                    ErrorSpellChecker& spell_checker) finline{
+        report_could_not_find(key_part, "Could not find namespace '%s'", spell_checker);
+    };
+    auto report_could_not_find_module = [&report_could_not_find](ImportStmt::KeyPart& key_part,
+                                                                 ErrorSpellChecker& spell_checker) finline{
+        report_could_not_find(key_part, "Could not find module '%s'", spell_checker);
     };
 
     auto report_invalid_import = [&logger, importn]() finline {
@@ -481,6 +512,8 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
                            .end_error(ErrCode::SemaParentModuleImportExpectModuleIdent);
     };
 
+    ErrorSpellChecker spell_checker(context.should_show_spell_checking());
+
     if (key.size() == 1 && importn->within_same_modl) {
         auto& modl = importn->file->modl;
         Identifier ident = key[0].name;
@@ -489,7 +522,9 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         } else if (auto structn = modl.find_struct(ident)) {
             add_struct(structn);
         } else {
-            report_could_not_find(key[0]);
+            spell_checker.add_searches(modl.get_namespaces());
+            spell_checker.add_searches(modl.get_structs());
+            report_could_not_find_general(key[0], spell_checker);
         }
         return;
     }
@@ -509,8 +544,8 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         if (auto modl = context.find_module(key[0].name)) {
             add_namespace(modl);
         } else {
-            logger.begin_error(key[0].error_loc, "Could not find module '%s'", key[0].name)
-                .end_error(ErrCode::SemaCouldNotResolveImport);
+            spell_checker.add_searches(context.get_modules());
+            report_could_not_find_module(key[0], spell_checker);
         }
         return;
     }
@@ -521,12 +556,12 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
             if (auto structn = nspace->find_struct(key[1].name)) {
                 add_struct(structn);
             } else {
-                logger.begin_error(key[1].error_loc, "Could not find struct '%s'", key[1].name)
-                    .end_error(ErrCode::SemaCouldNotResolveImport);
+                spell_checker.add_searches(nspace->get_structs());
+                report_could_not_find_struct(key[1], spell_checker);
             }
         } else {
-            logger.begin_error(key[0].error_loc, "Could not find mamespace '%s'", key[0].name)
-                .end_error(ErrCode::SemaCouldNotResolveImport);
+            spell_checker.add_searches(modl.get_namespaces());
+            report_could_not_find_namespace(key[0], spell_checker);
         }
         return;
     }
@@ -542,8 +577,8 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         if (auto structn = modl.find_struct(key[1].name)) {
             add_struct(structn);
         } else {
-            logger.begin_error(key[1].error_loc, "Could not find struct '%s'", key[1].name)
-                .end_error(ErrCode::SemaCouldNotResolveImport);
+            spell_checker.add_searches(modl.get_structs());
+            report_could_not_find_struct(key[1], spell_checker);
         }
         return;
     }
@@ -560,10 +595,13 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
             } else if (auto structn = modl->find_struct(key[1].name)) {
                 add_struct(structn);
             } else {
-                report_could_not_find(key[1]);
+                spell_checker.add_searches(modl->get_namespaces());
+                spell_checker.add_searches(modl->get_structs());
+                report_could_not_find_general(key[1], spell_checker);
             }
         } else {
-            report_could_not_find(key[0]);
+            spell_checker.add_searches(context.get_modules());
+            report_could_not_find_module(key[0], spell_checker);
         }
         return;
     }
@@ -571,16 +609,19 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
     if (key.size() == 3) {
         if (auto modl = context.find_module(key[0].name)) {
             if (auto nspace = modl->find_namespace(key[1].name)) {
-                if (auto structn = modl->find_struct(key[2].name)) {
+                if (auto structn = nspace->find_struct(key[2].name)) {
                     add_struct(structn);
                 } else {
-                    report_could_not_find(key[2]);
+                    spell_checker.add_searches(nspace->get_structs());
+                    report_could_not_find_struct(key[2], spell_checker);
                 } 
             } else {
-                report_could_not_find(key[1]);
+                spell_checker.add_searches(modl->get_namespaces());
+                report_could_not_find_namespace(key[1], spell_checker);
             }
         } else {
-            report_could_not_find(key[0]);
+            spell_checker.add_searches(context.get_modules());
+            report_could_not_find_module(key[0], spell_checker);
         }
         return;
     }
@@ -2574,8 +2615,11 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
     }
 }
 
+template<bool is_spell_checking>
 void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call) {
     
+    ErrorSpellChecker spell_checker(context.should_show_spell_checking());
+
     if (is_comptime_if_cond) {
         if (is_for_call) {
             error(expand(ref), "Cannot make calls in comptime if conditions")
@@ -2589,19 +2633,25 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
             return;
         }
         
-        error(expand(ref), "Could not find identifier '%s'", ref->ident)
-            .end_error(ErrCode::SemaNoFindIdentRef);
+        spell_checker.add_searches(context.get_universal_constants());
+
+        auto& logger = error(expand(ref), "Could not find identifier '%s'", ref->ident);
+        spell_checker.search(logger, ref->ident);
+        logger.end_error(ErrCode::SemaNoFindIdentRef);
         return;
     }
 
     bool same_nspace = search_nspace == nspace;
 
-    auto find_function = [=, this]() finline {
+    auto find_function = [=, this, &spell_checker]() finline {
         if (same_nspace) {
             if (cur_struct) {
                 if (auto* funcs = cur_struct->nspace->find_functions(ref->ident)) {
                     ref->set_funcs_ref(funcs);
                     return;
+                }
+                if constexpr (is_spell_checking) {
+                    spell_checker.add_searches(cur_struct->nspace->get_functions());
                 }
             }
 
@@ -2614,19 +2664,32 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
                 ref->set_funcs_ref(funcs);
                 return;
             }
+
+            if constexpr (is_spell_checking) {
+                spell_checker.add_searches(file->get_functions());
+                for (const Namespace* nspace : file->get_static_imports()) {
+                    spell_checker.add_searches(nspace->get_functions());
+                }
+            }
         }
 
         if (auto* funcs = search_nspace->find_functions(ref->ident)) {
             ref->set_funcs_ref(funcs);
         }
+        if constexpr (is_spell_checking) {
+            spell_checker.add_searches(search_nspace->get_functions());
+        }
     };
 
-    auto find_variable = [=, this]() finline {
+    auto find_variable = [=, this, &spell_checker]() finline {
         if (same_nspace) {
             if (cur_scope) {
                 if (auto* var = cur_scope->find_variable(ref->ident)) {
                     ref->set_var_ref(var);
                     return;
+                }
+                if constexpr (is_spell_checking) {
+                    spell_checker.add_searches(cur_scope->variables);
                 }
             }
 
@@ -2634,6 +2697,9 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
                 if (auto* var = cur_struct->nspace->find_variable(ref->ident)) {
                     ref->set_var_ref(var);
                     return;
+                }
+                if constexpr (is_spell_checking) {
+                    spell_checker.add_searches(cur_struct->nspace->get_variables());
                 }
             }
 
@@ -2646,6 +2712,13 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
                 ref->set_var_ref(var);
                 return;
             }
+
+            if constexpr (is_spell_checking) {
+                spell_checker.add_searches(file->get_variables());
+                for (const Namespace* nspace : file->get_static_imports()) {
+                    spell_checker.add_searches(nspace->get_variables());
+                }
+            }
         }
 
         if (auto* var = search_nspace->find_variable(ref->ident)) {
@@ -2654,6 +2727,11 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         }
         if (auto* universal = context.get_universal_constant(ref->ident)) {
             ref->set_universal_ref(universal);
+        }
+
+        if constexpr (is_spell_checking) {
+            spell_checker.add_searches(search_nspace->get_variables());
+            spell_checker.add_searches(context.get_universal_constants());
         }
     };
 
@@ -2674,6 +2752,16 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         if (auto importn = file->find_import(ref->ident)) {
             ref->set_import_ref(importn);
         }
+
+        if constexpr (is_spell_checking) {
+            spell_checker.add_searches(file->get_imports());
+        }
+    }
+
+    if constexpr (is_spell_checking) {
+        // Not reporting the error just reporting spell checking information.
+        spell_checker.search(logger, ref->ident);
+        return;
     }
     
     switch (ref->found_kind) {
@@ -2713,8 +2801,9 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         break;
     }
     case IdentRef::NoneKind: {
-        error(expand(ref), "Could not find %s '%s'", is_for_call ? "function" : "identifier", ref->ident)
-            .end_error(!is_for_call ? ErrCode::SemaNoFindIdentRef : ErrCode::SemaNoFindFuncIdentRef);
+        auto& logger = error(expand(ref), "Could not find %s '%s'", is_for_call ? "function" : "identifier", ref->ident);
+        check_ident_ref<true>(ref, search_nspace, is_for_call);
+        logger.end_error(!is_for_call ? ErrCode::SemaNoFindIdentRef : ErrCode::SemaNoFindFuncIdentRef);
         break;
     }
     }

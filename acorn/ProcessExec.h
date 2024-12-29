@@ -1,5 +1,5 @@
-#ifndef PROCESS_H
-#define PROCESS_H
+#ifndef PROCESS_EXEC_H
+#define PROCESS_EXEC_H
 
 #include <string>
 
@@ -13,4 +13,4 @@ namespace acorn {
     bool exe_process(wchar_t* process, wchar_t* process_dir, bool seperate_window, int& exit_code);
 }
 
-#endif // PROCESS_H
+#endif // PROCESS_EXEC_H

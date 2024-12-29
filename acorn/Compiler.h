@@ -54,6 +54,7 @@ namespace acorn {
         void set_should_emit_debug_info()        { context.set_should_emit_debug_info();    }
         void set_dont_show_colors()              { disable_terminal_colors = true;          }
         void set_dont_show_error_location()      { context.set_dont_show_error_location();  }
+        void set_dont_show_spell_checking()      { context.set_dont_show_spell_checking();  }
 
         void set_output_name(std::wstring output_name);
         void set_output_directory(std::wstring output_directory);

@@ -119,6 +119,7 @@ namespace acorn {
 
         void check_binary_op(BinOp* bin_op);
         void check_unary_op(UnaryOp* unary_op);
+        template<bool is_spell_checking = false>
         void check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call);
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);

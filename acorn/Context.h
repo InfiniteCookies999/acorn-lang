@@ -205,11 +205,23 @@ namespace acorn {
             return show_error_locations;
         }
 
+        void set_dont_show_spell_checking() {
+            show_spell_checking = false;
+        }
+
+        bool should_show_spell_checking() const {
+            return show_spell_checking;
+        }
+
         // Returns true if it exceeds the maximum allowed number
         // of errors.
         bool inc_error_count();
 
         Expr* get_universal_constant(Identifier identifier) const;
+
+        const llvm::DenseMap<Identifier, Expr*>& get_universal_constants() const {
+            return universal_constants;
+        }
 
     private:
         PageAllocator& allocator;
@@ -220,12 +232,13 @@ namespace acorn {
         llvm::SmallVector<Func*> canidate_main_funcs;
         Func* main_func = nullptr;
 
-        std::atomic<size_t> error_count        = 0;
-        size_t              max_error_count    = 30;
-        size_t              max_call_err_funcs = 3;
-        bool                show_error_codes   = false;
-        bool                emit_debug_info    = false;
+        std::atomic<size_t> error_count          = 0;
+        size_t              max_error_count      = 30;
+        size_t              max_call_err_funcs   = 3;
+        bool                show_error_codes     = false;
+        bool                emit_debug_info      = false;
         bool                show_error_locations = true;
+        bool                show_spell_checking  = true;
 
         llvm::LLVMContext& ll_context;
         llvm::Module&      ll_module;

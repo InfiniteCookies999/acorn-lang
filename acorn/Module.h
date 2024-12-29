@@ -25,6 +25,10 @@ namespace acorn {
 
         Namespace* find_namespace(Identifier name);
 
+        const llvm::DenseMap<Identifier, Namespace*> get_namespaces() const {
+            return namespaces;
+        }
+
         void mark_bad_scope(ScopeLocation location, Node* node, Logger& logger);
 
         void add_duplicate_decl(Decl* decl, Decl* prev_decl, 

@@ -63,6 +63,10 @@ namespace acorn {
         FuncList* find_static_import_functions(Identifier name);
         Var* find_static_import_variable(Identifier name);
 
+        const llvm::SmallVector<Namespace*>& get_static_imports() const {
+            return static_imports;
+        }
+
     private:
         uint32_t default_access = Modifier::Private;
 
