@@ -125,6 +125,19 @@ struct FileHandle {
 #endif
     }
 
+    int write_buffer(const char* buffer, int length) {
+#if OS_GROUP_WINDOWS
+        uint32 bytes_written;
+        if win32.WriteFile(handle, buffer, as(uint32) length, &bytes_written, null) == 0 {
+            module.println("failed to read from file handle :(");
+            return 0;
+        }
+        return as(int) bytes_written;
+#elif OS_GROUP_UNIX
+        return 0;
+#endif
+    }
+
     ~FileHandle() {
         if auto_close {
             close();
@@ -342,7 +355,7 @@ FileHandle open(const char* path, uint32 flags) {
             // Windows is weird and none of the create options allow us to simply
             // overwrite the old file. We will simply remove the existing file if
             // it exists then create a new one.
-            // TODO: come back to!! remove(path);
+            remove(path); // TODO: should this report an error if it fails?
             create_flags |= win32.CREATE_NEW;
         }
     } else {
