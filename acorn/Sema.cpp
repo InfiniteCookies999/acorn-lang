@@ -321,10 +321,18 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
 }
 
 void acorn::Sema::check_for_duplicate_functions(const FuncList& funcs, Context& context) {
+    bool decls_have_errors = false;
     for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
         Func* func = *itr;
         Sema analyzer(context, func->file, func->get_logger());
-        analyzer.check_function_decl(func);
+        if (!analyzer.check_function_decl(func)) {
+            decls_have_errors = true;
+        }
+    }
+    if (decls_have_errors) {
+        // Do not proceed to checking duplicates because it could report
+        // nonsensical information.
+        return;
     }
     
     for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
