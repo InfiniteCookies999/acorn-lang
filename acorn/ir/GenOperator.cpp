@@ -396,3 +396,48 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         return nullptr;
     }
 }
+
+llvm::Value* acorn::IRGenerator::gen_ternary(Ternary* ternary, 
+                                             llvm::Value* ll_dest_addr, 
+                                             Node* lvalue,
+                                             bool is_assign_op,
+                                             bool try_move) {
+
+    if (ternary->type->is_aggregate()) {
+        // Basically have to create an if statement.
+
+        if (!ll_dest_addr) {
+            ll_dest_addr = gen_unseen_alloca(gen_type(ternary->type), "tmp.aggr");
+        }
+
+        auto ll_then_bb = gen_bblock("tern.then");
+        auto ll_else_bb = gen_bblock("tern.else");
+        auto ll_end_bb  = gen_bblock("tern.end");
+
+        gen_branch_on_condition(ternary->cond, ll_then_bb, ll_else_bb);
+
+        // Then block
+        insert_bblock_at_end(ll_then_bb);
+        builder.SetInsertPoint(ll_then_bb);
+        gen_assignment(ll_dest_addr, ternary->type, ternary->lhs, lvalue, is_assign_op, try_move);
+        gen_branch_if_not_term(ll_end_bb);
+
+        // Else block
+        insert_bblock_at_end(ll_else_bb);
+        builder.SetInsertPoint(ll_else_bb);
+        gen_assignment(ll_dest_addr, ternary->type, ternary->rhs, lvalue, is_assign_op, try_move);
+        gen_branch_if_not_term(ll_end_bb);
+
+        // Continuing forward into a new block after the ternary.
+        insert_bblock_at_end(ll_end_bb);
+        builder.SetInsertPoint(ll_end_bb);
+
+        return ll_dest_addr;
+    } else {
+        auto ll_cond = gen_condition(ternary->cond);
+        auto ll_lhs = gen_rvalue(ternary->lhs);
+        auto ll_rhs = gen_rvalue(ternary->rhs);
+
+        return builder.CreateSelect(ll_cond, ll_lhs, ll_rhs);
+    }
+}

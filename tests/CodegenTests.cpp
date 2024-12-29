@@ -1687,6 +1687,45 @@ static void move_constructors_tests() {
     });
 }
 
+static void ternaries_tests() {
+    test("Ternary of constant integers", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test1.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("@#");
+    });
+    test("Ternary of non-constant integers", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test2.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("@#");
+    });
+    test("Ternary of select inline structs", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test3.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Ternary of select non-inline structs", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test4.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Returning ternary struct inline (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test5.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Returning ternary struct inline (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test6.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCDEFGH");
+    });
+}
+
 void test_codegen() {
 
     executable_path = get_executable_path();
@@ -1731,5 +1770,6 @@ void test_codegen() {
         auto_type_tests();
         test_implicit_ptrs();
         move_constructors_tests();
+        ternaries_tests();
     }, true);
 }

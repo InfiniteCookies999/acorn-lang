@@ -161,7 +161,11 @@ namespace acorn {
         llvm::Value* gen_numeric_binary_op(tokkind op, BinOp* bin_op,
                                            llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_rhs);
-
+        llvm::Value* gen_ternary(Ternary* ternary,
+                                 llvm::Value* ll_dest_addr,
+                                 Node* lvalue      = nullptr,
+                                 bool is_assign_op = false,
+                                 bool try_move     = false);
 
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
         llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue = nullptr);

@@ -668,6 +668,10 @@ namespace acorn {
     struct Ternary : Expr {
         Ternary() : Expr(NodeKind::Ternary) {
         }
+
+        Expr* cond;
+        Expr* lhs;
+        Expr* rhs;
     };
 
     struct MoveObj : Expr {

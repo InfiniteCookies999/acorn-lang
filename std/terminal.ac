@@ -45,7 +45,6 @@ void print(char c) {
 }
 
 void print(bool b) {
-    // TODO: replace with ternary.
     if b {
         print("true", 4);
     } else {

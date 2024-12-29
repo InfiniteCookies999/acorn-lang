@@ -94,6 +94,12 @@ if (e1 > e) { e = e1; }           \
             go_until(e, '(', ')');
             break;
         }
+        case NodeKind::Ternary: {
+            Ternary* ternary = static_cast<Ternary*>(node);
+            get(ternary->cond);
+            get(ternary->rhs);
+            break;
+        }
         case NodeKind::Number:
         case NodeKind::IdentRef:
         case NodeKind::String:

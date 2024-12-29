@@ -843,6 +843,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_sizeof(static_cast<SizeOf*>(node));
     case NodeKind::MoveObj:
         return check_moveobj(static_cast<MoveObj*>(node), false);
+    case NodeKind::Ternary:
+        return check_ternary(static_cast<Ternary*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -1355,7 +1357,7 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
             } else if (ifs->post_variable_cond) {
                 check_node(ifs->post_variable_cond);
                 if (ifs->post_variable_cond->type) {
-                    check_condition(ifs->post_variable_cond);
+                    check_is_condition(ifs->post_variable_cond);
                 }
             }
         }
@@ -1364,7 +1366,7 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
         check_node(ifs->cond);
         Expr* cond = static_cast<Expr*>(ifs->cond);
         if (cond->type) {
-            check_condition(cond);
+            check_is_condition(cond);
         }
     }
     
@@ -1391,7 +1393,7 @@ void acorn::Sema::check_predicate_loop(PredicateLoopStmt* loop) {
     if (loop->cond) {
         check_node(loop->cond);
         if (loop->cond->type) {
-            check_condition(loop->cond);
+            check_is_condition(loop->cond);
         }
     }
 
@@ -3549,6 +3551,37 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
     }
 }
 
+void acorn::Sema::check_ternary(Ternary* ternary) {
+    check_node(ternary->cond);
+    if (ternary->cond->type) {
+        if (!check_is_condition(ternary->cond)) {
+            return;
+        }
+    }
+    
+    check_node(ternary->lhs);
+    check_node(ternary->rhs);
+
+    if (!ternary->lhs->type || !ternary->rhs->type) {
+        return;
+    }
+    if (!ternary->lhs->is_foldable || !ternary->rhs->is_foldable) {
+        ternary->is_foldable = false;
+    }
+
+    // TODO: This is too strict. It should work even when there are const
+    // types. otherwise this will fail for basic things like 'int' and 'const int'.
+    //
+    if (ternary->lhs->type->is_not(ternary->rhs->type)) {
+        error(expand(ternary), "Operator ? has incompatible types '%s' and '%s'",
+              ternary->lhs->type, ternary->rhs->type)
+            .end_error(ErrCode::SemaTernaryIncompatibleTypes);
+        return;
+    }
+
+    ternary->type = ternary->lhs->type;
+}
+
 void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) {
     // TODO: Does this need to just check if var->is_being_checked is true? It may be possible
     // that it somehow circularly depends on itself through a different means.
@@ -4013,7 +4046,7 @@ void acorn::Sema::create_cast(Expr* expr, Type* to_type) {
     }
 }
 
-bool acorn::Sema::check_condition(Expr* cond) {
+bool acorn::Sema::check_is_condition(Expr* cond) {
     if (!is_condition(cond->type)) {
         error(expand(cond), "Expected condition")
             .end_error(ErrCode::SemaExpectedCondition);

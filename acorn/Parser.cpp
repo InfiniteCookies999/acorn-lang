@@ -1444,7 +1444,19 @@ acorn::Expr* acorn::Parser::parse_expr() {
 }
 
 acorn::Expr* acorn::Parser::parse_expr(Expr* lhs) {
-    return parse_binary_expr(lhs);
+    lhs = parse_binary_expr(lhs);
+    
+    if (cur_token.is('?')) {
+        Ternary* ternary = new_node<Ternary>(cur_token);
+        ternary->cond = lhs;
+        next_token();
+        ternary->lhs = parse_expr();
+        expect(':', "for ternary expression");
+        ternary->rhs = parse_expr();
+        return ternary;
+    } else {
+        return lhs;
+    }
 }
 
 std::pair<acorn::Token, acorn::Token> acorn::Parser::split_number_from_sign(Token token) {

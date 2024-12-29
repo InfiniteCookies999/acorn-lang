@@ -115,6 +115,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_this(static_cast<This*>(node));
     case NodeKind::SizeOf:
         return gen_sizeof(static_cast<SizeOf*>(node));
+    case NodeKind::Ternary:
+        return gen_ternary(static_cast<Ternary*>(node), nullptr);
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;
@@ -1274,10 +1276,6 @@ llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs, llvm::BasicBlock* ll_end_bb
     // Insert the then and else blocks after the condition because the condition might
     // branch.
     insert_bblock_at_end(ll_then_bb);
-    if (ifs->elseif) {
-        insert_bblock_at_end(ll_else_bb);
-    }
-
     builder.SetInsertPoint(ll_then_bb);
     gen_scope(ifs->scope);
 
@@ -1290,6 +1288,9 @@ llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs, llvm::BasicBlock* ll_end_bb
     pop_scope();
 
     if (Node* elif = ifs->elseif) {
+        // Insert after the if.then because it might create more blocks.
+        insert_bblock_at_end(ll_else_bb);
+        
         builder.SetInsertPoint(ll_else_bb);
         if (elif->is(NodeKind::IfStmt)) {
             // Pass the ll_end_bb so that all the if statements jump to
@@ -2997,6 +2998,14 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
         } else {
             auto initializer = static_cast<StructInitializer*>(value);
             gen_struct_initializer(initializer, ll_address, lvalue);
+        }
+    } else if (value->is(NodeKind::Ternary)) {
+        auto ll_value = gen_ternary(static_cast<Ternary*>(value), ll_address, lvalue, is_assign_op, try_move);
+        if (!value->type->is_aggregate()) { // If it is an aggregate it calls gen_assignment for the passed ll_address.
+            builder.CreateStore(ll_value, ll_address);
+            if (should_emit_debug_info && lvalue) {
+                di_emitter->emit_location(builder, lvalue->loc);
+            }
         }
     } else if (to_type->is_struct()) {
         if (value->is(NodeKind::MoveObj)) {

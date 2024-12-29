@@ -214,6 +214,8 @@ case c1:                                        \
         return new_token_and_eat(';');
     case ':':
         return new_token_and_eat(':');
+    case '?':
+        return new_token_and_eat('?');
 
     case '\0':
         return new_token_and_eat(Token::EOB);

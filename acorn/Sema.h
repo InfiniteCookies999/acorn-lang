@@ -165,6 +165,7 @@ namespace acorn {
         void check_named_value(NamedValue* named_value);
         void check_array(Array* arr, Type* dest_elm_type);
         void check_memory_access(MemoryAccess* mem_access);
+        void check_ternary(Ternary* ternary);
 
         void ensure_global_variable_checked(SourceLoc error_loc, Var* var);
         bool ensure_struct_checked(SourceLoc error_loc, Struct* structn);
@@ -184,7 +185,7 @@ namespace acorn {
         bool may_implicitly_convert_ptr(PointerType* ptr_type, Expr* from_expr) const;
         void check_division_by_zero(PointSourceLoc error_loc, Expr* expr);
         void create_cast(Expr* expr, Type* to_type);
-        bool check_condition(Expr* cond);
+        bool check_is_condition(Expr* cond);
         bool is_condition(Type* type) const;
         void check_modifier_incompatibilities(Decl* decl);
         void display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code);

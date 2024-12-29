@@ -348,11 +348,8 @@ String to_string(int value, int base = 10) {
 }
 
 String to_string(bool b) {
-    if b {
-        return String{ "true", 4 };
-    } else {
-        return String{ "false", 5 };
-    }
+    return b ? String{ "true" , 4 }
+             : String{ "false", 5 };
 }
 
 String to_string(char c) {
