@@ -86,6 +86,9 @@ native dllimport uint32 GetFileAttributesA(const char* lpFileName);
 
 native dllimport int32 CreateDirectoryA(const char* lpPathName, void* lpSecurityAttributes);
 
+native dllimport int32 RemoveDirectoryA(const char* lpPathName);
+native dllimport int32 DeleteFileA(const char* lpFileName);
+
 // ------------------------------------------------
 // Win32: profileapi.h
 
