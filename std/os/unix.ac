@@ -291,4 +291,6 @@ native int32 close(int32 fd);
 
 native isize read(int32 fd, void* buf, usize count);
 
+native int32 remove(const char* path);
+
 #endif

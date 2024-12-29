@@ -296,8 +296,9 @@ bool remove(const char* path) {
         return win32.RemoveDirectoryA(path) != 0;
     }
     return win32.DeleteFileA(path) != 0;
+#elif OS_GROUP_UNIX
+    return unix.remove(path) == 0;
 #endif
-
 }
 
 /*
