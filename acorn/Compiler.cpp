@@ -12,7 +12,6 @@
 #include "Logger.h"
 #include "Parser.h"
 #include "Sema.h"
-#include "Util.h"
 #include "ir/IRGen.h"
 #include "ir/DebugGen.h"
 #include "CodeGen.h"

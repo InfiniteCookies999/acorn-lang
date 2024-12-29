@@ -16,7 +16,14 @@
 #include <string_view>
 #include <sstream>
 
-void acorn::set_color(Stream stream, Color color) {
+// Forward declaration.
+bool acorn::disable_terminal_colors = false;
+
+void acorn::set_terminal_color(Stream stream, Color color) {
+    if (disable_terminal_colors) {
+        return;
+    }
+
 #ifdef _WIN32
     HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
     static std::unordered_map<Color, WORD> color_map = {

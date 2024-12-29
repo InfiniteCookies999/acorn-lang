@@ -197,6 +197,14 @@ namespace acorn {
             emit_debug_info = true;
         }
 
+        void set_dont_show_error_location() {
+            show_error_locations = false;
+        }
+
+        bool should_show_error_location() const {
+            return show_error_locations;
+        }
+
         // Returns true if it exceeds the maximum allowed number
         // of errors.
         bool inc_error_count();
@@ -217,6 +225,7 @@ namespace acorn {
         size_t              max_call_err_funcs = 3;
         bool                show_error_codes   = false;
         bool                emit_debug_info    = false;
+        bool                show_error_locations = true;
 
         llvm::LLVMContext& ll_context;
         llvm::Module&      ll_module;

@@ -94,7 +94,8 @@ namespace acorn {
         return value <= std::numeric_limits<T>::max();
     }
 
-    void set_color(Stream stream, Color color);
+    extern bool disable_terminal_colors;
+    void set_terminal_color(Stream stream, Color color);
 
     std::string& trim_leading(std::string& s);
 

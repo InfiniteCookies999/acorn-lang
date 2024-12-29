@@ -23,7 +23,7 @@ static std::mutex test_print_mutex;
 thread_local int thread_id;
 
 static void set_color(acorn::Color color) {
-    acorn::set_color(acorn::Stream::StdOut, color);
+    acorn::set_terminal_color(acorn::Stream::StdOut, color);
 }
 
 TestCase::TestCase(const char* name, uint32_t depth, const std::function<void()>& cb)

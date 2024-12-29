@@ -82,6 +82,13 @@ Options:
     -nshow-wrote-to-msg
         Stops showing the message about where the compiled
         program was written to.
+
+    -nshow-colors
+        Stops showing compiler output messages with color.
+
+    -nshow-error-location, -nshow-error-loc, -nshow-err-loc
+        Stops displaying the visual location where an error
+        occurred and only the error description instead.
     
     -show-linker-command, -show-linker-cmd
         Shows the command that is ran to perform linking.
@@ -108,6 +115,8 @@ int main(int argc, char* argv[]) {
     processor.add_flag("show-llvm-ir", { "show-llvm" }, &acorn::Compiler::set_should_show_llvm_ir);
     processor.add_flag("show-error-codes", &acorn::Compiler::set_should_show_error_codes);
     processor.add_flag("nshow-wrote-to-msg", &acorn::Compiler::set_dont_show_wrote_to_msg);
+    processor.add_flag("nshow-colors", &acorn::Compiler::set_dont_show_colors);
+    processor.add_flag("nshow-error-location", { "nshow-error-loc", "nshow-err-loc" }, &acorn::Compiler::set_dont_show_error_location);
     processor.add_flag("run", &acorn::Compiler::set_run_program);
     processor.add_flag("run-seperate", { "run-seperate-window"}, &acorn::Compiler::set_run_program_seperate_window);
     processor.add_flag("show-linker-command", { "show-linker-cmd" }, &acorn::Compiler::set_show_linker_command);

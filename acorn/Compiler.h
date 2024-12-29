@@ -13,6 +13,7 @@
 #include "Module.h"
 #include "Timer.h"
 #include "Errors.h"
+#include "Util.h"
 
 namespace llvm {
     class TargetMachine;
@@ -51,6 +52,8 @@ namespace acorn {
         void set_max_error_count(int max_errors) { context.set_max_error_count(max_errors); }
         void set_max_call_err_funcs(int max_errors) { context.set_max_call_err_funcs(max_errors); }
         void set_should_emit_debug_info()        { context.set_should_emit_debug_info();    }
+        void set_dont_show_colors()              { disable_terminal_colors = true;          }
+        void set_dont_show_error_location()      { context.set_dont_show_error_location();  }
 
         void set_output_name(std::wstring output_name);
         void set_output_directory(std::wstring output_directory);

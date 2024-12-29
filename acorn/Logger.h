@@ -133,7 +133,7 @@ namespace acorn {
         }
 
         static void print(Stream stream, Color color) {
-            set_color(stream, color);
+            set_terminal_color(stream, color);
         }
 
         static void print(Stream stream, Identifier identifier) {
@@ -246,6 +246,18 @@ namespace acorn {
             After
         };
 
+        // Data used for printing errors.
+        using InfoLines = llvm::SmallVector<std::string, 8>;
+        struct ErrorInfo {
+            InfoLines   lines;
+            size_t      start_line_number;
+            size_t      last_line_number;
+            std::string line_number_pad;
+            bool        exceeded_start, exceeded_end;
+            size_t      start_width;
+            size_t      end_width;
+        };
+
         Logger(Context& context, SourceFile& file)
             : AbstractLogger(context, Stream::StdErr), file(file) {
         }
@@ -347,7 +359,10 @@ namespace acorn {
             return *this;
         }
 
+    private:
         void print_header(ErrCode error_code, const std::string& line_number_pad);
+        void print_error_location(const ErrorInfo& info);
+    public:
         void end_error(ErrCode error_code);
 
         static void set_color(Stream stream, Color color);

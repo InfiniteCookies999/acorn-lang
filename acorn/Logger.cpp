@@ -125,7 +125,7 @@ int acorn::AbstractLogger<L>::get_handle(Stream stream) {
 
 
 void acorn::Logger::set_color(Stream stream, Color color) {
-    acorn::set_color(stream, color);
+    acorn::set_terminal_color(stream, color);
 }
 
 acorn::Logger& acorn::Logger::begin_error(PointSourceLoc location, const std::function<void()>& print_cb) {
@@ -154,7 +154,7 @@ void acorn::GlobalLogger::end_error(ErrCode error_code) {
         facing_length += 2 + static_cast<int>(count_digits(static_cast<unsigned>(error_code)));
     }
     fmt_print("%s -> ", BrightWhite), facing_length += 4;
-    set_color(stream, White);
+    set_terminal_color(stream, White);
 
     print_cb();
 
@@ -256,10 +256,8 @@ namespace acorn {
         return std::regex_replace(s, std::regex("\t"), "    ");
     }
 
-    using InfoLines = llvm::SmallVector<std::string, 8>;
-
-    static InfoLines split_lines(const std::string& str) {
-        InfoLines lines;
+    static Logger::InfoLines split_lines(const std::string& str) {
+        Logger::InfoLines lines;
 
         std::regex rgx("(\r\n|\n|\r)");
         std::sregex_token_iterator itr(str.begin(), str.end(), rgx, -1);
@@ -416,17 +414,7 @@ namespace acorn {
         return {start_info, end_info};
     }
 
-    struct ErrorInfo {
-        InfoLines   lines;
-        size_t      start_line_number;
-        size_t      last_line_number;
-        std::string line_number_pad;
-        bool        exceeded_start, exceeded_end;
-        size_t      start_width;
-        size_t      end_width;
-    };
-
-    static ErrorInfo collect_error_information(PointSourceLoc location, SourceFile& file) {
+    static Logger::ErrorInfo collect_error_information(PointSourceLoc location, SourceFile& file) {
        
         //  [ start_width ]
         //  |             |
@@ -445,7 +433,7 @@ namespace acorn {
         error_display = tabs_to_spaces(error_display);
         
 
-        InfoLines lines = split_lines(error_display);
+        Logger::InfoLines lines = split_lines(error_display);
         std::ranges::for_each(lines, trim_trailing);
 
         auto [start_line_number, _] = file.line_table.get_line_and_column_number(start_info.ptr);
@@ -454,7 +442,7 @@ namespace acorn {
         const auto line_number_pad = std::string(count_digits(last_line_number), ' ');
 
         const auto end_pt = end_info.ptr + 1, org_end_pt = location.ptr + location.length;
-        return ErrorInfo{
+        return Logger::ErrorInfo{
             std::move(lines),
             start_line_number,
             last_line_number,
@@ -507,39 +495,7 @@ void acorn::Logger::print_header(ErrCode error_code, const std::string& line_num
     }
 }
 
-void acorn::Logger::end_error(ErrCode error_code) {
-
-    if (fatal_state_encountered) {
-        // Do not want to print other error messages when fatal errors occure
-        // because we want fatal errors to appear as the last message!
-        return;
-    }
-
-    if (error_code_interceptor) {
-        mtx.lock();
-        if (context.inc_error_count()) {
-            print_exceeded_errors_msg(context);
-            mtx.unlock();
-            exit(1);
-        }
-        auto [start_line_number, _] = file.line_table.get_line_and_column_number(main_location.point);
-        std::string narrow_path;
-        narrow_path.reserve(file.path.size());
-        for (wchar_t wc : file.path) {
-            narrow_path += static_cast<char>(wc);
-        }
-        error_code_interceptor(error_code, narrow_path, static_cast<int>(start_line_number));
-        mtx.unlock();
-        return;
-    }
-
-    ErrorInfo info = collect_error_information(main_location, file);
-
-    // Placed after collecting information to reduce the time locked.
-    mtx.lock();
-
-    print_header(error_code, info.line_number_pad);
-
+void acorn::Logger::print_error_location(const ErrorInfo& info) {
     auto print_bar = [this, pad = info.line_number_pad](bool include_new_line = true){
         fmt_print(" %s %s|%s ", pad, BrightWhite, White);
         if (include_new_line) print("\n");
@@ -611,7 +567,45 @@ void acorn::Logger::end_error(ErrCode error_code) {
         fmt_print("%s\n", White);
 
     }
-    print("\n");
+}
+
+void acorn::Logger::end_error(ErrCode error_code) {
+
+    if (fatal_state_encountered) {
+        // Do not want to print other error messages when fatal errors occure
+        // because we want fatal errors to appear as the last message!
+        return;
+    }
+
+    if (error_code_interceptor) {
+        mtx.lock();
+        if (context.inc_error_count()) {
+            print_exceeded_errors_msg(context);
+            mtx.unlock();
+            exit(1);
+        }
+        auto [start_line_number, _] = file.line_table.get_line_and_column_number(main_location.point);
+        std::string narrow_path;
+        narrow_path.reserve(file.path.size());
+        for (wchar_t wc : file.path) {
+            narrow_path += static_cast<char>(wc);
+        }
+        error_code_interceptor(error_code, narrow_path, static_cast<int>(start_line_number));
+        mtx.unlock();
+        return;
+    }
+
+    ErrorInfo info = collect_error_information(main_location, file);
+
+    // Placed after collecting information to reduce the time locked.
+    mtx.lock();
+
+    print_header(error_code, info.line_number_pad);
+
+    if (context.should_show_error_location()) {
+        print_error_location(info);
+        print("\n");
+    }
 
     ++num_errors;
     if (context.inc_error_count()) {
