@@ -650,15 +650,30 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
         auto func = static_cast<Func*>(node);
         if (func->name != Identifier::Invalid) {
             if (func->is_destructor) {
+                if (structn->destructor) {
+                    structn->duplicate_struct_func_infos.push_back(
+                        Struct::DuplicateStructFuncInfo{ func, structn->destructor });
+                }
+
                 structn->destructor = func;
                 structn->needs_destruction = true;
                 func->structn = structn;
             } else if (func->is_copy_constructor) {
+                if (structn->copy_constructor) {
+                    structn->duplicate_struct_func_infos.push_back(
+                        Struct::DuplicateStructFuncInfo{ func, structn->copy_constructor });
+                }
+
                 structn->copy_constructor = func;
                 func->structn = structn;
                 func->is_constructor = true;
                 structn->needs_copy_call = true;
             } else if (func->is_move_constructor) {
+                if (structn->move_constructor) {
+                    structn->duplicate_struct_func_infos.push_back(
+                        Struct::DuplicateStructFuncInfo{ func, structn->move_constructor });
+                }
+
                 structn->move_constructor = func;
                 func->structn = structn;
                 func->is_constructor = true;

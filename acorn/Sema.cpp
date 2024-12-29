@@ -328,6 +328,13 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
     for (const auto& [_, structn] : nspace->get_structs()) {
         check_for_duplicate_functions(structn->nspace, context);
         check_for_duplicate_functions(structn->constructors, context);
+
+        for (auto& duplicate_info : structn->duplicate_struct_func_infos) {
+            report_redeclaration(duplicate_info.duplicate_function,
+                                 duplicate_info.prior_function,
+                                 duplicate_info.duplicate_function->is_constructor ? "constructor" : "destructor",
+                                 ErrCode::SemaDuplicateFunc);
+        }
     }
 }
 
@@ -405,7 +412,7 @@ bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2
             return false;
         }
     }
-    report_redeclaration(func1, func2, func1->is_constructor ? "constructor" : "function", ErrCode::SemaDuplicateGlobalFunc);
+    report_redeclaration(func1, func2, func1->is_constructor ? "constructor" : "function", ErrCode::SemaDuplicateFunc);
     return true;
 }
 

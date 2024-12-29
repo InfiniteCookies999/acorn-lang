@@ -276,6 +276,11 @@ namespace acorn {
         Namespace* nspace;
         // Ordered list of the fields.
         llvm::SmallVector<Var*> fields;
+        struct DuplicateStructFuncInfo {
+            Func* duplicate_function;
+            Func* prior_function;
+        };
+        llvm::SmallVector<DuplicateStructFuncInfo> duplicate_struct_func_infos;
 
         Func*                    default_constructor = nullptr;
         Func*                    copy_constructor    = nullptr;
