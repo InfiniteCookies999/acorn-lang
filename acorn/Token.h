@@ -111,6 +111,7 @@ namespace acorn {
             RangeEq,
             RangeLt,
             DotDot,
+            DotDotDot,
 
             IntLiteral,
             HexLiteral,

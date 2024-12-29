@@ -649,6 +649,11 @@ bool acorn::Sema::check_function_decl(Func* func) {
 
     check_modifier_incompatibilities(func);
 
+    if (func->uses_native_varargs && !func->has_modifier(Modifier::Native)) {
+        error(func, "Functions cannot use native variadic parameters unless marked as native")
+            .end_error(ErrCode::SemaFuncHasNativeVarArgButNotNative);
+    }
+
     if (func->return_type == context.auto_type ||
         func->return_type == context.auto_ptr_type ||
         func->return_type == context.const_auto_type) {
@@ -789,6 +794,14 @@ bool acorn::Sema::check_function_decl(Func* func) {
                 }
                 logger.end_error(ErrCode::SemaInvalidIntrinsicDecl);
             }
+        }
+    }
+
+    if (func->uses_native_varargs && func->default_params_offset != -1) {
+        for (Var* param : func->params) {
+            if (!param->assignment) continue;
+            error(param, "Functions with native variadic parameters cannot have parameters with default values")
+                .end_error(ErrCode::SemaFuncWithNativeVarArgNoParamDefaultVal);
         }
     }
 
@@ -3056,6 +3069,11 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
     // Creating casts from the argument to the parameter.
     for (size_t i = 0; i < args.size(); i++) {
 
+        if (called_func->uses_native_varargs &&
+            i >= called_func->params.size() - 1) {
+            continue;
+        }
+
         auto arg_value = args[i];
         Var* param;
         if (arg_value->is(NodeKind::NamedValue)) {
@@ -3176,6 +3194,22 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         Expr* arg_value = args[i];
         Var* param;
 
+        if (candidate->uses_native_varargs &&
+            i >= candidate->params.size() - 1) {
+            
+            if (arg_value->type->is_aggregate()) {
+                return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
+            }
+
+            if (is_incomplete_type(arg_value->type)) {
+                return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
+            }
+
+            // Variadic arguments for native functions take any type except
+            // aggregate types.
+            continue;
+        }
+
         if (arg_value->is(NodeKind::NamedValue)) {
             // Handle named arguments by finding the corresponding parameter
 
@@ -3244,8 +3278,14 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
 bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const 
                                              llvm::SmallVector<Expr*>& args) const {
     if (candidate->default_params_offset == -1) {
-        if (candidate->params.size() != args.size()) {
-            return false;
+        if (!candidate->uses_native_varargs) {
+            if (candidate->params.size() != args.size()) {
+                return false;
+            }
+        } else {
+            if (args.size() < candidate->params.size()) {
+                return false;
+            }
         }
     } else {
         size_t num_params = candidate->params.size();
@@ -3370,6 +3410,26 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         
         Expr* arg_value = args[i];
         Var* param = nullptr;
+
+        if constexpr (is_func_decl) {
+            if (candidate->uses_native_varargs &&
+                i >= candidate->params.size() - 1) {
+                
+                if (arg_value->type->is_aggregate()) {
+                    err_line("Arg %s of type '%s' cannot be used in a native varargs list",
+                             i + 1, arg_value->type);
+                }
+
+                if (is_incomplete_type(arg_value->type)) {
+                    err_line("Arg %s of type '%s' is incomplete",
+                             i + 1, arg_value->type);
+                }
+
+                // Variadic arguments for native functions take any type except
+                // aggregate types.
+                continue;
+            }
+        }
 
         if (arg_value->is(NodeKind::NamedValue)) {
             
@@ -3921,24 +3981,24 @@ void acorn::Sema::check_modifiable(Expr* expr) {
     }
 }
 
-bool acorn::Sema::is_lvalue(Expr* expr) {
+bool acorn::Sema::is_lvalue(Expr* expr) const {
     if (expr->is(NodeKind::MemoryAccess)) {
         return true;
     }
     if (expr->is(NodeKind::IdentRef) || expr->is(NodeKind::DotOperator)) {
-        auto ref = static_cast<IdentRef*>(expr);
+        auto ref = static_cast<const IdentRef*>(expr);
         return ref->is_var_ref();
     }
 
     if (expr->is(NodeKind::UnaryOp)) {
-        auto unary = static_cast<UnaryOp*>(expr);
+        auto unary = static_cast<const UnaryOp*>(expr);
         return unary->op == '*';
     }
 
     return false;
 }
 
-bool acorn::Sema::is_incomplete_type(Type* type) {
+bool acorn::Sema::is_incomplete_type(Type* type) const {
     switch (type->get_kind()) {
     case TypeKind::Void:
     case TypeKind::NamespaceRef:
@@ -3955,7 +4015,7 @@ bool acorn::Sema::is_incomplete_type(Type* type) {
     }
 }
 
-bool acorn::Sema::is_incomplete_statement(Node* stmt) {
+bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
     switch (stmt->kind) {
     case NodeKind::ReturnStmt:
     case NodeKind::Var:
@@ -3972,7 +4032,7 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) {
     case NodeKind::SwitchStmt:
         return false;
     case NodeKind::BinOp: {
-        BinOp* bin_op = static_cast<BinOp*>(stmt);
+        auto bin_op = static_cast<const BinOp*>(stmt);
 
         switch (bin_op->op) {
         case '=':
@@ -3995,7 +4055,7 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) {
         return true;
     }
     case NodeKind::UnaryOp: {
-        UnaryOp* unary_op = static_cast<UnaryOp*>(stmt);
+        auto unary_op = static_cast<const UnaryOp*>(stmt);
 
         if (unary_op->op == Token::AddAdd || unary_op->op == Token::SubSub ||
             unary_op->op == Token::PostAddAdd || unary_op->op == Token::PostSubSub) {

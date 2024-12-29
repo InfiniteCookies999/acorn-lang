@@ -154,6 +154,8 @@ X(SemaMoveObjValueMustHaveAddress          , 20105)
 X(SemaMoveObjMustBeAssignedToAddress       , 20106)
 X(SemaCannotUseVariableBeforeAssigned      , 20107)
 X(SemaTernaryIncompatibleTypes             , 20108)
+X(SemaFuncHasNativeVarArgButNotNative      , 20109)
+X(SemaFuncWithNativeVarArgNoParamDefaultVal, 20110)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

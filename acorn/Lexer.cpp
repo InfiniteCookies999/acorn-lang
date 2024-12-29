@@ -192,7 +192,12 @@ case c1:                                        \
             return new_token(ptr - 3, 3, Token::RangeLt);
         } else if (*ptr == '.') {
             ptr += 1;
-            return new_token(ptr - 2, 2, Token::DotDot);
+            if (*ptr == '.') {
+                ptr += 1;
+                return new_token(ptr - 3, 3, Token::DotDotDot);
+            } else {
+                return new_token(ptr - 2, 2, Token::DotDot);
+            }
         }
         return new_token(ptr - 1, 1, '.');
     }

@@ -211,7 +211,9 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         ll_param_types.push_back(gen_function_param_type(param));
     }
 
-    auto ll_func_type = llvm::FunctionType::get(ll_ret_type, ll_param_types, false);
+    auto ll_func_type = llvm::FunctionType::get(ll_ret_type,
+                                                ll_param_types,
+                                                func->uses_native_varargs);
 
     auto get_name = [func, &context=this->context, is_main] {
         bool dont_fix_name = is_main || func->has_modifier(Modifier::Native);
@@ -2233,10 +2235,12 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
                                                         Node* lvalue) {
     
     bool uses_aggr_param = called_func->uses_aggr_param;
+    bool uses_default_param_values = called_func->default_params_offset != -1;
 
     llvm::SmallVector<llvm::Value*> ll_args;
     bool is_member_func = called_func->structn;
-    size_t ll_num_args = called_func->params.size();
+    size_t ll_num_args = uses_default_param_values ? called_func->params.size()
+                                                   : args.size();
     size_t arg_offset = 0;
     
     if (is_member_func) {
@@ -2261,7 +2265,6 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         ll_args[arg_offset++] = ll_dest_addr;
     }
     
-    bool uses_default_param_values = called_func->default_params_offset != -1;
     if (uses_default_param_values) {
         // Zero initializing the arguments after the start of the default parameter values
         // then filling them in later if they were not filled by the named parameter.
@@ -2281,11 +2284,17 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
                 ll_args[arg_idx] = gen_function_call_arg_for_implicit_ptr(named_arg->assignment);
             }
         } else {
+            size_t arg_idx = arg_offset + i;
+            if (called_func->uses_native_varargs) {
+                ll_args[arg_idx] = gen_function_call_arg(arg);
+                continue;
+            }
+
             Var* param = called_func->params[i];
             if (!param->has_implicit_ptr) {
-                ll_args[arg_offset + i] = gen_function_call_arg(arg);
+                ll_args[arg_idx] = gen_function_call_arg(arg);
             } else {
-                ll_args[arg_offset + i] = gen_function_call_arg_for_implicit_ptr(arg);
+                ll_args[arg_idx] = gen_function_call_arg_for_implicit_ptr(arg);
             }
         }
     }
@@ -2313,7 +2322,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     }
 
     // -- Debug
-    // std::string debug_info = "Calling function with name: " + called_func->name.reduce().str() + "\n";
+    // std::string debug_info = "Calling function with name: " + called_func->name.to_string().str() + "\n";
     // debug_info += "         LLVM Types passed to function:  [";
     // for (auto ll_arg : ll_args) {
     //     debug_info += to_string(ll_arg->getType());

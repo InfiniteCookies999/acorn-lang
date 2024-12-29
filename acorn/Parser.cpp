@@ -487,6 +487,12 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
         bool more_params = false, full_reported = false;
         uint32_t param_idx = 0;
         do {
+            if (cur_token.is(Token::DotDotDot)) {
+                func->uses_native_varargs = true;
+                next_token();
+                break;
+            }
+
             Type* type = parse_type_for_decl();
             bool has_implicit_ptr = cur_token.is('^');
             if (has_implicit_ptr) {

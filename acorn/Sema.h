@@ -178,9 +178,9 @@ namespace acorn {
         bool try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr) const;
         bool has_valid_constness(Type* to_type, Type* from_type) const;
         void check_modifiable(Expr* expr);
-        bool is_lvalue(Expr* expr);
-        bool is_incomplete_type(Type* type);
-        bool is_incomplete_statement(Node* stmt);
+        bool is_lvalue(Expr* expr) const;
+        bool is_incomplete_type(Type* type) const;
+        bool is_incomplete_statement(Node* stmt) const;
         bool may_implicitly_convert_return_ptr(Type* to_type, FuncCall* call) const;
         bool may_implicitly_convert_ptr(PointerType* ptr_type, Expr* from_expr) const;
         void check_division_by_zero(PointSourceLoc error_loc, Expr* expr);

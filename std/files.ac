@@ -9,6 +9,7 @@ import .String;
 import .unix.Stat;
 #endif
 
+// TODO: We want to a flag to not truncate when writing.
 
 /*
  * Flags that indicate how to open a file for
@@ -129,12 +130,17 @@ struct FileHandle {
 #if OS_GROUP_WINDOWS
         uint32 bytes_written;
         if win32.WriteFile(handle, buffer, as(uint32) length, &bytes_written, null) == 0 {
-            module.println("failed to read from file handle :(");
+            module.println("failed to write to file handle :(");
             return 0;
         }
         return as(int) bytes_written;
 #elif OS_GROUP_UNIX
-        return 0;
+        isize bytes_written = unix.write(handle, buffer, as(usize) length);
+        if bytes_written == -1 {
+            module.println("failed to write to file handle :(");
+            return 0;
+        }
+        return as(int) bytes_written;
 #endif
     }
 
@@ -383,24 +389,30 @@ FileHandle open(const char* path, uint32 flags) {
     // TODO: O_LARGEFILE -- Allow working for large file sizes.
 
     int32 os_flags = 0;
+    uint32 os_mode = 0;
 
-    if (flags & IO_FLAG_IN) != 0 && (flags & IO_FLAG_IN) != 0 {
+    if (flags & IO_FLAG_IN) != 0 && (flags & IO_FLAG_OUT) != 0 {
         os_flags |= unix.O_RDWR;
     } elif (flags & IO_FLAG_IN) != 0 {
         os_flags |= unix.O_RDONLY;
-    } elif (flags & IO_FLAG_IN) != 0 {
+    } elif (flags & IO_FLAG_OUT) != 0 {
         os_flags |= unix.O_WRONLY;
     }
 
     if (flags & IO_FLAG_APPEND) != 0 {
         os_flags |= unix.O_APPEND;
+    } else {
+        os_flags |= unix.O_TRUNC;
     }
 
     if (flags & IO_FLAG_CREATE) != 0 {
         os_flags |= unix.O_CREAT;
+        // 0666
+        os_mode = unix.S_IRUSR | unix.S_IWUSR | unix.S_IRGRP |
+                  unix.S_IWGRP | unix.S_IROTH | unix.S_IWOTH;
     }
 
-    int32 handle = unix.open(path, os_flags);
+    int32 handle = unix.open(path, os_flags, os_mode);
     if handle == -1 {
         // TODO: proper error handling!
         module.println("Failed to open file :(");
