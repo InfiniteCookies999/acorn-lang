@@ -160,6 +160,7 @@ X(SemaNativeFuncParamsCannotBeAggregate    , 20111)
 X(SemaNativeFuncCannotRetAggregate         , 20112)
 X(SemaNativeFuncCannotRetImplicitPtr       , 20113)
 X(SemaNativeFuncParamCannotHaveImplicitPtr , 20114)
+X(SemaNativeFuncCannotBeMemberFunc         , 20115)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

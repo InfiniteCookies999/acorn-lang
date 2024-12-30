@@ -691,6 +691,10 @@ bool acorn::Sema::check_function_decl(Func* func) {
             error(func, "Functions with modifier 'native' cannot return implicit pointers")
                 .end_error(ErrCode::SemaNativeFuncCannotRetImplicitPtr);
         }
+        if (func->structn) {
+            error(func, "Native functions cannot be member functions")
+                .end_error(ErrCode::SemaNativeFuncCannotBeMemberFunc);
+        }
     }
 
     // If we ever decide to allow nesting functions for some reason then this
