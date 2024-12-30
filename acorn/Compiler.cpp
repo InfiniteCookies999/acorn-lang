@@ -239,6 +239,14 @@ void acorn::Compiler::sema_and_irgen() {
         return;
     }
 
+    if (!context.should_stand_alone()) {
+        find_std_lib_declarations();
+
+        if (context.has_errors()) {
+            return;
+        }
+    }
+
     for (auto& entry : context.get_modules()) {
         for (auto source_file : entry.second->get_source_files()) {
             Sema::resolve_imports(context, source_file);
@@ -563,7 +571,7 @@ void acorn::Compiler::parse_files(SourceVector& sources) {
     }
 
     // Trying to find the standard library.
-    if (!stand_alone) {
+    if (!context.should_stand_alone()) {
         if (const char* lib_path = get_std_lib_path()) {
             std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
             auto wpath = converter.from_bytes(lib_path);
@@ -667,4 +675,21 @@ void acorn::Compiler::parse_file(Module& modl,
     Parser parser(context, modl, file);
     parser.parse();
 
+}
+
+void acorn::Compiler::find_std_lib_declarations() {
+    auto modl = context.find_module(Identifier::get("std"));
+    if (Struct* structn = modl->find_struct(context.string_struct_identifier)) {
+        auto& struct_import = context.std_string_struct_import;
+        
+        struct_import = allocator.alloc_type<ImportStmt>();
+        new (struct_import) ImportStmt();
+        struct_import->key.push_back({ context.string_struct_identifier });
+        struct_import->set_imported_struct(structn);
+
+    } else {
+        Logger::global_error(context, "Failed to find standard library 'String' struct")
+            .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+    }
+    
 }

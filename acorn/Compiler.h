@@ -45,7 +45,7 @@ namespace acorn {
         void set_should_show_llvm_ir()           { should_show_llvm_ir = true;              }
         void set_should_show_error_codes()       { context.set_should_show_error_codes();   }
         void set_dont_show_wrote_to_msg()        { dont_show_wrote_to_msg = true;           }
-        void set_stand_alone()                   { stand_alone = true;                      }
+        void set_stand_alone()                   { context.set_stand_alone();               }
         void set_run_program()                   { should_run_program = true;               }
         void set_run_program_seperate_window()   { should_run_seperate_window = true;       }
         void set_show_linker_command()           { show_linker_command = true;              }
@@ -96,7 +96,6 @@ namespace acorn {
         bool should_show_times          = false;
         bool should_show_llvm_ir        = false;
         bool dont_show_wrote_to_msg     = false;
-        bool stand_alone                = false;
         bool should_run_program         = false;
         bool should_run_seperate_window = false;
         bool show_linker_command        = false;
@@ -138,6 +137,8 @@ namespace acorn {
         void parse_file(Module& modl,
                         const std::filesystem::path& path,
                         const std::filesystem::path& root_path);
+
+        void find_std_lib_declarations();
 
     };
 }

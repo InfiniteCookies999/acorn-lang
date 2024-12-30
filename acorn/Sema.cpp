@@ -459,6 +459,13 @@ void acorn::Sema::resolve_imports(Context& context, SourceFile* file) {
     for (auto& entry : file->get_imports()) {
         resolve_import(context, entry.second);
     }
+
+    // This goes after resolving imports as to not have to waste time checking
+    // if the String struct exists.
+    if (!context.should_stand_alone()) {
+        // Auto importing the String struct.
+        file->try_add_import(context.std_string_struct_import);
+    }
 }
 
 void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {

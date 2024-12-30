@@ -93,6 +93,9 @@ namespace acorn {
         Identifier access_identifier;
         Identifier namespace_identifier;
         Identifier module_identifier;
+        Identifier string_struct_identifier;
+
+        ImportStmt* std_string_struct_import;
 
         // LLVM generation data.
         struct LLVMIntrinsicDefinition {
@@ -213,6 +216,14 @@ namespace acorn {
             return show_spell_checking;
         }
 
+        void set_stand_alone() {
+            is_stand_alone = true;
+        }
+
+        bool should_stand_alone() const {
+            return is_stand_alone;
+        }
+
         // Returns true if it exceeds the maximum allowed number
         // of errors.
         bool inc_error_count();
@@ -239,6 +250,7 @@ namespace acorn {
         bool                emit_debug_info      = false;
         bool                show_error_locations = true;
         bool                show_spell_checking  = true;
+        bool                is_stand_alone       = false;
 
         llvm::LLVMContext& ll_context;
         llvm::Module&      ll_module;
