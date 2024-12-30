@@ -677,6 +677,22 @@ bool acorn::Sema::check_function_decl(Func* func) {
         return false;
     }
 
+    if (func->has_modifier(Modifier::Native)) {
+        if (func->return_type->is_aggregate()) {
+            if (func->return_type->is_struct()) {
+                error(func, "Functions with modifier 'native' cannot return struct types")
+                    .end_error(ErrCode::SemaNativeFuncCannotRetAggregate);
+            } else {
+                error(func, "Functions with modifier 'native' cannot return array types")
+                    .end_error(ErrCode::SemaNativeFuncCannotRetAggregate);
+            }
+        }
+        if (func->has_implicit_return_ptr) {
+            error(func, "Functions with modifier 'native' cannot return implicit pointers")
+                .end_error(ErrCode::SemaNativeFuncCannotRetImplicitPtr);
+        }
+    }
+
     // If we ever decide to allow nesting functions for some reason then this
     // will possibly be a problem because it will have overriden the current scope.
     size_t pcount = 0;
@@ -716,12 +732,27 @@ bool acorn::Sema::check_function_decl(Func* func) {
             encountered_param_default_value = true;
         }
 
+        if (func->has_modifier(Modifier::Native)) {
+            if (param->type->is_aggregate()) {
+                if (param->type->is_struct()) {
+                    error(param, "Parameters of functions with modifier 'native' cannot have a struct type")
+                        .end_error(ErrCode::SemaNativeFuncParamsCannotBeAggregate);
+                } else {
+                    error(param, "Parameters of functions with modifier 'native' cannot have an array type")
+                        .end_error(ErrCode::SemaNativeFuncParamsCannotBeAggregate);
+                }
+            } else if (param->has_implicit_ptr) {
+                error(param, "Parameters of functions with modifier 'native' cannot have implicit pointers")
+                    .end_error(ErrCode::SemaNativeFuncParamCannotHaveImplicitPtr);
+            }
+        }
+
         ++pcount;
     }
+
     if (num_default_params != 0) {
         func->default_params_offset = func->params.size() - num_default_params;
     }
-
 
     if (func->has_modifier(Modifier::Native)) {
         Identifier link_name = func->linkname.empty() ? func->name

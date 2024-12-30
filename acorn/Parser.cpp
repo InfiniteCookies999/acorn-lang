@@ -228,14 +228,14 @@ acorn::Node* acorn::Parser::parse_statement() {
             return parse_struct(modifiers, name);
         } else if (cur_token.is(Token::Identifier)) {
             auto ident = Identifier::get(cur_token.text());
-            if (cur_struct->name == ident && peek_token(0).is('(')) {
+            if (cur_struct && cur_struct->name == ident && peek_token(0).is('(')) {
                 next_token(); // Consuming the identifier token.
                 return parse_function(modifiers, context.void_type, false, cur_struct->name);
             }
         } else if (cur_token.is('~') && peek_token(0).is(Token::Identifier)) {
             auto peek0 = peek_token(0);
             auto ident = Identifier::get(peek0.text());
-            if (cur_struct->name == ident && peek_token(1).is('(')) {
+            if (cur_struct && cur_struct->name == ident && peek_token(1).is('(')) {
                 // Encountered a destructor!
                 next_token(); // Consuming '~' token.
                 next_token(); // Consuming the identifier token.
@@ -275,7 +275,7 @@ acorn::Node* acorn::Parser::parse_statement() {
         auto peek0 = peek_token(0);
         if (peek0.is(Token::Identifier)) {
             auto ident = Identifier::get(peek0.text());
-            if (cur_struct->name == ident && peek_token(1).is('(')) {
+            if (cur_struct && cur_struct->name == ident && peek_token(1).is('(')) {
                 next_token(); // Consuming the 'copyobj' token.
                 next_token(); // Consuming the identifier token.
                 return parse_function(modifiers, context.void_type, false, cur_struct->name, true);
@@ -288,7 +288,7 @@ acorn::Node* acorn::Parser::parse_statement() {
         auto peek0 = peek_token(0);
         if (peek0.is(Token::Identifier)) {
             auto ident = Identifier::get(peek0.text());
-            if (cur_struct->name == ident && peek_token(1).is('(')) {
+            if (cur_struct && cur_struct->name == ident && peek_token(1).is('(')) {
                 next_token(); // Consuming the 'moveobj' token.
                 next_token(); // Consuming the identifier token.
                 return parse_function(modifiers, context.void_type, false, cur_struct->name, false, true);
