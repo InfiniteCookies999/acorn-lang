@@ -22,14 +22,16 @@ namespace acorn {
             costs[k] = k;
         }
 
+        // Using std::tolower to normalize the comparisons so it does
+        // not take into account case sensitivity.
         for (size_t i = 0; i < s1.size(); ++i) {
-            char c1 = s1[i];
+            char c1 = std::tolower(s1[i]);
 
             costs[0] = i + 1;
             size_t corner = i;
 
             for (size_t j = 0; j < s2.size(); ++j) {
-                char c2 = s2[j];
+                char c2 = std::tolower(s2[j]);
 
                 size_t upper = costs[j + 1];
                 if (c1 == c2) {
