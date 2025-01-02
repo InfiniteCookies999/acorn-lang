@@ -17,6 +17,16 @@ void acorn::Decl::show_location_msg(Logger& logger) const {
     print_source_location(logger, file, loc);
 }
 
+const char* acorn::Decl::get_composite_kind() const {
+    switch (kind) {
+    case NodeKind::Struct: return "struct";
+    case NodeKind::Enum:   return "enum";
+    default:
+        acorn_fatal("Unknown composite kind");
+        return "";
+    }
+}
+
 const char* acorn::Modifier::to_string(uint32_t modifier) {
     switch (modifier) {
     case Native:    return "native";

@@ -46,6 +46,10 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Mod
         auto struct_type = static_cast<StructType*>(type);
         return gen_struct_type(struct_type, ll_context, ll_module);
     }
+    case TypeKind::Enum: {
+        auto enum_type = static_cast<EnumType*>(type);
+        return gen_type(enum_type->get_index_type(), ll_context, ll_module);
+    }
     default:
         acorn_fatal("gen_type: Unknown type");
         return nullptr;

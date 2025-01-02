@@ -15,30 +15,33 @@ native isize write(int32 fd, const void* buf, usize count);
 
 #endif
 
-void write_val(int8 val) {
-
+void print(const char* s, int length) {
 #if OS_GROUP_WINDOWS
     void* handle = GetStdHandle(-11);
     uint32 written;
-    char c = as(char) val;
-    WriteFile(handle, &c, 1, &written, null);
+    WriteFile(handle, s, as(uint32) length, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
-    write(1, &c, 1);
+    write(1, s, as(usize) length);
 #endif
-
 }
 
-struct A {
-    int8 v1;
-}
-
-A foo() {
-    return A{64};
+enum En {
+    A = "I love coffeeee1 ",
+    B = "I love coffeeee2 ",
+    C = "I love coffeeee3 ",
+    D = "I love coffeeee4 "
 }
 
 void main() {
-    A$() f = foo;
-    int8 v = f().v1;
-    write_val(v);
+    En e1 = En.A;
+    print(e1, 17);
+
+    En e2 = En.B;
+    print(e2, 17);
+    
+    En e3 = En.C;
+    print(e3, 17);
+
+    En e4 = En.D;
+    print(e4, 17);
 }

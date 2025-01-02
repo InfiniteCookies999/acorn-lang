@@ -41,7 +41,7 @@ A foo() {
 }
 
 void main() {
-    A!() f = foo;
+    A$() f = foo;
     int64 v1 = f().v1;
     int64 v2 = f().v2;
     int64 v3 = f().v3;

@@ -47,6 +47,7 @@ void test_parser() {
     context = allocator.alloc_type<Context>();
     new (context) Context(ll_context, *ll_test_model, allocator);
     context->set_max_error_count(999999);
+    context->set_stand_alone();
 
     acorn::initialize_float_parsing(allocator);
     

@@ -85,6 +85,7 @@ namespace acorn {
         Type* auto_type;
         Type* auto_ptr_type;
         Type* const_auto_type;
+        Type* expr_type;
 
         // Used to identifier the entry point of
         // the program.

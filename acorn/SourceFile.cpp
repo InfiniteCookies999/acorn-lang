@@ -31,11 +31,11 @@ void acorn::SourceFile::add_variable(Var* var) {
     }
 }
 
-void acorn::SourceFile::add_struct(Struct* structn) {
-    if (has_public_access(structn)) {
-        nspace->add_struct(structn);
+void acorn::SourceFile::add_composite(Decl* composite) {
+    if (has_public_access(composite)) {
+        nspace->add_composite(composite);
     } else {
-        Namespace::add_struct(structn);
+        Namespace::add_composite(composite);
     }
 }
 

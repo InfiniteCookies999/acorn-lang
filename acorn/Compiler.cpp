@@ -159,6 +159,8 @@ void acorn::Compiler::show_time_table() {
     int pad_width = get_ms_pad_width(parse_timer, sema_timer, ir_timer, codegen_timer, link_timer, total_timer);
     double misc_time = get_misc_time(parse_timer, sema_timer, ir_timer, codegen_timer, link_timer);
 
+    std::cout << "Parsed " << (total_lines_parsed - whitespace_lines_parsed) << " lines"
+              << " (" << "Including whitespace: " << total_lines_parsed << ")\n";
     std::cout << "Parsing Time   " << get_pad(parse_timer, pad_width)
                                    << ShowTime(parse_timer) << "\n";
     std::cout << "Sema    Time   " << get_pad(sema_timer, pad_width)
@@ -309,6 +311,11 @@ void acorn::Compiler::sema_and_irgen() {
             auto structn = static_cast<Struct*>(decl);
             if (!structn->has_been_checked) {
                 sema.check_struct(structn);
+            }
+        } else if (decl->is(NodeKind::Enum)) {
+            auto enumn = static_cast<Enum*>(decl);
+            if (!enumn->has_been_checked) {
+                sema.check_enum(enumn);
             }
         } else {
             acorn_fatal("Unreachable: Missing check case");
@@ -674,22 +681,30 @@ void acorn::Compiler::parse_file(Module& modl,
 
     Parser parser(context, modl, file);
     parser.parse();
+    total_lines_parsed += static_cast<uint64_t>(parser.get_total_lines_parsed());
+    whitespace_lines_parsed += static_cast<uint64_t>(parser.get_whitespace_lines_parsed());
 
 }
 
 void acorn::Compiler::find_std_lib_declarations() {
     auto modl = context.find_module(Identifier::get("std"));
-    if (Struct* structn = modl->find_struct(context.string_struct_identifier)) {
-        auto& struct_import = context.std_string_struct_import;
-        
-        struct_import = allocator.alloc_type<ImportStmt>();
-        new (struct_import) ImportStmt();
-        struct_import->key.push_back({ context.string_struct_identifier });
-        struct_import->set_imported_struct(structn);
+    if (Decl* composite = modl->find_composite(context.string_struct_identifier)) {
+        if (composite->is(NodeKind::Struct)) {
+            auto structn = static_cast<Struct*>(composite);
+            
+            auto& struct_import = context.std_string_struct_import;
 
+            struct_import = allocator.alloc_type<ImportStmt>();
+            new (struct_import) ImportStmt();
+            struct_import->key.push_back({ context.string_struct_identifier });
+            struct_import->set_imported_composite(structn);
+
+        } else {
+            Logger::global_error(context, "Standard library 'String' struct not a struct")
+                .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+        }
     } else {
         Logger::global_error(context, "Failed to find standard library 'String' struct")
             .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
     }
-    
 }

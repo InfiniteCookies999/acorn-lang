@@ -22,6 +22,14 @@ namespace acorn {
     struct Expr;
     class Context;
     struct Struct;
+    struct Enum;
+    class ContainerType;
+    class PointerType;
+    class ArrayType;
+    class RangeType;
+    class FunctionType;
+    class StructType;
+    class EnumType;
 
     enum class TypeKind {
         Invalid,
@@ -58,10 +66,13 @@ namespace acorn {
         Null,
         AssignDeterminedArray,
         Function,
-        UnresolvedStructType,
+        UnresolvedCompositeType,
         Struct,
+        Enum,
+        EnumContainer,
         Range,
         Auto,
+        Expr, // A type that appears as part of an expression in code.
 
     };
     
@@ -71,12 +82,10 @@ namespace acorn {
         
         static Type* create(PageAllocator& allocator, TypeKind kind, bool is_const = false);
 
-        TypeKind get_kind() const { return kind; }
+        TypeKind get_kind() const { return kind;  }
 
         bool is_const() const { return vconst; }
-        bool does_contain_const() const {
-            return contains_const;
-        }
+        bool does_contain_const() const { return contains_const; }
         Type* remove_all_const() const { return non_const_version; };
 
         bool is(const Type* type)     const { return type == this; }
@@ -114,6 +123,7 @@ namespace acorn {
         bool is_range() const     { return kind == TypeKind::Range;    }
         bool is_function() const  { return kind == TypeKind::Function; }
         bool is_struct() const    { return kind == TypeKind::Struct;   }
+        bool is_enum() const      { return kind == TypeKind::Enum;     }
 
         bool is_aggregate() const {
             return is_array() || is_struct();
@@ -133,6 +143,10 @@ namespace acorn {
 
         std::string to_string() const;
 
+        EnumType* get_container_enum_type() const {
+            return container_enum_type;
+        }
+
     protected:
         Type(TypeKind kind, bool is_const)
             : kind(kind), vconst(is_const) {
@@ -141,6 +155,12 @@ namespace acorn {
         // We store a version of this type except with all of it's
         // constness removed for efficiency and ease of use.
         Type* non_const_version;
+        // If it is an enum type container then this is the enum type that
+        // contains this type. Because the container types of the enums in
+        // all instances except for checking assignability need to take into
+        // account all the behavior of the type they contain instead of creating
+        // a enum container type and wrapping the wrapping is done in the inverse.
+        EnumType* container_enum_type = nullptr;
         TypeKind kind;
         bool     vconst;
         // This is different than the type itself being const
@@ -179,20 +199,22 @@ namespace acorn {
         }
     };
 
-    class UnresolvedArrayType : public ContainerType {
+    class UnresolvedBracketType : public ContainerType {
     public:
 
-        static Type* create(PageAllocator& allocator, Type* elm_type,
-                            Expr* length_expr, bool is_const = false);
+        static Type* create(PageAllocator& allocator,
+                            Type* elm_type,
+                            Expr* expr,
+                            bool is_const = false);
 
-        Expr* get_length_expr() const { return length_expr; }
+        Expr* get_expr() const { return expr; }
 
     private:
-        UnresolvedArrayType(bool is_const, Expr* length_expr, Type* elm_type) :
-            ContainerType(TypeKind::UnresolvedArrayType, is_const, elm_type) {
+        UnresolvedBracketType(bool is_const, Expr* expr, Type* elm_type) :
+            ContainerType(TypeKind::UnresolvedArrayType, is_const, elm_type), expr(expr) {
         }
         
-        Expr* length_expr;
+        Expr* expr;
     };
 
     class ArrayType : public ContainerType {
@@ -288,7 +310,7 @@ namespace acorn {
         FunctionTypeKey* key;
     };
 
-    class UnresolvedStructType : public Type {
+    class UnresolvedCompositeType : public Type {
     public:
 
         static Type* create(PageAllocator& allocator,
@@ -305,8 +327,8 @@ namespace acorn {
         }
 
     protected:
-        UnresolvedStructType(bool is_const, Identifier name, SourceLoc error_location)
-            : Type(TypeKind::UnresolvedStructType, is_const),
+        UnresolvedCompositeType(bool is_const, Identifier name, SourceLoc error_location)
+            : Type(TypeKind::UnresolvedCompositeType, is_const),
               name(name),
               error_location(error_location) {
         }
@@ -337,12 +359,60 @@ namespace acorn {
         }
 
     protected:
-        StructType(bool is_const, Struct* nstruct)
-            : Type(TypeKind::Struct, is_const), structn(nstruct) {
+        StructType(bool is_const, Struct* structn)
+            : Type(TypeKind::Struct, is_const), structn(structn) {
         }
 
         llvm::StructType* ll_struct_type = nullptr;
         Struct*           structn;
+    };
+
+    class EnumType : public Type {
+    public:
+
+        static EnumType* create(PageAllocator& allocator,
+                                Enum* enumn,
+                                bool is_const = false);
+
+        std::string to_string() const;
+
+        Enum* get_enum() const {
+            return enumn;
+        }
+
+        void set_index_type(Type* type) {
+            index_type = type;
+        }
+
+        Type* get_index_type() const {
+            return index_type;
+        }
+
+        void set_default_index(uint64_t index) {
+            default_index = index;
+        }
+
+        uint64_t get_default_index() const {
+            return default_index;
+        }
+
+        void set_values_type(Type* type) {
+            values_type = type;
+        }
+
+        Type* get_values_type() const {
+            return values_type;
+        }
+
+    protected:
+        EnumType(bool is_const, Enum* enumn)
+            : Type(TypeKind::Enum, is_const), enumn(enumn) {
+        }
+
+        uint64_t default_index;
+        Type* index_type;
+        Type* values_type = nullptr;
+        Enum* enumn;
     };
 }
 

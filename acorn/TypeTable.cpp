@@ -16,37 +16,67 @@ acorn::Type* acorn::TypeTable::get_const_type(Type* type) {
         return itr->second;
     }
 
-    Type* const_type;
+    Type* const_type = create_type_from_type(type, true);
+
+    const_types.insert({ type, const_type });
+    const_type->non_const_version = type->does_contain_const() ? type->non_const_version : type;
+    const_type->container_enum_type = type->container_enum_type;
+
+    return const_type;
+}
+
+acorn::Type* acorn::TypeTable::get_enum_container_type(EnumType* enum_type) {
+    std::lock_guard lock(enum_container_types_mtx);
+
+    auto itr = enum_container_types.find(enum_type);
+    if (itr != enum_container_types.end()) {
+        return itr->second;
+    }
+
+    Type* container_type = create_type_from_type(enum_type->get_values_type(), false);
+    container_type->non_const_version = container_type;
+    container_type->container_enum_type = enum_type;
+
+    enum_container_types.insert({ enum_type, container_type });
+
+    return container_type;
+}
+
+acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) {
+
+    Type* new_type;
     switch (type->get_kind()) {
     case TypeKind::Pointer: {
         auto ptr_type = static_cast<PointerType*>(type);
-        const_type = PointerType::create(allocator, ptr_type->get_elm_type(), true);
+        new_type = PointerType::create(allocator, ptr_type->get_elm_type(), is_const);
         break;
     }
     case TypeKind::Struct: {
         auto struct_type = static_cast<StructType*>(type);
-        const_type = StructType::create(allocator, struct_type->get_struct(), true);
+        new_type = StructType::create(allocator, struct_type->get_struct(), is_const);
+        break;
+    }
+    case TypeKind::Enum: {
+        auto enum_type = static_cast<EnumType*>(type);
+        new_type = EnumType::create(allocator, enum_type->get_enum(), is_const);
         break;
     }
     case TypeKind::Array: {
         auto arr_type = static_cast<ArrayType*>(type);
-        const_type = ArrayType::create(allocator, arr_type->get_elm_type(), arr_type->get_length(), true);
+        new_type = ArrayType::create(allocator, arr_type->get_elm_type(), arr_type->get_length(), is_const);
         break;
     }
     case TypeKind::Function: {
         auto func_type = static_cast<FunctionType*>(type);
-        const_type = FunctionType::create(allocator, func_type->get_key(), true);
+        new_type = FunctionType::create(allocator, func_type->get_key(), is_const);
         break;
     }
     default:
-        const_type = Type::create(allocator, type->get_kind(), true);
+        new_type = Type::create(allocator, type->get_kind(), is_const);
         break;
     }
 
-    const_types.insert({ type, const_type });
-    const_type->non_const_version = type->does_contain_const() ? type->non_const_version : type;
-
-    return const_type;
+    return new_type;
 }
 
 acorn::Type* acorn::TypeTable::get_ptr_type(Type* elm_type) {

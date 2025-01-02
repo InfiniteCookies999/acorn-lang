@@ -53,6 +53,7 @@ namespace acorn {
             KwCase,
             KwStatic,
             KwStruct,
+            KwEnum,
             KwThis,
             KwSizeof,
             KwCopyobj,
@@ -112,6 +113,7 @@ namespace acorn {
             RangeLt,
             DotDot,
             DotDotDot,
+            ColCol,
 
             IntLiteral,
             HexLiteral,

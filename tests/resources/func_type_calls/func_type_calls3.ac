@@ -30,7 +30,7 @@ const char* foo() {
 }
 
 void main() {
-    const char*!() cb = foo;
+    const char*$() cb = foo;
     const char* msg = cb();
     print(msg, 18);
 }

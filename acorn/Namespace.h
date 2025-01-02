@@ -23,11 +23,11 @@ namespace acorn {
 
         void add_function(Func* func);
         void add_variable(Var* var);
-        void add_struct(Struct* nstruct);
+        void add_composite(Decl* composite);
 
         FuncList* find_functions(Identifier name);
         Var*      find_variable(Identifier name);
-        Struct*   find_struct(Identifier name);
+        Decl*     find_composite(Identifier name);
 
         const llvm::DenseMap<Identifier, Var*>& get_variables() const {
             return variables;
@@ -37,8 +37,8 @@ namespace acorn {
             return functions;
         }
 
-        const llvm::DenseMap<Identifier, Struct*>& get_structs() const {
-            return structs;
+        const llvm::DenseMap<Identifier, Decl*>& get_composites() const {
+            return composites;
         }
 
         void set_duplicates_checked() {
@@ -60,7 +60,7 @@ namespace acorn {
 
         llvm::DenseMap<Identifier, FuncList> functions;
         llvm::DenseMap<Identifier, Var*>     variables;
-        llvm::DenseMap<Identifier, Struct*>  structs;
+        llvm::DenseMap<Identifier, Decl*>    composites;
     };
 }
 

@@ -1726,6 +1726,45 @@ static void ternaries_tests() {
     });
 }
 
+static void enums_tests() {
+    test("Enum int values", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test1.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Enum uint64 values", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test2.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Enum const char* values", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test3.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("I love coffeeee1 I love coffeeee2 I love coffeeee3 I love coffeeee4 ");
+    });
+    test("Enum int values eq and neq", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test4.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("eq2neq1");
+    });
+    test("Enum const char* values eq and neq", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test5.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("eq2neq1");
+    });
+    test("Enum int values add gives container type", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test6.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCD");
+    });
+}
+
 void test_codegen() {
 
     executable_path = get_executable_path();
@@ -1771,5 +1810,6 @@ void test_codegen() {
         test_implicit_ptrs();
         move_constructors_tests();
         ternaries_tests();
+        enums_tests();
     }, true);
 }

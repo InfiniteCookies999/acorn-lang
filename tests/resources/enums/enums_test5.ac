@@ -25,25 +25,34 @@ void print(const char* s, int length) {
 #endif
 }
 
-struct A {
-    int64 a;
-    int64 b;
-    int64 c;
-    int64 d;
-
-    ~A() {
-        print("called", 6);
-    }
-}
-
-A foo() {
-    A a;
-    return a;
+enum En {
+    A = "blah",
+    B = "blah",
+    C = "blah",
+    D = "blah"
 }
 
 void main() {
-    A$() f = foo;
-
-    f();
-    print("begin ", 6);
+    {
+        En e1 = En.A;
+        En e2 = En.B;
+        En e3 = En.A;
+        if e1 == e2 {
+            print("eq1", 3);
+        }
+        if e1 == e3 {
+            print("eq2", 3);
+        }
+    }
+    {
+        En e1 = En.A;
+        En e2 = En.B;
+        En e3 = En.A;
+        if e1 != e2 {
+            print("neq1", 4);
+        }
+        if e1 != e3 {
+            print("neq2", 4);
+        }
+    }
 }

@@ -28,6 +28,7 @@ namespace acorn {
     class Namespace;
     class Logger;
     class StructType;
+    class EnumType;
     struct ComptimeIfStmt;
     struct Struct;
     struct BinOp;
@@ -43,6 +44,7 @@ namespace acorn {
         Var,
         VarList,
         Struct,
+        Enum,
 
         ReturnStmt,
         IfStmt,
@@ -75,6 +77,7 @@ namespace acorn {
         SizeOf,
         Ternary,
         MoveObj,
+        TypeExpr,
         ExprEnd
 
     };
@@ -153,6 +156,8 @@ namespace acorn {
 
         void show_prev_declared_msg(Logger& logger) const;
         void show_location_msg(Logger& logger) const;
+
+        const char* get_composite_kind() const;
 
     };
 
@@ -309,6 +314,28 @@ namespace acorn {
         Var* find_field(Identifier name) const;
     };
 
+    struct Enum : Decl {
+        Enum() : Decl(NodeKind::Enum) {
+        }
+
+        EnumType* enum_type;
+
+        struct Value {
+            size_t     index;
+            Identifier name;
+            SourceLoc  name_loc;
+            Expr*      assignment;
+        };
+
+        llvm::SmallVector<Value> values;
+
+        // When the values are not simply integers then the values
+        // are placed into a global array.
+        llvm::Value* ll_array = nullptr;
+        bool has_been_checked = false;
+
+    };
+
     struct ImportStmt : Node {
         ImportStmt() : Node(NodeKind::ImportStmt) {
         }
@@ -331,25 +358,25 @@ namespace acorn {
         // Discriminated union.
         enum {
             NamespaceKind,
-            StructKind
+            CompositeKind
         } imported_kind;
 
         union {
             Namespace* imported_nspace;
-            Struct*    imported_struct;
+            Decl*      imported_composite;
         };
 
         bool is_imported_namespace() const { return imported_kind == NamespaceKind; }
-        bool is_imported_struct() const    { return imported_kind == StructKind; }
+        bool is_imported_composite() const { return imported_kind == CompositeKind; }
 
         void set_imported_namespace(Namespace* nspace) {
             imported_kind = NamespaceKind;
             imported_nspace = nspace;
         }
 
-        void set_imported_struct(Struct* structn) {
-            imported_kind = StructKind;
-            imported_struct = structn;
+        void set_imported_composite(Decl* composite) {
+            imported_kind = CompositeKind;
+            imported_composite = composite;
         }
     };
 
@@ -531,23 +558,23 @@ namespace acorn {
             VarKind,
             FuncsKind,
             UniversalKind,
-            ImportKind,
-            StructKind
+            NamespaceKind,
+            CompositeKind
         } found_kind = NoneKind;
 
         union {
             Var*        var_ref = nullptr;
             FuncList*   funcs_ref;
             Expr*       universal_ref;
-            ImportStmt* import_ref;
-            Struct*     struct_ref;
+            Namespace*  nspace_ref;
+            Decl*       composite_ref;
         };
 
         bool is_var_ref() const       { return found_kind == VarKind;       }
         bool is_funcs_ref() const     { return found_kind == FuncsKind;     }
         bool is_universal_ref() const { return found_kind == UniversalKind; }
-        bool is_import_ref() const    { return found_kind == ImportKind;    }
-        bool is_struct_ref() const    { return found_kind == StructKind;    }
+        bool is_namespace_ref() const { return found_kind == NamespaceKind; }
+        bool is_composite_ref() const { return found_kind == CompositeKind; }
 
         void set_var_ref(Var* var) {
             var_ref    = var;
@@ -564,14 +591,14 @@ namespace acorn {
             found_kind = UniversalKind;
         }
 
-        void set_import_ref(ImportStmt* importn) {
-            import_ref = importn;
-            found_kind = ImportKind;
+        void set_namespace_ref(Namespace* nspace) {
+            nspace_ref = nspace;
+            found_kind = NamespaceKind;
         }
 
-        void set_struct(Struct* structn) {
-            struct_ref = structn;
-            found_kind = StructKind;
+        void set_composite_ref(Decl* composite) {
+            composite_ref = composite;
+            found_kind = CompositeKind;
         }
     };
 
@@ -580,11 +607,23 @@ namespace acorn {
         }
 
         bool is_array_length = false;
+        Enum::Value* enum_value = nullptr;
         Expr* site;
     };
 
-    struct MemoryAccess : IdentRef {
-        MemoryAccess() : IdentRef(NodeKind::MemoryAccess) {
+    struct TypeExpr : Expr {
+        TypeExpr() : Expr(NodeKind::TypeExpr) {
+        }
+
+        TypeExpr(NodeKind kind) : Expr(kind) {
+        }
+
+        NodeKind prev_node_kind = NodeKind::InvalidExpr;
+        Type* expr_type;
+    };
+
+    struct MemoryAccess : TypeExpr {
+        MemoryAccess() : TypeExpr(NodeKind::MemoryAccess) {
         }
 
         Expr* site;

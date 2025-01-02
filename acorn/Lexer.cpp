@@ -30,6 +30,8 @@ acorn::Lexer::Lexer(const Context& context, Buffer buffer, Logger& logger) :
 
 acorn::Token acorn::Lexer::next_token() {
     
+    bool whitespace = false;
+
 RestartLexingLabel:
 
 #define two_tok(c1, c2, c2kind)                 \
@@ -47,17 +49,28 @@ case c1:                                        \
         goto RestartLexingLabel;
     
     // Encountered a new line.
-    case '\n':
+    case '\n': {
+        if (whitespace) {
+            ++whitespace_lines_lexed;
+        }
+        whitespace = true;
+        ++total_lines_lexed;
         ++ptr;
         goto RestartLexingLabel;
-    case '\r':
+    }
+    case '\r': {
+        if (whitespace) {
+            ++whitespace_lines_lexed;
+        }
+        whitespace = true;
+        ++total_lines_lexed;
         ++ptr;
         // Check for windows \r\n case.
         if (*ptr == '\n') {
             ++ptr;
         }
         goto RestartLexingLabel;
-
+    }
     case 'a': case 'b': case 'c': case 'd': case 'e':
     case 'f': case 'g': case 'h': case 'i': case 'j':
     case 'k': case 'l': case 'm': case 'n': case 'o':
@@ -103,6 +116,7 @@ case c1:                                        \
     two_tok('^', '=', Token::CaretEq);
     two_tok('~', '=', Token::TildeEq);
     two_tok('!', '=', Token::ExEq);
+    two_tok(':', ':', Token::ColCol);
 
     case '&': {
         ++ptr;
@@ -217,10 +231,10 @@ case c1:                                        \
         return new_token_and_eat('}');
     case ';':
         return new_token_and_eat(';');
-    case ':':
-        return new_token_and_eat(':');
     case '?':
         return new_token_and_eat('?');
+    case '$':
+        return new_token_and_eat('$');
 
     case '\0':
         return new_token_and_eat(Token::EOB);
@@ -246,6 +260,10 @@ void acorn::Lexer::eat_single_line_comment() {
     }
 
     // Check for windows \r\n case.
+    if (*ptr != '\0') {
+        ++total_lines_lexed;
+        ++whitespace_lines_lexed;
+    }
     if (*ptr == '\r' && *(ptr + 1) == '\n') {
         ptr += 2; // skip \r\n
     } else if (*ptr != '\0') {
@@ -267,6 +285,17 @@ void acorn::Lexer::eat_multiline_comment() {
             // Found closing '*/', must decrease depth.
             --depth;
             ptr += 2;
+        } else if (*ptr == '\n') {
+            ++total_lines_lexed;
+            ++whitespace_lines_lexed;
+            ++ptr;
+        } else if (*ptr == '\r') {
+            ++total_lines_lexed;
+            ++whitespace_lines_lexed;
+            ++ptr;
+            if (*ptr == '\n') {
+                ++ptr;
+            }
         } else {
             ++ptr;
         }

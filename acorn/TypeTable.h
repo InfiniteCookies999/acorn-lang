@@ -18,6 +18,8 @@ namespace acorn {
 
         Type* get_const_type(Type* type);
 
+        Type* get_enum_container_type(EnumType* enum_type);
+
         Type* get_ptr_type(Type* elm_type);
 
         Type* get_arr_type(Type* elm_type, uint32_t length);
@@ -35,6 +37,9 @@ namespace acorn {
         std::mutex const_types_mtx;
         llvm::DenseMap<Type*, Type*> const_types;
         
+        std::mutex enum_container_types_mtx;
+        llvm::DenseMap<Type*, Type*> enum_container_types;
+
         std::mutex ptr_types_mtx;
         llvm::DenseMap<Type*, Type*> ptr_types;
         
@@ -43,6 +48,9 @@ namespace acorn {
 
         std::mutex func_types_mtx;
         llvm::DenseMap<FunctionTypeKey*, Type*> func_types;
+
+        Type* create_type_from_type(Type* type, bool is_const);
+
     };
 }
 

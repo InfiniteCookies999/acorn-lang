@@ -39,7 +39,7 @@ A foo() {
 }
 
 void main() {
-    A!() f = foo;
+    A$() f = foo;
 
     f();
     print("begin ", 6);

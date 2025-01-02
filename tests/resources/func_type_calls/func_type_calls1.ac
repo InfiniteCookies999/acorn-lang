@@ -30,6 +30,6 @@ void foo() {
 }
 
 void main() {
-    void!() cb = foo;
+    void$() cb = foo;
     cb();
 }

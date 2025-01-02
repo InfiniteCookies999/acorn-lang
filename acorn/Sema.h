@@ -41,6 +41,7 @@ namespace acorn {
         void check_function(Func* func);
         void check_variable(Var* var);
         void check_struct(Struct* structn);
+        void check_enum(Enum* enumn);
 
     private:
         Context&    context;
@@ -53,6 +54,7 @@ namespace acorn {
         Func*   cur_func;
         Var*    cur_global_var = nullptr;
         Struct* cur_struct     = nullptr;
+        Enum*   cur_enum       = nullptr;
 
         bool is_comptime_if_cond = false;
         bool should_request_gen_queue;
@@ -85,9 +87,9 @@ namespace acorn {
         void check_node(Node* node);
 
         Type* fixup_type(Type* type);
-        Type* fixup_unresolved_arr_type(Type* type);
+        Type* fixup_unresolved_bracket_type(Type* type);
         Type* fixup_assign_det_arr_type(Type* type, Var* var);
-        Type* fixup_unresolved_struct_type(Type* type);
+        Type* fixup_unresolved_composite_type(Type* type);
         Type* fixup_function_type(Type* type);
 
         // Statement checking
@@ -166,9 +168,11 @@ namespace acorn {
         void check_array(Array* arr, Type* dest_elm_type);
         void check_memory_access(MemoryAccess* mem_access);
         void check_ternary(Ternary* ternary);
+        void check_type_expr(TypeExpr* type_expr);
 
         void ensure_global_variable_checked(SourceLoc error_loc, Var* var);
         bool ensure_struct_checked(SourceLoc error_loc, Struct* structn);
+        void ensure_enum_checked(SourceLoc error_loc, Enum* enumn);
 
         // Utility functions
         //--------------------------------------
@@ -183,17 +187,18 @@ namespace acorn {
         bool is_incomplete_statement(Node* stmt) const;
         bool may_implicitly_convert_return_ptr(Type* to_type, FuncCall* call) const;
         bool may_implicitly_convert_ptr(PointerType* ptr_type, Expr* from_expr) const;
-        void check_division_by_zero(PointSourceLoc error_loc, Expr* expr);
+        void check_division_by_zero(Node* error_node, Expr* expr);
         void create_cast(Expr* expr, Type* to_type);
         bool check_is_condition(Expr* cond);
         bool is_condition(Type* type) const;
         void check_modifier_incompatibilities(Decl* decl);
         void display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code);
         void report_error_cannot_use_variable_before_assigned(SourceLoc error_loc, Var* var);
+        Type* get_type_of_type_expr(Expr* expr);
 
-        Struct* find_struct(Identifier name);
+        Decl* find_composite(Identifier name);
 
-        llvm::Constant* gen_constant(PointSourceLoc error_loc, Expr* expr);
+        llvm::Constant* gen_constant(Node* error_node, Expr* expr);
         
         std::string get_type_mismatch_error(Type* to_type, Expr* expr) const;
         std::string get_type_mismatch_error(Type* to_type, Type* from_type) const;

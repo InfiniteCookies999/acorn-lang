@@ -16,34 +16,42 @@ import .unix.Stat;
  * reading and writing.
  */
 
-const uint32 IO_FLAG_IN  = 0x0001;
-const uint32 IO_FLAG_OUT = 0x0002;	
+enum FileFlag :: uint32 {
+    
+    /*
+     * Read from the file.
+     */
+    IN  = 0x0001,
+    
+    /*
+     * Write to the file.
+     */
+    OUT = 0x0002,
 
-/*
-* More than once open instance of the
-* file can be opened and accessed at
-* the same time.
-*/
-const uint32 IO_FLAG_SHARE = 0x0004;
+    /*
+    * More than once open instance of the
+    * file can be opened and accessed at
+    * the same time.
+    */
+    SHARE = 0x0004,
 
-/*
-* Creates the file if it does not exist.
-* Will override the contents of the old
-* file.
-*
-* The default behavior is to override the
-* file it it exists. If you wish to append
-* to an existing file use APPEND.
-*/
-const uint32 IO_FLAG_CREATE = 0x0008;
+    /*
+     * Creates the file if it does not exist.
+     *
+     * The default behavior is to override the
+     * file it it exists. If you wish to append
+     * to an existing file use `APPEND`.
+     */
+    CREATE = 0x0008,
 
-/*
-* Will append to an existing file or may be used
-* in conjunction with CREATE to create the file
-* if it does not exist and append to the new file.
-*/
-const uint32 IO_FLAG_APPEND = 0x0010;
+    /*
+     * Will append to an existing file or may be used
+     * in conjunction with CREATE to create the file
+     * if it does not exist and append to the new file.
+     */
+    APPEND = 0x0010
 
+}
 
 // TODO: We need to fix the file handle to work with
 //       large files?
@@ -163,7 +171,7 @@ struct FileHandle {
  * Reads an entire file into a string.
  */
 String read(const char* path) {
-    auto handle = open(path, IO_FLAG_IN | IO_FLAG_SHARE);
+    auto handle = open(path, FileFlag.IN | FileFlag.SHARE);
 
 // TODO: eventually when we have proper error handling this should
 //       not be needed.
@@ -331,7 +339,7 @@ bool remove(const String^ path) {
     return remove(path.buffer);
 }
 
-FileHandle open(const char* path, uint32 flags) {
+FileHandle open(const char* path, FileFlag[uint32] flags) {
 #if OS_GROUP_WINDOWS
     uint32 access_flags = 0;
     uint32 share_flags  = 0;
@@ -341,22 +349,22 @@ FileHandle open(const char* path, uint32 flags) {
         access_flags = win32.GENERIC_ALL;
     }
 
-    if (flags & IO_FLAG_IN) != 0 {
+    if (flags & FileFlag.IN) != 0 {
         access_flags |= win32.GENERIC_READ;
     }
 
-    if (flags & IO_FLAG_APPEND) != 0 {
+    if (flags & FileFlag.APPEND) != 0 {
         access_flags |= win32.FILE_APPEND_DATA;
-    } elif (flags & IO_FLAG_OUT) != 0 {
+    } elif (flags & FileFlag.OUT) != 0 {
         access_flags |= win32.GENERIC_WRITE;
     }
 
-    if (flags & IO_FLAG_SHARE) != 0 {
+    if (flags & FileFlag.SHARE) != 0 {
         share_flags |= win32.FILE_SHARE_READ;
     }
 
-    if (flags & IO_FLAG_CREATE) != 0 {
-        if (flags & IO_FLAG_APPEND) != 0 {
+    if (flags & FileFlag.CREATE) != 0 {
+        if (flags & FileFlag.APPEND) != 0 {
             create_flags |= win32.OPEN_ALWAYS;
         } else {
             // Windows is weird and none of the create options allow us to simply
@@ -391,21 +399,21 @@ FileHandle open(const char* path, uint32 flags) {
     int32 os_flags = 0;
     uint32 os_mode = 0;
 
-    if (flags & IO_FLAG_IN) != 0 && (flags & IO_FLAG_OUT) != 0 {
+    if (flags & FileFlag.IN) != 0 && (flags & FileFlag.OUT) != 0 {
         os_flags |= unix.O_RDWR;
-    } elif (flags & IO_FLAG_IN) != 0 {
+    } elif (flags & FileFlag.IN) != 0 {
         os_flags |= unix.O_RDONLY;
-    } elif (flags & IO_FLAG_OUT) != 0 {
+    } elif (flags & FileFlag.OUT) != 0 {
         os_flags |= unix.O_WRONLY;
     }
 
-    if (flags & IO_FLAG_APPEND) != 0 {
+    if (flags & FileFlag.APPEND) != 0 {
         os_flags |= unix.O_APPEND;
     } else {
         os_flags |= unix.O_TRUNC;
     }
 
-    if (flags & IO_FLAG_CREATE) != 0 {
+    if (flags & FileFlag.CREATE) != 0 {
         os_flags |= unix.O_CREAT;
         // 0666
         os_mode = unix.S_IRUSR | unix.S_IWUSR | unix.S_IRGRP |
@@ -423,6 +431,6 @@ FileHandle open(const char* path, uint32 flags) {
 #endif
 }
 
-FileHandle open(const String^ path, uint32 flags) {
+FileHandle open(const String^ path, FileFlag[uint32] flags) {
     return open(path.buffer, flags);
 }

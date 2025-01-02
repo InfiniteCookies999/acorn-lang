@@ -202,6 +202,8 @@ namespace acorn {
         llvm::Constant* gen_zero(Type* type);
         llvm::Constant* gen_one(Type* type);
         llvm::Value* gen_cast(Type* to_type, Type* from_type, llvm::Value* ll_value);
+        llvm::Value* gen_enum_index(uint64_t index, Type* index_type);
+        llvm::Value* gen_enum_value_from_enum_array(EnumType* enum_type, llvm::Value* ll_index);
 
         llvm::Value* gen_condition(Expr* cond);
 

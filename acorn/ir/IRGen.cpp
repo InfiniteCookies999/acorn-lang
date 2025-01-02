@@ -2691,10 +2691,6 @@ llvm::Value* acorn::IRGenerator::gen_null() {
     return llvm::Constant::getNullValue(builder.getPtrTy());
 }
 
-llvm::Value* acorn::IRGenerator::gen_cast(Cast* cast) {
-    return gen_cast(cast->explicit_cast_type, cast->value->type, gen_rvalue(cast->value));
-}
-
 llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr, Node* lvalue) {
     if (!ll_dest_addr) {
         ll_dest_addr = gen_unseen_alloca(arr->type, "tmp.arr");
@@ -2870,6 +2866,13 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
             return gen_struct_type_access(static_cast<StructType*>(elm_type));
         } else {
             return gen_ident_reference(dot);
+        }
+    } else if (dot->enum_value) {
+        auto enum_type = static_cast<EnumType*>(dot->type);
+        if (enum_type->get_values_type()->is_integer()) {
+            return gen_rvalue(dot->enum_value->assignment);
+        } else {
+            return gen_enum_index(dot->enum_value->index, enum_type->get_index_type());
         }
     } else {
         return gen_ident_reference(dot);
@@ -3152,6 +3155,15 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type, 
 
         if (should_emit_debug_info && lvalue)
             di_emitter->emit_location(builder, lvalue->loc);
+    } else if (type_kind == TypeKind::Enum) {
+        
+        auto enum_type = static_cast<EnumType*>(type);
+        uint64_t default_index = enum_type->get_default_index();
+
+        auto ll_index = gen_enum_index(default_index, enum_type->get_index_type());
+        builder.CreateStore(ll_index, ll_address);
+        if (should_emit_debug_info && lvalue)
+            di_emitter->emit_location(builder, lvalue->loc);
     } else {
         builder.CreateStore(gen_zero(type), ll_address);
         if (should_emit_debug_info && lvalue)
@@ -3213,6 +3225,10 @@ llvm::Constant* acorn::IRGenerator::gen_one(Type* type) {
     }
 }
 
+llvm::Value* acorn::IRGenerator::gen_cast(Cast* cast) {
+    return gen_cast(cast->explicit_cast_type, cast->value->type, gen_rvalue(cast->value));
+}
+
 llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::Value* ll_value) {
     switch (to_type->get_kind()) {
     case TypeKind::Pointer: {
@@ -3226,6 +3242,9 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
             // but there may be GEP issues if the cast happens inline. That and clang uses GEP
             // to perform a cast from an array to a pointer.
             return ll_value;
+        } else if (from_type->is_enum()) {
+            auto enum_type = static_cast<EnumType*>(from_type);
+            return gen_enum_value_from_enum_array(enum_type, ll_value);
         }
         goto NoCastFound;
     }
@@ -3254,6 +3273,9 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
             } else {
                 return builder.CreateFPToUI(ll_value, gen_type(to_type), "cast");
             }
+        } else if (from_type->is_enum()) {
+            // When working with integer types there is no difference in the index vs. the value.
+            return ll_value;
         }
         goto NoCastFound;
     }
@@ -3293,6 +3315,57 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
 
 
     return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_enum_index(uint64_t index, Type* index_type) {
+    switch (index_type->get_kind()) {
+    case TypeKind::Int8: case TypeKind::UInt8: case TypeKind::Char:
+        return builder.getInt8(static_cast<uint8_t>(index));
+    case TypeKind::Int16: case TypeKind::UInt16: case TypeKind::Char16:
+        return builder.getInt16(static_cast<uint16_t>(index));
+    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32: case TypeKind::Char32:
+        return builder.getInt32(static_cast<uint32_t>(index));
+    case TypeKind::Int64: case TypeKind::UInt64:
+        return builder.getInt64(index);
+    case TypeKind::ISize:
+        return llvm::ConstantInt::get(gen_ptrsize_int_type(), index, true);
+    case TypeKind::USize:
+        return llvm::ConstantInt::get(gen_ptrsize_int_type(), index, false);
+    default:
+        acorn_fatal("Unknown integer type");
+        return nullptr;
+    }
+}
+
+llvm::Value* acorn::IRGenerator::gen_enum_value_from_enum_array(EnumType* enum_type, llvm::Value* ll_index) {
+
+    auto ll_values_type = gen_type(enum_type->get_values_type());
+    auto enumn = enum_type->get_enum();
+
+    auto ll_array_type = llvm::ArrayType::get(ll_values_type, enumn->values.size());
+
+    if (enumn->ll_array) {
+        ll_index = builder.CreateInBoundsGEP(ll_array_type, enumn->ll_array, {gen_isize(0), ll_index});
+        return builder.CreateLoad(ll_values_type, ll_index, "cast");
+    }
+
+    llvm::SmallVector<llvm::Constant*> ll_elements;
+    ll_elements.reserve(enumn->values.size());
+    for (auto& enum_value : enumn->values) {
+        ll_elements.push_back(llvm::cast<llvm::Constant>(gen_rvalue(enum_value.assignment)));
+    }
+
+    auto ll_const_array = llvm::ConstantArray::get(ll_array_type, ll_elements);
+    auto ll_name = "global." + llvm::Twine(enumn->name.to_string()) + "." + llvm::Twine(context.global_counter++);
+    auto ll_array = gen_global_variable(ll_name,
+                                          ll_array_type,
+                                          true, // is constant
+                                          ll_const_array,
+                                          llvm::GlobalValue::InternalLinkage);
+    enumn->ll_array = ll_array;
+
+    ll_index = builder.CreateInBoundsGEP(ll_array_type, ll_array, {gen_isize(0), ll_index});
+    return builder.CreateLoad(ll_values_type, ll_index, "cast");
 }
 
 llvm::Value* acorn::IRGenerator::gen_condition(Expr* cond) {

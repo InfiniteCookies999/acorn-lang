@@ -14,10 +14,10 @@ void acorn::Namespace::add_variable(Var* var) {
     }
 }
 
-void acorn::Namespace::add_struct(Struct* nstruct) {
-    auto [prev_itr, success] = structs.try_emplace(nstruct->name, nstruct);
+void acorn::Namespace::add_composite(Decl* composite) {
+    auto [prev_itr, success] = composites.try_emplace(composite->name, composite);
     if (!success) {
-        modl.add_duplicate_decl(nstruct, prev_itr->second, scope_location);
+        modl.add_duplicate_decl(composite, prev_itr->second, scope_location);
     }
 }
 
@@ -31,7 +31,7 @@ acorn::Var* acorn::Namespace::find_variable(Identifier name) {
     return itr != variables.end() ? itr->second : nullptr;
 }
 
-acorn::Struct* acorn::Namespace::find_struct(Identifier name) {
-    auto itr = structs.find(name);
-    return itr != structs.end() ? itr->second : nullptr;
+acorn::Decl* acorn::Namespace::find_composite(Identifier name) {
+    auto itr = composites.find(name);
+    return itr != composites.end() ? itr->second : nullptr;
 }

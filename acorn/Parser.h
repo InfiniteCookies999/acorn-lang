@@ -24,6 +24,14 @@ namespace acorn {
 
         void parse();
 
+        int get_total_lines_parsed() const {
+            return lex.get_total_lines_lexed();
+        }
+
+        int get_whitespace_lines_parsed() const {
+            return lex.get_whitespace_lines_lexed();
+        }
+
     private:
         Context&       context;
         Module&        modl;
@@ -58,7 +66,7 @@ namespace acorn {
         // Statement parsing
         //--------------------------------------
 
-        void add_global_node(Node* node);
+        void add_node_to_global_scope(Node* node);
 
         void parse_import_top();
         ImportStmt* parse_import();
@@ -87,6 +95,8 @@ namespace acorn {
         Struct* parse_struct(uint32_t modifiers, Identifier name);
         void add_node_to_struct(Struct* structn, Node* node);
 
+        Enum* parse_enum(uint32_t modifiers);
+
         uint32_t parse_modifiers();
 
         ReturnStmt*        parse_return();
@@ -111,8 +121,8 @@ namespace acorn {
         Type* parse_type_for_decl();
         Type* parse_base_type();
         Type* construct_type_from_identifier(Token name_token, bool is_const);
-        Type* construct_array_type(Type* base_type, 
-                                   const llvm::SmallVector<Expr*, 8>& arr_lengths);
+        Type* construct_unresolved_bracket_type(Type* base_type, 
+                                                const llvm::SmallVector<Expr*, 8>& exprs);
         Type* parse_optional_function_type(Type* base_type);
         Type* parse_optional_array_and_ptr_types(Type* type);
 

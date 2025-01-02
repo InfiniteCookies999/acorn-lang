@@ -29,7 +29,7 @@ void foo() {
     print("called callback!", 16);
 }
 
-void bar(void!() cb) {
+void bar(void$() cb) {
     cb();
 }
 

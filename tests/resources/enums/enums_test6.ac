@@ -15,7 +15,7 @@ native isize write(int32 fd, const void* buf, usize count);
 
 #endif
 
-void write_val(int8 val) {
+void write_val(int val) {
 
 #if OS_GROUP_WINDOWS
     void* handle = GetStdHandle(-11);
@@ -29,16 +29,29 @@ void write_val(int8 val) {
 
 }
 
-struct A {
-    int8 v1;
-}
-
-A foo() {
-    return A{64};
+enum En {
+    A = 55,
+    B = 56,
+    C = 57,
+    D = 58
 }
 
 void main() {
-    A$() f = foo;
-    int8 v = f().v1;
-    write_val(v);
+
+    En e1 = En.A;
+    En[int] v1 = e1 + 10;
+    write_val(as(int) v1);
+
+    En e2 = En.B;
+    En[int] v2 = e2 + 10;
+    write_val(as(int) v2);
+
+    En e3 = En.C;
+    En[int] v3 = e3 + 10;
+    write_val(as(int) v3);
+
+    En e4 = En.D;
+    En[int] v4 = e4 + 10;
+    write_val(as(int) v4);
+
 }

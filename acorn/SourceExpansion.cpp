@@ -100,6 +100,7 @@ if (e1 > e) { e = e1; }           \
             get(ternary->rhs);
             break;
         }
+        case NodeKind::TypeExpr:
         case NodeKind::Number:
         case NodeKind::IdentRef:
         case NodeKind::String:
@@ -152,6 +153,19 @@ void acorn::go_until(const char*& e, char open, char close) {
 acorn::PointSourceLoc acorn::expand(Node* node) {
     auto [s, e] = get_expansion(node);
     
+    // Balacing parenethsis.
+    const char* sp = s;
+    int paran_count = 0;
+    while ((sp < e || paran_count > 0) && *sp != '\0') {
+        if (*sp == '(') {
+            ++paran_count;
+        } else if (*sp == ')') {
+            --paran_count;
+        }
+        ++sp;
+    }
+    e = sp;
+
     return PointSourceLoc{
         s,
         static_cast<uint16_t>(e - s),

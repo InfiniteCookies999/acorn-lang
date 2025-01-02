@@ -36,6 +36,6 @@ void foo(int a, int b, int c) {
 }
 
 void main() {
-    void!(int, int, int) cb = foo;
+    void$(int, int, int) cb = foo;
     cb(65, 66, 67);
 }

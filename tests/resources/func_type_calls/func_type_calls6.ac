@@ -42,7 +42,7 @@ void foo(int[8] a) {
 
 void main() {
     const int l = 4;
-    void!(int[4 + l]) cb = foo;
+    void$(int[4 + l]) cb = foo;
     
     int[8] a = [ 76, 101, 116, 115, 32, 103, 111, 33 ];
     cb(a);

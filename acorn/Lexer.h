@@ -17,9 +17,20 @@ namespace acorn {
         
         [[nodiscard]] Token next_token();
 
+        int get_total_lines_lexed() const {
+            return total_lines_lexed;
+        }
+
+        int get_whitespace_lines_lexed() const {
+            return whitespace_lines_lexed;
+        }
+
     private:
         const Context& context;
         Logger&        logger;
+
+        int total_lines_lexed      = 0;
+        int whitespace_lines_lexed = 0;
 
         const char* ptr;
         const char* end;

@@ -17,7 +17,28 @@ acorn::Type* acorn::Type::create(PageAllocator& allocator, TypeKind kind, bool i
 }
 
 bool acorn::Type::is_comparable() const {
-    return is_number() || is_pointer() || kind == TypeKind::Null;
+    switch (kind) {
+    case TypeKind::Int:
+    case TypeKind::Int8:
+    case TypeKind::Int16:
+    case TypeKind::Int32:
+    case TypeKind::Int64:
+    case TypeKind::ISize:
+    case TypeKind::UInt8:
+    case TypeKind::UInt16:
+    case TypeKind::UInt32:
+    case TypeKind::UInt64:
+    case TypeKind::USize:
+    case TypeKind::Char:
+    case TypeKind::Char16:
+    case TypeKind::Char32:
+    case TypeKind::Pointer:
+    case TypeKind::Enum:
+    case TypeKind::Null:
+        return true;
+    default:
+        return false;
+    }
 }
 
 bool acorn::Type::is_sized() const {
@@ -72,7 +93,6 @@ uint32_t acorn::Type::get_number_of_bits() const {
 }
 
 bool acorn::Type::needs_destruction() const {
-    auto kind = get_kind();
     if (kind == TypeKind::Struct) {
         auto struct_type = static_cast<const StructType*>(this);
         auto structn = struct_type->get_struct();
@@ -91,6 +111,17 @@ bool acorn::Type::needs_destruction() const {
 }
 
 std::string acorn::Type::to_string() const {
+
+    if (container_enum_type) {
+        auto enumn = container_enum_type->get_enum();
+        std::string s = enumn->name.to_string().str();
+        if (is_const()) {
+            s = "const " + s;
+        }
+        auto contained_type_str = container_enum_type->get_values_type()->to_string();
+        return s + "[" + contained_type_str + "]";
+    }
+
 #define str(s) !is_const() ? s : "const " s;
     switch (kind) {
     case TypeKind::Void:      return str("void");
@@ -116,6 +147,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Float32:   return str("float32");
     case TypeKind::Float64:   return str("float64");
     case TypeKind::EmptyArray: return str("[]");
+    case TypeKind::Expr:      return str("expr type");
     case TypeKind::Auto: {
         if (is_const()) {
             return "const";
@@ -128,6 +160,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Array:     return static_cast<const ArrayType*>(this)->to_string();
     case TypeKind::Function:  return static_cast<const FunctionType*>(this)->to_string();
     case TypeKind::Struct:    return static_cast<const StructType*>(this)->to_string();
+    case TypeKind::Enum:      return static_cast<const EnumType*>(this)->to_string();
     case TypeKind::AssignDeterminedArray:
                               return static_cast<const AssignDeterminedArrayType*>(this)->to_string();
     default:
@@ -172,19 +205,22 @@ std::string acorn::PointerType::to_string() const {
     return elm_type->to_string() + "*";
 }
 
-acorn::Type* acorn::UnresolvedArrayType::create(PageAllocator& allocator, Type* elm_type,
-                                                Expr* length_expr, bool is_const) {
-    UnresolvedArrayType* unarr_type = allocator.alloc_type<UnresolvedArrayType>();
-    unarr_type->contains_const = is_const;
-    unarr_type->length_expr = length_expr;
-    return new (unarr_type) UnresolvedArrayType(is_const, length_expr, elm_type);
+acorn::Type* acorn::UnresolvedBracketType::create(PageAllocator& allocator,
+                                                Type* elm_type,
+                                                Expr* expr,
+                                                bool is_const) {
+    UnresolvedBracketType* unresolved_type = allocator.alloc_type<UnresolvedBracketType>();
+    new (unresolved_type) UnresolvedBracketType(is_const, expr, elm_type);
+    unresolved_type->contains_const = is_const;
+    return unresolved_type;
 }
 
 acorn::Type* acorn::ArrayType::create(PageAllocator& allocator, Type* elm_type, 
                                       uint32_t length, bool is_const) {
     ArrayType* arr_type = allocator.alloc_type<ArrayType>();
+    new (arr_type) ArrayType(is_const, elm_type, length);
     arr_type->contains_const = is_const;
-    return new (arr_type) ArrayType(is_const, elm_type, length);
+    return arr_type;
 }
 
 uint64_t acorn::ArrayType::get_total_linear_length() const {
@@ -206,8 +242,9 @@ acorn::Type* acorn::AssignDeterminedArrayType::create(PageAllocator& allocator,
                                                       Type* elm_type,
                                                       bool is_const) {
     auto arr_type = allocator.alloc_type<AssignDeterminedArrayType>();
+    new (arr_type) AssignDeterminedArrayType(is_const, elm_type);
     arr_type->contains_const = is_const;
-    return new (arr_type) AssignDeterminedArrayType(is_const, elm_type);
+    return arr_type;
 }
 
 std::string acorn::AssignDeterminedArrayType::to_string() const {
@@ -218,8 +255,9 @@ acorn::Type* acorn::RangeType::create(PageAllocator& allocator,
                                       Type* value_type, 
                                       bool is_const) {
     auto range_type = allocator.alloc_type<RangeType>();
+    new (range_type) RangeType(is_const, value_type);
     range_type->contains_const = is_const;
-    return new (range_type) RangeType(is_const, value_type);
+    return range_type;
 }
 
 std::string acorn::RangeType::to_string() const {
@@ -230,8 +268,9 @@ acorn::Type* acorn::FunctionType::create(PageAllocator& allocator,
                                          FunctionTypeKey* key,
                                          bool is_const) {
     auto function_type = allocator.alloc_type<FunctionType>();
+    new (function_type) FunctionType(is_const, key);
     function_type->contains_const = is_const;
-    return new (function_type) FunctionType(is_const, key);
+    return function_type;
 }
 
 std::string acorn::FunctionType::to_string() const {
@@ -249,23 +288,44 @@ std::string acorn::FunctionType::to_string() const {
     return str;
 }
 
-acorn::Type* acorn::UnresolvedStructType::create(PageAllocator& allocator,
-                                                 Identifier name,
-                                                 SourceLoc name_location,
-                                                 bool is_const) {
-    auto struct_type = allocator.alloc_type<UnresolvedStructType>();
-    struct_type->contains_const = is_const;
-    return new (struct_type) UnresolvedStructType(is_const, name, name_location);
+acorn::Type* acorn::UnresolvedCompositeType::create(PageAllocator& allocator,
+                                                    Identifier name,
+                                                    SourceLoc name_location,
+                                                    bool is_const) {
+    auto composite_type = allocator.alloc_type<UnresolvedCompositeType>();
+    new (composite_type) UnresolvedCompositeType(is_const, name, name_location);
+    composite_type->contains_const = is_const;
+    return composite_type;
 }
 
 acorn::StructType* acorn::StructType::create(PageAllocator& allocator,
-                                             Struct* nstruct,
+                                             Struct* structn,
                                              bool is_const) {
     auto struct_type = allocator.alloc_type<StructType>();
+    new (struct_type) StructType(is_const, structn);
     struct_type->contains_const = is_const;
-    return new (struct_type)  StructType(is_const, nstruct);
+    if (!is_const) {
+        struct_type->non_const_version = struct_type;
+    } 
+    return struct_type;
 }
 
 std::string acorn::StructType::to_string() const {
     return structn->name.to_string().str();
+}
+
+acorn::EnumType* acorn::EnumType::create(PageAllocator& allocator,
+                                         Enum* enumn,
+                                         bool is_const) {
+    auto enum_type = allocator.alloc_type<EnumType>();
+    new(enum_type) EnumType(is_const, enumn);
+    enum_type->contains_const = is_const;
+    if (!is_const) {
+        enum_type->non_const_version = enum_type;
+    }
+    return enum_type;
+}
+
+std::string acorn::EnumType::to_string() const {
+    return enumn->name.to_string().str();
 }

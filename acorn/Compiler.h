@@ -113,6 +113,9 @@ namespace acorn {
         PageAllocator& allocator;
         Context&       context;
 
+        uint64_t total_lines_parsed      = 0;
+        uint64_t whitespace_lines_parsed = 0;
+
         bool initialize_target_machine();
 
         void show_time_table();

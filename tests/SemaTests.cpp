@@ -28,7 +28,8 @@ void test_sema() {
 
         Context* context = allocator.alloc_type<Context>();
         new (context) Context(ll_context, *ll_test_model, allocator);
-        
+        context->set_stand_alone();
+
         acorn::Identifier::clear_cache();
         Module* mock_modl = new Module();
         context->get_modules().insert({ Identifier::get("sema_modl"), mock_modl});
