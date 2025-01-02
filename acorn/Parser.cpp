@@ -355,6 +355,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
         llvm::SmallVector<Expr*, 8> indexes;
         llvm::SmallVector<Token> bracket_tokens;
         while (cur_token.is('[')) {
+            ++bracket_count;
             bracket_tokens.push_back(cur_token);
             next_token();
             if (cur_token.is_not(']')) {
@@ -364,6 +365,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
                 is_garenteed_type = true;
             }
             expect(']');
+            --bracket_count;
         }
         if (cur_token.is('*') || cur_token.is('^') || cur_token.is('$')) {
             is_garenteed_type = true;
@@ -1473,12 +1475,14 @@ acorn::Type* acorn::Parser::parse_optional_array_and_ptr_types(Type* type) {
         } else {
             llvm::SmallVector<Expr*, 8> arr_lengths;
             while (cur_token.is('[')) {
+                ++bracket_count;
                 next_token();
 
                 arr_lengths.push_back(cur_token.is_not(']') ? parse_expr()
                                                             : nullptr);
 
                 expect(']');
+                --bracket_count;
             }
 
             type = construct_unresolved_bracket_type(type, arr_lengths);
@@ -2020,11 +2024,13 @@ acorn::Expr* acorn::Parser::parse_memory_access(Expr* site) {
     
     auto mem_access = new_node<MemoryAccess>(cur_token);
     next_token(); // Consuming '[' token.
+    ++bracket_count;
 
     mem_access->site = site;
     mem_access->index = parse_expr();
 
     expect(']', "for memory access");
+    --bracket_count;
     return mem_access;
 }
 
@@ -2613,6 +2619,8 @@ acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char
 
 acorn::Expr* acorn::Parser::parse_array() {
     Array* arr = new_node<Array>(cur_token);
+
+    ++bracket_count;
     next_token(); // Consuming '[' token.
 
     bool more_values = false;
@@ -2682,6 +2690,7 @@ acorn::Expr* acorn::Parser::parse_array() {
     }
 
     expect(']', "for array");
+    --bracket_count;
     return arr;
 }
 
@@ -2803,11 +2812,16 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
         case '{':
         case '}':
         case ';':
-        case ']':
         case ',':
             return;
         case ')': {
             if (paran_count > 0)
+                return;
+            next_token();
+            break;
+        }
+        case ']': {
+            if (bracket_count > 0)
                 return;
             next_token();
             break;
