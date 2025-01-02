@@ -17,6 +17,7 @@ namespace acorn {
         TypeTable(PageAllocator& allocator, Context& context);
 
         Type* get_const_type(Type* type);
+        Type* remove_const(Type* type);
 
         Type* get_enum_container_type(EnumType* enum_type);
 
@@ -36,6 +37,7 @@ namespace acorn {
 
         std::mutex const_types_mtx;
         llvm::DenseMap<Type*, Type*> const_types;
+        llvm::DenseMap<Type*, Type*> inv_const_types;
         
         std::mutex enum_container_types_mtx;
         llvm::DenseMap<Type*, Type*> enum_container_types;

@@ -3905,17 +3905,23 @@ void acorn::Sema::check_ternary(Ternary* ternary) {
         ternary->is_foldable = false;
     }
 
-    // TODO: This is too strict. It should work even when there are const
-    // types. otherwise this will fail for basic things like 'int' and 'const int'.
-    //
-    if (ternary->lhs->type->is_not(ternary->rhs->type)) {
+    Type* lhs_type = ternary->lhs->type;
+    Type* rhs_type = ternary->rhs->type;
+    if (rhs_type->is_const()) {
+        rhs_type = type_table.remove_const(rhs_type);
+    }
+    if (lhs_type->is_const()) {
+        lhs_type = type_table.remove_const(lhs_type);
+    }
+
+    if (lhs_type->is_not(rhs_type)) {
         error(expand(ternary), "Operator ? has incompatible types '%s' and '%s'",
               ternary->lhs->type, ternary->rhs->type)
             .end_error(ErrCode::SemaTernaryIncompatibleTypes);
         return;
     }
 
-    ternary->type = ternary->lhs->type;
+    ternary->type = lhs_type;
 }
 
 void acorn::Sema::check_type_expr(TypeExpr* type_expr) {

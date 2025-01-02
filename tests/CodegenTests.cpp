@@ -1688,13 +1688,13 @@ static void move_constructors_tests() {
 }
 
 static void ternaries_tests() {
-    test("Ternary of constant integers", [&] {
+    test("Ternary of foldable integers", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test1.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
     
         expect(result, std::identity()).to_be("@#");
     });
-    test("Ternary of non-constant integers", [&] {
+    test("Ternary of non-foldable integers", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
     
@@ -1723,6 +1723,12 @@ static void ternaries_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
     
         expect(result, std::identity()).to_be("ABCDEFGH");
+    });
+    test("Ternary of non-foldable integers with one const type", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("@#");
     });
 }
 

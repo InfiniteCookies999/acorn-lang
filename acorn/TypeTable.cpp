@@ -19,10 +19,16 @@ acorn::Type* acorn::TypeTable::get_const_type(Type* type) {
     Type* const_type = create_type_from_type(type, true);
 
     const_types.insert({ type, const_type });
+    inv_const_types.insert({ const_type, type });
     const_type->non_const_version = type->does_contain_const() ? type->non_const_version : type;
     const_type->container_enum_type = type->container_enum_type;
 
     return const_type;
+}
+
+acorn::Type* acorn::TypeTable::remove_const(Type* type) {
+    std::lock_guard lock(const_types_mtx);
+    return inv_const_types[type];
 }
 
 acorn::Type* acorn::TypeTable::get_enum_container_type(EnumType* enum_type) {
