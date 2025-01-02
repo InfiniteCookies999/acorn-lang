@@ -588,7 +588,14 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
         }
     }
 
-    // TODO: const: !>_<
+    bool is_const = false;
+    if (var->type->is_array()) {
+        auto arr_type = static_cast<ArrayType*>(var->type);
+        if (arr_type->get_base_type()->is_const()) {
+            is_const = true;
+        }
+    }
+
     auto ll_linkage = var->has_modifier(Modifier::Native) ? llvm::GlobalValue::ExternalLinkage
                                                           : llvm::GlobalValue::InternalLinkage;
     auto ll_name = var->linkname.empty() ? var->name.to_string() : var->linkname;
@@ -596,7 +603,7 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
                                                              : "global." + ll_name + "." + llvm::Twine(context.global_counter++);
     auto ll_address = gen_global_variable(ll_final_name,
                                           gen_type(var->type),
-                                          false,
+                                          is_const,
                                           nullptr,
                                           ll_linkage);
     ll_address->setAlignment(get_alignment(gen_type(var->type)));

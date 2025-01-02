@@ -123,6 +123,7 @@ std::string acorn::Type::to_string() const {
     }
 
 #define str(s) !is_const() ? s : "const " s;
+#define str2(s) !is_const() ? (s) : std::string("const (") + s + ")";
     switch (kind) {
     case TypeKind::Void:      return str("void");
     case TypeKind::Int:       return str("int");
@@ -155,19 +156,20 @@ std::string acorn::Type::to_string() const {
             return "auto";
         }
     }
-    case TypeKind::Range:     return static_cast<const RangeType*>(this)->to_string();
-    case TypeKind::Pointer:   return static_cast<const PointerType*>(this)->to_string();
-    case TypeKind::Array:     return static_cast<const ArrayType*>(this)->to_string();
-    case TypeKind::Function:  return static_cast<const FunctionType*>(this)->to_string();
-    case TypeKind::Struct:    return static_cast<const StructType*>(this)->to_string();
-    case TypeKind::Enum:      return static_cast<const EnumType*>(this)->to_string();
+    case TypeKind::Range:     return str2(static_cast<const RangeType*>(this)->to_string());
+    case TypeKind::Pointer:   return str2(static_cast<const PointerType*>(this)->to_string());
+    case TypeKind::Array:     return str2(static_cast<const ArrayType*>(this)->to_string());
+    case TypeKind::Function:  return str2(static_cast<const FunctionType*>(this)->to_string());
+    case TypeKind::Struct:    return str2(static_cast<const StructType*>(this)->to_string());
+    case TypeKind::Enum:      return str2(static_cast<const EnumType*>(this)->to_string());
     case TypeKind::AssignDeterminedArray:
-                              return static_cast<const AssignDeterminedArrayType*>(this)->to_string();
+                              return str2(static_cast<const AssignDeterminedArrayType*>(this)->to_string());
     default:
         acorn_fatal_fmt("Type::to_string() missing to_string case. Kind=%s", static_cast<int>(kind));
         return "";
     }
 #undef str
+#undef str2
 }
 
 acorn::Type* acorn::ContainerType::get_base_type() const {

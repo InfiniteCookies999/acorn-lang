@@ -2608,8 +2608,19 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
                 if (!is_assignable_to) {
                     error(expand(bin_op->lhs), get_type_mismatch_error(bin_op->lhs->type, bin_op->rhs).c_str())
                         .end_error(ErrCode::SemaVariableTypeMismatch);
+                    return;
                 }
             }
+
+            if (lhs_type->is_array()) {
+                auto arr_type = static_cast<ArrayType*>(lhs_type);
+                auto base_type = arr_type->get_base_type();
+                if (base_type->is_const()) {
+                    error(expand(bin_op->lhs), "Cannot reassign to arrays with constant memory")
+                        .end_error(ErrCode::SemaCannotReassignToArrayWithConstMem);
+                }
+            }
+
             break;
         }
         case Token::AddEq: case Token::SubEq: case Token::MulEq: {
