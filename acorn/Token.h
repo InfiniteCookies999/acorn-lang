@@ -114,6 +114,7 @@ namespace acorn {
             DotDot,
             DotDotDot,
             ColCol,
+            BackslashBackslash,
 
             IntLiteral,
             HexLiteral,

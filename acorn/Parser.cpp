@@ -304,7 +304,7 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
     case '{':
         return parse_scope();
-    case ')': case '}': case ',': {
+    case '}': case ',': {
         // Handling these cases as if it is special because the skip recovery.
         // will treat them as recovery points.
         error("Expected an expression")
@@ -487,6 +487,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     cur_func = func;
 
     // Parsing parameters.
+    ++paran_count;
     expect('(');
     if (cur_token.is_not(')') && cur_token.is_not('{')) {
         bool more_params = false, full_reported = false;
@@ -526,6 +527,8 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
         
     }
     expect(')', "for function declaration");
+
+    --paran_count;
 
     if (cur_token.is(Token::KwConst)) {
         func->is_constant = true;
@@ -1180,6 +1183,7 @@ void acorn::Parser::parse_comptime_file_info() {
     Token start_token = cur_token;
     next_token();
     
+    ++paran_count;
     expect('(');
 
     if (cur_token.is_not(')')) {
@@ -1253,6 +1257,7 @@ void acorn::Parser::parse_comptime_file_info() {
     }
 
     expect(')');
+    --paran_count;
 }
 
 // Expression parsing
@@ -2041,6 +2046,23 @@ acorn::Expr* acorn::Parser::parse_term() {
         next_token();
         return new_node<InvalidExpr>(cur_token);
     }
+    case '\\': case Token::BackslashBackslash: {
+        bool file_local = cur_token.is('\\');
+        next_token();
+
+        Token ident_token = cur_token;
+        
+        IdentRef* ref = new_node<IdentRef>(cur_token);
+        ref->ident = expect_identifier();
+        ref->relative_enforcement = file_local ? IdentRef::RelativeEnforcement::File
+                                               : IdentRef::RelativeEnforcement::Module;
+
+        if (allow_struct_initializer && cur_token.is('{')) {
+            return parse_struct_initializer(ref);
+        }
+        
+        return ref;
+    }
     case Token::Identifier: {
         
         auto parse_as_type_expr = [this]() finline{
@@ -2183,9 +2205,11 @@ acorn::Expr* acorn::Parser::parse_term() {
     case Token::KwAs: {
         Cast* cast = new_node<Cast>(cur_token);
         next_token();
+        ++paran_count;
         expect('(');
         cast->explicit_cast_type = parse_type();
         expect(')');
+        --paran_count;
         cast->value = parse_postfix();
         return cast;
     }
@@ -2197,17 +2221,21 @@ acorn::Expr* acorn::Parser::parse_term() {
     case Token::KwSizeof: {
         SizeOf* sof = new_node<SizeOf>(cur_token);
         next_token();
+        ++paran_count;
         expect('(');
         sof->type_with_size = parse_type();
         expect(')');
+        --paran_count;
         return sof;
     }
     case Token::KwMoveobj: {
         MoveObj* move_obj = new_node<MoveObj>(cur_token);
         next_token();
+        ++paran_count;
         expect('(');
         move_obj->value = parse_expr();
         expect(')');
+        --paran_count;
         return move_obj;
     }
     case TypeTokens: {
@@ -2772,12 +2800,18 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
     while (true) {
         switch (cur_token.kind) {
         case Token::EOB:
-        case ')': // TODO: Might want to count these so it doesn't just recover at bad times.
         case '{':
         case '}':
         case ';':
+        case ']':
         case ',':
             return;
+        case ')': {
+            if (paran_count > 0)
+                return;
+            next_token();
+            break;
+        }
         case ModifierTokens: {
             if (stop_on_modifiers)
                 return;

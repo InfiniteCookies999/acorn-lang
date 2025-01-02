@@ -49,6 +49,7 @@ std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
     case Token::DotDot:               return "..";
     case Token::DotDotDot:            return "...";
     case Token::ColCol:               return "::";
+    case Token::BackslashBackslash:   return "\\\\";
 
     default: {
         if (kind > Token::KeywordStart && kind < Token::KeywordEnd) {

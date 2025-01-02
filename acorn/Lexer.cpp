@@ -117,6 +117,7 @@ case c1:                                        \
     two_tok('~', '=', Token::TildeEq);
     two_tok('!', '=', Token::ExEq);
     two_tok(':', ':', Token::ColCol);
+    two_tok('\\', '\\', Token::BackslashBackslash);
 
     case '&': {
         ++ptr;

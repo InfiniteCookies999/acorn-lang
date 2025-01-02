@@ -552,6 +552,12 @@ namespace acorn {
         }
 
         Identifier ident;
+
+        enum class RelativeEnforcement {
+            File,
+            Module,
+            None
+        } relative_enforcement = RelativeEnforcement::None;
     
         bool found_ref() const {
             return found_kind != NoneKind;

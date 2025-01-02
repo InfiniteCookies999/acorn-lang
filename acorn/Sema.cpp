@@ -2876,6 +2876,17 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
     
     ErrorSpellChecker spell_checker(context.should_show_spell_checking());
 
+    if (ref->relative_enforcement != IdentRef::RelativeEnforcement::None) {
+        if (ref->relative_enforcement == IdentRef::RelativeEnforcement::File) {
+            search_nspace = file;
+        } else {
+            // TODO: Fix this. We probably do not want to modify all the code below
+            // because that would just make shit slower so we should probably just
+            // do specific searching here instead.
+            search_nspace = &file->get_module();
+        }
+    }
+
     if (is_comptime_if_cond) {
         if (is_for_call) {
             error(expand(ref), "Cannot make calls in comptime if conditions")
