@@ -140,7 +140,7 @@ namespace acorn {
         // dependencies.
         Decl* dependency = nullptr;
 
-        bool has_modifier(uint32_t modifier) {
+        bool has_modifier(uint32_t modifier) const {
             return (modifiers & modifier) != 0;
         }
 
@@ -148,7 +148,7 @@ namespace acorn {
         // since the locations of the modifiers are not stored for
         // performance sake. Luckily they are easily reobtainable by
         // simply iterating backwards.
-        SourceLoc get_modifier_location(uint32_t modifier);
+        SourceLoc get_modifier_location(uint32_t modifier) const;
 
         Logger& get_logger() const;
 
@@ -207,6 +207,10 @@ namespace acorn {
         Var* aggr_ret_var = nullptr;
 
         Var* find_parameter(Identifier name) const;
+
+        // Scans forward until it finds the 'const' keyword after the parameter
+        // type information.
+        SourceLoc get_function_const_location() const;
 
     };
 

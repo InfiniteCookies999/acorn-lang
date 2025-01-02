@@ -720,6 +720,13 @@ bool acorn::Sema::check_function_decl(Func* func) {
         return false;
     }
 
+    if (func->is_constant && (func->is_constructor || func->is_destructor)) {
+        error(func->get_function_const_location(), "%s cannot be marked 'const'",
+              func->is_constructor ? "Constructors" : "Destructors")
+            .end_error(ErrCode::SemaOnlyMemberFuncsMarkedConst);
+        return false;
+    }
+
     if (func->has_modifier(Modifier::Native)) {
         if (func->return_type->is_aggregate()) {
             if (func->return_type->is_struct()) {
@@ -992,16 +999,7 @@ void acorn::Sema::check_function(Func* func) {
                 .end_error(ErrCode::SemaMemberFuncHasDllimportModifier);
         }
     } else if (func->is_constant) {
-        SourceLoc loc = func->loc;
-        const char* start_ptr = loc.ptr + loc.length;
-        go_until(start_ptr, '(', ')');
-        // Skip over whitespace until we reach 'const' keyword.
-        while (std::isspace(*start_ptr)) {
-            ++start_ptr;
-        }
-
-        SourceLoc error_loc = SourceLoc::from_ptrs(start_ptr, start_ptr + 5);
-        error(error_loc, "Only member functions may be marked 'const'")
+        error(func->get_function_const_location(), "Only member functions may be marked 'const'")
             .end_error(ErrCode::SemaOnlyMemberFuncsMarkedConst);
     }
 

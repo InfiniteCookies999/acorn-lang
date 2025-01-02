@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include "SourceFile.h"
 #include "Type.h"
+#include "SourceExpansion.h"
 
 void acorn::Decl::show_prev_declared_msg(Logger& logger) const {
     logger.print("Previously declared at: ");
@@ -39,7 +40,7 @@ const char* acorn::Modifier::to_string(uint32_t modifier) {
     }
 }
 
-acorn::SourceLoc acorn::Decl::get_modifier_location(uint32_t modifier) {
+acorn::SourceLoc acorn::Decl::get_modifier_location(uint32_t modifier) const {
     // We have to manually implement rfind because otherwise we would have to
     // create a std::string for the file contents which could potentially be
     // slow.
@@ -61,6 +62,18 @@ acorn::SourceLoc acorn::Decl::get_modifier_location(uint32_t modifier) {
     // that we have.
     acorn_fatal("unreachable");
     return SourceLoc{};
+}
+
+acorn::SourceLoc acorn::Func::get_function_const_location() const {
+    SourceLoc loc = this->loc;
+    const char* start_ptr = loc.ptr + loc.length;
+    go_until(start_ptr, '(', ')');
+    // Skip over whitespace until we reach 'const' keyword.
+    while (std::isspace(*start_ptr)) {
+        ++start_ptr;
+    }
+
+    return SourceLoc::from_ptrs(start_ptr, start_ptr + 5);
 }
 
 acorn::Var* acorn::Func::find_parameter(Identifier name) const {

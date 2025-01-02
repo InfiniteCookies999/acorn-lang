@@ -448,7 +448,7 @@ D* acorn::Parser::new_declaration(uint32_t modifiers, Identifier name, Token loc
     decl->name      = name;
     if constexpr (uses_linkname) {
         decl->linkname = linkname;
-    } // TODO: if it does not use the link name but the linkname is set an error should be reported
+    }
     linkname = "";
     return decl;
 }
