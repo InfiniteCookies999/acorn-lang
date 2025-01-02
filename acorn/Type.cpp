@@ -122,7 +122,7 @@ std::string acorn::Type::to_string() const {
         return s + "[" + contained_type_str + "]";
     }
 
-#define str(s) !is_const() ? s : "const " s;
+#define str(s) !is_const() ? (s) : std::string("const ") + (s);
 #define str2(s) !is_const() ? (s) : std::string("const (") + s + ")";
     switch (kind) {
     case TypeKind::Void:      return str("void");
@@ -160,8 +160,8 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Pointer:   return str2(static_cast<const PointerType*>(this)->to_string());
     case TypeKind::Array:     return str2(static_cast<const ArrayType*>(this)->to_string());
     case TypeKind::Function:  return str2(static_cast<const FunctionType*>(this)->to_string());
-    case TypeKind::Struct:    return str2(static_cast<const StructType*>(this)->to_string());
-    case TypeKind::Enum:      return str2(static_cast<const EnumType*>(this)->to_string());
+    case TypeKind::Struct:    return str(static_cast<const StructType*>(this)->to_string());
+    case TypeKind::Enum:      return str(static_cast<const EnumType*>(this)->to_string());
     case TypeKind::AssignDeterminedArray:
                               return str2(static_cast<const AssignDeterminedArrayType*>(this)->to_string());
     default:

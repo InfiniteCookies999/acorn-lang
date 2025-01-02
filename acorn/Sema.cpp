@@ -991,6 +991,18 @@ void acorn::Sema::check_function(Func* func) {
             error(func->get_modifier_location(Modifier::DllImport), "Member function cannot have dllimport modifier")
                 .end_error(ErrCode::SemaMemberFuncHasDllimportModifier);
         }
+    } else if (func->is_constant) {
+        SourceLoc loc = func->loc;
+        const char* start_ptr = loc.ptr + loc.length;
+        go_until(start_ptr, '(', ')');
+        // Skip over whitespace until we reach 'const' keyword.
+        while (std::isspace(*start_ptr)) {
+            ++start_ptr;
+        }
+
+        SourceLoc error_loc = SourceLoc::from_ptrs(start_ptr, start_ptr + 5);
+        error(error_loc, "Only member functions may be marked 'const'")
+            .end_error(ErrCode::SemaOnlyMemberFuncsMarkedConst);
     }
 
     if (func->has_modifier(Modifier::Native)) {
@@ -3039,9 +3051,18 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
             }
             break;
         }
-        
+
         ref->is_foldable = var_ref->is_foldable;
         ref->type = var_ref->type;
+
+        if (var_ref->is_field() && cur_func && cur_func->is_constant) {
+            // Referencing a field in a constant struct so the field must be
+            // constant.
+            if (!ref->type->is_const()) {
+                ref->type = type_table.get_const_type(ref->type);
+            }
+        }
+
         break;
     }
     case IdentRef::FuncsKind: {
@@ -3102,7 +3123,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             return;
         }
 
-        if (dot->site->type->is_const() && !dot->type->is_const()) {
+        if (struct_type->is_const() && !dot->type->is_const()) {
             // The constness must be passed onto the field to prevent modification of fields.
             dot->type = type_table.get_const_type(dot->type);
         }
@@ -3261,6 +3282,24 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                                    llvm::SmallVector<Expr*>& args,
                                                    size_t non_named_args_offset,
                                                    FuncList& candidates) {
+    
+    //class A {
+    //public:
+    //    int* v;
+    //    int z;
+    //
+    //    int* foo() const {
+    //        return v;
+    //    }
+    //
+    //    int& foo2() const {
+    //        return z;
+    //    }
+    //};
+    //
+    //const A* a;
+    //int* c = a->foo();
+
 
     for (Func* canidate : candidates) {
         if (canidate->is_checking_declaration) {
@@ -3358,6 +3397,36 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         }
 
         create_cast(arg_value, param->type);
+    }
+
+    if (called_func->structn && !called_func->is_constant && !called_func->is_constructor) {
+        auto call = static_cast<FuncCall*>(call_node);
+        if (call->site->is(NodeKind::IdentRef) && cur_func) {
+            // Calling one member function from another.
+            if (cur_func->is_constant) {
+                error(expand(call), "Cannot call non-const member function from const member function")
+                    .end_error(ErrCode::SemaCallNonConstMemeberFuncFromConst);
+            }
+        } else {
+            auto report_cannot_call_non_const_member_func = [this, call](DotOperator* dot) finline {
+                error(expand(call), "Cannot call non-const member function with const memory of type '%s'",
+                      dot->site->type)
+                      .end_error(ErrCode::SemaCallNonConstMemeberFuncFromConst);
+            };
+
+            auto dot = static_cast<DotOperator*>(call->site);
+            if (dot->site->type->is_struct()) {
+                if (dot->site->type->is_const()) {
+                    report_cannot_call_non_const_member_func(dot);
+                }
+            } else {
+                auto ptr_type = static_cast<PointerType*>(dot->site->type);
+                auto elm_type = ptr_type->get_elm_type();
+                if (elm_type->is_struct() && elm_type->is_const()) {
+                    report_cannot_call_non_const_member_func(dot);
+                }
+            }
+        }
     }
 
     return called_func;
@@ -4315,10 +4384,18 @@ void acorn::Sema::check_modifiable(Expr* expr) {
     if (expr->type->is_const()) {
         if (expr->is(NodeKind::IdentRef) &&
             static_cast<IdentRef*>(expr)->found_kind == IdentRef::VarKind) {
-            error(expand(expr), "Cannot reassign to a const variable")
-                .end_error(ErrCode::SemaReassignConstVariable);
+
+            auto ref = static_cast<IdentRef*>(expr);
+            if (ref->var_ref->is_field() && !ref->var_ref->type->is_const() &&
+                cur_func && cur_func->is_constant) {
+                error(expand(expr), "Cannot reassign to field in a const member function")
+                    .end_error(ErrCode::SemaReassignConstVariable);
+            } else {
+                error(expand(expr), "Cannot reassign to a const variable")
+                    .end_error(ErrCode::SemaReassignConstVariable);
+            }
         } else {
-            error(expand(expr), "Cannot assign to const address")
+            error(expand(expr), "Cannot assign to a const address")
                 .end_error(ErrCode::SemaReassignConstAddress);
         }
     }

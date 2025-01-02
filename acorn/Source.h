@@ -23,6 +23,13 @@ namespace acorn {
         // tokens to fit into 8 bytes.
         const char* ptr;
         uint16_t    length;
+
+        static SourceLoc from_ptrs(const char* start_ptr, const char* end_ptr) {
+            return SourceLoc{
+                .ptr = start_ptr,
+                .length = static_cast<uint16_t>(end_ptr - start_ptr)
+            };
+        }
     };
 
     // SourceLoc but with a pointer to the most relevant location

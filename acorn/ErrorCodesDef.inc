@@ -169,6 +169,8 @@ X(SemaDuplicateEnumValueName               , 20120)
 X(SemaEnumValueWrongType                   , 20121)
 X(SemaEnumContainerTypeWrongValueType      , 20122)
 X(SemaCannotReassignToArrayWithConstMem    , 20123)
+X(SemaCallNonConstMemeberFuncFromConst     , 20124)
+X(SemaOnlyMemberFuncsMarkedConst           , 20125)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

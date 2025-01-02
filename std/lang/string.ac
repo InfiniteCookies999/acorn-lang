@@ -79,10 +79,17 @@ struct String {
     }
 
     /*
+     * The length of the String is zero.
+     */
+    bool empty() const {
+        return length == 0;
+    }
+
+    /*
      * Returns a sub-string of this string which is in the range
      * of `begin_idx` and goes to the end of the string.
      */
-    String substr(int begin_idx) {
+    String substr(int begin_idx) const {
         return substr(begin_idx, length);
     }
 
@@ -90,7 +97,7 @@ struct String {
      * Returns a sub-string of this string which is in the range
      * of `begin_idx` and goes until `end_idx - 1`.
      */
-    String substr(int begin_idx, int end_idx) {
+    String substr(int begin_idx, int end_idx) const {
         // TODO: error handling.
         
         int sublength = end_idx - begin_idx;

@@ -527,6 +527,11 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     }
     expect(')', "for function declaration");
 
+    if (cur_token.is(Token::KwConst)) {
+        func->is_constant = true;
+        next_token();
+    }
+
     // Parsing the scope of the function.
     if (!func->has_modifier(Modifier::Native) || cur_token.is('{')) {
         if (func->has_modifier(Modifier::Native)) {
@@ -876,10 +881,8 @@ acorn::IfStmt* acorn::Parser::parse_if() {
         next_token(); // Consuming else token.
         if (cur_token.is(Token::KwIf)) {
             // We do not want the user to use 'else if'.
-            SourceLoc error_loc = {
-                .ptr = prev_token.loc.ptr,
-                .length = static_cast<uint16_t>((cur_token.loc.ptr + cur_token.loc.length) - prev_token.loc.ptr)
-            };
+            SourceLoc error_loc = SourceLoc::from_ptrs(prev_token.loc.ptr,
+                                                       cur_token.loc.ptr + cur_token.loc.length);
             error(error_loc, "Must use 'elif' for else if statements")
                 .end_error(ErrCode::ParseMustUseElif);
         }
@@ -1293,10 +1296,9 @@ acorn::Type* acorn::Parser::parse_type() {
     type = parse_optional_function_type(type);
 
     if (type->is(context.const_void_type)) {
-        SourceLoc error_loc = {
-            .ptr = first_token.loc.ptr,
-            .length = static_cast<uint16_t>(prev_token.loc.ptr + prev_token.loc.length - first_token.loc.ptr)
-        };
+        SourceLoc error_loc = SourceLoc::from_ptrs(first_token.loc.ptr,
+                                                   prev_token.loc.ptr + prev_token.loc.length);
+        
         error(error_loc, "'const void' is not a valid type")
             .end_error(ErrCode::ParseConstVoidNotType);
         return nullptr;
@@ -2054,10 +2056,8 @@ acorn::Expr* acorn::Parser::parse_term() {
             SourceLoc start_loc = ident_token.loc;
             SourceLoc end_loc   = prev_token.loc;
 
-            SourceLoc type_location = SourceLoc{
-                .ptr = start_loc.ptr,
-                .length = static_cast<uint16_t>(end_loc.ptr + end_loc.length - start_loc.ptr)
-            };
+            SourceLoc type_location = SourceLoc::from_ptrs(start_loc.ptr,
+                                                           end_loc.ptr + end_loc.length);
             type_expr->loc = type_location;
             return type_expr;
         };
@@ -2218,10 +2218,8 @@ acorn::Expr* acorn::Parser::parse_term() {
         SourceLoc start_loc = start_token.loc;
         SourceLoc end_loc   = prev_token.loc;
 
-        SourceLoc type_location = SourceLoc{
-            .ptr = start_loc.ptr,
-            .length = static_cast<uint16_t>(end_loc.ptr + end_loc.length - start_loc.ptr)
-        };
+        SourceLoc type_location = SourceLoc::from_ptrs(start_loc.ptr,
+                                                       end_loc.ptr + end_loc.length);
         type_expr->loc = type_location;
         return type_expr;
     }

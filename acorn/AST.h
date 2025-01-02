@@ -203,6 +203,7 @@ namespace acorn {
         bool is_move_constructor     = false;
         bool has_implicit_return_ptr = false;
         bool uses_native_varargs     = false;
+        bool is_constant             = false;
         Var* aggr_ret_var = nullptr;
 
         Var* find_parameter(Identifier name) const;
