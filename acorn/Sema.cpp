@@ -2876,14 +2876,18 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
     
     ErrorSpellChecker spell_checker(context.should_show_spell_checking());
 
+    bool search_relative = search_nspace == nspace;
+    bool search_nested = true;
+
     if (ref->relative_enforcement != IdentRef::RelativeEnforcement::None) {
         if (ref->relative_enforcement == IdentRef::RelativeEnforcement::File) {
-            search_nspace = file;
-        } else {
-            // TODO: Fix this. We probably do not want to modify all the code below
-            // because that would just make shit slower so we should probably just
-            // do specific searching here instead.
+            // search file first BUT NOT nested scopes then search module.
+            search_nested = false;
             search_nspace = &file->get_module();
+        } else {
+            // search explicitly in module.
+            search_nspace = &file->get_module();
+            search_relative = false;
         }
     }
 
@@ -2908,11 +2912,9 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         return;
     }
 
-    bool same_nspace = search_nspace == nspace;
-
     auto find_function = [=, this, &spell_checker]() finline {
-        if (same_nspace) {
-            if (cur_struct) {
+        if (search_relative) {
+            if (cur_struct && search_nested) {
                 if (auto* funcs = cur_struct->nspace->find_functions(ref->ident)) {
                     ref->set_funcs_ref(funcs);
                     return;
@@ -2949,8 +2951,8 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
     };
 
     auto find_variable = [=, this, &spell_checker]() finline {
-        if (same_nspace) {
-            if (cur_scope) {
+        if (search_relative && search_nested) {
+            if (cur_scope && search_nested) {
                 if (auto* var = cur_scope->find_variable(ref->ident)) {
                     ref->set_var_ref(var);
                     return;
@@ -2960,7 +2962,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
                 }
             }
 
-            if (cur_struct) {
+            if (cur_struct && search_nested) {
                 if (auto* var = cur_struct->nspace->find_variable(ref->ident)) {
                     ref->set_var_ref(var);
                     return;
@@ -3015,7 +3017,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
     }
 
     // If still not found let us try and search for an imported module.
-    if (!ref->found_ref() && same_nspace) {
+    if (!ref->found_ref() && search_relative) {
         if (auto importn = file->find_import(ref->ident)) {
             if (importn->is_imported_namespace()) {
                 if (importn->is_static) {

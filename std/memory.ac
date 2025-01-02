@@ -45,6 +45,23 @@ void* malloc(int size) {
 prv native("malloc") void* _malloc(isize size);
 
 /*
+ * Compares two blocks of memory `mem1` and `mem2`.
+ *
+ * If they match returns 0.
+ * 
+ * If the first non-equivalent character in `mem1` is larger than
+ * the character in `mem2` returns +1.
+ *
+ * If the first non-equivalent character in `mem2` is larger than
+ * the character in `mem1` returns -1.
+ */
+int memcmp(const void* mem1, const void* mem2, int n) {
+    return as(int) _memcmp(mem1, mem2, as(isize) n);
+}
+
+prv native("memcmp") int32 _memcmp(const void* str1, const void* str2, isize n);
+
+/*
  * Given a pointer to memory on the heap this function frees up the
  * memory. Only pointers allocated with malloc should be passed
  * as an argument to this function.

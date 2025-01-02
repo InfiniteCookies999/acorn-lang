@@ -184,7 +184,7 @@ struct String {
         
         loop head + sub_length - 1 < end {
             int remaining = as(int) (end - head);
-            int index = find_first_of(head, remaining, sub_str, sub_length);
+            int index = find_substring(head, remaining, sub_str, sub_length);
             if index == -1  break; // No more remaining substrings to replace.
 
             // Have to add the offset of the head since we only search for indexes
@@ -290,6 +290,126 @@ struct String {
         return replace(s.buffer, s.length, "", 0);
     }
 
+    /*
+     * Finds the first occurrence of `sub` in this String and
+     * returns the index into this String.
+     *
+     * If `sub` is empty returns 0.
+     */
+    int find(const char* sub) const {
+        return \find_substring(this.buffer, this.length, sub, strlen(sub));
+    }
+
+    /*
+     * Finds the first occurrence of `sub` in this String and
+     * returns the index into this String.
+     *
+     * If `sub` is empty returns 0.
+     */
+    int find(const String^ sub) const {
+        return \find_substring(this.buffer, this.length, sub.buffer, sub.length);
+    }
+
+    /*
+     * Finds the first occurrence of `c` in this String and
+     * returns the index into this String.
+     */
+    int find(char c) const {
+        return \find_character(this.buffer, this.length, c);
+    }
+
+    /*
+     * Finds the last occurrence of `sub` in this String and
+     * returns the index into this String.
+     *
+     * If `sub` is empty returns this.length - 1.
+     */
+    int find_last(const char* sub) const {
+        return \find_last_substring(this.buffer, this.length, sub, strlen(sub));
+    }
+
+    /*
+     * Finds the last occurrence of `sub` in this String and
+     * returns the index into this String.
+     *
+     * If `sub` is empty returns this.length - 1.
+     */
+    int find_last(const String^ sub) const {
+        return \find_last_substring(this.buffer, this.length, sub.buffer, sub.length);
+    }
+
+    /*
+     * Finds the last occurrence of `c` in this String and
+     * returns the index into this String.
+     */
+    int find_last(char c) const {
+        return \find_last_character(this.buffer, this.length, c);
+    }
+
+    /*
+     * Converts all the characters in the String to lowercase.
+     */
+    String^ tolower() {
+        loop int i : 0..<length {
+            buffer[i] = \tolower(buffer[i]);
+        }
+        return this;
+    }
+
+    /*
+     * Converts all the characters in the String to uppercase.
+     */
+    String^ toupper() {
+        loop int i : 0..<length {
+            buffer[i] = \toupper(buffer[i]);
+        }
+        return this;
+    }
+
+    /*
+     * Returns true if this String starts with `sub` string.
+     */
+    bool starts_with(const char* sub) const {
+        int sub_length = strlen(sub);
+        if sub_length > length {
+            return false;
+        }
+        return memcmp(this.buffer, sub, sub_length) == 0;
+    }
+
+    /*
+     * Returns true if this String starts with `sub` string.
+     */
+    bool starts_with(const String^ sub) const {
+        if sub.length > length {
+            return false;
+        }
+        return memcmp(this.buffer, sub.buffer, sub.length) == 0;
+    }
+
+    /*
+     * Returns true if this String ends with `sub` string.
+     */
+    bool ends_with(const char* sub) const {
+        int sub_length = strlen(sub);
+        if sub_length > length {
+            return false;
+        }
+        int offset = this.length - sub_length;
+        return memcmp(this.buffer + offset, sub, sub_length) == 0;
+    }
+
+    /*
+     * Returns true if this String ends with `sub` string.
+     */
+    bool ends_with(const String^ sub) const {
+        if sub.length > length {
+            return false;
+        }
+        int offset = this.length - sub.length;
+        return memcmp(this.buffer + offset, sub.buffer, sub.length) == 0;
+    }
+
     ~String() {
         if buffer != &DEFAULT_CHAR { // Make sure it is not just referencing the global memory.
             free(buffer);
@@ -363,12 +483,15 @@ String to_string(char c) {
     return String{ &c, 1 };
 }
 
-int find_first_of(const char* s, int s_length, const char* sub, int sub_length) {
+int find_substring(const char* s, int s_length, const char* sub, int sub_length) {
     if s_length == 0 {
-        return -1;
+        return 0;
     }
     if sub_length == 1 {
-        return find_first_of(s, s_length, *sub);
+        return find_character(s, s_length, *sub);
+    }
+    if s_length < sub_length {
+        return -1;
     }
 
     auto head = s;
@@ -377,16 +500,7 @@ int find_first_of(const char* s, int s_length, const char* sub, int sub_length) 
     loop head + sub_length - 1 < end {
         if *head == *sub {
             // Possible start of substring.
-            auto tail = head + 1;
-            bool matches = true;
-            loop int i : 1..<sub_length {
-                if *tail != *(sub + i) {
-                    matches = false;
-                    break;
-                }
-                ++tail;
-            }
-            if matches {
+            if memcmp(head, sub, sub_length) == 0 {
                 return as(int) (head - s);
             }
         }
@@ -397,8 +511,46 @@ int find_first_of(const char* s, int s_length, const char* sub, int sub_length) 
     return -1;
 }
 
-int find_first_of(const char* s, int s_length, char c) {
+int find_character(const char* s, int s_length, char c) {
     loop int i : 0..<s_length {
+        if s[i] == c {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int find_last_substring(const char* s, int s_length, const char* sub, int sub_length) {
+    if s_length == 0 {
+        return s_length - 1;
+    }
+    if sub_length == 1 {
+        return find_last_character(s, s_length, *sub);
+    }
+    if sub_length > s_length {
+        return -1;
+    }
+
+    // We go back sub_length because we know any comparisons less than
+    // sub_length are are too short.
+    auto head  = s + s_length - sub_length;
+    auto start = s;
+
+    loop head >= start {
+        if *head == *sub {
+            // Possible start of substring.
+            if memcmp(head, sub, sub_length) == 0 {
+                return as(int) (head - s);
+            }
+        }
+        --head;
+    }
+
+    return -1;
+}
+
+int find_last_character(const char* s, int s_length, char c) {
+    loop int i = s_length - 1; i >= 0; --i {
         if s[i] == c {
             return i;
         }
