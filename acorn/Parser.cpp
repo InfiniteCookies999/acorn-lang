@@ -2211,8 +2211,18 @@ acorn::Expr* acorn::Parser::parse_term() {
         return move_obj;
     }
     case TypeTokens: {
+        Token start_token = cur_token;
         TypeExpr* type_expr = new_node<TypeExpr>(cur_token);
         type_expr->expr_type = parse_type();
+
+        SourceLoc start_loc = start_token.loc;
+        SourceLoc end_loc   = prev_token.loc;
+
+        SourceLoc type_location = SourceLoc{
+            .ptr = start_loc.ptr,
+            .length = static_cast<uint16_t>(end_loc.ptr + end_loc.length - start_loc.ptr)
+        };
+        type_expr->loc = type_location;
         return type_expr;
     }
     default:
