@@ -666,7 +666,6 @@ acorn::Enum* acorn::Parser::parse_enum(uint32_t modifiers) {
 
     expect('{');
 
-    size_t index = 0;
     bool more_values = true;
     do {
 
@@ -678,7 +677,7 @@ acorn::Enum* acorn::Parser::parse_enum(uint32_t modifiers) {
             value_assignment = parse_expr();
         }
 
-        enumn->values.emplace_back(index, value_name, value_name_token.loc, value_assignment);
+        enumn->values.emplace_back(0, value_name, value_name_token.loc, value_assignment);
 
         more_values = cur_token.is(',');
         if (more_values) {
@@ -687,7 +686,6 @@ acorn::Enum* acorn::Parser::parse_enum(uint32_t modifiers) {
                 more_values = false;
             }
         }
-        ++index;
     } while (more_values);
 
     expect('}', "for enum");

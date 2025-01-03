@@ -1769,6 +1769,12 @@ static void enums_tests() {
     
         expect(result, std::identity()).to_be("ABCD");
     });
+    test("Enums int value auto-increments index", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("ABCDEF");
+    });
 }
 
 void test_codegen() {

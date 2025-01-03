@@ -1423,7 +1423,18 @@ void acorn::Sema::check_enum(Enum* enumn) {
     // TODO: check to make sure the explicit values type is a foldable type?
     bool has_explicit_values_type = values_type != nullptr;
     
+    if (has_explicit_values_type) {
+        if (is_incomplete_type(values_type)) {
+            error(enumn, "Value type '%s' is an incomplete type", values_type)
+                .end_error(ErrCode::SemaEnumValuesTypeIncomplete);
+            return;
+        }
+    }
+
     size_t count = 0;
+    size_t index_counter = 0;
+    bool has_non_assigning = false;
+    bool has_conflicting_values_type = false;
     for (auto& value : enumn->values) {
 
         for (size_t i = 0; i < count; i++) {
@@ -1438,14 +1449,23 @@ void acorn::Sema::check_enum(Enum* enumn) {
             check_node(value.assignment);
         
             if (value.assignment->type) {
+                bool assignment_is_integer = value.assignment->type->is_integer();
+
                 if (!value.assignment->is_foldable) {
                     error(expand(value.assignment), "Values of enum expected to be determined at compile time")
                         .end_error(ErrCode::SemaEnumValuesNotFoldable);
-                } else if (value.assignment->type->is_integer() && count == 0) {
+                } else if (value.assignment->type->is_integer()) {
                     if (auto ll_const = gen_constant(value.assignment)) {
                         auto ll_integer = llvm::cast<llvm::ConstantInt>(ll_const);
-                        defualt_index = ll_integer->getZExtValue();
+                        value.index = ll_integer->getZExtValue();
+                        index_counter = value.index;
+
+                        if (count == 0) {
+                            defualt_index = ll_integer->getZExtValue();
+                        }
                     }
+                } else {
+                    value.index = index_counter;
                 }
                 
                 if (values_type) {
@@ -1455,6 +1475,7 @@ void acorn::Sema::check_enum(Enum* enumn) {
                                   values_type, value.assignment->type)
                                 .end_error(ErrCode::SemaEnumValueWrongType);
                         } else {
+                            has_conflicting_values_type = true;
                             error(expand(value.assignment), "Incompatible types for enum '%s'. First found '%s' but now '%s'",
                                   enumn->name, values_type, value.assignment->type)
                             .end_error(ErrCode::SemaIncompatibleEnumValueTypes);
@@ -1464,9 +1485,27 @@ void acorn::Sema::check_enum(Enum* enumn) {
                     values_type = value.assignment->type;
                 }
             }
+        } else {
+            has_non_assigning = true;
+            
+            // No assignment so set it to be equal to one past the last value.
+            value.index = index_counter;
         }
 
+        ++index_counter;
         ++count;
+    }
+
+    if (has_non_assigning && !has_conflicting_values_type &&
+        values_type && !values_type->is_integer()) {
+        // Must always assign to all enum slots if the 
+        for (auto& value : enumn->values) {
+            if (!value.assignment) {
+                error(value.name_loc, "Enum values require assignment when the value type of the enum is '%s'",
+                      values_type)
+                    .end_error(ErrCode::SemaEnumValueNoAssignment);
+            }
+        }
     }
 
     enumn->enum_type->set_default_index(defualt_index);

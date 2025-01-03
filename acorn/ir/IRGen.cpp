@@ -2878,11 +2878,7 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
         }
     } else if (dot->enum_value) {
         auto enum_type = static_cast<EnumType*>(dot->type);
-        if (enum_type->get_values_type()->is_integer()) {
-            return gen_rvalue(dot->enum_value->assignment);
-        } else {
-            return gen_enum_index(dot->enum_value->index, enum_type->get_index_type());
-        }
+        return gen_enum_index(dot->enum_value->index, enum_type->get_index_type());
     } else {
         return gen_ident_reference(dot);
     }
