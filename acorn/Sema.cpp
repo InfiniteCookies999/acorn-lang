@@ -176,7 +176,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_bracket_type(Type* type) {
         return nullptr;
     }
 
-    if (auto ll_length = gen_constant(expr, expr)) {
+    if (auto ll_length = gen_constant(expr)) {
         auto ll_int_length = llvm::cast<llvm::ConstantInt>(ll_length);
         uint32_t length = static_cast<uint32_t>(ll_int_length->getZExtValue());
 
@@ -281,7 +281,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
         // HACK
         //
         // Checking if the user possibly mistyped common mistakes that happen when
-        // working with parsing.
+        // writing code to assume it was a parsing mistake instead.
 
         auto try_detect_multiply_parse_error = [this](const char* end, SourceLoc error_loc) finline {
             if (*end == '*') {
@@ -325,10 +325,6 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
         auto found_struct = static_cast<Struct*>(found_composite);
 
         if (!ensure_struct_checked(unresolved_composite_type->get_error_location(), found_struct)) {
-            return nullptr;
-        }
-
-        if (found_struct->fields_have_errors) {
             return nullptr;
         }
 
@@ -1014,7 +1010,7 @@ bool acorn::Sema::check_comptime_cond(Expr* cond) {
         return false;
     }
 
-    auto ll_cond = llvm::cast<llvm::ConstantInt>(gen_constant(cond, cond));
+    auto ll_cond = llvm::cast<llvm::ConstantInt>(gen_constant(cond));
     if (!ll_cond) {
         return false;
     }
@@ -1446,7 +1442,7 @@ void acorn::Sema::check_enum(Enum* enumn) {
                     error(expand(value.assignment), "Values of enum expected to be determined at compile time")
                         .end_error(ErrCode::SemaEnumValuesNotFoldable);
                 } else if (value.assignment->type->is_integer() && count == 0) {
-                    if (auto ll_const = gen_constant(value.assignment, value.assignment)) {
+                    if (auto ll_const = gen_constant(value.assignment)) {
                         auto ll_integer = llvm::cast<llvm::ConstantInt>(ll_const);
                         defualt_index = ll_integer->getZExtValue();
                     }
@@ -1481,10 +1477,7 @@ void acorn::Sema::check_enum(Enum* enumn) {
         enumn->enum_type->set_index_type(context.int_type);
     }
 
-    if (!values_type) {
-        enumn->enum_type->set_values_type(context.int_type);
-    }
-
+    enumn->enum_type->set_values_type(!values_type ? context.int_type : values_type);
     enumn->is_being_checked = false;
 
 }
@@ -2121,7 +2114,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
                     prior_values.push_back({}); // Need to still add empty to keep indices correct.
                 
                 } else if (scase.cond->is_foldable) {
-                    auto ll_value = gen_constant(scase.cond, scase.cond);
+                    auto ll_value = gen_constant(scase.cond);
                     add_foldable_value(CmpNumber::get(ll_value, scase.cond->type), scase);
                 } else {
                     prior_values.push_back({}); // Need to still add empty to keep indices correct.
@@ -2175,10 +2168,6 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
     auto structn = static_cast<Struct*>(composite);
 
     if (!ensure_struct_checked(initializer->ref->loc, structn)) {
-        return;
-    }
-
-    if (structn->fields_have_errors) {
         return;
     }
 
@@ -2403,40 +2392,6 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     Expr* lhs = bin_op->lhs;
     Expr* rhs = bin_op->rhs;
 
-    auto error_cannot_apply = [this, bin_op, lhs, rhs](Expr* expr) finline {
-        auto op_str = token_kind_to_string(context, bin_op->op);
-        error(expand(expr), "Operator %s cannot apply to type '%s'.   ('%s' %s '%s')",
-                op_str, expr->type, lhs->type, op_str, rhs->type)
-            .end_error(ErrCode::SemaBinOpTypeCannotApply);
-    };
-
-    auto error_mismatched = [this, bin_op, lhs, rhs]() finline {
-        error(expand(bin_op), "Invalid operation. Mismatched types ('%s' %s '%s')",
-              lhs->type, token_kind_to_string(context, bin_op->op), rhs->type)
-              .end_error(ErrCode::SemaBinOpTypeMismatch);
-    };
-
-    auto get_integer_type = [=, this](bool enforce_lhs, Type* lhs_type, Type* rhs_type) finline -> Type* {
-        if (rhs_type->is_ignore_const(lhs_type)) {
-            return lhs_type->remove_all_const();
-        }
-
-        // Allow numeric operations on integer types when one of them is
-        // an integer literal but without an explicit type.
-        if (lhs_type->is_integer() && rhs_type->is_integer()) {
-            if (rhs->is(NodeKind::Number) &&
-                (rhs_type->is(context.int_type) || rhs_type->is(context.char_type))) {
-                return lhs_type->remove_all_const();
-            }
-            if (!enforce_lhs && lhs->is(NodeKind::Number) &&
-                (lhs_type->is(context.int_type) || lhs_type->is(context.char_type))) {
-                return rhs_type->remove_all_const();
-            }
-        }
-
-        return nullptr;
-    };
-
     auto get_number_type = [=](bool enforce_lhs, Type* lhs_type, Type* rhs_type) finline -> Type* {
         // TODO: If one of the types is a float and the other an integer 
         //       we may want the bitwidth to be less than or equal to the
@@ -2461,7 +2416,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             }
             return nullptr;
         }
-        return get_integer_type(enforce_lhs, lhs_type, rhs_type);
+        return get_integer_type_for_binary_op(enforce_lhs, bin_op, lhs_type, rhs_type);
     };
 
     //lhs, rhs, error_cannot_apply, error_mismatched, valid_number_compare
@@ -2477,10 +2432,10 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         if (lhs_type->is_pointer() || lhs_type->is_array()) {
             // Pointer arithmetic
             if (bin_op->op == '+' && !rhs_type->is_integer()) {
-                error_mismatched();
+                report_binary_op_mistmatch_types(bin_op);
                 return nullptr;
             } else if (!(rhs_type->is_integer() || rhs_type->is(lhs_type))) {
-                error_mismatched();
+                report_binary_op_mistmatch_types(bin_op);
                 return nullptr;
             }
 
@@ -2495,11 +2450,11 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         } else if (!enforce_lhs && rhs_type->is_pointer() || rhs_type->is_array()) {
             // Pointer arithmetic
             if (bin_op->op == '+' && !lhs_type->is_integer()) {
-                error_mismatched();
+                report_binary_op_mistmatch_types(bin_op);
                 return nullptr;
             } else if (bin_op->op == '-') {
                 // ptr - ptr   case would have already been handled.
-                error_mismatched();
+                report_binary_op_mistmatch_types(bin_op);
                 return nullptr;
             }
 
@@ -2511,28 +2466,28 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         }
 
         if (!lhs_type->is_number()) {
-            error_cannot_apply(lhs);
+            report_binary_op_cannot_apply(bin_op, lhs);
             return nullptr;
         }
         if (!rhs_type->is_number()) {
-            error_cannot_apply(rhs);
+            report_binary_op_cannot_apply(bin_op, rhs);
             return nullptr;
         }
         if (Type* result_type = get_number_type(enforce_lhs, lhs_type, rhs_type)) {
             return result_type;
         }
 
-        error_mismatched();
+        report_binary_op_mistmatch_types(bin_op);
         return nullptr;
     };
 
     auto get_div_mod_type = [=, this](bool enforce_lhs, Type* lhs_type, Type* rhs_type) finline -> Type* {
         if (!lhs_type->is_number()) {
-            error_cannot_apply(lhs);
+            report_binary_op_cannot_apply(bin_op, lhs);
             return nullptr;
         }   
         if (!rhs_type->is_number()) {
-            error_cannot_apply(rhs);
+            report_binary_op_cannot_apply(bin_op, rhs);
             return nullptr;
         }
             
@@ -2542,41 +2497,42 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             return result_type;
         }
         
-        error_mismatched();
+        report_binary_op_mistmatch_types(bin_op);
         return nullptr;
     };
 
     auto get_logical_bitwise_type = [=, this](bool enforce_lhs, Type* lhs_type, Type* rhs_type) finline -> Type* {
+
         if (!(lhs_type->is_integer() || lhs_type->is_bool())) {
-            error_cannot_apply(lhs);
+            report_binary_op_cannot_apply(bin_op, lhs);
             return nullptr;
         }
         if (!(rhs_type->is_integer() || rhs_type->is_bool())) {
-            error_cannot_apply(rhs);
+            report_binary_op_cannot_apply(bin_op, rhs);
             return nullptr;
         }
-        if (Type* result_type = get_integer_type(enforce_lhs, lhs_type, rhs_type)) {
+        if (Type* result_type = get_integer_type_for_binary_op(enforce_lhs, bin_op, lhs_type, rhs_type)) {
             return result_type;
         }
 
-        error_mismatched();
+        report_binary_op_mistmatch_types(bin_op);
         return nullptr;
     };
 
     auto get_shifts_type = [=, this](bool enforce_lhs, Type* lhs_type, Type* rhs_type) finline -> Type* {
         if (!lhs_type->is_integer()) {
-            error_cannot_apply(lhs);
+            report_binary_op_cannot_apply(bin_op, lhs);
             return nullptr;
         }
         if (!rhs_type->is_integer()) {
-            error_cannot_apply(rhs);
+            report_binary_op_cannot_apply(bin_op, rhs);
             return nullptr;
         }
-        if (Type* result_type = get_integer_type(enforce_lhs, lhs_type, rhs_type)) {
+        if (Type* result_type = get_integer_type_for_binary_op(enforce_lhs, bin_op, lhs_type, rhs_type)) {
             return result_type;
         }
         
-        error_mismatched();
+        report_binary_op_mistmatch_types(bin_op);
         return nullptr;
     };
 
@@ -2594,44 +2550,27 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         bin_op->is_foldable = false;
     }
 
-    Type* lhs_type = lhs->type;
-    Type* rhs_type = rhs->type;
-
-    EnumType* used_enum_type = nullptr;
+    EnumType* lhs_enum_type = nullptr, *rhs_enum_type = nullptr;
     if (lhs->type->is_enum()) {
         auto enum_type = static_cast<EnumType*>(lhs->type);
-        used_enum_type = enum_type;
-        lhs_type = enum_type->get_values_type();
+        lhs_enum_type = enum_type;
     } else if (auto enum_type = lhs->type->get_container_enum_type()) {
-        used_enum_type = enum_type;
-        lhs_type = enum_type->get_values_type();
+        lhs_enum_type = enum_type;
     }
     if (rhs->type->is_enum()) {
         auto enum_type = static_cast<EnumType*>(rhs->type);
-        used_enum_type = enum_type;
-        rhs_type = enum_type->get_values_type();
+        rhs_enum_type = enum_type;
     } else if (auto enum_type = rhs->type->get_container_enum_type()) {
-        used_enum_type = enum_type;
-        rhs_type = enum_type->get_values_type();
+        rhs_enum_type = enum_type;
     }
 
-    if (lhs->type->is_enum() || rhs->type->is_enum()) {
-        auto lhs_val_type = lhs->type;
-        auto rhs_val_type = rhs->type;
-
-        EnumType* to_enum_type = nullptr;
-        if (lhs_val_type->is_enum()) {
-            auto enum_type = static_cast<EnumType*>(lhs_val_type);
-            lhs_val_type = enum_type->get_values_type();
-            to_enum_type = enum_type;
-        }
-        if (rhs_val_type->is_enum()) {
-            auto enum_type = static_cast<EnumType*>(rhs_val_type);
-            rhs_val_type = enum_type->get_values_type();
-            to_enum_type = enum_type;
-        }
-
+    if (lhs_enum_type || rhs_enum_type) {
+        check_binary_op_for_enums(bin_op, lhs_enum_type, rhs_enum_type);
+        return;
     }
+
+    Type* lhs_type = lhs->type;
+    Type* rhs_type = rhs->type;
 
     switch (bin_op->op) {
     case '=':
@@ -2694,15 +2633,15 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         }
         case Token::TildeEq: {
             if (!lhs_type->is_integer()) {
-                error_cannot_apply(lhs);
+                report_binary_op_cannot_apply(bin_op, lhs);
                 return;
             }
             if (!rhs_type->is_integer()) {
-                error_cannot_apply(rhs);
+                report_binary_op_cannot_apply(bin_op, rhs);
                 return;
             }
-            if (!get_integer_type(true, lhs_type, rhs_type)) {
-                error_mismatched();
+            if (!get_integer_type_for_binary_op(true, bin_op, lhs_type, rhs_type)) {
+                report_binary_op_mistmatch_types(bin_op);
                 return;
             }
             break;
@@ -2762,23 +2701,23 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     case Token::GtEq: case Token::LtEq:
     case Token::EqEq: case Token::ExEq: {
         if (!lhs_type->is_comparable()) {
-            error_cannot_apply(lhs);
+            report_binary_op_cannot_apply(bin_op, lhs);
             return;
         }
         if (!rhs_type->is_comparable()) {
-            error_cannot_apply(rhs);
+            report_binary_op_cannot_apply(bin_op, rhs);
             return;
         }
 
         // This is a hack, get_integer_type was not meant to work with pointers
         // but since it's first check is if the types are equal ignoring const
         // it can still work with pointers.
-        auto result_type = get_integer_type(false, lhs_type, rhs_type);
+        auto result_type = get_integer_type_for_binary_op(false, bin_op, lhs_type, rhs_type);
         if (!(result_type ||
              (rhs_type->is_pointer() && lhs_type->get_kind() == TypeKind::Null) ||
              (lhs_type->is_pointer() && rhs_type->get_kind() == TypeKind::Null)
               )) {
-            error_mismatched();
+            report_binary_op_mistmatch_types(bin_op);
             return;
         } else if (result_type) {
             create_cast(lhs, result_type);
@@ -2789,11 +2728,11 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     }
     case Token::AndAnd: case Token::OrOr: {
         if (!is_condition(lhs_type)) {
-            error_cannot_apply(lhs);
+            report_binary_op_cannot_apply(bin_op, lhs);
             return;
         }
         if (!is_condition(rhs_type)) {
-            error_cannot_apply(rhs);
+            report_binary_op_cannot_apply(bin_op, rhs);
             return;
         }
         
@@ -2802,16 +2741,16 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     }
     case Token::RangeEq: case Token::RangeLt: {
         if (!lhs_type->is_integer()) {
-            error_cannot_apply(lhs);
+            report_binary_op_cannot_apply(bin_op, lhs);
             return;
         }
         if (!rhs_type->is_integer()) {
-            error_cannot_apply(rhs);
+            report_binary_op_cannot_apply(bin_op, rhs);
             return;
         }
         
         if (!lhs_type->is_ignore_const(rhs_type)) {
-            error_mismatched();
+            report_binary_op_mistmatch_types(bin_op);
             return;
         }
 
@@ -2822,20 +2761,174 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         acorn_fatal("check_binary_op(): Failed to implement case");
         break;
     }
+}
 
-    // If either operand is an enum type then create a container enum type to
-    // wrap the type.
-    if (used_enum_type) {
-        switch (bin_op->op) {
-        case '<': case '>':
-        case Token::GtEq: case Token::LtEq:
-        case Token::EqEq: case Token::ExEq:
-            break;
-        default:
-            bin_op->type = type_table.get_enum_container_type(used_enum_type);
-            break;
+void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_type, EnumType* rhs_enum_type) {
+    Type* lhs_type = bin_op->lhs->type;
+    Type* rhs_type = bin_op->rhs->type;
+
+    if (lhs_enum_type) {
+        lhs_type = lhs_enum_type->get_values_type();
+    }
+    if (rhs_enum_type) {
+        rhs_type = rhs_enum_type->get_values_type();
+    }
+
+    switch (bin_op->op) {
+    case '=': {
+
+        check_modifiable(bin_op->lhs);
+
+        // Make sure the destination is an enum type.
+        if (!lhs_enum_type || !rhs_enum_type) {
+            error(expand(bin_op->lhs), get_type_mismatch_error(bin_op->lhs->type, bin_op->rhs).c_str())
+                .end_error(ErrCode::SemaVariableTypeMismatch);
+        }
+
+        bin_op->type = type_table.get_enum_container_type(lhs_enum_type);
+        break;
+    }
+    case Token::AddEq:
+    case Token::SubEq:
+    case Token::MulEq:
+    case Token::DivEq:
+    case Token::ModEq:
+    case Token::AndEq:
+    case Token::OrEq:
+    case Token::CaretEq:
+    case Token::TildeEq:
+    case Token::LtLtEq:
+    case Token::GtGtEq: {
+        if (!lhs_type->is_integer()) {
+            report_binary_op_cannot_apply(bin_op, bin_op->lhs);
+            return;
+        }
+        if (!rhs_type->is_integer()) {
+            report_binary_op_cannot_apply(bin_op, bin_op->rhs);
+            return;
+        }
+
+        // Make sure the destination is an enum type.
+        if (!lhs_enum_type) {
+            error(expand(bin_op->lhs), get_type_mismatch_error(bin_op->lhs->type, bin_op->rhs).c_str())
+                .end_error(ErrCode::SemaVariableTypeMismatch);
+        }
+
+        check_modifiable(bin_op->lhs);
+        bin_op->type = type_table.get_enum_container_type(lhs_enum_type);
+
+        break;
+    }
+    case '+': case '-': case '*':
+    case '^': case '&': case '|':
+    case Token::LtLt: case Token::GtGt: {
+        if (!lhs_type->is_integer()) {
+            report_binary_op_cannot_apply(bin_op, bin_op->lhs);
+            return;
+        }
+        if (!rhs_type->is_integer()) {
+            report_binary_op_cannot_apply(bin_op, bin_op->rhs);
+            return;
+        }
+
+        bin_op->type = type_table.get_enum_container_type(lhs_enum_type);
+        break;
+    }
+    case '/': case '%': {
+        if (!lhs_type->is_integer()) {
+            report_binary_op_cannot_apply(bin_op, bin_op->lhs);
+            return;
+        }
+        if (!rhs_type->is_integer()) {
+            report_binary_op_cannot_apply(bin_op, bin_op->rhs);
+            return;
+        }
+        
+        check_division_by_zero(bin_op, bin_op->rhs);
+
+        bin_op->type = type_table.get_enum_container_type(lhs_enum_type);
+        break;
+    }
+    case '<': case '>':
+    case Token::GtEq: case Token::LtEq:
+    case Token::EqEq: case Token::ExEq: {
+        
+        bool lhs_is_enum = bin_op->lhs->type->is_enum(),
+             rhs_is_enum = bin_op->rhs->type->is_enum();
+        if (!lhs_is_enum) {
+            if (!lhs_type->is_integer()) {
+                report_binary_op_cannot_apply(bin_op, bin_op->lhs);
+                return;
+            }
+        }
+        if (!rhs_is_enum) {
+            if (!rhs_type->is_integer()) {
+                report_binary_op_cannot_apply(bin_op, bin_op->rhs);
+                return;
+            }
+        }
+
+        // Make sure they are either comparing the container types to each
+        // other or they are comparing the enum types
+        if (lhs_is_enum ^ rhs_is_enum) {
+            report_binary_op_mistmatch_types(bin_op);
+            return;
+        }
+
+        bin_op->type = context.bool_type;
+        break;
+    }
+    case Token::AndAnd: case Token::OrOr: {
+        report_binary_op_cannot_apply(bin_op, bin_op->lhs);
+        return;
+    }
+    case Token::RangeEq: case Token::RangeLt: {
+        // TODO: allow for enum ranges!
+        report_binary_op_cannot_apply(bin_op, bin_op->lhs);
+        break;
+    }
+    default:
+        acorn_fatal("checkcheck_binary_op_for_enums_binary_op(): Failed to implement case");
+        break;
+    }
+}
+
+void acorn::Sema::report_binary_op_cannot_apply(BinOp* bin_op, Expr* expr) {
+    auto op_str = token_kind_to_string(context, bin_op->op);
+    error(expand(expr), "Operator %s cannot apply to type '%s'.   ('%s' %s '%s')",
+            op_str, expr->type, bin_op->lhs->type, op_str, bin_op->rhs->type)
+        .end_error(ErrCode::SemaBinOpTypeCannotApply);
+}
+
+void acorn::Sema::report_binary_op_mistmatch_types(BinOp* bin_op) {
+    error(expand(bin_op), "Invalid operation. Mismatched types ('%s' %s '%s')",
+          bin_op->lhs->type, token_kind_to_string(context, bin_op->op), bin_op->rhs->type)
+        .end_error(ErrCode::SemaBinOpTypeMismatch);
+}
+
+acorn::Type* acorn::Sema::get_integer_type_for_binary_op(bool enforce_lhs,
+                                                         BinOp* bin_op,
+                                                         Type* lhs_type,
+                                                         Type* rhs_type) const {
+    if (rhs_type->is_ignore_const(lhs_type)) {
+        return lhs_type->remove_all_const();
+    }
+
+    // Allow numeric operations on integer types when one of them is
+    // an integer literal but without an explicit type.
+    
+    if (lhs_type->is_integer() && rhs_type->is_integer()) {
+        if (bin_op->rhs->is(NodeKind::Number) &&
+            (rhs_type->is(context.int_type) || rhs_type->is(context.char_type))) {
+            return lhs_type->remove_all_const();
+        }
+        if (!enforce_lhs && bin_op->lhs->is(NodeKind::Number) &&
+            (lhs_type->is(context.int_type) || lhs_type->is(context.char_type))) {
+            return rhs_type->remove_all_const();
         }
     }
+
+    return nullptr;
 }
 
 void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
@@ -3224,7 +3317,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
                 // It should be fine to take the address here since the array is no
                 // longer modified after parsing.
                 dot->enum_value = &value;
-                dot->is_foldable = false; // TODO: come back to!
+                dot->is_foldable = enumn->enum_type->get_values_type()->is_number();
             } else {
                 error(expand(dot), "Could not find value '%s' in enum '%s'",
                       dot->ident, enumn->name)
@@ -4139,7 +4232,7 @@ bool acorn::Sema::ensure_struct_checked(SourceLoc error_loc, Struct* structn) {
         Sema sema(context, structn->file, structn->get_logger());
         sema.check_struct(structn);
     }
-    return true;
+    return !structn->fields_have_errors;
 }
 
 void acorn::Sema::ensure_enum_checked(SourceLoc error_loc, Enum* enumn) {
@@ -4610,10 +4703,10 @@ bool acorn::Sema::may_implicitly_convert_ptr(PointerType* ptr_type, Expr* from_e
 void acorn::Sema::check_division_by_zero(Node* error_node, Expr* expr) {
     if (!expr->is_foldable) return;
 
-    if (auto ll_constant = gen_constant(error_node, expr)) {
+    if (auto ll_constant = gen_constant(expr)) {
         if (!ll_constant->isZeroValue()) return;
         
-        error(expr, "Division by zero")
+        error(error_node, "Division by zero")
             .end_error(ErrCode::SemaDivisionByZero);
     }
 }
@@ -4742,11 +4835,11 @@ acorn::Decl* acorn::Sema::find_composite(Identifier name) {
     return nullptr;
 }
 
-llvm::Constant* acorn::Sema::gen_constant(Node* error_node, Expr* expr) {
+llvm::Constant* acorn::Sema::gen_constant(Expr* expr) {
     IRGenerator generator(context);
     auto ll_value = generator.gen_rvalue(expr);
     if (ll_value->getValueID() == llvm::Value::ValueTy::PoisonValueVal) {
-        error(expand(error_node), "Signed overflow")
+        error(expand(expr), "Signed overflow")
             .end_error(ErrCode::NumericOverflow);
         return nullptr;
     }

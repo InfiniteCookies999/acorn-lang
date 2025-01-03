@@ -2327,7 +2327,14 @@ acorn::Expr* acorn::Parser::parse_term() {
 acorn::Number* acorn::Parser::parse_int_literal() {
     static uint64_t void_table[256];
     const auto text = cur_token.text();
-    return parse_number_literal<10, void_table, false>(text.data(), text.end());
+    auto number = parse_number_literal<10, void_table, false>(text.data(), text.end());
+    char last_char = text.back();
+    if (last_char == 'f') {
+        number->type = context.float32_type;
+    } else if (last_char == 'd') {
+        number->type = context.float64_type;
+    }
+    return number;
 }
 
 static constinit uint64_t hex_table[256] = {
@@ -2648,12 +2655,6 @@ acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char
             if (is_signed) number->type = context.int64_type, check_range_fit((int64_t)0);
             else           number->type = context.uint64_type;
         }
-    } else if (*ptr == 'f') {
-        // TODO: should check if fits?
-        number->type = context.float32_type;
-    } else if (*ptr == 'd') {
-        // TODO: should check if fits?
-        number->type = context.float64_type;
     } else {
         auto fit_range = [this, number]<typename V>(V value) finline {
             if (fits_in_range<int32_t>(value)) {

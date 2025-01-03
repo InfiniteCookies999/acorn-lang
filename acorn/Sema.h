@@ -120,6 +120,13 @@ namespace acorn {
         //--------------------------------------        
 
         void check_binary_op(BinOp* bin_op);
+        void check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_type, EnumType* rhs_enum_type);
+        void report_binary_op_cannot_apply(BinOp* bin_op, Expr* expr);
+        void report_binary_op_mistmatch_types(BinOp* bin_op);
+        Type* get_integer_type_for_binary_op(bool enforce_lhs,
+                                             BinOp* bin_op, 
+                                             Type* lhs_type,
+                                             Type* rhs_type) const;
         void check_unary_op(UnaryOp* unary_op);
         template<bool is_spell_checking = false>
         void check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call);
@@ -199,7 +206,7 @@ namespace acorn {
 
         Decl* find_composite(Identifier name);
 
-        llvm::Constant* gen_constant(Node* error_node, Expr* expr);
+        llvm::Constant* gen_constant(Expr* expr);
         
         std::string get_type_mismatch_error(Type* to_type, Expr* expr) const;
         std::string get_type_mismatch_error(Type* to_type, Type* from_type) const;

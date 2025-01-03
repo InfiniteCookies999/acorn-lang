@@ -77,6 +77,7 @@ if (e1 > e) { e = e1; }           \
         case NodeKind::DotOperator: {
             DotOperator* dot = static_cast<DotOperator*>(node);
             e += dot->ident.to_string().size();
+            get(dot->site);
             break;
         }
         case NodeKind::SizeOf: {
@@ -168,17 +169,35 @@ acorn::PointSourceLoc acorn::expand(Node* node) {
     auto [s, e] = get_expansion(node);
     
     // Balacing parenethsis.
-    const char* sp = s;
+    //
+    // Balance forward.
     int paran_count = 0;
-    while ((sp < e || paran_count > 0) && *sp != '\0') {
-        if (*sp == '(') {
-            ++paran_count;
-        } else if (*sp == ')') {
-            --paran_count;
+    {
+        const char* sp = s;
+        while ((sp < e || paran_count > 0) && *sp != '\0') {
+            if (*sp == '(') {
+                ++paran_count;
+            } else if (*sp == ')') {
+                --paran_count;
+            }
+            ++sp;
+        }
+        e = sp;
+    }
+    // Balance backwards.
+    if (paran_count < 0) {
+        const char* sp = s;
+        while (paran_count < 0 && *sp != '\0') {
+            if (*sp == '(') {
+                ++paran_count;
+            } else if (*sp == ')') {
+                --paran_count;
+            }
+            --sp;
         }
         ++sp;
+        s = sp;
     }
-    e = sp;
 
     return PointSourceLoc{
         s,
