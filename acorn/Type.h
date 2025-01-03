@@ -32,8 +32,7 @@ namespace acorn {
     class EnumType;
 
     enum class TypeKind {
-        Invalid,
-
+        
         Int,
 
         Int8,
@@ -73,6 +72,7 @@ namespace acorn {
         Range,
         Auto,
         Expr, // A type that appears as part of an expression in code.
+        Invalid,
 
     };
     
@@ -99,7 +99,7 @@ namespace acorn {
         }
 
         bool is_integer() const {
-            return kind >= TypeKind::Int && kind <= TypeKind::Char32;
+            return kind <= TypeKind::Char32;
         }
 
         bool is_signed() const {

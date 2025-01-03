@@ -1,0 +1,86 @@
+#file(access=pub, namespace=reflect)
+
+/*
+ * Represents the kind of a Type in acorn.
+ */
+enum TypeId {
+    
+    Int,
+
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    ISize,
+
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    USize,
+
+    Char,
+    Char16,
+    Char32,
+
+    Float32,
+    Float64,
+
+    Void,
+    Bool,
+    FuncsRef,      // A reference to an identifier to overloaded functions.
+    NamespaceRef,  // A reference to an identifier to a namespace.
+    Pointer,
+    Array,
+    EmptyArray,
+    UnresolvedArrayType, // Length could not be resolved during parsing.
+    Null,
+    AssignDeterminedArray,
+    Function,
+    UnresolvedCompositeType,
+    Struct,
+    Enum,
+    EnumContainer,
+    Range,
+    Auto,
+    Expr, // A type that appears as part of an expression in code.
+    Invalid,
+
+}
+
+struct FieldTypeInfo {
+    const char* name;
+    const Type* type;
+    int         offset_in_bytes;
+}
+
+struct StructTypeInfo {
+    const char*          name;
+    int                  num_fields;
+    const FieldTypeInfo* fields;
+}
+
+// TODO: Add type information for enums
+struct Type {
+
+    TypeId id;
+    int    size_in_bytes;
+
+    // Element type of pointers and arrays.
+    const Type*           element_type;
+    // If the type is an array this is the length.
+    int                   array_length;
+    const StructTypeInfo* struct_info;
+
+    bool is_integer() const {
+        return id <= TypeId.USize;
+    }
+
+    bool is_number() const {
+        return is_integer() || id == TypeId.Float32 || id == TypeId.Float64;
+    }
+
+    bool is_signed() const {
+        return id <= TypeId.ISize;
+    }
+}

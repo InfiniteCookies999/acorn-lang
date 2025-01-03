@@ -30,6 +30,10 @@ namespace acorn {
                 .length = static_cast<uint16_t>(end_ptr - start_ptr)
             };
         }
+
+        const char* end() const {
+            return ptr + length;
+        }
     };
 
     // SourceLoc but with a pointer to the most relevant location

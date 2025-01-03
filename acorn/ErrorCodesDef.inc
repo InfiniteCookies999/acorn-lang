@@ -171,6 +171,7 @@ X(SemaEnumContainerTypeWrongValueType      , 20122)
 X(SemaCannotReassignToArrayWithConstMem    , 20123)
 X(SemaCallNonConstMemeberFuncFromConst     , 20124)
 X(SemaOnlyMemberFuncsMarkedConst           , 20125)
+X(SemaCannotReflectWhenStandAlone          , 20126)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

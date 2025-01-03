@@ -186,6 +186,8 @@ namespace acorn {
         // an identifier object if it is. It then consumes the token.
         Identifier expect_identifier(const char* for_msg = nullptr);
 
+        bool peek_if_expr_is_type(Token tok0, Token tok1);
+
         template<typename... TArgs>
         [[nodiscard]] Logger& error(SourceLoc error_loc, const char* fmt, TArgs&&... args) {
             return logger.begin_error(error_loc, fmt, std::forward<TArgs>(args)...);

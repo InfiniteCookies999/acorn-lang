@@ -15,6 +15,7 @@ namespace llvm {
     class LLVMContext;
     class Module;
     class BasicBlock;
+    class GlobalVariable;
 
     namespace Intrinsic {
         typedef unsigned ID;
@@ -95,8 +96,20 @@ namespace acorn {
         Identifier namespace_identifier;
         Identifier module_identifier;
         Identifier string_struct_identifier;
+        Identifier reflect_identifier;
+        Identifier type_id_enum_identifier;
+        Identifier type_struct_identifier;
+        Identifier struct_type_info_struct_identifier;
+        Identifier field_type_info_struct_identifier;
 
         ImportStmt* std_string_struct_import;
+        Enum*       std_type_id_enum;
+        Struct*     std_type_struct;
+        Struct*     std_struct_type_info_struct;
+        Struct*     std_field_type_info_struct;
+        Type*       const_std_type_ptr;
+
+        llvm::DenseMap<Type*, llvm::GlobalVariable*> ll_type_info_global_addresses;
 
         // LLVM generation data.
         struct LLVMIntrinsicDefinition {
@@ -235,6 +248,11 @@ namespace acorn {
             return universal_constants;
         }
 
+        ReflectKind get_reflect_kind(llvm::StringRef identifier) const {
+            auto itr = reflect_identifiers.find(identifier);
+            return itr->second;
+        }
+
     private:
         PageAllocator& allocator;
         
@@ -263,6 +281,7 @@ namespace acorn {
         llvm::DenseMap<tokkind, llvm::StringRef> inv_keyword_mapping; // Inverse of keyword_mapping.
         llvm::DenseMap<tokkind, int>             precedence;
         llvm::DenseMap<Identifier, Expr*>        universal_constants;
+        llvm::StringMap<ReflectKind>             reflect_identifiers;
 
     };
 }

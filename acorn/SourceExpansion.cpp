@@ -100,7 +100,21 @@ if (e1 > e) { e = e1; }           \
             get(ternary->rhs);
             break;
         }
-        case NodeKind::TypeExpr:
+        case NodeKind::TypeExpr: {
+            TypeExpr* type_expr = static_cast<TypeExpr*>(node);
+            if (type_expr->prev_node_kind == NodeKind::MemoryAccess) {
+                MemoryAccess* mem_access = static_cast<MemoryAccess*>(node);
+                get(mem_access->site);
+                get(mem_access->index);
+                // Include the closing ]
+                go_until(e, '[', ']');
+            }
+            break;
+        }
+        case NodeKind::Reflect: {
+            go_until(e, '(', ')');
+            break;
+        }
         case NodeKind::Number:
         case NodeKind::IdentRef:
         case NodeKind::String:

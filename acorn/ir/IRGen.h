@@ -166,6 +166,12 @@ namespace acorn {
                                  Node* lvalue      = nullptr,
                                  bool is_assign_op = false,
                                  bool try_move     = false);
+        llvm::Value* gen_reflect(Reflect* reflect);
+        llvm::GlobalVariable* gen_reflect_type_info(Type* type);
+        llvm::Constant* gen_reflect_type_of_type_info(Type* type);
+        llvm::Constant* gen_reflect_type_info_struct_info(StructType* struct_type);
+        llvm::Constant* gen_reflect_type_info_field_info(Var* field,
+                                                         uint64_t offset_in_bytes);
 
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
         llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue = nullptr);

@@ -687,24 +687,62 @@ void acorn::Compiler::parse_file(Module& modl,
 }
 
 void acorn::Compiler::find_std_lib_declarations() {
-    auto modl = context.find_module(Identifier::get("std"));
-    if (Decl* composite = modl->find_composite(context.string_struct_identifier)) {
-        if (composite->is(NodeKind::Struct)) {
-            auto structn = static_cast<Struct*>(composite);
-            
-            auto& struct_import = context.std_string_struct_import;
+    
+    auto find_composite_of_kind = [&, this]<typename T>
+        (T*, Namespace* nspace, Identifier decl_name) finline -> T* {
 
-            struct_import = allocator.alloc_type<ImportStmt>();
-            new (struct_import) ImportStmt();
-            struct_import->key.push_back({ context.string_struct_identifier });
-            struct_import->set_imported_composite(structn);
-
+        NodeKind decl_kind;
+        const char* decl_type_str;
+        if constexpr (std::is_same_v<Struct, T>) {
+            decl_kind = NodeKind::Struct;
+            decl_type_str = "struct";
+        } else if constexpr (std::is_same_v<Enum, T>) {
+            decl_kind = NodeKind::Enum;
+            decl_type_str = "enum";
         } else {
-            Logger::global_error(context, "Standard library 'String' struct not a struct")
+            acorn_fatal("unknown composite type");
+        }
+        
+        if (Decl* composite = nspace->find_composite(decl_name)) {
+            if (composite->is(decl_kind)) {
+                return static_cast<T*>(composite);
+            } else {
+                Logger::global_error(context, "Standard library '%s' struct not a %s",
+                                     decl_name, decl_type_str)
+                    .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+            }
+        } else {
+            Logger::global_error(context, "Failed to find standard library '%s' %s",
+                                 decl_name, decl_type_str)
                 .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
         }
-    } else {
-        Logger::global_error(context, "Failed to find standard library 'String' struct")
-            .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+        return nullptr;
+    };
+
+    auto& type_table = context.type_table;
+    auto modl = context.find_module(Identifier::get("std"));
+    if (Struct* structn = find_composite_of_kind((Struct*)0, modl, context.string_struct_identifier)) {
+        auto& struct_import = context.std_string_struct_import;
+
+        struct_import = allocator.alloc_type<ImportStmt>();
+        new (struct_import) ImportStmt();
+        struct_import->key.push_back({ context.string_struct_identifier });
+        struct_import->set_imported_composite(structn);
+    }
+
+    if (Namespace* nspace = modl->find_namespace(context.reflect_identifier)) {
+        if (Enum* enumn = find_composite_of_kind((Enum*)0, nspace, context.type_id_enum_identifier)) {
+            context.std_type_id_enum = enumn;
+        }
+        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.type_struct_identifier)) {
+            context.std_type_struct = structn;
+            context.const_std_type_ptr = type_table.get_ptr_type(type_table.get_const_type(structn->struct_type));
+        }
+        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.struct_type_info_struct_identifier)) {
+            context.std_struct_type_info_struct = structn;
+        }
+        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.field_type_info_struct_identifier)) {
+            context.std_field_type_info_struct = structn;
+        }
     }
 }

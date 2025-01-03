@@ -117,6 +117,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_sizeof(static_cast<SizeOf*>(node));
     case NodeKind::Ternary:
         return gen_ternary(static_cast<Ternary*>(node), nullptr);
+    case NodeKind::Reflect:
+        return gen_reflect(static_cast<Reflect*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
         return nullptr;

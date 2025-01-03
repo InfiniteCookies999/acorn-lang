@@ -275,8 +275,46 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
             }
         }
 
-        logger.begin_error(unresolved_composite_type->get_error_location(),
-                           "Could not find struct or enum type '%s'", name);
+        auto error_loc = unresolved_composite_type->get_error_location();
+        auto end = error_loc.end();
+
+        // HACK
+        //
+        // Checking if the user possibly mistyped common mistakes that happen when
+        // working with parsing.
+
+        auto try_detect_multiply_parse_error = [this](const char* end, SourceLoc error_loc) finline {
+            if (*end == '*') {
+                auto star_loc = end;
+                ++end;
+                while (std::isspace(*end))  ++end;
+                if (*end == ';' || *end == ']' || *end == ')') {
+                    // could be something like `int a = b *;` in which case we will tell the
+                    // user that it expected an expression instead.
+                    //logger.begin_error(error_loc, "");
+                    error_loc.ptr = star_loc;
+                    error_loc.length = 1;
+                    error(error_loc, "Expected an expression")
+                        .end_error(ErrCode::ParseExpectedExpression);
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        while (std::isspace(*end))  ++end;
+        if (try_detect_multiply_parse_error(end, error_loc)) {
+            return nullptr;
+        } else if (*end == '[') {
+            go_until(end, '[', ']');
+            while (std::isspace(*end))  ++end;
+            if (try_detect_multiply_parse_error(end, error_loc)) {
+                return nullptr;
+            }
+        }
+
+        logger.begin_error(error_loc, "Could not find struct or enum type '%s'", name);
         spell_checker.search(logger, name);
         logger.end_error(ErrCode::SemaCouldNotFindStructType);
         return nullptr;
@@ -952,6 +990,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_ternary(static_cast<Ternary*>(node));
     case NodeKind::TypeExpr:
         return check_type_expr(static_cast<TypeExpr*>(node));
+    case NodeKind::Reflect:
+        return check_reflect(static_cast<Reflect*>(node));
     default:
         acorn_fatal("check_node(): missing case");
     }
@@ -1375,6 +1415,9 @@ void acorn::Sema::check_struct(Struct* structn) {
 
 void acorn::Sema::check_enum(Enum* enumn) {
 
+    // -- Debug
+    // Logger::debug("Checking enum: %s", enumn->name);
+
     enumn->has_been_checked = true;
     enumn->is_being_checked = true;
 
@@ -1437,7 +1480,11 @@ void acorn::Sema::check_enum(Enum* enumn) {
     } else {
         enumn->enum_type->set_index_type(context.int_type);
     }
-    
+
+    if (!values_type) {
+        enumn->enum_type->set_values_type(context.int_type);
+    }
+
     enumn->is_being_checked = false;
 
 }
@@ -3089,6 +3136,14 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         break;
     }
     case IdentRef::CompositeKind: {
+        if (ref->composite_ref->is(NodeKind::Struct)) {
+            ensure_struct_checked(ref->loc, static_cast<Struct*>(ref->composite_ref));
+        } else if (ref->composite_ref->is(NodeKind::Enum)) {
+            ensure_enum_checked(ref->loc, static_cast<Enum*>(ref->composite_ref));
+        } else {
+            acorn_fatal("Unknown composite type");
+        }
+
         ref->type = context.expr_type;
         break;
     }
@@ -3165,9 +3220,6 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             });
             if (itr != enumn->values.end()) {
                 Enum::Value& value = *itr;
-                if (!value.assignment->type) {
-                    return;
-                }
                 dot->type = enumn->enum_type;
                 // It should be fine to take the address here since the array is no
                 // longer modified after parsing.
@@ -3941,22 +3993,21 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
     check_and_verify_type(mem_access->site);
     check_and_verify_type(mem_access->index);
 
-    if (mem_access->index->is(NodeKind::TypeExpr)) {
-        if (mem_access->site->type->is(context.expr_type)) {
+    if (mem_access->site->type->is(context.expr_type)) {
             
-            auto expr_type = get_type_of_type_expr(mem_access->site);
-            auto unresolved_type = UnresolvedBracketType::create(context.get_allocator(), expr_type, mem_access->index);
-            auto fixed_expr_type = fixup_unresolved_bracket_type(unresolved_type);
-            if (!fixed_expr_type) {
-                return;
-            }
-
-            mem_access->expr_type = fixed_expr_type;
-            mem_access->kind = NodeKind::TypeExpr;
-            mem_access->prev_node_kind = NodeKind::MemoryAccess;
-
+        auto expr_type = get_type_of_type_expr(mem_access->site);
+        auto unresolved_type = UnresolvedBracketType::create(context.get_allocator(), expr_type, mem_access->index);
+        auto fixed_expr_type = fixup_unresolved_bracket_type(unresolved_type);
+        if (!fixed_expr_type) {
             return;
         }
+
+        mem_access->type = context.expr_type;
+        mem_access->resolved_expr_type = fixed_expr_type;
+        mem_access->kind = NodeKind::TypeExpr;
+        mem_access->prev_node_kind = NodeKind::MemoryAccess;
+
+        return;
     }
 
     mem_access->is_foldable = false;
@@ -4022,8 +4073,39 @@ void acorn::Sema::check_type_expr(TypeExpr* type_expr) {
         check_memory_access(memory_access);
         return;
     }
+    if (Type* fixed_type = fixup_type(type_expr->expr_type)) {
+        type_expr->resolved_expr_type = fixed_type;
+        type_expr->type = context.expr_type;
+    }
+}
 
-    type_expr->type = context.expr_type;
+void acorn::Sema::check_reflect(Reflect* reflect) {
+    if (context.should_stand_alone()) {
+        error(reflect, "Cannot reflect when stand alone is enabled")
+            .end_error(ErrCode::SemaCannotReflectWhenStandAlone);
+        return;
+    }
+    
+    check_and_verify_type(reflect->expr);
+
+    switch (reflect->reflect_kind) {
+    case ReflectKind::TypeInfo: {
+        
+        if (reflect->expr->type == context.expr_type) {
+            reflect->type_info_type = get_type_of_type_expr(reflect->expr);
+        } else {
+            reflect->type_info_type = reflect->expr->type;
+        }
+
+        reflect->type = context.const_std_type_ptr;
+        // TODO: come back to we will need some way for accessing the fields to be considered foldable.
+        reflect->is_foldable = false;
+
+        break;
+    }
+    default:
+        acorn_fatal("Reflection kind not implemented");
+    }
 }
 
 void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) {
@@ -4633,8 +4715,8 @@ acorn::Type* acorn::Sema::get_type_of_type_expr(Expr* expr) {
             return structn->struct_type;
         }
     } else {
-        auto site_mem_accesss = static_cast<MemoryAccess*>(expr);
-        return site_mem_accesss->expr_type;
+        auto type_expr = static_cast<TypeExpr*>(expr);
+        return type_expr->resolved_expr_type;
     }
 }
 

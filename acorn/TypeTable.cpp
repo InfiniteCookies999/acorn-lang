@@ -64,7 +64,11 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
     }
     case TypeKind::Enum: {
         auto enum_type = static_cast<EnumType*>(type);
-        new_type = EnumType::create(allocator, enum_type->get_enum(), is_const);
+        auto new_enum_type = EnumType::create(allocator, enum_type->get_enum(), is_const);
+        new_enum_type->set_default_index(enum_type->get_default_index());
+        new_enum_type->set_values_type(enum_type->get_values_type());
+        new_enum_type->set_index_type(enum_type->get_index_type());
+        new_type = new_enum_type;
         break;
     }
     case TypeKind::Array: {

@@ -1566,7 +1566,15 @@ acorn::Expr* acorn::Parser::parse_binary_expr(Expr* lhs) {
             if (text[0] == '-' || text[0] == '+') {
                 auto [new_op, number_token] = split_number_from_sign(cur_token);
                 cur_token = new_op;
-                peeked_tokens[peeked_size++] = number_token;
+                
+                // Shift all elements up one since we split the current token.
+                for (size_t i = 0; i < peeked_size; i++) {
+                    peeked_tokens[i + 1] = peeked_tokens[i];
+                }
+
+                peeked_tokens[0] = number_token;
+                ++peeked_size;
+                
                 return new_op;
             }
         }
@@ -2022,16 +2030,53 @@ acorn::Expr* acorn::Parser::parse_dot_operator(Expr* site) {
 
 acorn::Expr* acorn::Parser::parse_memory_access(Expr* site) {
     
-    auto mem_access = new_node<MemoryAccess>(cur_token);
-    next_token(); // Consuming '[' token.
-    ++bracket_count;
+    llvm::SmallVector<Expr*, 8>     indexes;
+    llvm::SmallVector<SourceLoc, 8> bracket_locations;
 
-    mem_access->site = site;
-    mem_access->index = parse_expr();
+    while (cur_token.is('[')) {
+        bracket_locations.push_back(cur_token.loc);
+        next_token(); // Consuming '[' token.
+        ++bracket_count;
+        
+        indexes.push_back(parse_expr());
 
-    expect(']', "for memory access");
-    --bracket_count;
-    return mem_access;
+        expect(']');
+        --bracket_count;
+    }
+
+    if (site->is(NodeKind::IdentRef) &&
+        peek_if_expr_is_type(cur_token, peek_token(0))) {
+
+        auto ref = static_cast<IdentRef*>(site);
+
+        auto type = UnresolvedCompositeType::create(allocator, ref->ident, ref->loc, false);
+        type = construct_unresolved_bracket_type(type, indexes);
+        type = parse_optional_array_and_ptr_types(type);
+        type = parse_optional_function_type(type);
+
+        TypeExpr* type_expr = new_node<TypeExpr>(cur_token);
+        type_expr->expr_type = type;
+        
+        SourceLoc start_loc = ref->loc;
+        SourceLoc end_loc   = prev_token.loc;
+        
+        SourceLoc type_location = SourceLoc::from_ptrs(start_loc.ptr,
+                                                       end_loc.ptr + end_loc.length);
+        type_expr->loc = type_location;
+        return type_expr;
+    }
+
+    size_t count = 0;
+    for (Expr* index : indexes) {
+        auto mem_access = new_node<MemoryAccess>(bracket_locations[count]);
+        mem_access->site = site;
+        mem_access->index = index;
+        
+        site = mem_access;
+        ++count;
+    }
+
+    return site;
 }
 
 acorn::Expr* acorn::Parser::parse_term() {
@@ -2091,21 +2136,24 @@ acorn::Expr* acorn::Parser::parse_term() {
         };
 
         auto peek0 = peek_token(0);
-        if (peek0.is('*')) {
-            switch (peek_token(1).kind) {
-            case ')':
-            case '[': // This leads to less than ideal parsing and makes the assumption that there
-                      // cannot be multiplication by arrays.
-            case ']':
-            case ';':
-            case '*':
-            case '$':
-                return parse_as_type_expr();
-            default:
-                break;
-            }
-        } else if (peek0.is('$')) {
-            return parse_as_type_expr();
+        auto peek1 = peek_token(1);
+        if (peek_if_expr_is_type(peek0, peek1)) {
+            Token ident_token = cur_token;
+            next_token();
+            Type* type = construct_type_from_identifier(ident_token, false);
+            type = parse_optional_array_and_ptr_types(type);
+            type = parse_optional_function_type(type);
+
+            TypeExpr* type_expr = new_node<TypeExpr>(ident_token);
+            type_expr->expr_type = type;
+                
+            SourceLoc start_loc = ident_token.loc;
+            SourceLoc end_loc   = prev_token.loc;
+
+            SourceLoc type_location = SourceLoc::from_ptrs(start_loc.ptr,
+                                                           end_loc.ptr + end_loc.length);
+            type_expr->loc = type_location;
+            return type_expr;
         }
 
         IdentRef* ref = new_node<IdentRef>(cur_token);
@@ -2256,6 +2304,17 @@ acorn::Expr* acorn::Parser::parse_term() {
                                                        end_loc.ptr + end_loc.length);
         type_expr->loc = type_location;
         return type_expr;
+    }
+    case Token::KwCTReflect: {
+        Reflect* reflect = new_node<Reflect>(cur_token);
+        reflect->reflect_kind = context.get_reflect_kind(cur_token.text());
+        next_token();
+        ++paran_count;
+        expect('(');
+        reflect->expr = parse_expr();
+        expect(')');
+        --paran_count;
+        return reflect;
     }
     default:
         error("Expected an expression")
@@ -2795,6 +2854,26 @@ acorn::Identifier acorn::Parser::expect_identifier(const char* for_msg) {
         logger.end_error(ErrCode::ParseExpectIdent);
         return Identifier();
     }
+}
+
+bool acorn::Parser::peek_if_expr_is_type(Token tok0, Token tok1) {
+    if (tok0.is('*')) {
+        switch (tok1.kind) {
+        case ')':
+        case '[': // This leads to less than ideal parsing and makes the assumption that there
+                    // cannot be multiplication by arrays.
+        case ']':
+        case ';':
+        case '*':
+        case '$':
+            return true;
+        default:
+            break;
+        }
+    } else if (tok0.is('$')) {
+        return true;
+    }
+    return false;
 }
 
 acorn::Expr* acorn::Parser::new_binary_op(Token op_tok, Expr* lhs, Expr* rhs) {

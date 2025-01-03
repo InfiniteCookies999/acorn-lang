@@ -169,6 +169,7 @@ namespace acorn {
         void check_memory_access(MemoryAccess* mem_access);
         void check_ternary(Ternary* ternary);
         void check_type_expr(TypeExpr* type_expr);
+        void check_reflect(Reflect* reflect);
 
         void ensure_global_variable_checked(SourceLoc error_loc, Var* var);
         bool ensure_struct_checked(SourceLoc error_loc, Struct* structn);

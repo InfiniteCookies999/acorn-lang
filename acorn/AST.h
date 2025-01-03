@@ -78,6 +78,7 @@ namespace acorn {
         Ternary,
         MoveObj,
         TypeExpr,
+        Reflect,
         ExprEnd
 
     };
@@ -91,6 +92,10 @@ namespace acorn {
         const static uint32_t End       = 0x08;
 
         static const char* to_string(uint32_t modifier);
+    };
+
+    enum class ReflectKind {
+        TypeInfo
     };
 
     struct Node {
@@ -631,6 +636,7 @@ namespace acorn {
 
         NodeKind prev_node_kind = NodeKind::InvalidExpr;
         Type* expr_type;
+        Type* resolved_expr_type;
     };
 
     struct MemoryAccess : TypeExpr {
@@ -735,6 +741,15 @@ namespace acorn {
         }
 
         Expr* value;
+    };
+
+    struct Reflect : Expr {
+        Reflect() : Expr(NodeKind::Reflect) {
+        }
+
+        ReflectKind reflect_kind;
+        Expr* expr;
+        Type* type_info_type;
     };
 }
 
