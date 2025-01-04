@@ -2833,7 +2833,7 @@ bool acorn::Parser::expect(tokkind kind, const char* for_msg) {
         auto fixed_for_msg = for_msg ? std::string{ " " } + for_msg : "";
 
         logger.begin_error(prev_token.loc, "Expected%s '%s' token%s", closing_msg, str_kind, fixed_for_msg)
-              .add_arrow_msg(Logger::ArrowLoc::After, arrow_msg)
+              .add_arrow_msg(Logger::ArrowPosition::After, arrow_msg)
               .end_error(ErrCode::ParseExpect);
         return false;
     }

@@ -129,4 +129,9 @@ void acorn::write_obj_file(Context& context, const wchar_t* file_path,
     pass.run(ll_module);
     stream.flush();
 
+    if (stream.has_error()) {
+        Logger::global_error(context, "Stream failed to write object file: %s", stream.error().message())
+            .end_error(ErrCode::GlobalFailedToWriteObjFile);
+        return;
+    }
 }

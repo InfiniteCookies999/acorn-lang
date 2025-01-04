@@ -243,7 +243,7 @@ case c1:                                        \
         unsigned char unknown_char = static_cast<unsigned char>(*ptr);
         if (unknown_char >= 33 && unknown_char <= 126) { // Easily displayable.
             logger.begin_error(SourceLoc{ ptr, 1 }, "Invalid character: '%s'", std::string(1, unknown_char))
-                  .add_arrow_msg(Logger::ArrowLoc::At, "remove this character")
+                  .add_arrow_msg(Logger::ArrowPosition::At, "remove this character")
                   .end_error(ErrCode::LexInvalidChar);
         } else {
             error("Invalid character (utf-8): '%s'", unknown_char).end_error(ErrCode::LexInvalidChar);

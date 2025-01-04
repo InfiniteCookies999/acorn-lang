@@ -241,13 +241,14 @@ namespace acorn {
 
     class Logger : public AbstractLogger<Logger> {
     public:
-        enum class ArrowLoc {
+        enum class ArrowPosition {
             At,
-            After
+            After,
+            Alongside
         };
 
         // Data used for printing errors.
-        using InfoLines = llvm::SmallVector<std::string, 8>;
+        using InfoLines = llvm::SmallVector<std::pair<std::string, const char*>, 8>;
         struct ErrorInfo {
             InfoLines   lines;
             size_t      start_line_number;
@@ -354,8 +355,20 @@ namespace acorn {
 
         // Adds a message to point to the error to help the user determine what they
         // need to change in their code to fix things.
-        Logger& add_arrow_msg(ArrowLoc loc, std::string msg) {
-            arrow_msg = { .msg = msg, .loc = loc };
+        Logger& add_arrow_msg(ArrowPosition position, std::string msg) {
+            if (position == ArrowPosition::Alongside) {
+                acorn_fatal("Must call add_arrow_msg_alongside with ArrowLoc::Alongside");
+            }
+            arrow_msg = { .msg = msg, .position = position };
+            return *this;
+        }
+
+        Logger& add_arrow_msg_alongside(std::string msg, SourceLoc location) {
+            arrow_msg = {
+                .msg = msg,
+                .position = ArrowPosition::Alongside,
+                .location = location
+            };
             return *this;
         }
 
@@ -398,8 +411,9 @@ namespace acorn {
         std::function<void()> primary_print_cb;
         
         struct ArrowMsg {
-            std::string msg;
-            ArrowLoc    loc;
+            std::string   msg;
+            ArrowPosition position;
+            SourceLoc     location;
         } arrow_msg;
 
         // This is not the total number of accumulated errors. This

@@ -97,11 +97,11 @@ namespace acorn {
     extern bool disable_terminal_colors;
     void set_terminal_color(Stream stream, Color color);
 
-    std::string& trim_leading(std::string& s);
+    std::string trim_leading(const std::string& s);
 
-    std::string& trim_trailing(std::string& s);
+    std::string trim_trailing(const std::string& s);
 
-    std::string& trim(std::string& s);
+    std::string trim(const std::string& s);
 
     llvm::SmallVector<std::string> split_by_whitespace(const std::string& s);
 

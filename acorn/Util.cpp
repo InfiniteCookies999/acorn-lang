@@ -92,21 +92,21 @@ uint64_t acorn::next_pow2(uint64_t value) {
     return value + 1;
 }
 
-std::string& acorn::trim_leading(std::string& s) {
+std::string acorn::trim_leading(const std::string& s) {
     auto view = s | std::views::drop_while(isspace);
-    s.assign(view.begin(), view.end());
+    std::string result(view.begin(), view.end());
     return s;
 }
 
-std::string& acorn::trim_trailing(std::string& s) {
+std::string acorn::trim_trailing(const std::string& s) {
     auto view = s | std::views::reverse
                   | std::views::drop_while(isspace)
                   | std::views::reverse;
-    s.assign(view.begin(), view.end());
-    return s;
+    std::string result(view.begin(), view.end());
+    return result;
 }
 
-std::string& acorn::trim(std::string& s) {
+std::string acorn::trim(const std::string& s) {
     return trim_leading(trim_trailing(s));
 }
 

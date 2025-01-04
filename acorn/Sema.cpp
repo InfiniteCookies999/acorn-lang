@@ -283,7 +283,8 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
         // Checking if the user possibly mistyped common mistakes that happen when
         // writing code to assume it was a parsing mistake instead.
 
-        auto try_detect_multiply_parse_error = [this](const char* end, SourceLoc error_loc) finline {
+        auto try_detect_multiply_parse_error = [this, &spell_checker, name]
+            (const char* end, SourceLoc error_loc) finline {
             if (*end == '*') {
                 auto star_loc = end;
                 ++end;
@@ -291,11 +292,16 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
                 if (*end == ';' || *end == ']' || *end == ')') {
                     // could be something like `int a = b *;` in which case we will tell the
                     // user that it expected an expression instead.
-                    //logger.begin_error(error_loc, "");
-                    error_loc.ptr = star_loc;
-                    error_loc.length = 1;
-                    error(error_loc, "Expected an expression")
-                        .end_error(ErrCode::ParseExpectedExpression);
+                    
+                    logger.begin_error(error_loc, "Tried to interpret '%s' as a type but may be part of an incomplete expression",
+                                       name);
+                    SourceLoc arrow_loc = {
+                        .ptr = star_loc,
+                        .length = 1
+                    };
+                    logger.add_arrow_msg_alongside("expression here?", arrow_loc);
+                    spell_checker.search(logger, name);
+                    logger.end_error(ErrCode::ParseExpectedExpression);
                     return true;
                 }
             }
@@ -303,14 +309,15 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
             return false;
         };
 
-        while (std::isspace(*end))  ++end;
-        if (try_detect_multiply_parse_error(end, error_loc)) {
-            return nullptr;
-        } else if (*end == '[') {
-            go_until(end, '[', ']');
+        while (true) {
             while (std::isspace(*end))  ++end;
             if (try_detect_multiply_parse_error(end, error_loc)) {
                 return nullptr;
+            } else if (*end == '[') {
+                go_until(end, '[', ']');
+                if (try_detect_multiply_parse_error(end, error_loc)) {
+                    return nullptr;
+                }
             }
         }
 

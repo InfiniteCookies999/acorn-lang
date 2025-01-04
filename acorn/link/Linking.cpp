@@ -225,7 +225,7 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
         }
 
         auto version = std::string(buffer, length);
-        trim(version);
+        version = trim(version);
 
         std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
         auto wversion = converter.from_bytes(version);
