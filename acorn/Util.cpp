@@ -95,7 +95,7 @@ uint64_t acorn::next_pow2(uint64_t value) {
 std::string acorn::trim_leading(const std::string& s) {
     auto view = s | std::views::drop_while(isspace);
     std::string result(view.begin(), view.end());
-    return s;
+    return result;
 }
 
 std::string acorn::trim_trailing(const std::string& s) {
