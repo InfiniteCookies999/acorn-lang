@@ -634,6 +634,11 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
         }
     };
 
+    if (!var->should_default_initialize) {
+        ll_global->setInitializer(gen_zero(var->type));
+        return;
+    }
+
     if (!var->assignment) {
         if (var->type->is_struct()) {
             // Initialize as many fields as possible then post-pone the initialization
@@ -1976,7 +1981,7 @@ llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
 
     if (var->assignment) {
         gen_assignment(var->ll_address, var->type, var->assignment, var);
-    } else {
+    } else if (var->should_default_initialize) {
         gen_default_value(var->ll_address, var->type);
     }
 

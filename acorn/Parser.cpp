@@ -574,7 +574,13 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
     
     if (cur_token.is('=')) {
         next_token(); // Consume '=' token.
-        var->assignment = parse_expr();
+
+        if (cur_token.is(Token::SubSubSub)) {
+            next_token();
+            var->should_default_initialize = false;
+        } else {
+            var->assignment = parse_expr();
+        }
     }
 
     return var;

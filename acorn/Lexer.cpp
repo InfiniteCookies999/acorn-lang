@@ -161,6 +161,10 @@ case c1:                                        \
             return new_token(ptr - 2, 2, Token::SubEq);
         } else if (*ptr == '-') {
             ++ptr;
+            if (*ptr == '-') {
+                ++ptr;
+                return new_token(ptr - 3, 3, Token::SubSubSub);
+            }
             return new_token(ptr - 2, 2, Token::SubSub);
         } else if (is_digit(*ptr)) {
             return next_number(ptr - 1);

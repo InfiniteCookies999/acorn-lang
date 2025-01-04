@@ -251,10 +251,12 @@ namespace acorn {
         Type* parsed_type;
         Type* type;
 
-        Expr* assignment      = nullptr;
-        bool has_been_checked = false;
-        bool is_foldable      = false;
-        bool has_implicit_ptr = false;
+        Expr* assignment = nullptr;
+
+        bool has_been_checked          = false;
+        bool is_foldable               = false;
+        bool has_implicit_ptr          = false;
+        bool should_default_initialize = true;
 
         // If the variable is foldable then this contains the
         // generated value of the variable.

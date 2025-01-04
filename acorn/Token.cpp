@@ -42,6 +42,7 @@ std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
     case Token::PostAddAdd:           return "++";
     case Token::SubSub:
     case Token::PostSubSub:           return "--";
+    case Token::SubSubSub:            return "---";
     case Token::AndAnd:               return "&&";
     case Token::OrOr:                 return "||";
     case Token::RangeEq:              return "..=";

@@ -103,6 +103,7 @@ namespace acorn {
             GtGtEq,
             AddAdd,
             SubSub,
+            SubSubSub,
             AndAnd,
             OrOr,
             // While technically these are not tokens
