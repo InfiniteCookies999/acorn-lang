@@ -625,6 +625,7 @@ namespace acorn {
         }
 
         bool is_array_length = false;
+        bool is_slice_ptr = false;
         Enum::Value* enum_value = nullptr;
         Expr* site;
     };

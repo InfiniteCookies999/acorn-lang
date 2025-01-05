@@ -210,6 +210,10 @@ namespace acorn {
         llvm::Value* gen_cast(Type* to_type, Type* from_type, llvm::Value* ll_value);
         llvm::Value* gen_enum_index(uint64_t index, Type* index_type);
         llvm::Value* gen_enum_value_from_enum_array(EnumType* enum_type, llvm::Value* ll_index);
+        llvm::Value* gen_store_array_in_slice(llvm::Type* ll_slice_type,
+                                              llvm::Value* ll_slice_addr,
+                                              llvm::Value* ll_array_addr,
+                                              ArrayType* arr_type);
 
         llvm::Value* gen_condition(Expr* cond);
 
@@ -275,7 +279,6 @@ namespace acorn {
         llvm::AllocaInst* gen_unseen_alloca(Type* type, llvm::Twine ll_name);
         llvm::AllocaInst* gen_unseen_alloca(llvm::Type* ll_type, llvm::Twine ll_name);
 
-        bool is_decayed_array(Expr* arr);
         bool is_pointer_lvalue(Expr* expr);
 
         ImplicitFunc* create_implicit_function(ImplicitFunc::ImplicitKind implicit_kind, Struct* structn);

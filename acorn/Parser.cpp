@@ -355,6 +355,12 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
         llvm::SmallVector<Expr*, 8> indexes;
         llvm::SmallVector<Token> bracket_tokens;
         while (cur_token.is('[')) {
+            if (peek_token(0).is('*') && peek_token(1).is(']')) {
+                // Slice type encountered.
+                is_garenteed_type = true;
+                break;
+            }
+            
             ++bracket_count;
             bracket_tokens.push_back(cur_token);
             next_token();
@@ -375,7 +381,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
             // Variable declarations.
             auto type = construct_type_from_identifier(name_token, false);
             type = construct_unresolved_bracket_type(type, indexes);
-            type = parse_optional_array_and_ptr_types(type);
+            type = parse_optional_container_types(type);
             type = parse_optional_function_type(type);
             if (!is_for_expr) {
                 return parse_decl(0, type);
@@ -1303,7 +1309,7 @@ acorn::Type* acorn::Parser::parse_type() {
         return type;
     }
 
-    type = parse_optional_array_and_ptr_types(type);
+    type = parse_optional_container_types(type);
     type = parse_optional_function_type(type);
 
     if (type->is(context.const_void_type)) {
@@ -1471,13 +1477,22 @@ acorn::Type* acorn::Parser::parse_optional_function_type(Type* base_type) {
     return base_type;
 }
 
-acorn::Type* acorn::Parser::parse_optional_array_and_ptr_types(Type* type) {
+acorn::Type* acorn::Parser::parse_optional_container_types(Type* type) {
     while (cur_token.is('*') || cur_token.is('[')) {
         if (cur_token.is('*')) {
             type = type_table.get_ptr_type(type);
             next_token();
+        } else if (peek_token(0).is('*') && peek_token(1).is(']')) {
+            if (peek_token(0).is('*') && peek_token(1).is(']')) {
+                next_token(); // Consuming '[' token.
+                next_token(); // Consuming '*' token.
+                next_token(); // Consuming ']' token.
+                type = type_table.get_slice_type(type);
+                continue;
+            }
         } else {
             llvm::SmallVector<Expr*, 8> arr_lengths;
+            
             while (cur_token.is('[')) {
                 ++bracket_count;
                 next_token();
@@ -2055,7 +2070,7 @@ acorn::Expr* acorn::Parser::parse_memory_access(Expr* site) {
 
         auto type = UnresolvedCompositeType::create(allocator, ref->ident, ref->loc, false);
         type = construct_unresolved_bracket_type(type, indexes);
-        type = parse_optional_array_and_ptr_types(type);
+        type = parse_optional_container_types(type);
         type = parse_optional_function_type(type);
 
         TypeExpr* type_expr = new_node<TypeExpr>(cur_token);
@@ -2124,7 +2139,7 @@ acorn::Expr* acorn::Parser::parse_term() {
             Token ident_token = cur_token;
             next_token();
             Type* type = construct_type_from_identifier(ident_token, false);
-            type = parse_optional_array_and_ptr_types(type);
+            type = parse_optional_container_types(type);
             type = parse_optional_function_type(type);
 
             TypeExpr* type_expr = new_node<TypeExpr>(ident_token);
@@ -2145,7 +2160,7 @@ acorn::Expr* acorn::Parser::parse_term() {
             Token ident_token = cur_token;
             next_token();
             Type* type = construct_type_from_identifier(ident_token, false);
-            type = parse_optional_array_and_ptr_types(type);
+            type = parse_optional_container_types(type);
             type = parse_optional_function_type(type);
 
             TypeExpr* type_expr = new_node<TypeExpr>(ident_token);

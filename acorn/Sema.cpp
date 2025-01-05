@@ -3334,9 +3334,14 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         }
     };
 
-    if (dot->ident == context.length_identifier && dot->site->type->is_array()) {
+    if (dot->ident == context.length_identifier &&
+        (dot->site->type->is_array() || dot->site->type->is_slice())) {
         dot->is_array_length = true;
         dot->type = context.int_type;
+    } else if (dot->ident == context.ptr_identifier && dot->site->type->is_slice()) {
+        auto slice_type = static_cast<SliceType*>(dot->site->type);
+        dot->is_slice_ptr = true;
+        dot->type = type_table.get_ptr_type(slice_type->get_elm_type());
     } else if (dot->site->type->is_struct()) {
         auto struct_type = static_cast<StructType*>(dot->site->type);
         check_struct_ident_ref(struct_type);
@@ -4152,7 +4157,7 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
     mem_access->is_foldable = false;
 
     Type* access_type = mem_access->site->type;
-    if (!(access_type->is_array() || access_type->is_pointer())) {
+    if (!(access_type->is_array() || access_type->is_pointer() || access_type->is_slice())) {
         error(mem_access, "Cannot index memory of type '%s'", access_type)
             .end_error(ErrCode::SemaMemoryAccessBadType);
     } else {
@@ -4485,6 +4490,19 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             }
 
             return true;
+        }
+
+        return to_type->is(from_type);
+    }
+    case TypeKind::SliceType: {
+        if (from_type->is_array()) {
+            auto from_arr_type = static_cast<ArrayType*>(from_type);
+            auto from_elm_type = from_arr_type->get_elm_type();
+            
+            auto to_slice_type = static_cast<SliceType*>(to_type);
+            auto to_elm_type   = to_slice_type->get_elm_type();
+
+            return from_elm_type->is(to_elm_type);
         }
 
         return to_type->is(from_type);

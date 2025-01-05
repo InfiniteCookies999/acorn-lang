@@ -74,6 +74,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       
       main_identifier(Identifier::get("main")),
       length_identifier(Identifier::get("length")),
+      ptr_identifier(Identifier::get("ptr")),
       access_identifier(Identifier::get("access")),
       namespace_identifier(Identifier::get("namespace")),
       module_identifier(Identifier::get("module")),

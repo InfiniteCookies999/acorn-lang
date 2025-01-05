@@ -578,6 +578,12 @@ static void array_tests() {
 
         expect(result, std::identity()).to_be("Lets go!");
     });
+    test("Array pass to function then reassign", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test30.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@@@@@@@@");
+    });
 }
 
 static void loop_tests() {
@@ -1777,6 +1783,81 @@ static void enums_tests() {
     });
 }
 
+static void slices_tests() {
+    test("Slice assign variable array to slice", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test1.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Slice assign inline array to slice", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test2.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Slice assign variable array to slice and pass to func", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test3.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Slice asign variable after declare slice", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test4.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Global slice assign variable array to slice", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test5.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Global slice assign variable array at global scope", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test6.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Slice accessing length field", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("@");
+    });
+    test("Slice return pointer to global array", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test8.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Slice return pointer to array passed to function", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Slice return pointer to array passed to function", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test10.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Slice return pointer to array passed to function multi-return", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test11.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Slice access ptr through ptr field", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test12.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+    
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+}
+
 void test_codegen() {
 
     executable_path = get_executable_path();
@@ -1823,5 +1904,6 @@ void test_codegen() {
         move_constructors_tests();
         ternaries_tests();
         enums_tests();
+        slices_tests();
     }, true);
 }

@@ -127,7 +127,7 @@ namespace acorn {
         Type* construct_unresolved_bracket_type(Type* base_type, 
                                                 const llvm::SmallVector<Expr*, 8>& exprs);
         Type* parse_optional_function_type(Type* base_type);
-        Type* parse_optional_array_and_ptr_types(Type* type);
+        Type* parse_optional_container_types(Type* type);
 
         Expr* parse_assignment_and_expr();
         Expr* parse_assignment_and_expr(Expr* lhs);

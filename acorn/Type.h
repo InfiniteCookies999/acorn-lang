@@ -60,6 +60,7 @@ namespace acorn {
         NamespaceRef,  // A reference to an identifier to a namespace.
         Pointer,
         Array,
+        SliceType,
         EmptyArray,
         UnresolvedArrayType, // Length could not be resolved during parsing.
         Null,
@@ -116,18 +117,23 @@ namespace acorn {
         }
 
         bool is_comparable() const;
-        bool is_container() const { return is_pointer() || is_array(); }
-        bool is_pointer() const   { return kind == TypeKind::Pointer;  }
-        bool is_array() const     { return kind == TypeKind::Array;    }
-        bool is_bool() const      { return kind == TypeKind::Bool;     }
-        bool is_range() const     { return kind == TypeKind::Range;    }
-        bool is_function() const  { return kind == TypeKind::Function; }
-        bool is_struct() const    { return kind == TypeKind::Struct;   }
-        bool is_enum() const      { return kind == TypeKind::Enum;     }
+        
+        bool is_container() const {
+            return is_pointer() || is_array() || is_slice();
+        }
 
         bool is_aggregate() const {
-            return is_array() || is_struct();
+            return is_array() || is_struct() || is_slice();
         }
+
+        bool is_pointer() const   { return kind == TypeKind::Pointer;   }
+        bool is_array() const     { return kind == TypeKind::Array;     }
+        bool is_bool() const      { return kind == TypeKind::Bool;      }
+        bool is_range() const     { return kind == TypeKind::Range;     }
+        bool is_function() const  { return kind == TypeKind::Function;  }
+        bool is_struct() const    { return kind == TypeKind::Struct;    }
+        bool is_enum() const      { return kind == TypeKind::Enum;      }
+        bool is_slice() const     { return kind == TypeKind::SliceType; }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
@@ -189,7 +195,7 @@ namespace acorn {
     class PointerType : public ContainerType {
     public:
 
-        static Type* create(PageAllocator& allocator, Type* elm_type, bool is_const = false);
+        static PointerType* create(PageAllocator& allocator, Type* elm_type, bool is_const = false);
 
         std::string to_string() const;
 
@@ -220,8 +226,8 @@ namespace acorn {
     class ArrayType : public ContainerType {
     public:
 
-        static Type* create(PageAllocator& allocator, Type* elm_type,
-                            uint32_t length, bool is_const = false);
+        static ArrayType* create(PageAllocator& allocator, Type* elm_type,
+                                 uint32_t length, bool is_const = false);
 
         uint32_t get_length() const { return length; }
 
@@ -235,6 +241,33 @@ namespace acorn {
         }
 
         uint32_t length;
+    };
+
+    class SliceType : public ContainerType {
+    public:
+
+        static SliceType* create(PageAllocator& allocator,
+                                 Type* elm_type,
+                                 bool is_const = false);
+
+        std::string to_string() const;
+
+        llvm::StructType* get_ll_struct_type() const {
+            return ll_struct_type;
+        }
+
+        void set_ll_struct_type(llvm::StructType* ll_struct_type) {
+            this->ll_struct_type = ll_struct_type;
+        }
+
+    protected:
+        SliceType(bool is_const, Type* elm_type) 
+            : ContainerType(TypeKind::SliceType, is_const, elm_type) {
+        }
+
+        // The struct type containing the pointer to memory and the length.
+        llvm::StructType* ll_struct_type = nullptr;
+
     };
 
     class AssignDeterminedArrayType : public ContainerType {
@@ -255,9 +288,9 @@ namespace acorn {
     class RangeType : public Type {
     public:
 
-        static Type* create(PageAllocator& allocator, 
-                            Type* value_type, 
-                            bool is_const = false);
+        static RangeType* create(PageAllocator& allocator, 
+                                 Type* value_type, 
+                                 bool is_const = false);
 
         Type* get_value_type() const { return value_type; }
 
@@ -283,9 +316,9 @@ namespace acorn {
     class FunctionType : public Type {
     public:
 
-        static Type* create(PageAllocator& allocator,
-                            FunctionTypeKey* key,
-                            bool is_const = false);
+        static FunctionType* create(PageAllocator& allocator,
+                                    FunctionTypeKey* key,
+                                    bool is_const = false);
 
         Type* get_return_type() const {
             return key->return_type;

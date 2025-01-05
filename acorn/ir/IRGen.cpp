@@ -132,8 +132,9 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
         node->kind == NodeKind::DotOperator) {
         IdentRef* ref = static_cast<IdentRef*>(node);
         if (ref->is_var_ref() &&
-            !ref->is_foldable &&   // If the reference is foldable then no memory address is provided for storage to load.
-            !ref->type->is_array() // Arrays are essentially always treated like lvalues.
+            !ref->is_foldable &&      // If the reference is foldable then no memory address is provided for storage to load.
+            !ref->type->is_array() && // Arrays are essentially always treated like lvalues.
+            !ref->type->is_slice()    // Slices are essentially always treated like lvalues.
             ) {
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
@@ -359,6 +360,16 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 
     for (Var* param : func->params) {
         if (!param->is_aggr_param) {
+            
+            //llvm::Type* ll_param_type;
+            //if (param->type->is_array()) {
+            //    // When passing arrays to functions the array is passed as a
+            //    // pointer so the parameter address must be a pointer.
+            //    ll_param_type = builder.getPtrTy();
+            //} else {
+            //    ll_param_type = gen_type(param->type);
+            //}
+            
             auto ll_param_type = gen_type(param->type);
             gen_variable_address(param, ll_param_type);
             emit_dbg(di_emitter->emit_function_variable(param, builder));
@@ -541,6 +552,11 @@ llvm::AllocaInst* acorn::IRGenerator::gen_alloca(llvm::Type* ll_alloc_type, llvm
 
 llvm::Type* acorn::IRGenerator::gen_function_param_type(Var* param) const {
     if (param->type->is_array()) {
+        // We do not set is_aggr_param to true here even though technically it is an aggregate
+        // parameter because the array is passed as a pointer and we provide an address for
+        // the pointer.
+        
+        param->is_aggr_param = true;
         return llvm::PointerType::get(ll_context, 0);
     } else if (param->type->is_struct()) {
         auto struct_type = static_cast<StructType*>(param->type);
@@ -554,6 +570,9 @@ llvm::Type* acorn::IRGenerator::gen_function_param_type(Var* param) const {
         }
         
         // Will pass a pointer and memcpy over at the call site.
+        param->is_aggr_param = true;
+        return llvm::PointerType::get(ll_context, 0);
+    } else if (param->type->is_slice()) {
         param->is_aggr_param = true;
         return llvm::PointerType::get(ll_context, 0);
     }
@@ -1497,17 +1516,12 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         auto ll_elm_type = gen_type(elm_type);
         auto ll_arr_itr_ptr = gen_unseen_alloca(ll_ptr_type, "arr.itr.ptr");
 
-        bool is_decayed = is_decayed_array(loop->container);
         auto ll_arr_length = gen_isize(arr_type->get_length());
         auto ll_arr_type = gen_type(arr_type);
 
         auto ll_arr_beg = gen_node(loop->container);
-        if (is_decayed) {
-            ll_arr_beg = builder.CreateLoad(ll_ptr_type, ll_arr_beg);
-        }
 
-        auto ll_arr_end = is_decayed ? builder.CreateInBoundsGEP(ll_elm_type, ll_arr_beg, ll_arr_length)
-                                     : gen_array_memory_access(ll_arr_beg, gen_type(arr_type), ll_arr_length);
+        auto ll_arr_end = gen_array_memory_access(ll_arr_beg, gen_type(arr_type), ll_arr_length);
         builder.CreateStore(ll_arr_beg, ll_arr_itr_ptr);
 
         // Branch into the condition block and determine when to stop
@@ -2108,17 +2122,6 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
         auto move_obj = static_cast<MoveObj*>(arg);
         arg = move_obj->value;
     }
-
-    if (arg->is(NodeKind::IdentRef)) {
-        auto ref = static_cast<IdentRef*>(arg);
-        if (ref->is_var_ref() &&
-            ref->var_ref->is_param() &&
-            ref->var_ref->type->is_array()) {
-            // The argument references an already decayed array
-            // from a parameter so it must be loaded.
-            return builder.CreateLoad(builder.getPtrTy(), gen_node(arg));
-        }
-    }
     
     if (arg->type->is_struct()) {
         
@@ -2711,7 +2714,12 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
         process_destructor_state(arr->type, ll_dest_addr);
     }
 
-    auto to_type = arr->get_final_type();;
+    auto to_type = arr->get_final_type();
+    if (to_type->is_slice()) {
+        // If casting to a slice type we need to generate the array as per
+        // usual.
+        to_type = arr->type;
+    }
 
     auto arr_type = static_cast<ArrayType*>(to_type);
     auto ll_elm_type = gen_type(arr_type->get_elm_type());
@@ -2818,17 +2826,6 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
     auto ll_memory = gen_rvalue(mem_access->site);
     bool mem_access_ptr = mem_access->site->type->is_pointer();
 
-    if (is_decayed_array(mem_access->site)) {
-        // We have to load again because gen_rvalue says to always treat
-        // nodes with array types as lvalues but it was decayed so it
-        // was stored into a variable that now needs loaded.
-        //
-        // Conceptually this makes sense to do here since gen_array_memory_access
-        // works under the assumption that the memory given is the lvalue of the
-        // array.
-        ll_memory = builder.CreateLoad(builder.getPtrTy(), ll_memory);
-        mem_access_ptr = true;
-    }
     Type* type = mem_access->site->type;
 
     if (mem_access->site->is(NodeKind::FuncCall)) {
@@ -2840,9 +2837,18 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
         auto ctr_type = static_cast<ContainerType*>(type);
         auto ll_load_type = gen_type(ctr_type->get_elm_type());
         return builder.CreateInBoundsGEP(ll_load_type, ll_memory, {gen_rvalue(mem_access->index)});
-    } else {
-        // Should be an array type otherwise.
+    } else if (type->is_array()) {
         return gen_array_memory_access(ll_memory, type, mem_access->index);
+    } else {
+        // Should be a slice type otherwise.
+        auto ll_slice_type = gen_type(type);
+        
+        auto ll_elements_field_addr = builder.CreateStructGEP(ll_slice_type, ll_memory, 0);
+        auto ll_elements_ptr = builder.CreateLoad(builder.getPtrTy(), ll_elements_field_addr);
+        
+        auto ctr_type = static_cast<ContainerType*>(type);
+        auto ll_load_type = gen_type(ctr_type->get_elm_type());
+        return builder.CreateInBoundsGEP(ll_load_type, ll_elements_ptr, {gen_rvalue(mem_access->index)});
     }
 }
 
@@ -2869,10 +2875,26 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
     };
 
     if (dot->is_array_length) {
-        auto arr_type = static_cast<ArrayType*>(dot->site->type);
-        return builder.getInt32(arr_type->get_length());
+        if (dot->site->type->is_array()) {
+            auto arr_type = static_cast<ArrayType*>(dot->site->type);
+            return builder.getInt32(arr_type->get_length());
+        } else {
+            auto slice_type = static_cast<SliceType*>(dot->site->type);
+            auto ll_slice_type = gen_type(slice_type);
+            auto ll_slice = gen_node(dot->site);
+
+            auto ll_length_field_addr = builder.CreateStructGEP(ll_slice_type, ll_slice, 1);
+            return builder.CreateLoad(builder.getInt32Ty(), ll_length_field_addr);
+        }
     } else if (dot->site->type->is_struct()) {
         return gen_struct_type_access(static_cast<StructType*>(dot->site->type));
+    } else if (dot->is_slice_ptr) {
+        auto slice_type = static_cast<SliceType*>(dot->site->type);
+        auto ll_slice_type = gen_type(slice_type);
+        auto ll_slice = gen_node(dot->site);
+
+        auto ll_length_field_addr = builder.CreateStructGEP(ll_slice_type, ll_slice, 0);
+        return builder.CreateLoad(builder.getPtrTy(), ll_length_field_addr);
     } else if (dot->site->type->is_pointer()) {
         auto ptr_type = static_cast<PointerType*>(dot->site->type);
         auto elm_type = ptr_type->get_elm_type();
@@ -2996,6 +3018,20 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
     };
 
     if (value->is(NodeKind::Array)) {
+        if (to_type->is_slice()) {
+
+            auto arr_type = static_cast<ArrayType*>(value->type);
+            auto ll_slice_type = gen_type(to_type);
+            
+            auto ll_array = gen_array(static_cast<Array*>(value), nullptr);
+            gen_store_array_in_slice(ll_slice_type, ll_address, ll_array, arr_type);
+
+            if (should_emit_debug_info && lvalue)
+                di_emitter->emit_location(builder, lvalue->loc);
+
+            return;
+        }
+
         if (is_assign_op && to_type->needs_destruction()) {
             create_tmp_then_assign_and_destroy([this, value, lvalue](llvm::Value* ll_address) {
                 gen_array(static_cast<Array*>(value), ll_address, lvalue);
@@ -3085,6 +3121,33 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
         } else {
             copy_or_move_array_of_structs(ll_from_addr);
         }
+    } else if (to_type->is_slice()) {
+        if (value->type->is_array()) {
+            
+            auto arr_type = static_cast<ArrayType*>(value->type);
+            auto ll_slice_type = gen_type(to_type);
+            
+            auto ll_array = gen_node(value);
+            gen_store_array_in_slice(ll_slice_type, ll_address, ll_array, arr_type);
+
+        } else {
+            
+            auto ll_slice_type = gen_type(to_type);
+            
+            // TODO: Is the alignment correct?
+            llvm::Align ll_alignment = get_alignment(ll_slice_type);
+
+            auto ll_from_address = gen_node(value);
+
+            builder.CreateMemCpy(
+                ll_address, ll_alignment,
+                ll_from_address, ll_alignment,
+                sizeof_type_in_bytes(ll_slice_type)
+            );
+        }
+
+        if (should_emit_debug_info && lvalue)
+            di_emitter->emit_location(builder, lvalue->loc);
     } else {
         if (value->is(NodeKind::MoveObj)) {
             auto move_obj = static_cast<MoveObj*>(value);
@@ -3206,6 +3269,7 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
         return llvm::Constant::getNullValue(builder.getPtrTy());
     case TypeKind::Array:
     case TypeKind::Struct:
+    case TypeKind::SliceType:
         return llvm::ConstantAggregateZero::get(gen_type(type));
     default:
         acorn_fatal("gen_zero(): Missing case");
@@ -3309,12 +3373,25 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Type* from_type, llvm::
         goto NoCastFound;
     }
     case TypeKind::Function: {
+        // NOTE: FuncsRef is not the same as is_function()!
         if (from_type->get_kind() == TypeKind::FuncsRef) {
             return ll_value;
         } else if (from_type->is_pointer()) {
             return ll_value;
         }
 
+        goto NoCastFound;
+    }
+    case TypeKind::SliceType: {
+        if (from_type->is_array()) {
+            // Creating a temporary slice and storing the array into it.
+            auto ll_slice_type = gen_type(to_type);
+            auto ll_slice = gen_unseen_alloca(gen_type(to_type), "tmp.slice");
+
+            auto arr_type = static_cast<ArrayType*>(from_type);
+            return gen_store_array_in_slice(ll_slice_type, ll_slice, ll_value, arr_type);
+        }
+        
         goto NoCastFound;
     }
     default:
@@ -3376,6 +3453,20 @@ llvm::Value* acorn::IRGenerator::gen_enum_value_from_enum_array(EnumType* enum_t
 
     ll_index = builder.CreateInBoundsGEP(ll_array_type, ll_array, {gen_isize(0), ll_index});
     return builder.CreateLoad(ll_values_type, ll_index, "cast");
+}
+
+llvm::Value* acorn::IRGenerator::gen_store_array_in_slice(llvm::Type* ll_slice_type,
+                                                          llvm::Value* ll_slice_addr,
+                                                          llvm::Value* ll_array_addr,
+                                                          ArrayType* arr_type) {
+
+    auto elements_field_addr = builder.CreateStructGEP(ll_slice_type, ll_slice_addr, 0);
+    builder.CreateStore(ll_array_addr, elements_field_addr);
+
+    auto length_field_addr = builder.CreateStructGEP(ll_slice_type, ll_slice_addr, 1);
+    builder.CreateStore(builder.getInt32(arr_type->get_length()), length_field_addr);
+
+    return ll_slice_addr;
 }
 
 llvm::Value* acorn::IRGenerator::gen_condition(Expr* cond) {
@@ -3666,12 +3757,6 @@ llvm::AllocaInst* acorn::IRGenerator::gen_unseen_alloca(llvm::Type* ll_type, llv
     auto ll_address = gen_alloca(ll_type, ll_name);
     builder.SetInsertPoint(ll_backup_insert_block);
     return ll_address;
-}
-
-bool acorn::IRGenerator::is_decayed_array(Expr* arr) {
-    if (arr->is_not(NodeKind::IdentRef)) return false;
-    auto ref = static_cast<IdentRef*>(arr);
-    return ref->is_var_ref() && ref->var_ref->is_param() && ref->type->is_array();
 }
 
 bool acorn::IRGenerator::is_pointer_lvalue(Expr* expr) {

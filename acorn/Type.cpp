@@ -159,6 +159,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Range:     return str2(static_cast<const RangeType*>(this)->to_string());
     case TypeKind::Pointer:   return str2(static_cast<const PointerType*>(this)->to_string());
     case TypeKind::Array:     return str2(static_cast<const ArrayType*>(this)->to_string());
+    case TypeKind::SliceType: return str2(static_cast<const SliceType*>(this)->to_string());
     case TypeKind::Function:  return str2(static_cast<const FunctionType*>(this)->to_string());
     case TypeKind::Struct:    return str(static_cast<const StructType*>(this)->to_string());
     case TypeKind::Enum:      return str(static_cast<const EnumType*>(this)->to_string());
@@ -197,7 +198,7 @@ size_t acorn::ContainerType::get_depth() const {
     return depth;
 }
 
-acorn::Type* acorn::PointerType::create(PageAllocator& allocator, Type* elm_type, bool is_const) {
+acorn::PointerType* acorn::PointerType::create(PageAllocator& allocator, Type* elm_type, bool is_const) {
     PointerType* ptr_type = allocator.alloc_type<PointerType>();
     ptr_type->contains_const = is_const;
     return new (ptr_type) PointerType(is_const, elm_type);
@@ -217,8 +218,8 @@ acorn::Type* acorn::UnresolvedBracketType::create(PageAllocator& allocator,
     return unresolved_type;
 }
 
-acorn::Type* acorn::ArrayType::create(PageAllocator& allocator, Type* elm_type, 
-                                      uint32_t length, bool is_const) {
+acorn::ArrayType* acorn::ArrayType::create(PageAllocator& allocator, Type* elm_type, 
+                                           uint32_t length, bool is_const) {
     ArrayType* arr_type = allocator.alloc_type<ArrayType>();
     new (arr_type) ArrayType(is_const, elm_type, length);
     arr_type->contains_const = is_const;
@@ -240,6 +241,17 @@ std::string acorn::ArrayType::to_string() const {
     return elm_type->to_string() + "[" + std::to_string(length) + "]";
 }
 
+acorn::SliceType* acorn::SliceType::create(PageAllocator& allocator, Type* elm_type, bool is_const) {
+    auto slice_type = allocator.alloc_type<SliceType>();
+    new (slice_type) SliceType(is_const, elm_type);
+    slice_type->contains_const = is_const;
+    return slice_type;
+}
+
+std::string acorn::SliceType::to_string() const {
+    return elm_type->to_string() + "[*]";
+}
+
 acorn::Type* acorn::AssignDeterminedArrayType::create(PageAllocator& allocator, 
                                                       Type* elm_type,
                                                       bool is_const) {
@@ -253,9 +265,9 @@ std::string acorn::AssignDeterminedArrayType::to_string() const {
     return elm_type->to_string() + "[]";
 }
 
-acorn::Type* acorn::RangeType::create(PageAllocator& allocator, 
-                                      Type* value_type, 
-                                      bool is_const) {
+acorn::RangeType* acorn::RangeType::create(PageAllocator& allocator, 
+                                           Type* value_type, 
+                                           bool is_const) {
     auto range_type = allocator.alloc_type<RangeType>();
     new (range_type) RangeType(is_const, value_type);
     range_type->contains_const = is_const;
@@ -266,9 +278,9 @@ std::string acorn::RangeType::to_string() const {
     return "range";
 }
 
-acorn::Type* acorn::FunctionType::create(PageAllocator& allocator,
-                                         FunctionTypeKey* key,
-                                         bool is_const) {
+acorn::FunctionType* acorn::FunctionType::create(PageAllocator& allocator,
+                                                 FunctionTypeKey* key,
+                                                 bool is_const) {
     auto function_type = allocator.alloc_type<FunctionType>();
     new (function_type) FunctionType(is_const, key);
     function_type->contains_const = is_const;

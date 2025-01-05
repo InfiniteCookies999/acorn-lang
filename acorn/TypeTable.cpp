@@ -59,7 +59,9 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
     }
     case TypeKind::Struct: {
         auto struct_type = static_cast<StructType*>(type);
-        new_type = StructType::create(allocator, struct_type->get_struct(), is_const);
+        auto new_struct_type = StructType::create(allocator, struct_type->get_struct(), is_const);
+        new_struct_type->set_ll_struct_type(struct_type->get_ll_struct_type());
+        new_type = new_struct_type;
         break;
     }
     case TypeKind::Enum: {
@@ -76,6 +78,13 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = ArrayType::create(allocator, arr_type->get_elm_type(), arr_type->get_length(), is_const);
         break;
     }
+    case TypeKind::SliceType: {
+        auto slice_type = static_cast<SliceType*>(type);
+        auto new_slice_type = SliceType::create(allocator, slice_type->get_elm_type(), is_const);
+        new_slice_type->set_ll_struct_type(slice_type->get_ll_struct_type());
+        new_type = new_slice_type;
+        break;
+    }
     case TypeKind::Function: {
         auto func_type = static_cast<FunctionType*>(type);
         new_type = FunctionType::create(allocator, func_type->get_key(), is_const);
@@ -89,7 +98,7 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
     return new_type;
 }
 
-acorn::Type* acorn::TypeTable::get_ptr_type(Type* elm_type) {
+acorn::PointerType* acorn::TypeTable::get_ptr_type(Type* elm_type) {
     std::lock_guard lock(ptr_types_mtx);
 
     auto itr = ptr_types.find(elm_type);
@@ -148,7 +157,7 @@ acorn::Type* acorn::TypeTable::get_ptr_type(Type* elm_type) {
     return ptr_type;
 }
 
-acorn::Type* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length) {
+acorn::ArrayType* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length) {
     std::lock_guard lock(arr_types_mtx);
     
     auto itr = arr_types.find({ elm_type, length });
@@ -179,11 +188,42 @@ acorn::Type* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length) {
     return arr_type;
 }
 
+acorn::SliceType* acorn::TypeTable::get_slice_type(Type* elm_type) {
+    std::lock_guard lock(slice_types_mtx);
+
+    auto itr = slice_types.find(elm_type);
+    if (itr != slice_types.end()) {
+        return itr->second;
+    }
+    
+    auto slice_type = SliceType::create(allocator, elm_type);
+    slice_types.insert({ elm_type, slice_type });
+    
+    if (elm_type->does_contain_const()) {
+        slice_type->contains_const = true;
+        auto non_const_elm_type = elm_type->non_const_version;
+
+        auto itr = slice_types.find(non_const_elm_type);
+        if (itr != slice_types.end()) {
+            slice_type->non_const_version = itr->second;
+        } else {
+            auto new_non_const_slice_type = SliceType::create(allocator, non_const_elm_type);
+            new_non_const_slice_type->non_const_version = new_non_const_slice_type;
+            slice_types.insert({ non_const_elm_type, new_non_const_slice_type });
+            slice_type->non_const_version = new_non_const_slice_type;
+        }
+    } else {
+        slice_type->non_const_version = slice_type;
+    }
+
+    return slice_type;
+}
+
 acorn::Type* acorn::TypeTable::get_assigned_det_arr_type(Type* elm_type) {
     return AssignDeterminedArrayType::create(allocator, elm_type);
 }
 
-acorn::Type* acorn::TypeTable::get_range_type(Type* value_type) {
+acorn::RangeType* acorn::TypeTable::get_range_type(Type* value_type) {
     switch (value_type->get_kind()) {
     case TypeKind::Int: return context.int_range_type;
     case TypeKind::Int8: return context.int8_range_type;
@@ -205,7 +245,7 @@ acorn::Type* acorn::TypeTable::get_range_type(Type* value_type) {
     }
 }
 
-acorn::Type* acorn::TypeTable::get_function_type(Type* return_type, llvm::SmallVector<Type*> param_types) {
+acorn::FunctionType* acorn::TypeTable::get_function_type(Type* return_type, llvm::SmallVector<Type*> param_types) {
     std::lock_guard lock(func_types_mtx);
     
     FunctionTypeKey cmp_key = FunctionTypeKey(return_type, param_types);
