@@ -355,7 +355,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
         llvm::SmallVector<Expr*, 8> indexes;
         llvm::SmallVector<Token> bracket_tokens;
         while (cur_token.is('[')) {
-            if (peek_token(0).is('*') && peek_token(1).is(']')) {
+            if (peek_token(0).is(Token::DotDot)) {
                 // Slice type encountered.
                 is_garenteed_type = true;
                 break;
@@ -1482,14 +1482,12 @@ acorn::Type* acorn::Parser::parse_optional_container_types(Type* type) {
         if (cur_token.is('*')) {
             type = type_table.get_ptr_type(type);
             next_token();
-        } else if (peek_token(0).is('*') && peek_token(1).is(']')) {
-            if (peek_token(0).is('*') && peek_token(1).is(']')) {
-                next_token(); // Consuming '[' token.
-                next_token(); // Consuming '*' token.
-                next_token(); // Consuming ']' token.
-                type = type_table.get_slice_type(type);
-                continue;
-            }
+        } else if (peek_token(0).is(Token::DotDot)) {
+            next_token(); // Consuming '[' token.
+            next_token(); // Consuming '..' token.
+            expect(']', "for slice type");
+            type = type_table.get_slice_type(type);
+            continue;
         } else {
             llvm::SmallVector<Expr*, 8> arr_lengths;
             
@@ -1587,8 +1585,8 @@ acorn::Expr* acorn::Parser::parse_binary_expr(Expr* lhs) {
                 cur_token = new_op;
                 
                 // Shift all elements up one since we split the current token.
-                for (size_t i = 0; i < peeked_size; i++) {
-                    peeked_tokens[i + 1] = peeked_tokens[i];
+                for (size_t i = peeked_size; i > 0; i--) {
+                    peeked_tokens[i] = peeked_tokens[i - 1];
                 }
 
                 peeked_tokens[0] = number_token;
@@ -2053,6 +2051,10 @@ acorn::Expr* acorn::Parser::parse_memory_access(Expr* site) {
     llvm::SmallVector<SourceLoc, 8> bracket_locations;
 
     while (cur_token.is('[')) {
+        if (peek_token(0).is(Token::DotDot)) {
+            break;
+        }
+        
         bracket_locations.push_back(cur_token.loc);
         next_token(); // Consuming '[' token.
         ++bracket_count;
@@ -2063,26 +2065,29 @@ acorn::Expr* acorn::Parser::parse_memory_access(Expr* site) {
         --bracket_count;
     }
 
-    if (site->is(NodeKind::IdentRef) &&
-        peek_if_expr_is_type(cur_token, peek_token(0))) {
+    if (site->is(NodeKind::IdentRef)) {
+        auto peek0 = peek_token(0);
+        auto peek1 = peek_token(1);
+       if (peek_if_expr_is_type(cur_token, peek0)) {
 
-        auto ref = static_cast<IdentRef*>(site);
+            auto ref = static_cast<IdentRef*>(site);
 
-        auto type = UnresolvedCompositeType::create(allocator, ref->ident, ref->loc, false);
-        type = construct_unresolved_bracket_type(type, indexes);
-        type = parse_optional_container_types(type);
-        type = parse_optional_function_type(type);
+            auto type = UnresolvedCompositeType::create(allocator, ref->ident, ref->loc, false);
+            type = construct_unresolved_bracket_type(type, indexes);
+            type = parse_optional_container_types(type);
+            type = parse_optional_function_type(type);
 
-        TypeExpr* type_expr = new_node<TypeExpr>(cur_token);
-        type_expr->expr_type = type;
+            TypeExpr* type_expr = new_node<TypeExpr>(cur_token);
+            type_expr->expr_type = type;
         
-        SourceLoc start_loc = ref->loc;
-        SourceLoc end_loc   = prev_token.loc;
+            SourceLoc start_loc = ref->loc;
+            SourceLoc end_loc   = prev_token.loc;
         
-        SourceLoc type_location = SourceLoc::from_ptrs(start_loc.ptr,
-                                                       end_loc.ptr + end_loc.length);
-        type_expr->loc = type_location;
-        return type_expr;
+            SourceLoc type_location = SourceLoc::from_ptrs(start_loc.ptr,
+                                                           end_loc.ptr + end_loc.length);
+            type_expr->loc = type_location;
+            return type_expr;
+        }
     }
 
     size_t count = 0;
@@ -2891,6 +2896,8 @@ bool acorn::Parser::peek_if_expr_is_type(Token tok0, Token tok1) {
             break;
         }
     } else if (tok0.is('$')) {
+        return true;
+    } else if (tok0.is('[') && tok1.is(Token::DotDot)) {
         return true;
     }
     return false;

@@ -29,14 +29,14 @@ void write_val(int val) {
 
 }
 
-int[*] get_slice(int[8] a) {
+int[..] get_slice(int[8] a) {
     return a;
 }
 
 void main() {
  
     int[8] a = [ 76, 101, 116, 115, 32, 103, 111, 33 ];
-    int[*] s = get_slice(a);
+    int[..] s = get_slice(a);
 
     write_val(s[0]);
     write_val(s[1]);

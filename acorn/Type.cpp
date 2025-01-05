@@ -249,7 +249,7 @@ acorn::SliceType* acorn::SliceType::create(PageAllocator& allocator, Type* elm_t
 }
 
 std::string acorn::SliceType::to_string() const {
-    return elm_type->to_string() + "[*]";
+    return elm_type->to_string() + "[..]";
 }
 
 acorn::Type* acorn::AssignDeterminedArrayType::create(PageAllocator& allocator, 
