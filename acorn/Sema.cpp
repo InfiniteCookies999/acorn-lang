@@ -318,6 +318,9 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
                 if (try_detect_multiply_parse_error(end, error_loc)) {
                     return nullptr;
                 }
+            } else {
+                // Did not detect that the user tried to type an expression instead.
+                break;
             }
         }
 

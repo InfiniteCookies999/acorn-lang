@@ -360,16 +360,6 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 
     for (Var* param : func->params) {
         if (!param->is_aggr_param) {
-            
-            //llvm::Type* ll_param_type;
-            //if (param->type->is_array()) {
-            //    // When passing arrays to functions the array is passed as a
-            //    // pointer so the parameter address must be a pointer.
-            //    ll_param_type = builder.getPtrTy();
-            //} else {
-            //    ll_param_type = gen_type(param->type);
-            //}
-            
             auto ll_param_type = gen_type(param->type);
             gen_variable_address(param, ll_param_type);
             emit_dbg(di_emitter->emit_function_variable(param, builder));
@@ -552,10 +542,6 @@ llvm::AllocaInst* acorn::IRGenerator::gen_alloca(llvm::Type* ll_alloc_type, llvm
 
 llvm::Type* acorn::IRGenerator::gen_function_param_type(Var* param) const {
     if (param->type->is_array()) {
-        // We do not set is_aggr_param to true here even though technically it is an aggregate
-        // parameter because the array is passed as a pointer and we provide an address for
-        // the pointer.
-        
         param->is_aggr_param = true;
         return llvm::PointerType::get(ll_context, 0);
     } else if (param->type->is_struct()) {
