@@ -433,6 +433,35 @@ llvm::Value* acorn::IRGenerator::gen_ternary(Ternary* ternary,
         builder.SetInsertPoint(ll_end_bb);
 
         return ll_dest_addr;
+    } else if (!ternary->is_foldable) {
+        // Still have to create an if statement because it is possible that it modifies
+        // memory in some way on one of the paths.
+
+        auto ll_then_bb = gen_bblock("tern.then");
+        auto ll_else_bb = gen_bblock("tern.else");
+        auto ll_end_bb  = gen_bblock("tern.end");
+
+        gen_branch_on_condition(ternary->cond, ll_then_bb, ll_else_bb);
+
+        // Then block
+        insert_bblock_at_end(ll_then_bb);
+        builder.SetInsertPoint(ll_then_bb);
+        auto ll_lhs = gen_rvalue(ternary->lhs);
+        gen_branch_if_not_term(ll_end_bb);
+
+        // Else block
+        insert_bblock_at_end(ll_else_bb);
+        builder.SetInsertPoint(ll_else_bb);
+        auto ll_rhs = gen_rvalue(ternary->rhs);
+        gen_branch_if_not_term(ll_end_bb);
+
+        insert_bblock_at_end(ll_end_bb);
+        builder.SetInsertPoint(ll_end_bb);
+
+        auto ll_result = builder.CreatePHI(gen_type(ternary->type), 2, "tern.res");
+        ll_result->addIncoming(ll_lhs, ll_then_bb);
+        ll_result->addIncoming(ll_rhs, ll_else_bb);
+        return ll_result;
     } else {
         auto ll_cond = gen_condition(ternary->cond);
         auto ll_lhs = gen_rvalue(ternary->lhs);

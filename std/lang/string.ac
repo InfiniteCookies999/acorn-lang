@@ -5,6 +5,7 @@ prv char DEFAULT_CHAR = '\0';
 struct String {
     char* buffer;
     int   length;
+    int   capacity;
     
     /*
      * Creates a String with a length of 0.
@@ -14,61 +15,69 @@ struct String {
     }
 
     copyobj String(String* o) {
-        this.length = o.length;
-        this.buffer = as(char*) malloc(length + 1); // +1 for null terminator.
+        this.length   = o.length;
+        this.capacity = o.capacity;
+        this.buffer   = as(char*) malloc(length + 1); // +1 for null terminator.
         memcpy(this.buffer, o.buffer, length + 1);
     }
 
     moveobj String(String* o) {
-        this.length = o.length;
-        this.buffer = o.buffer;
-        o.length = 0;
-        o.buffer = &DEFAULT_CHAR;
+        this.length   = o.length;
+        this.buffer   = o.buffer;
+        this.capacity = o.capacity;
+        o.length   = 0;
+        o.buffer   = &DEFAULT_CHAR;
+        o.capacity = 0;
     }
 
     /*
      * Creates a String from a null terminated
-     * character buffer.
+     * character `buffer`.
      */
     String(const char* buffer) {
-        this.length = strlen(buffer);
-        this.buffer = as(char*) malloc(length + 1); // +1 for null terminator.
+        this.length   = strlen(buffer);
+        this.capacity = this.length;
+        this.buffer   = as(char*) malloc(length + 1); // +1 for null terminator.
         memcpy(this.buffer, buffer, length + 1);
     }
 
     /*
-     * Creates a String from a character buffer and an
-     * explicit length. Because of the explicitly defined
-     * length the buffer does not have to be null terminated.
+     * Creates a String from a character `buffer` and an
+     * explicit `length`. Because of the explicitly defined
+     * `length` the `buffer` does not have to be null terminated.
      *
-     * If the buffer is null terminated do not include the
-     * null termination in the length.
+     * If the `buffer` is null terminated do not include the
+     * null termination in the `length`.
      */
     String(const char* buffer, int length) {
-        this.length = length;
-        this.buffer = as(char*) malloc(length + 1); // +1 for null terminator.
+        this.length   = length;
+        this.capacity = length;
+        this.buffer   = as(char*) malloc(length + 1); // +1 for null terminator.
         memcpy(this.buffer, buffer, length);
         this.buffer[length] = '\0';
     }
 
     /*
-     * Creates a String from a character buffer and
-     * an explicit length. Because of the explicitly
-     * defined length the buffer does not have to be
-     * null terminated.
+     * Creates a String from a character `buffer` and
+     * an explicit `length`. Because of the explicitly
+     * defined `length` the `buffer` does not have to be
+     * null terminated (Unless `copy_buffer` is set to false).
      *
-     * If the buffer is null terminated do not include
+     * If the `buffer` is null terminated do not include
      * the null termination in the length.
      *
      * @Param copy_buffer if true it allocates new memory
-     *                    and copies the buffer over otherwise
-     *                    the buffer is assumed to be already
+     *                    and copies the `buffer` over otherwise
+     *                    the `buffer` is assumed to be already
      *                    allocated and null terminated.
      *                    It will also assume ownership over the
-     *                    memory if set to true.
+     *                    memory if set to true. It will also assume
+     *                    the allocation size of the `buffer` is the
+     *                    `length` passed.
      */
     String(char* buffer, int length, bool copy_buffer = true) {
-        this.length = length;
+        this.length   = length;
+        this.capacity = length;
         if copy_buffer {
             this.buffer = as(char*) malloc(length + 1); // +1 for null terminator.
             memcpy(this.buffer, buffer, length);
@@ -231,6 +240,9 @@ struct String {
         }
 
         int new_string_length = this.length + (replace_length * index_count) - (sub_length * index_count);
+
+        // Cannot use existing capacity here because to construct the new buffer we
+        // rely on the memory of the existing buffer.
         char* new_buffer = as(char*) malloc(new_string_length + 1); // +1 for null termination.
 
         int new_buffer_offset = 0, buffer_offset = 0;
@@ -268,8 +280,9 @@ struct String {
         new_buffer[new_string_length] = '\0';
 
         free(this.buffer);
-        this.buffer = new_buffer;
-        this.length = new_string_length;
+        this.buffer   = new_buffer;
+        this.length   = new_string_length;
+        this.capacity = new_string_length;
 
         free(ext_buffer);
 
@@ -410,11 +423,20 @@ struct String {
         return memcmp(this.buffer + offset, sub.buffer, sub.length) == 0;
     }
 
+    /*
+     * Sets the length of the string to zero but keeps
+     * the existing memory allocation.
+     */
+    void clear() {
+        length = 0;
+    }
+
     ~String() {
         if buffer != &DEFAULT_CHAR { // Make sure it is not just referencing the global memory.
             free(buffer);
-            length = 0;
-            buffer = &DEFAULT_CHAR;
+            length   = 0;
+            capacity = 0;
+            buffer   = &DEFAULT_CHAR;
         }
     }
 }

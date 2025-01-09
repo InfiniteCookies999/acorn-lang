@@ -51,7 +51,7 @@ namespace acorn {
         SourceFile* file;
         TypeTable&  type_table;
 
-        Func*   cur_func;
+        Func*   cur_func       = nullptr;
         Var*    cur_global_var = nullptr;
         Struct* cur_struct     = nullptr;
         Enum*   cur_enum       = nullptr;
