@@ -878,6 +878,18 @@ static void function_type_calls_tests() {
 
         expect(result, std::identity()).to_be("Lets go!");
     });
+    test("Call function type for member function", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@");
+    });
+    test("Call function type for member function with bg aggregate ret", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls8.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCD");
+    });
 }
 
 static void struct_tests() {

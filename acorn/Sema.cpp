@@ -4522,12 +4522,24 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             if (func->return_type->is_not(to_func_type->get_return_type())) {
                 return false;
             }
+            bool passes_struct_ptr = func->structn != nullptr;
+            size_t param_offset = (passes_struct_ptr ? 1 : 0);
+
             auto& param_types = to_func_type->get_param_types();
-            if (func->params.size() != param_types.size()) {
+            if ((func->params.size() + param_offset) != param_types.size()) {
                 return false;
             }
-            for (size_t i = 0; i < param_types.size(); i++) {
-                if (param_types[i]->is_not(func->params[i]->type)) {
+
+            if (passes_struct_ptr) {
+                auto struct_ptr_type = type_table.get_ptr_type(func->structn->struct_type);
+
+                if (param_types[0]->is_not(struct_ptr_type)) {
+                    return false;
+                }
+            }
+
+            for (size_t i = param_offset; i < param_types.size(); i++) {
+                if (param_types[i]->is_not(func->params[i - param_offset]->type)) {
                     return false;
                 }
             }
@@ -5017,6 +5029,10 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
 
         auto types = func->params | std::views::transform([](Var* param) { return param->type; })
                                   | std::ranges::to<llvm::SmallVector<Type*>>();
+        if (func->structn) {
+            auto struct_ptr_type = type_table.get_ptr_type(func->structn->struct_type);
+            types.insert(types.begin(), struct_ptr_type);
+        }
 
         auto from_type = type_table.get_function_type(func->return_type, types);
         // It is possible the types match but the function is private!

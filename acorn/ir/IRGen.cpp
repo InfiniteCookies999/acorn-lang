@@ -202,11 +202,11 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     auto ll_ret_type = gen_function_return_type(func, is_main);
 
     // Creating the parameter types.
-    if (func->structn) {
+    if (func->uses_aggr_param) {
         ll_param_types.push_back(builder.getPtrTy());
     }
 
-    if (func->uses_aggr_param) {
+    if (func->structn) {
         ll_param_types.push_back(builder.getPtrTy());
     }
 
@@ -262,15 +262,15 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     };
 
     size_t param_idx = 0;
-    if (func->structn) {
-        auto ll_param = assign_param_info(param_idx++, "in.this");
-    }
     if (func->uses_aggr_param) {
         auto ll_param = assign_param_info(param_idx, "aggr.ret.addr");
         // Add noalias attribute which tells the compiler no other pointer
         // could possibly point to this pointer.
         ll_param->addAttr(llvm::Attribute::NoAlias);
         ++param_idx;
+    }
+    if (func->structn) {
+        auto ll_param = assign_param_info(param_idx++, "in.this");
     }
 
     for (Var* param : func->params) {
@@ -341,6 +341,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
 
     // Allocating and storing incoming variables.
     unsigned int param_idx = 0;
+    if (func->uses_aggr_param) {
+        ll_ret_addr = ll_cur_func->getArg(param_idx++);
+    }
     if (func->structn) {
         ll_this = ll_cur_func->getArg(param_idx++);
 
@@ -353,9 +356,6 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
             ll_this->setName("this");
             di_emitter->emit_struct_this_variable(ll_this_address, func, builder);
         }
-    }
-    if (func->uses_aggr_param) {
-        ll_ret_addr = ll_cur_func->getArg(param_idx++);
     }
 
     for (Var* param : func->params) {
@@ -2254,11 +2254,6 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     }
     ll_args.resize(ll_num_args);
 
-    // Pass the address of the struct for the member function.
-    if (is_member_func) {
-        ll_args[arg_offset++] = ll_in_this;
-    }
-
     if (!ll_dest_addr) {
         gen_call_return_aggr_type_temporary(called_func->return_type, uses_aggr_param, ll_dest_addr);
     }
@@ -2266,6 +2261,11 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     // Pass the return address as an argument.
     if (uses_aggr_param) {
         ll_args[arg_offset++] = ll_dest_addr;
+    }
+
+    // Pass the address of the struct for the member function.
+    if (is_member_func) {
+        ll_args[arg_offset++] = ll_in_this;
     }
 
     if (uses_default_param_values) {
@@ -2890,6 +2890,11 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
             auto ll_length_field_addr = builder.CreateStructGEP(ll_slice_type, ll_slice, 1);
             return builder.CreateLoad(builder.getInt32Ty(), ll_length_field_addr);
         }
+    } else if (dot->is_funcs_ref()) {
+        auto func = (*dot->funcs_ref)[0];
+        gen_function_decl(func);
+
+        return func->ll_func;
     } else if (dot->site->type->is_struct()) {
         return gen_struct_type_access(static_cast<StructType*>(dot->site->type));
     } else if (dot->is_slice_ptr) {
