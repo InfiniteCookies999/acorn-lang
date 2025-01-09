@@ -859,7 +859,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
         if (itr != context.ll_intrinsics_table.end()) {
             func->ll_intrinsic_id = itr->second;
             
-            // Validating that the parameters are correct.
+            // Validating that the parameters and return are correct.
 
             for (Var* param : func->params) {
                 if (param->assignment) {
@@ -2487,7 +2487,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             if (bin_op->op == '+' && !rhs_type->is_integer()) {
                 report_binary_op_mistmatch_types(bin_op);
                 return nullptr;
-            } else if (!(rhs_type->is_integer() || rhs_type->is(lhs_type))) {
+            } else if (!(rhs_type->is_integer() || rhs_type->is_ignore_const(lhs_type))) {
                 report_binary_op_mistmatch_types(bin_op);
                 return nullptr;
             }

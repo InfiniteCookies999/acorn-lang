@@ -14,7 +14,7 @@ int strlen(const char* s) {
 prv native("strlen") isize _strlen(const char* s);
 
 /*
- * Copies count amount of bytes from the `src`
+ * Copies `count` amount of bytes from the `src`
  * to the `dest`.
  *
  * Warning: This is not a safe function. Use with caution.
@@ -25,16 +25,28 @@ void memcpy(void* dest, const void* src, int count) {
 prv native("memcpy") void _memcpy(void* dest, const void* src, usize count);
 
 /*
+ * Copies `count` amount of bytes from the `src` to
+ * the `dest` allowing for overlapping memory by creating
+ * a temporary buffer.
+ *
+ * Warning: This is not a safe function. Use with caution.
+ */
+void memmove(void* dest, const void* src, int count) {
+    _memmove(dest, src, as(usize) count);
+}
+prv native("memmove") void _memmove(void* dest, const void* src, usize count);
+
+/*
  * Sets `n` copies of the value to the dest.
  *
- * @param n is the number of bytes and value is a byte value.
+ * @param  n is the number of bytes and value is a byte value.
  *
  * Warning: This is not a safe function. Use with caution.
  */
 void memset(void* dest, int8 value, int n) {
     _memset(dest, value, as(usize) n);
 }
-prv native("memset") void* _memset(void* dest, int8 value, usize n);
+prv native("memset") void _memset(void* dest, int8 value, usize n);
 
 /*
  * Allocates memory on the heap. Allocates size number of bytes.

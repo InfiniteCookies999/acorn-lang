@@ -431,6 +431,59 @@ struct String {
         length = 0;
     }
 
+    /*
+     * Removes any ASCII character less than or equal to the space
+     * character from the front of the String. This means it will
+     * consider standard characters such as ' ', '\t', '\r', '\n',
+     * or '\f', but also include characters such as ascii code 24
+     * for [CANCEL].
+     */
+    String^ trim_leading() {
+        if length == 0 {
+            return this;
+        }
+        
+        const char* ptr = buffer;
+        loop *ptr <= ' ' {
+            ++ptr;
+        }
+
+        // Check for no changes.
+        if ptr == buffer {
+            return this;
+        }
+
+        int amount_trimmed = as(int) (ptr - buffer);
+        memmove(buffer, ptr, length - amount_trimmed);
+        length -= amount_trimmed;
+
+        return this;
+    }
+
+    /*
+     * Removes any ASCII character less than or equal to the space
+     * character from the back of the String. This means it will
+     * consider standard characters such as ' ', '\t', '\r', '\n',
+     * or '\f', but also include characters such as ascii code 24
+     * for [CANCEL].
+     */
+    String^ trim_trailing() {
+        if length == 0 {
+            return this;
+        }
+
+        const char* end = buffer + length - 1;
+        const char* ptr = end;
+        loop *ptr <= ' ' && ptr > buffer {
+            --ptr;
+        }
+
+        int amount_trimmed = as(int) (end - ptr);
+        length -= amount_trimmed;
+
+        return this;
+    }
+
     ~String() {
         if buffer != &DEFAULT_CHAR { // Make sure it is not just referencing the global memory.
             free(buffer);

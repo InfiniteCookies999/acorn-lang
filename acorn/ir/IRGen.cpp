@@ -2571,6 +2571,24 @@ return builder.CreateCall(ll_func, { ll_arg0, ll_arg1 });
             gen_rvalue(arg2)
         );
     }
+    case llvm::Intrinsic::memmove: {
+
+        Expr* arg0 = get_arg(0);
+        Expr* arg1 = get_arg(1);
+        Expr* arg2 = get_arg(2);
+
+        auto container_type = static_cast<ContainerType*>(arg0->get_final_type());
+        auto elm_type = container_type->get_elm_type();
+        auto ll_elm_type = elm_type->is(context.void_type) ? llvm::Type::getInt8Ty(ll_context)
+                                                           : gen_type(elm_type);
+        llvm::Align ll_alignment = get_alignment(ll_elm_type);
+
+        return builder.CreateMemMove(
+            gen_rvalue(arg0), ll_alignment,
+            gen_rvalue(arg1), ll_alignment,
+            gen_rvalue(arg2)
+        );
+    }
     case llvm::Intrinsic::memset: {
         // We know the first argument is a pointer/array type since
         // it is cast to a void* so to get the type that we are
