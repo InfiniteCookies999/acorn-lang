@@ -492,6 +492,11 @@ bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2
             return false;
         }
     }
+
+    if (func1->is_constant != func2->is_constant) {
+        return false;
+    }
+
     report_redeclaration(func1, func2, func1->is_constructor ? "constructor" : "function", ErrCode::SemaDuplicateFunc);
     return true;
 }
@@ -2247,7 +2252,8 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
         Func* found_constructor = check_function_decl_call(initializer,
                                                            initializer->values,
                                                            initializer->non_named_vals_offset,
-                                                           structn->constructors);
+                                                           structn->constructors,
+                                                           false);
         if (!found_constructor) {
             return;
         }
@@ -3474,11 +3480,30 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         return;
     }
 
+    bool is_const_object = false;
+    if (call->site->is(NodeKind::DotOperator)) {
+        auto dot = static_cast<DotOperator*>(call->site);
+        if (dot->site->is(NodeKind::IdentRef)) {
+            auto ref = static_cast<IdentRef*>(dot->site);
+            if (ref->type->is_struct() && ref->type->is_const()) {
+                is_const_object = true;
+            } else if (ref->type->is_pointer()) {
+                auto ptr_type = static_cast<PointerType*>(ref->type);
+                if (ptr_type->get_elm_type()->is_const()) {
+                    is_const_object = true;
+                }
+            }
+        }
+    } else if (cur_func && cur_func->is_constant) {
+        is_const_object = true;
+    }
+
     IdentRef* ref = static_cast<IdentRef*>(call->site);
     auto called_func = check_function_decl_call(call,
                                                 call->args,
                                                 call->non_named_args_offset,
-                                                *ref->funcs_ref);
+                                                *ref->funcs_ref,
+                                                is_const_object);
     if (!called_func) {
         return;
     }
@@ -3495,7 +3520,7 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
     auto display_error = [this, call, func_type]() finline {
         logger.begin_error(expand(call), "Invalid call to function type: %s", func_type);
         logger.add_empty_line();
-        display_call_mismatch_info(func_type, call->args, false);
+        display_call_mismatch_info(func_type, call->args, false, call);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
     };
 
@@ -3528,25 +3553,8 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
 acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                                    llvm::SmallVector<Expr*>& args,
                                                    size_t non_named_args_offset,
-                                                   FuncList& candidates) {
-
-    //class A {
-    //public:
-    //    int* v;
-    //    int z;
-    //
-    //    int* foo() const {
-    //        return v;
-    //    }
-    //
-    //    int& foo2() const {
-    //        return z;
-    //    }
-    //};
-    //
-    //const A* a;
-    //int* c = a->foo();
-
+                                                   FuncList& candidates,
+                                                   bool is_const_object) {
 
     for (Func* canidate : candidates) {
         if (canidate->is_checking_declaration) {
@@ -3609,9 +3617,9 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
     }
 
     bool selected_implicitly_converts_ptr_arg = false;
-    auto called_func = find_best_call_candidate(candidates, args, selected_implicitly_converts_ptr_arg);
+    auto called_func = find_best_call_candidate(candidates, args, selected_implicitly_converts_ptr_arg, is_const_object);
     if (!called_func) {
-        display_call_mismatch_info(expand(call_node), candidates, args);
+        display_call_mismatch_info(expand(call_node), call_node, candidates, args);
         return nullptr;
     }
 
@@ -3646,7 +3654,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         create_cast(arg_value, param->type);
     }
 
-    if (called_func->structn && !called_func->is_constant && !called_func->is_constructor) {
+    /*if (called_func->structn && !called_func->is_constant && !called_func->is_constructor) {
         auto call = static_cast<FuncCall*>(call_node);
         if (call->site->is(NodeKind::IdentRef) && cur_func) {
             // Calling one member function from another.
@@ -3674,8 +3682,11 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                 }
             }
         }
-    }
+    }*/
 
+    // TODO: This needs to move to being part of compare as canidate because the problem is that
+    // it should be able to still choose a non-private function first as long as some of the arguments
+    // match.
     if (called_func->has_modifier(Modifier::Private) && called_func->structn) {
         if (!cur_func || (cur_func->structn != called_func->structn)) {
             error(expand(call_node), "Cannot call function marked private")
@@ -3686,38 +3697,22 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
     return called_func;
 }
 
-uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm::SmallVector<Expr*>& args) const {
-    // We just want to define enough to definitely place the next score
-    // value above any of the mismatched types.
-    const uint32_t MAX_ARGS_SCORE_CAP          = MAX_FUNC_PARAMS * 4;
-    const uint32_t MAX_NOT_ASSIGNABLE_CAP      = MAX_ARGS_SCORE_CAP * 2;
-
-    const uint32_t INCORRECT_PARAM_NAME_OR_ORD = MAX_NOT_ASSIGNABLE_CAP * 2;
-    const uint32_t INCORRECT_NUM_ARGS_CAP      = MAX_NOT_ASSIGNABLE_CAP * 2;
+uint32_t acorn::Sema::get_function_call_score(const Func* candidate,
+                                              const llvm::SmallVector<Expr*>& args,
+                                              bool is_const_object) const {
 
     uint32_t score = 0;
+    bool implicitly_converts_ptr_arg = 0;
+    auto status = compare_as_call_candidate<true>(candidate, args, is_const_object, score, implicitly_converts_ptr_arg);
 
-    uint32_t mimatched_types = 0;
-    uint32_t not_assignable_types = 0;
-    bool implicitly_converts_ptr_arg = false;
-    auto status = compare_as_call_candidate<true>(candidate,
-                                                  args,
-                                                  mimatched_types,
-                                                  not_assignable_types,
-                                                  implicitly_converts_ptr_arg);
     switch (status) {
     case CallCompareStatus::INCORRECT_ARGS:
-        return INCORRECT_NUM_ARGS_CAP;
+        return INCORRECT_NUM_ARGS_LIMIT;
     case CallCompareStatus::INCORRECT_PARAM_BY_NAME_NOT_FOUND:
     case CallCompareStatus::OUT_OF_ORDER_PARAMS:
-        return INCORRECT_PARAM_NAME_OR_ORD;
+        return INCORRECT_PARAM_NAME_OR_ORD_LIMIT;
     default:
         break;
-    }
-    score += mimatched_types;
-    if (not_assignable_types != 0) {
-        score += MAX_ARGS_SCORE_CAP;
-        score += not_assignable_types;
     }
 
     return score;
@@ -3725,40 +3720,27 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm:
 
 acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
                                                    llvm::SmallVector<Expr*>& args,
-                                                   bool& selected_implicitly_converts_ptr_arg) {
+                                                   bool& selected_implicitly_converts_ptr_arg,
+                                                   bool is_const_object) {
 
     Func* selected = nullptr;
-    uint32_t best_mimatched_types = 0;
+    uint32_t best_score = 0;
 
-    // TODO: select if has fewer default values?
-
-    auto select = [&selected, &best_mimatched_types, &selected_implicitly_converts_ptr_arg]
-        (Func* canidate, uint32_t mimatched_types, bool implicitly_converts_ptr_arg) finline{
-        selected = canidate;
-        best_mimatched_types = mimatched_types;
-        selected_implicitly_converts_ptr_arg = implicitly_converts_ptr_arg;
-    };
     for (Func* canidate : candidates) {
 
-        uint32_t mimatched_types = 0;
-        uint32_t not_assignable_types = 0;
+        uint32_t score = 0;
         bool implicitly_converts_ptr_arg = false;
-        auto status = compare_as_call_candidate<false>(canidate,
-                                                       args,
-                                                       mimatched_types,
-                                                       not_assignable_types,
-                                                       implicitly_converts_ptr_arg);
+        auto status = compare_as_call_candidate<false>(canidate, args, is_const_object, score, implicitly_converts_ptr_arg);
         if (status != CallCompareStatus::SUCCESS) {
             continue;
         }
 
-        if (!selected) {
-            select(canidate, mimatched_types, implicitly_converts_ptr_arg);
-            continue;
-        }
-
-        if (best_mimatched_types > mimatched_types) {
-            select(canidate, mimatched_types, implicitly_converts_ptr_arg);
+        if (!selected || best_score > score) {
+            selected = canidate;
+            best_score = score;
+            selected_implicitly_converts_ptr_arg = implicitly_converts_ptr_arg;
+        } else if (best_score == score) {
+            // TODO: deal this should deal with ambiguity.
         }
     }
     return selected;
@@ -3767,11 +3749,20 @@ acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
 template<bool for_score_gathering>
 acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func* candidate,
                                                                       const llvm::SmallVector<Expr*>& args,
-                                                                      uint32_t& mimatched_types,
-                                                                      uint32_t& not_assignable_types,
+                                                                      const bool is_const_object,
+                                                                      uint32_t& score,
                                                                       bool& implicitly_converts_ptr_arg) const {
+
+    bool encountered_mismatched_types = false;
+
     if (!has_correct_number_of_args(candidate, args)) {
         return CallCompareStatus::INCORRECT_ARGS;
+    }
+
+    if (is_const_object && candidate->structn && !candidate->is_constant) {
+        return CallCompareStatus::NON_CONST_FROM_CONST_OBJECT;
+    } else if (!is_const_object && candidate->is_constant) {
+        score += PREFER_NON_CONST_LIMIT;
     }
 
     bool named_args_out_of_order = false;
@@ -3845,7 +3836,11 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
 
             if (!is_assignable) {
                 if constexpr (for_score_gathering) {
-                    ++not_assignable_types;
+                    if (!encountered_mismatched_types) {
+                        score += NOT_ASSIGNABLE_TYPES_LIMIT;
+                    }
+                    ++score;
+                    encountered_mismatched_types = true;
                     continue;
                 } else {
                     return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
@@ -3854,7 +3849,8 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         }
 
         if (param->type->is_not(arg_value->type)) {
-            ++mimatched_types;
+            // Lowest order case considered least important.
+            ++score;
         }
     }
 
@@ -3884,6 +3880,7 @@ bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const
 }
 
 void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
+                                             Node* call_node,
                                              const FuncList& candidates,
                                              const llvm::SmallVector<Expr*>& args) const {
 
@@ -3899,6 +3896,9 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
             ++count;
         }
         str += ")";
+        if (canidate->is_constant) {
+            str += " const";
+        }
         return str;
     };
 
@@ -3910,14 +3910,14 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
 
         logger.begin_error(error_loc, "Invalid call to %s: %s", func_type_str, function_decl_to_string(canidate));
         logger.add_empty_line();
-        display_call_mismatch_info(canidate, args, false);
+        display_call_mismatch_info(canidate, args, false, call_node);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
 
     } else {
 
         llvm::SmallVector<std::pair<uint32_t, const Func*>> candidates_and_scores;
         for (const Func* candidate : candidates) {
-            uint32_t score = get_function_call_score(candidate, args);
+            uint32_t score = get_function_call_score(candidate, args, false);
             candidates_and_scores.push_back(std::make_pair(score, candidate));
         }
         std::ranges::sort(candidates_and_scores, [](const auto& lhs, const auto& rhs) {
@@ -3928,7 +3928,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
         for (auto [_, candidate] : candidates_and_scores | std::views::take(context.get_max_call_err_funcs())) {
             logger.add_empty_line();
             logger.add_line("Could not match: %s", function_decl_to_string(candidate));
-            display_call_mismatch_info(candidate, args, true);
+            display_call_mismatch_info(candidate, args, true, call_node);
         }
         int64_t remaining = static_cast<int64_t>(candidates.size()) - static_cast<int64_t>(context.get_max_call_err_funcs());
         if (remaining > 0) {
@@ -3943,7 +3943,8 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
 template<typename F>
 void acorn::Sema::display_call_mismatch_info(const F* candidate,
                                              const llvm::SmallVector<Expr*>& args,
-                                             bool indent) const {
+                                             bool indent,
+                                             Node* call_node) const {
 
 #define err_line(fmt, ...) logger.add_line(("%s- " fmt), indent ? "  " : "", ##__VA_ARGS__)
 
@@ -3980,6 +3981,37 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         err_line("Incorrect number of args. Expected %s but found %s",
                  num_params, args.size());
         return;
+    }
+
+    if constexpr (is_func_decl) {
+        if (candidate->structn && !candidate->is_constant && !candidate->is_constructor) {
+            auto call = static_cast<FuncCall*>(call_node);
+            if (call->site->is(NodeKind::IdentRef) && cur_func) {
+                // Calling one member function from another.
+                if (cur_func->is_constant) {
+                    err_line("Cannot call non-const function from const function");
+                }
+            } else {
+
+                auto report_error = [&logger = this->logger, indent](DotOperator* dot) {
+                    err_line("Calling non-const function with const memory of type '%s'", dot->site->type);
+                };
+
+                auto dot = static_cast<DotOperator*>(call->site);
+                if (dot->site->type->is_struct()) {
+                    if (dot->site->type->is_const()) {
+                        report_error(dot);
+                    }
+                } else {
+                    auto ptr_type = static_cast<PointerType*>(dot->site->type);
+                    auto elm_type = ptr_type->get_elm_type();
+                    if (elm_type->is_struct() && elm_type->is_const()) {
+                        report_error(dot);
+                    }
+                }
+            }
+
+        }
     }
 
     auto get_param_type = [candidate](Var* param, size_t arg_idx) constexpr -> Type* {

@@ -1073,6 +1073,18 @@ static void struct_tests() {
 
         expect(result, std::identity()).to_be("ABCD");
     });
+    test("Struct with const and non-const func chooses non-const for non-const obj", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"structs/structs31.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("no const");
+    });
+    test("Struct with const and non-const func chooses const for const obj", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"structs/structs32.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("const");
+    });
 }
 
 static void member_function_tests() {

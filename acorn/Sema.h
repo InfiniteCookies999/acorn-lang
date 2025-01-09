@@ -56,6 +56,16 @@ namespace acorn {
         Struct* cur_struct     = nullptr;
         Enum*   cur_enum       = nullptr;
 
+        // Limits to calculate comparison scores for which function to call.
+        //
+        //     const uint32_t IMPLICIT_MISMATCHED_TYPES_LIMIT = 0;
+        static const uint32_t PREFER_NON_CONST_LIMIT         = MAX_FUNC_PARAMS * 4;
+        static const uint32_t NOT_ASSIGNABLE_TYPES_LIMIT     = PREFER_NON_CONST_LIMIT * 2;
+        static const uint32_t NON_CONST_FROM_CONST_OBJ_LIMIT = NOT_ASSIGNABLE_TYPES_LIMIT * 2;
+        // These get the same value because there is no preference of one over the other.
+        static const uint32_t INCORRECT_PARAM_NAME_OR_ORD_LIMIT = NON_CONST_FROM_CONST_OBJ_LIMIT * 2;
+        static const uint32_t INCORRECT_NUM_ARGS_LIMIT          = NON_CONST_FROM_CONST_OBJ_LIMIT * 2;
+
         bool is_comptime_if_cond = false;
         bool should_request_gen_queue;
 
@@ -136,39 +146,47 @@ namespace acorn {
         Func* check_function_decl_call(Expr* call_node,
                                        llvm::SmallVector<Expr*>& args,
                                        size_t non_named_args_offset,
-                                       FuncList& candidates);
+                                       FuncList& candidates,
+                                       bool is_const_object);
         Func* find_best_call_candidate(FuncList& candidates,
                                        llvm::SmallVector<Expr*>& args,
-                                       bool& selected_implicitly_converts_ptr_arg);
-        uint32_t get_function_call_score(const Func* candidate, const llvm::SmallVector<Expr*>& args) const;
+                                       bool& selected_implicitly_converts_ptr_arg,
+                                       bool is_const_object);
+        uint32_t get_function_call_score(const Func* candidate,
+                                         const llvm::SmallVector<Expr*>& args,
+                                         bool is_const_object) const;
         enum class CallCompareStatus {
             INCORRECT_ARGS,
             INCORRECT_PARAM_BY_NAME_NOT_FOUND,
             OUT_OF_ORDER_PARAMS,
             ARGS_NOT_ASSIGNABLE,
+            NON_CONST_FROM_CONST_OBJECT,
             SUCCESS
         };
+
         // Tells weather or not the function is callable and gathers information
         // to indicate if calling the function would be more viable to call than
         // a different overloaded version of the function.
         //
         // @return true if the function is callable with the given arguments.
         template<bool for_score_gathering>
-        CallCompareStatus compare_as_call_candidate(const Func* candidate,
+        CallCompareStatus compare_as_call_candidate(const Func* canidate,
                                                     const llvm::SmallVector<Expr*>& args,
-                                                    uint32_t& mimatched_types,
-                                                    uint32_t& not_assignable_types,
+                                                    const bool is_const_object,
+                                                    uint32_t& score,
                                                     bool& implicitly_converts_ptr_arg) const;
         bool has_correct_number_of_args(const Func* candidate,
                                         const llvm::SmallVector<Expr*>& args) const;
         void display_call_mismatch_info(PointSourceLoc error_loc,
+                                        Node* call_node,
                                         const FuncList& candidates,
                                         const llvm::SmallVector<Expr*>& args) const;
         // Displays information for why trying to call a function failed.
         template<typename F>
         void display_call_mismatch_info(const F* candidate,
                                         const llvm::SmallVector<Expr*>& args,
-                                        bool indent) const;
+                                        bool indent,
+                                        Node* call_node) const;
 
         void check_cast(Cast* cast);
         void check_named_value(NamedValue* named_value);
