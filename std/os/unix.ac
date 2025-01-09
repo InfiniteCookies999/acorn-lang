@@ -279,20 +279,20 @@ const __O_DIRECT    = 040000'i32;
 const __O_NOATIME   = 01000000'i32;
 const __O_PATH      = 010000000'i32;
 const __O_DSYNC     = 010000'i32;
-const __O_TMPFILE   = (020000000'i32 | __O_DIRECTORY);
+const __O_TMPFILE   = (020000000 | __O_DIRECTORY);
 
-const S_IRUSR = 0400'u32;                    /* Read by owner.  */
-const S_IWUSR = 0200'u32;                    /* Write by owner.  */
-const S_IXUSR = 0100'u32;                    /* Execute by owner.  */
+const S_IRUSR = 0400;                    /* Read by owner.  */
+const S_IWUSR = 0200;                    /* Write by owner.  */
+const S_IXUSR = 0100;                    /* Execute by owner.  */
 const S_IRWXU = S_IRUSR | S_IWUSR | S_IXUSR; /* Read, write, and execute by owner.  */
-const S_IRGRP = S_IRUSR >> 3'u32;            /* Read by group.  */
-const S_IWGRP = S_IWUSR >> 3'u32;            /* Write by group.  */
-const S_IXGRP = S_IXUSR >> 3'u32;            /* Execute by group.  */
-const S_IRWXG = S_IRWXU >> 3'u32;            /* Read, write, and execute by group.  */
-const S_IROTH = S_IRGRP >> 3'u32;            /* Read by others.  */
-const S_IWOTH = S_IWGRP >> 3'u32;            /* Write by others.  */
-const S_IXOTH = S_IXGRP >> 3'u32;            /* Execute by others.  */
-const S_IRWXO = S_IRWXG >> 3'u32;            /* Read, write, and execute by others.  */
+const S_IRGRP = S_IRUSR >> 3;            /* Read by group.  */
+const S_IWGRP = S_IWUSR >> 3;            /* Write by group.  */
+const S_IXGRP = S_IXUSR >> 3;            /* Execute by group.  */
+const S_IRWXG = S_IRWXU >> 3;            /* Read, write, and execute by group.  */
+const S_IROTH = S_IRGRP >> 3;            /* Read by others.  */
+const S_IWOTH = S_IWGRP >> 3;            /* Write by others.  */
+const S_IXOTH = S_IXGRP >> 3;            /* Execute by others.  */
+const S_IRWXO = S_IRWXG >> 3;            /* Read, write, and execute by others.  */
 
 native int32 open(const char* pathname, int32 flags, ...);
 
