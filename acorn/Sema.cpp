@@ -4087,7 +4087,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         auto param_type = get_param_type(param, i);
         if (!is_assignable_to(param_type, arg_value)) {
             bool is_assignable = false;
-            if (param->has_implicit_ptr) {
+            if (param && param->has_implicit_ptr) {
                 auto ptr_type = static_cast<PointerType*>(param->type);
                 if (may_implicitly_convert_ptr(ptr_type, arg_value)) {
                     is_assignable = true;
@@ -4567,7 +4567,12 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             }
 
             if (passes_struct_ptr) {
-                auto struct_ptr_type = type_table.get_ptr_type(func->structn->struct_type);
+                Type* struct_type = func->structn->struct_type;
+                if (func->is_constant) {
+                    struct_type = type_table.get_const_type(struct_type);
+                }
+
+                auto struct_ptr_type = type_table.get_ptr_type(struct_type);
 
                 if (param_types[0]->is_not(struct_ptr_type)) {
                     return false;
@@ -5078,7 +5083,12 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
         auto types = func->params | std::views::transform([](Var* param) { return param->type; })
                                   | std::ranges::to<llvm::SmallVector<Type*>>();
         if (func->structn) {
-            auto struct_ptr_type = type_table.get_ptr_type(func->structn->struct_type);
+            Type* struct_type = func->structn->struct_type;
+            if (func->is_constant) {
+                struct_type = type_table.get_const_type(struct_type);
+            }
+
+            auto struct_ptr_type = type_table.get_ptr_type(struct_type);
             types.insert(types.begin(), struct_ptr_type);
         }
 
