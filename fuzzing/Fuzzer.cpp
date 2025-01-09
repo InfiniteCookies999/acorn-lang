@@ -12,7 +12,7 @@ int main() {
     acorn::PageAllocator allocator(acorn::get_system_page_size());
     acorn::Compiler compiler(allocator);
     compiler.set_stand_alone();
-    compiler.set_max_error_count(1000);
+    compiler.set_max_error_count(5000);
 
 #if 1
     std::ofstream ostream("fuzz.ac");

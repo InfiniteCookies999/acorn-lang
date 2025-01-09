@@ -8,3 +8,6 @@ CMakePresets.json
 .*
 
 debug-testing
+
+# Visual studio config files
+**/CMakeSettings.json
