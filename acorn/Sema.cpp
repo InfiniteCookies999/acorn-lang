@@ -1325,6 +1325,8 @@ void acorn::Sema::check_struct(Struct* structn) {
     // -- Debug
     // Logger::debug("checking struct: %s", structn->name);
 
+    check_modifiers_for_composite(structn, "Structs");
+
     auto prev_struct = cur_struct;
     cur_struct = structn;
 
@@ -1434,6 +1436,8 @@ void acorn::Sema::check_enum(Enum* enumn) {
 
     // -- Debug
     // Logger::debug("Checking enum: %s", enumn->name);
+
+    check_modifiers_for_composite(enumn, "Enums");
 
     enumn->has_been_checked = true;
     enumn->is_being_checked = true;
@@ -4900,6 +4904,18 @@ void acorn::Sema::check_modifier_incompatibilities(Decl* decl) {
         }
     }
 #undef is_pow2
+}
+
+void acorn::Sema::check_modifiers_for_composite(Decl* decl, const char* composite_type_str) {
+    check_modifier_incompatibilities(decl);
+    if (decl->has_modifier(Modifier::DllImport)) {
+        error(decl->get_modifier_location(Modifier::DllImport), "%s cannot have dllimport modifier", composite_type_str)
+            .end_error(ErrCode::CompositeCannotHaveDllImportModifier);
+    }
+    if (decl->has_modifier(Modifier::Native)) {
+        error(decl->get_modifier_location(Modifier::Native), "%s cannot have native modifier", composite_type_str)
+            .end_error(ErrCode::CompositeCannotHaveNativeModifier);
+    }
 }
 
 void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code) {

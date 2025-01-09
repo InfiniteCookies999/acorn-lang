@@ -225,6 +225,7 @@ acorn::Node* acorn::Parser::parse_statement() {
     case ModifierTokens:
         modifiers = parse_modifiers();
         if (cur_token.is(Token::KwStruct)) {
+            next_token(); // Consuming 'struct' token.
             auto name = expect_identifier("for struct");
             return parse_struct(modifiers, name);
         } else if (cur_token.is(Token::KwEnum)) {
