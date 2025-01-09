@@ -132,11 +132,12 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
 
           { "native"       , Token::KwNative      },
           { "dllimport"    , Token::KwDllimport   },
-          { "pub"          , Token::KwPub         },
-          { "prv"          , Token::KwPrv         },
+          { "public"       , Token::KwPublic      },
+          { "private"      , Token::KwPrivate     },
+          { "readonly"     , Token::KwReadonly    },
           { "return"       , Token::KwReturn      },
           { "loop"         , Token::KwLoop        },
-                                                  
+ 
           { "#if"          , Token::KwCTIf        },
           { "#elif"        , Token::KwCTElIf      },
           { "#else"        , Token::KwCTElse      },

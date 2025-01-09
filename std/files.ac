@@ -1,4 +1,4 @@
-#file(access=pub, namespace=files)
+#file(access=public, namespace=files)
 
 import .. module;
 import .win32;

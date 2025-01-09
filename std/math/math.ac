@@ -1,4 +1,4 @@
-#file(access=pub, namespace=math)
+#file(access=public, namespace=math)
 
 /*
  * The ratio between the circumference and diameter of a circle.

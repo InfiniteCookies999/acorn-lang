@@ -37,8 +37,9 @@ case Token::KwAuto
 #define ModifierTokens   \
      Token::KwNative:    \
 case Token::KwDllimport: \
-case Token::KwPub:       \
-case Token::KwPrv
+case Token::KwPublic:    \
+case Token::KwPrivate:   \
+case Token::KwReadonly
 
 acorn::Parser::Parser(Context& context, Module& modl, SourceFile* file)
     : context(context),
@@ -711,6 +712,7 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
         if (var->name != Identifier::Invalid) {
             structn->nspace->add_variable(var);
             structn->fields.push_back(var);
+            var->structn = structn;
         }
     };
     
@@ -818,7 +820,7 @@ uint32_t acorn::Parser::parse_modifiers() {
             next_token();
             break;
         }
-        case Token::KwPub: {
+        case Token::KwPublic: {
             if (modifiers & Modifier::Public)
                 error(cur_token, "Duplicate modifier")
                     .end_error(ErrCode::ParseDuplicateModifier);
@@ -827,11 +829,20 @@ uint32_t acorn::Parser::parse_modifiers() {
             next_token();
             break;
         }
-        case Token::KwPrv: {
+        case Token::KwPrivate: {
             if (modifiers & Modifier::Private)
                 error(cur_token, "Duplicate modifier")
                     .end_error(ErrCode::ParseDuplicateModifier);
             modifiers |= Modifier::Private;
+
+            next_token();
+            break;
+        }
+        case Token::KwReadonly: {
+            if (modifiers & Modifier::Readonly)
+                error(cur_token, "Duplicate modifier")
+                .end_error(ErrCode::ParseDuplicateModifier);
+            modifiers |= Modifier::Readonly;
 
             next_token();
             break;
@@ -1222,10 +1233,10 @@ void acorn::Parser::parse_comptime_file_info() {
                 }
                 
                 already_set_access = true;
-                if (cur_token.is(Token::KwPub)) {
+                if (cur_token.is(Token::KwPublic)) {
                     next_token();
                     file->set_default_access(Modifier::Public);
-                } else if (cur_token.is(Token::KwPrv)) {
+                } else if (cur_token.is(Token::KwPrivate)) {
                     next_token();
                     file->set_default_access(Modifier::Private);
                 } else {

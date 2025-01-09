@@ -1,4 +1,4 @@
-#file(access=pub, namespace=reflect)
+#file(access=public, namespace=reflect)
 
 /*
  * Represents the kind of a Type in acorn.

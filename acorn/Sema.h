@@ -191,6 +191,7 @@ namespace acorn {
         bool has_valid_constness(Type* to_type, Type* from_type) const;
         void check_modifiable(Expr* expr);
         bool is_lvalue(Expr* expr) const;
+        bool is_readonly_field_without_access(Expr* expr) const;
         bool is_incomplete_type(Type* type) const;
         bool is_incomplete_statement(Node* stmt) const;
         bool may_implicitly_convert_return_ptr(Type* to_type, FuncCall* call) const;

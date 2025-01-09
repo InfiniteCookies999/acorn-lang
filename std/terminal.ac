@@ -1,4 +1,4 @@
-#file(access=pub)
+#file(access=public)
 
 import .win32;
 import .unix;
@@ -17,7 +17,7 @@ void print(const char* s) {
     print(s, strlen(s));
 }
 
-void print(String^ s) {
+void print(const String^ s) {
     print(s.buffer, s.length);
 }
 
@@ -80,7 +80,7 @@ void println(bool b) {
     print("\n");
 }
 
-void println(String^ s) {
+void println(const String^ s) {
     print(s);
     print("\n");
 }

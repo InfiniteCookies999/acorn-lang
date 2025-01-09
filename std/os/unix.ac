@@ -1,4 +1,4 @@
-#file(access=pub, namespace=unix)
+#file(access=public, namespace=unix)
 
 #if OS_GROUP_UNIX
 

@@ -1,11 +1,11 @@
-#file(access=pub)
+#file(access=public)
 
-prv char DEFAULT_CHAR = '\0';
+private char DEFAULT_CHAR = '\0';
 
 struct String {
-    char* buffer;
-    int   length;
-    int   capacity;
+    readonly char* buffer;
+    readonly int   length;
+    private  int   capacity;
     
     /*
      * Creates a String with a length of 0.

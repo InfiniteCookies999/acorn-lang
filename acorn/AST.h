@@ -84,12 +84,15 @@ namespace acorn {
     };
 
     struct Modifier {
-        const static uint32_t Start     = 0x01;
-        const static uint32_t Native    = 0x01;
-        const static uint32_t DllImport = 0x02;
-        const static uint32_t Public    = 0x04;
-        const static uint32_t Private   = 0x08;
-        const static uint32_t End       = 0x08;
+        const static uint32_t Start       = 0x01;
+        const static uint32_t Native      = 0x01;
+        const static uint32_t DllImport   = 0x02;
+        const static uint32_t Public      = 0x04;
+        const static uint32_t Private     = 0x08;
+        const static uint32_t Readonly    = 0x10;
+        const static uint32_t AccessMask  = 0x10;
+        const static uint32_t AccessShift = 0x08;
+        const static uint32_t End         = 0x10;
 
         static const char* to_string(uint32_t modifier);
     };
@@ -242,6 +245,8 @@ namespace acorn {
 
         llvm::StringRef linkname;
         
+        Struct* structn;
+
         uint32_t param_idx = NotParam;
         uint32_t field_idx = NotField;
         bool     is_global = false;

@@ -1,4 +1,4 @@
-#file(access=pub)
+#file(access=public)
 
 import .win32;
 import .unix;
@@ -16,7 +16,7 @@ void exit(int exit_code) {
 }
 
 // Used to keep track of time.
-prv int64 performance_freq;
+private int64 performance_freq;
 
 int64 time_in_nanosecs() {
 #if OS_GROUP_WINDOWS

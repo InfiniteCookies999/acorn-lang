@@ -66,8 +66,9 @@ namespace acorn {
             ModifierStart,
             KwNative,
             KwDllimport,
-            KwPub,
-            KwPrv,
+            KwPublic,
+            KwPrivate,
+            KwReadonly,
             ModifierEnd,
 
             KwReturn,

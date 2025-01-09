@@ -1,4 +1,4 @@
-#file(access=pub, namespace=win32)
+#file(access=public, namespace=win32)
 
 #if OS_GROUP_WINDOWS
 

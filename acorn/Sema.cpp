@@ -740,6 +740,10 @@ bool acorn::Sema::check_function_decl(Func* func) {
         error(func, "Functions cannot use native variadic parameters unless marked as native")
             .end_error(ErrCode::SemaFuncHasNativeVarArgButNotNative);
     }
+    if (func->has_modifier(Modifier::Readonly)) {
+        error(func, "Functions cannot have readonly modifier")
+            .end_error(ErrCode::SemaFuncsCannotHaveReadonlyModifier);
+    }
 
     if (func->return_type == context.auto_type ||
         func->return_type == context.auto_ptr_type ||
@@ -1108,6 +1112,10 @@ void acorn::Sema::check_variable(Var* var) {
     };
 
     check_modifier_incompatibilities(var);
+    if (var->has_modifier(Modifier::Readonly) && !var->is_field()) {
+        error(var, "Only fields can have readonly modifier")
+            .end_error(ErrCode::SemaOnlyFieldsCanHaveReadonlyModifier);
+    }
 
     // This must go up top before returning due to any errors because otherwise
     // future variables will not be able to find the reference of the variable
@@ -1282,6 +1290,9 @@ void acorn::Sema::check_variable(Var* var) {
         return cleanup();
     }
 
+    // !! WARNING: If this code ever changes to not call `is_asignable_to` when
+    // the variable has been declared `auto` then extra work must be done to
+    // ensure things such as accessing of function references that are private.
     if (var->assignment && !is_assignable_to(var->type, var->assignment)) {
         bool is_assignable_to = false;
         
@@ -3028,7 +3039,16 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
                 .end_error(ErrCode::SemaUnaryOpAddressAccessNotLvalue);
             return;
         }
+ 
+        Type* elm_type = expr->type;
+        if (is_readonly_field_without_access(expr)) {
+            if (!elm_type->is_const()) {
+                elm_type = type_table.get_const_type(elm_type);
+            }
+        }
+
         unary_op->type = type_table.get_ptr_type(expr->type);
+        
         unary_op->is_foldable = false;
         break;
     }
@@ -3335,6 +3355,15 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             return;
         }
 
+        if (dot->is_var_ref() && dot->var_ref->has_modifier(Modifier::Private)) {
+            if (!cur_func || cur_func->structn != dot->var_ref->structn) {
+                error(expand(dot), "Cannot access field '%s', it is marked private",
+                      dot->var_ref->name)
+                    .end_error(ErrCode::SemaCannotAccessFieldIsPrivate);
+            }
+        }
+        
+
         if (struct_type->is_const() && !dot->type->is_const()) {
             // The constness must be passed onto the field to prevent modification of fields.
             dot->type = type_table.get_const_type(dot->type);
@@ -3640,6 +3669,13 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                     report_cannot_call_non_const_member_func(dot);
                 }
             }
+        }
+    }
+
+    if (called_func->has_modifier(Modifier::Private) && called_func->structn) {
+        if (!cur_func || (cur_func->structn != called_func->structn)) {
+            error(expand(call_node), "Cannot call function marked private")
+                .end_error(ErrCode::SemaCannotCallFunctionMarkedPrivate);
         }
     }
 
@@ -4462,7 +4498,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
                 to_arr_type = static_cast<ArrayType*>(to_arr_type->get_elm_type());
                 from_arr_type = static_cast<ArrayType*>(from_arr_type->get_elm_type());
             }
-            
+
             // Allow for zero filling the remainder.
             if (from_arr_type->get_length() > to_arr_type->get_length()) {
                 return false;
@@ -4478,7 +4514,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
     case TypeKind::Function: {
         if (from_type->get_kind() == TypeKind::FuncsRef) {
             auto to_func_type = static_cast<FunctionType*>(to_type);
-            
+
             // TODO: in the future we want to allow selection of the
             //       specific function they ask for.
             auto ref = static_cast<IdentRef*>(expr);
@@ -4492,6 +4528,12 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             }
             for (size_t i = 0; i < param_types.size(); i++) {
                 if (param_types[i]->is_not(func->params[i]->type)) {
+                    return false;
+                }
+            }
+
+            if (func->has_modifier(Modifier::Private)) {
+                if (!cur_func || cur_func->structn != func->structn) {
                     return false;
                 }
             }
@@ -4656,6 +4698,12 @@ void acorn::Sema::check_modifiable(Expr* expr) {
                 .end_error(ErrCode::SemaReassignConstAddress);
         }
     }
+    if (is_readonly_field_without_access(expr)) {
+        auto dot = static_cast<DotOperator*>(expr);
+        error(expand(expr), "Cannot assign to field '%s', it is marked readonly",
+              dot->var_ref->name)
+            .end_error(ErrCode::SemaCannotAssignToReadonly);
+    }
 }
 
 bool acorn::Sema::is_lvalue(Expr* expr) const {
@@ -4672,6 +4720,17 @@ bool acorn::Sema::is_lvalue(Expr* expr) const {
         return unary->op == '*';
     }
 
+    return false;
+}
+
+bool acorn::Sema::is_readonly_field_without_access(Expr* expr) const {
+    if (expr->is(NodeKind::DotOperator)) {
+        auto dot = static_cast<DotOperator*>(expr);
+        if (dot->is_var_ref() && dot->var_ref->has_modifier(Modifier::Readonly) &&
+            (!cur_func || cur_func->structn != dot->var_ref->structn)) {
+            return true;
+        }
+    }
     return false;
 }
 
@@ -4812,10 +4871,23 @@ void acorn::Sema::check_modifier_incompatibilities(Decl* decl) {
               "Cannot have dllimport modifier without native modifier")
             .end_error(ErrCode::SemaDllImportWithoutNativeModifier);
     }
-    if (decl->has_modifier(Modifier::Private) && decl->has_modifier(Modifier::Public)) {
-        error(decl, "Cannot have both prv and pub modifiers")
-            .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
+#define is_pow2(n) ((n) & ((n) - 1)) == 0
+    uint32_t access_bits = (decl->modifiers >> Modifier::AccessShift) & Modifier::AccessMask;
+    if (is_pow2(access_bits)) {
+        if (decl->has_modifier(Modifier::Public) && decl->has_modifier(Modifier::Private)) {
+            error(decl, "Cannot have both private and public modifiers")
+                .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
+        }
+        if (decl->has_modifier(Modifier::Public) && decl->has_modifier(Modifier::Readonly)) {
+            error(decl, "Cannot have both readonly and public modifiers")
+                .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
+        }
+        if (decl->has_modifier(Modifier::Private) && decl->has_modifier(Modifier::Readonly)) {
+            error(decl, "Cannot have both private and readonly modifiers")
+                .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
+        }
     }
+#undef is_pow2
 }
 
 void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code) {
@@ -4947,6 +5019,12 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
                                   | std::ranges::to<llvm::SmallVector<Type*>>();
 
         auto from_type = type_table.get_function_type(func->return_type, types);
+        // It is possible the types match but the function is private!
+        if (to_type->is(from_type)) {
+            std::string name = func->name.to_string().str();
+            return std::format("Cannot access function '{}', it is marked private", name);
+        }
+
         return get_type_mismatch_error(to_type, from_type);
     } else {
         return get_type_mismatch_error(to_type, expr->type);

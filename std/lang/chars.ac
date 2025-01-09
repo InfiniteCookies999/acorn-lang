@@ -1,4 +1,4 @@
-#file(access=pub)
+#file(access=public)
 
 /*
  * A digit table that takes a digit and returns the corresponding
