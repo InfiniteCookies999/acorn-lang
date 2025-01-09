@@ -38,7 +38,7 @@ namespace acorn {
     using FuncList = llvm::SmallVector<Func*>;
 
     enum class NodeKind {
-        
+
         Func,
         ImplicitFunc,
         Var,
@@ -188,7 +188,7 @@ namespace acorn {
 
         uint32_t num_returns = 0;
         llvm::SmallVector<Var*, 16> vars_to_alloc;
-        
+
         size_t default_params_offset = static_cast<size_t>(-1);
 
         ScopeStmt* scope = nullptr;
@@ -244,7 +244,7 @@ namespace acorn {
         }
 
         llvm::StringRef linkname;
-        
+
         Struct* structn;
 
         uint32_t param_idx = NotParam;
@@ -266,7 +266,7 @@ namespace acorn {
         // If the variable is foldable then this contains the
         // generated value of the variable.
         llvm::Value* ll_comptime_value = nullptr;
-        
+
         // If this is set to true then the function passes the
         // struct value as an integer type then converts it back
         // once inside the body of the function.
@@ -275,7 +275,7 @@ namespace acorn {
         // are passed as pointers and memcpy is used at the
         // calling location.
         bool is_aggr_param = false;
-        
+
         llvm::Value* ll_address;
 
         bool is_param() const { return param_idx != NotParam; }
@@ -470,7 +470,7 @@ namespace acorn {
 
         SourceLoc end_loc;
     };
-    
+
 
     // Expressions
     //--------------------------------------
@@ -492,7 +492,7 @@ namespace acorn {
         //
         // This is equivalent to inserting a cast node into the tree
         // without the extra overhead of creating new nodes.
-        // 
+        //
         // Transformation:
         //            +                        +
         //          /   \           =>       /   \
@@ -570,7 +570,7 @@ namespace acorn {
             Module,
             None
         } relative_enforcement = RelativeEnforcement::None;
-    
+
         bool found_ref() const {
             return found_kind != NoneKind;
         }

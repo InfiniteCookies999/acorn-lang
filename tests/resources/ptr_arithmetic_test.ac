@@ -32,7 +32,7 @@ void write_val(const char* c) {
 void main() {
     const char* ptr   = "hello!";
     const char* start = ptr;
-    
+
     write_val(ptr);
 
     ptr = ptr + 1;

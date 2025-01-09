@@ -113,7 +113,7 @@ struct Expector {
         if (intercepted_error_codes.empty()) {
             fail([] {
                 std::cout << "Expected an error but no error occured";
-            });    
+            });
             return;
         }
         if (intercepted_error_codes.size() > 1) {

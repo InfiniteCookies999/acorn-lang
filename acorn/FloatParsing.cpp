@@ -149,7 +149,7 @@ public:
         if (this == &b) {
             return *this;
         }
-        
+
         delete[] this->blocks;
         this->length = b.length;
         this->blocks = new uint32_t[b.length];
@@ -189,7 +189,7 @@ public:
 
         size_t idx = 0;
         while (idx + 5 < big_digits_count) {
-            
+
             uint32_t value = static_cast<uint32_t>(big_digits[idx++]) - '0';
             for (size_t i = 1; i < 5; i++) {
                 value *= 10;
@@ -441,7 +441,7 @@ public:
         int64_t  shift_block_idx = shift >> 5;
         uint32_t shift_mod_idx   = shift & 31;
         BigIntFD result;
-    
+
         if (shift_mod_idx == 0) {
             // Block aligned.
             result.length = this->length + shift_block_idx;
@@ -563,8 +563,8 @@ private:
             blocks = nullptr;
             length = 0;
             return;
-        } 
-    
+        }
+
         blocks = new uint32_t[offset + 2];
         memset(blocks, 0, offset * sizeof(uint32_t));
         blocks[offset]   = b1;
@@ -681,7 +681,7 @@ static ParseData parse_float_data(PageAllocator& allocator, llvm::StringRef text
                     // Not all the zeros can actually fit into the number.
                     size_t taken_zeros = max_small_digits - small_digits_count;
                     trailing_zero_count -= taken_zeros;
-                    
+
                     small_value *= POW10_INT64_TABLE[taken_zeros];
                     small_digits_count = max_small_digits;
                     break;
@@ -889,9 +889,9 @@ struct CorrectionInfo<float> {
 
 template<typename T>
 static T correct_value(T value, ParseData parse_data) {
-    
+
     // The calculation:
-    // 
+    //
     // In the paper  "How to Read Floating Point Numbers Accurately" by
     // William D Clinger, section 5 tells us what we are
     // going to solve for. Let x denote the exact value
@@ -899,13 +899,13 @@ static T correct_value(T value, ParseData parse_data) {
     //
     // 1.   x/y = f*10^e / (m*b^k).
     // 2.   f*10^e = (m+err)*2^k
-    // 
+    //
     // Solving for error in equation 2 gives us err = (m(x - y))/y.
-    // 
+    //
     // The stopping condition for the algorithm is such that err <= 1/2.
-    // 
+    //
     // So we solve for:
-    // 
+    //
     // (m(x - y))/y <= 1/2 -> 2m(x - y) <= y
     //                     -> 2mx - 2my <= y
     //                     -> 2m*f*10^e - 2m*m*2^k <= m*2^k
@@ -916,8 +916,8 @@ static T correct_value(T value, ParseData parse_data) {
 
     using IntTy = CorrectionInfo<T>::IntTy;
     IntTy bits = std::bit_cast<IntTy>(value);
-    
-    
+
+
     int64_t e = parse_data.exp - (parse_data.small_digits_count + parse_data.big_digits_count);
 
     // Powers of 5 portion of the exponent for the exact value. If
@@ -986,7 +986,7 @@ static T correct_value(T value, ParseData parse_data) {
         } else {
             x2 += -no_zeros_exp;
         }
-        
+
         int64_t err_lhs_cmp;
         int64_t cmp_rhs2 = y2;
         if (exp_bits <= -exp_bias) {
@@ -1071,7 +1071,7 @@ static T correct_value(T value, ParseData parse_data) {
             }
         }
     }
-    
+
     if (parse_data.is_negative) {
         bits |= sign_mask;
     }
@@ -1139,7 +1139,7 @@ acorn::parse_float32_bits(PageAllocator& allocator, llvm::StringRef text) {
             // Otherwise continuing to harder cases.
         }
     }
-    
+
     int64_t total_digits_i64 = static_cast<int64_t>(total_digits);
     if (parse_data.exp >= total_digits_i64 &&
         total_digits_i64 + parse_data.exp < MAX_SMALL_DOUBLE_DIGITS) {
@@ -1174,7 +1174,7 @@ acorn::parse_float32_bits(PageAllocator& allocator, llvm::StringRef text) {
         if (parse_data.exp < -46) {
             return { 0.0f, FloatParseError::Underflow };
         }
-        
+
         if ((e & 15) != 0) {
             double_value /= POW10_DOUBLE_TABLE[e & 15];
         }

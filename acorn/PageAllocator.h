@@ -47,9 +47,9 @@ namespace acorn {
         size_t cur_page_size;
 
         std::mutex mtx;
-        
+
         llvm::SmallVector<void*, 32> pages;
-        
+
     };
 }
 

@@ -42,7 +42,7 @@ struct A {
     int64 bar2() {
         return v2;
     }
-    
+
     int64 bar3() {
         return v3;
     }

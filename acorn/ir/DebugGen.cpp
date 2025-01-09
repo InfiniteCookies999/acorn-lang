@@ -110,9 +110,9 @@ void acorn::DebugInfoEmitter::emit_location(llvm::IRBuilder<>& ir_builder, Sourc
 }
 
 void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction, SourceLoc location) {
-	
+
 	auto [line_number, column_number] = file->line_table.get_line_and_column_number(location);
-	
+
 	llvm::DIScope* di_scope = di_lexical_scopes.back();
 	auto di_location = llvm::DILocation::get(
 		context.get_ll_context(),
@@ -133,7 +133,7 @@ void acorn::DebugInfoEmitter::emit_location_at_last_statement(llvm::IRBuilder<>&
 
 void acorn::DebugInfoEmitter::emit_function_variable(Var* var, llvm::IRBuilder<>& ir_builder) {
 	auto di_scope = di_lexical_scopes.back();
-	
+
 	auto [line_number, column_number] = var->file->line_table.get_line_and_column_number(var->loc);
 
 	auto di_var = builder.createAutoVariable(
@@ -218,7 +218,7 @@ void acorn::DebugInfoEmitter::emit_file(SourceFile* file) {
 
 	auto itr = wfull_path.find_last_of('/');
 	bool has_last_slash = itr != std::wstring::npos;
-	
+
 	auto wfile_name = has_last_slash ? wfull_path.substr(itr + 1) : wfull_path;
 	auto wdirectory = wfull_path.substr(0, wfull_path.size() - wfile_name.size());
 	if (wdirectory.ends_with('/')) {
@@ -265,7 +265,7 @@ void acorn::DebugInfoEmitter::emit_file(SourceFile* file) {
 }
 
 llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
-	
+
 	auto itr = di_cached_types.find(type);
 	if (itr != di_cached_types.end()) {
 		return itr->second;
@@ -276,7 +276,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 		di_cached_types.insert({ type, di_type });
 		return di_type;
 	};
-	
+
 	switch (type->get_kind()) {
 	case TypeKind::Void:    return nullptr; // Yes this is correct it expects nullptr.
 	case TypeKind::Int:     return make_basic_type("int"   , 32, llvm::dwarf::DW_ATE_signed);
@@ -331,7 +331,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 		llvm::SmallVector<llvm::Metadata*> di_subscript_lengths;
 		bool more_subscripts = false;
 		do {
-			
+
 			auto di_subscript_length = llvm::ConstantAsMetadata::get(
 				llvm::ConstantInt::get(ll_length_type, arr_type->get_length()));
 
@@ -362,7 +362,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 
 		auto di_ret_type = emit_type(func_type->get_return_type());
 		di_func_types.push_back(di_ret_type);
-		
+
 		for (Type* param_type : func_type->get_param_types()) {
 			di_func_types.push_back(emit_type(param_type));
 		}
@@ -386,7 +386,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 		// This is right its underlying implementation gets the size of types by literally getting the size
 		// of C++ types which they map to.
 		uint64_t size_in_bits = ll_struct_layout->getSizeInBits();
-		
+
 		auto [line_number, _] = file->line_table.get_line_and_column_number(structn->loc);
 
 		llvm::DINode::DIFlags di_flags = llvm::DINode::FlagZero; // TODO: flags
@@ -411,9 +411,9 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 
 		auto create_member_field_type = [this, di_struct_type, file, di_unit](Var* field, uint64_t bits_offset) finline{
 			auto ll_type = gen_type(field->type, context.get_ll_context(), context.get_ll_module());
-		
+
 			uint64_t size_in_bits = context.get_ll_module().getDataLayout().getTypeAllocSize(ll_type);
-			
+
 			auto [line_number, _] = file->line_table.get_line_and_column_number(field->loc);
 
 			return builder.createMemberType(

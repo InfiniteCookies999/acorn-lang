@@ -40,13 +40,13 @@ namespace acorn {
         std::mutex const_types_mtx;
         llvm::DenseMap<Type*, Type*> const_types;
         llvm::DenseMap<Type*, Type*> inv_const_types;
-        
+
         std::mutex enum_container_types_mtx;
         llvm::DenseMap<Type*, Type*> enum_container_types;
 
         std::mutex ptr_types_mtx;
         llvm::DenseMap<Type*, PointerType*> ptr_types;
-        
+
         std::mutex arr_types_mtx;
         llvm::DenseMap<std::pair<Type*, uint32_t>, ArrayType*> arr_types;
 

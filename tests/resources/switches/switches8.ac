@@ -26,9 +26,9 @@ void print(const char* s, int length) {
 }
 
 void main() {
-    
+
     int a = 4;
-    
+
     switch a {
     case:
         print("default case", 12);

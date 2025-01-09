@@ -30,7 +30,7 @@ void write_val(int val) {
 }
 
 void main() {
-    
+
     int[64] a;
     int[..] s = a;
 

@@ -16,7 +16,7 @@
 // COM objects from visual studio's configuration dll. Do not want to go through the process
 // of including the setup configuration headers so the interfaces we want are defined here with
 // their respective IDs. The COM object for ISetupConfiguration will be loaded via COM library.
-// 
+//
 
 #ifdef _WIN32
 
@@ -67,7 +67,7 @@ Deferer<F> new_deferer(F&& cb) {
 
 namespace acorn {
     std::wstring find_newest_ver_directory(const std::wstring& path) {
-        
+
         int best_ver[4]{0};
         namespace fs = std::filesystem;
 
@@ -75,7 +75,7 @@ namespace acorn {
         for (const auto& entry : fs::directory_iterator(path)) {
             if (!entry.is_directory()) continue;
             std::string dir_name = entry.path().filename().string().c_str();
-            
+
             int ver[4];
             auto r = sscanf_s((const char* const)dir_name.c_str(), "%d.%d.%d.%d", &ver[0], &ver[1], &ver[2], &ver[3]);
             if (r < 4) continue;
@@ -121,7 +121,7 @@ bool acorn::get_windows_kits_install_paths(Context& context, PageAllocator& allo
                                            std::wstring& winkit_lib_um_path, std::wstring& winkit_lib_ucrt_path) {
 
     // TODO: Won't work on older versions of windows. This applies to windows 10+
-    
+
     HKEY main_key;
     if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots",
                       0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &main_key) != ERROR_SUCCESS) {
@@ -153,7 +153,7 @@ bool acorn::get_windows_kits_install_paths(Context& context, PageAllocator& allo
         winkit_lib_um_path += L"\\x86";
         winkit_lib_ucrt_path += L"\\x86";
     }
-    
+
     return true;
 }
 
@@ -231,12 +231,12 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
         auto wversion = converter.from_bytes(version);
 
         auto base_path = inst_path + L"\\VC\\Tools\\MSVC\\" + wversion;
-        
+
         auto msvc_lib = base_path + L"\\lib";
         auto msvc_bin = base_path + L"\\bin";
 #ifdef _WIN64
         msvc_bin += L"\\Hostx64";
-#else   
+#else
         msvc_bin += L"\\Hostx32";
 #endif
 
@@ -247,7 +247,7 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
             msvc_bin += L"\\x86";
             msvc_lib += L"\\x86";
         }
-        
+
 
         bin_path = msvc_bin;
         lib_path = msvc_lib;
@@ -271,7 +271,7 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
     //    return false;
     //}
     //
-    
+
     /*const char* versions[] = {"14.0", "13.0",  "12.0", "11.0", "10.0", "9.0"};
     const int num_versions = sizeof(versions) / sizeof(versions[0]);
 

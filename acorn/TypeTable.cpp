@@ -108,14 +108,14 @@ acorn::PointerType* acorn::TypeTable::get_ptr_type(Type* elm_type) {
 
     auto ptr_type = PointerType::create(allocator, elm_type);
     ptr_types.insert({ elm_type, ptr_type });
-    
+
     // Examples for while this process works.
     // Let get_const(type) represent requesting the const
     // version and get_ptr(type) be this function.
-    // 
+    //
     // Say we want const int* then the the following steps
     // are taken:
-    // 
+    //
     // 1. int  (initialized at startup)
     // 2. const int = get_const(int)
     //    2.a  (const int).non_const_version => int
@@ -159,7 +159,7 @@ acorn::PointerType* acorn::TypeTable::get_ptr_type(Type* elm_type) {
 
 acorn::ArrayType* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length) {
     std::lock_guard lock(arr_types_mtx);
-    
+
     auto itr = arr_types.find({ elm_type, length });
     if (itr != arr_types.end()) {
         return itr->second;
@@ -167,7 +167,7 @@ acorn::ArrayType* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length
 
     auto arr_type = ArrayType::create(allocator, elm_type, length);
     arr_types.insert({ { elm_type, length }, arr_type });
-    
+
     // Read comment under get_ptr_type for explaination as to what is happening here.
     if (elm_type->does_contain_const()) {
         arr_type->contains_const = true;
@@ -195,10 +195,10 @@ acorn::SliceType* acorn::TypeTable::get_slice_type(Type* elm_type) {
     if (itr != slice_types.end()) {
         return itr->second;
     }
-    
+
     auto slice_type = SliceType::create(allocator, elm_type);
     slice_types.insert({ elm_type, slice_type });
-    
+
     if (elm_type->does_contain_const()) {
         slice_type->contains_const = true;
         auto non_const_elm_type = elm_type->non_const_version;
@@ -247,18 +247,18 @@ acorn::RangeType* acorn::TypeTable::get_range_type(Type* value_type) {
 
 acorn::FunctionType* acorn::TypeTable::get_function_type(Type* return_type, llvm::SmallVector<Type*> param_types) {
     std::lock_guard lock(func_types_mtx);
-    
+
     FunctionTypeKey cmp_key = FunctionTypeKey(return_type, param_types);
 
     auto itr = func_types.find(&cmp_key);
     if (itr != func_types.end()) {
         return itr->second;
     }
-    
+
     auto new_key = allocator.alloc_type<FunctionTypeKey>();
     new (new_key) FunctionTypeKey(return_type, std::move(cmp_key.param_types));
     auto func_type = FunctionType::create(allocator, new_key);
     func_types.insert({ new_key, func_type });
-    
+
     return func_type;
 }

@@ -44,7 +44,7 @@ void acorn::set_terminal_color(Stream stream, Color color) {
         { Color::White        , 7  },
         { Color::BrightWhite  , 15 },
     };
-    
+
     SetConsoleTextAttribute(handle, color_map[color]);
 #else
     static std::unordered_map<Color, std::string> color_map ={
@@ -73,7 +73,7 @@ void acorn::set_terminal_color(Stream stream, Color color) {
     // buffer.
     std::cout << std::flush;
     write(handle, code.c_str(), code.length());
-    
+
 #endif
 }
 
@@ -88,7 +88,7 @@ uint64_t acorn::next_pow2(uint64_t value) {
     value |= value >> 8;
     value |= value >> 16;
     value |= value >> 32;
-        
+
     return value + 1;
 }
 

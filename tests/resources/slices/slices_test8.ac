@@ -36,7 +36,7 @@ int[..] get_slice() {
 }
 
 void main() {
-    
+
     int[..] s = get_slice();
 
     write_val(s[0]);

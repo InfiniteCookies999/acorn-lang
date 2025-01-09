@@ -14,17 +14,17 @@ llvm::Value* acorn::IRGenerator::gen_reflect(Reflect* reflect) {
 }
 
 llvm::GlobalVariable* acorn::IRGenerator::gen_reflect_type_info(Type* type) {
-    
+
     auto itr = context.ll_type_info_global_addresses.find(type);
     if (itr != context.ll_type_info_global_addresses.end()) {
         return itr->second;
     }
-    
+
     auto ll_struct_type = gen_struct_type(context.std_type_struct->struct_type);
 
-    auto ll_global_name = llvm::Twine("global.type.info.") + llvm::Twine(context.global_counter++); 
+    auto ll_global_name = llvm::Twine("global.type.info.") + llvm::Twine(context.global_counter++);
     auto ll_global = gen_global_variable(ll_global_name, ll_struct_type, true, nullptr);
-    
+
     context.ll_type_info_global_addresses.insert({ type, ll_global });
 
     auto ll_type_info = gen_reflect_type_of_type_info(type);
@@ -34,10 +34,10 @@ llvm::GlobalVariable* acorn::IRGenerator::gen_reflect_type_info(Type* type) {
 }
 
 llvm::Constant* acorn::IRGenerator::gen_reflect_type_of_type_info(Type* type) {
-    
+
     auto ll_struct_type = gen_struct_type(context.std_type_struct->struct_type);
     auto ll_type_info_type = gen_type(type);
-    
+
     llvm::SmallVector<llvm::Constant*> ll_values;
     ll_values.reserve(context.std_type_struct->struct_type->get_struct()->fields.size());
     { // TypeId id
@@ -72,12 +72,12 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_of_type_info(Type* type) {
             ll_values.push_back(llvm::Constant::getNullValue(builder.getPtrTy()));
         }
     }
-    
+
     return llvm::ConstantStruct::get(ll_struct_type, ll_values);
 }
 
 llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_struct_info(StructType* struct_type) {
-    
+
     auto ll_struct_type = gen_struct_type(context.std_struct_type_info_struct->struct_type);
     auto structn = struct_type->get_struct();
 
@@ -103,7 +103,7 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_struct_info(StructType
             uint64_t offset_in_bytes = ll_struct_layout->getElementOffset(field->field_idx);
             ll_fields.push_back(gen_reflect_type_info_field_info(field, offset_in_bytes));
         }
-        
+
         auto ll_elm_type = gen_struct_type(context.std_field_type_info_struct->struct_type);
         auto ll_array_type = llvm::ArrayType::get(ll_elm_type, ll_fields.size());
         auto ll_fields_array = llvm::ConstantArray::get(ll_array_type, ll_fields);
@@ -112,7 +112,7 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_struct_info(StructType
         auto ll_global_fields_array = gen_global_variable(ll_global_name, ll_array_type, true, ll_fields_array);
         ll_values.push_back(ll_global_fields_array);
     }
-    
+
     auto ll_global_name = llvm::Twine("global.type.struct.info.") + llvm::Twine(context.global_counter++);
     auto ll_global_data = llvm::ConstantStruct::get(ll_struct_type, ll_values);
     auto ll_global = gen_global_variable(ll_global_name, ll_struct_type, true, ll_global_data);
@@ -122,7 +122,7 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_struct_info(StructType
 
 llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_field_info(Var* field,
                                                                      uint64_t offset_in_bytes) {
-    
+
     auto ll_struct_type = gen_struct_type(context.std_field_type_info_struct->struct_type);
 
     llvm::SmallVector<llvm::Constant*> ll_values;

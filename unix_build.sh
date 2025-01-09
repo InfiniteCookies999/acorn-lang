@@ -2,7 +2,7 @@
 
 # Note: if you use vscode and want files to build to ./out then
 # you need to add the following to your settings.json file:
-# 
+#
 # "cmake.buildDirectory": "${workspaceFolder}/out"
 
 BUILD_DIRECTORY="out"

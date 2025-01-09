@@ -38,7 +38,7 @@ void main() {
 
     En e2 = En.B;
     print(e2, 17);
-    
+
     En e3 = En.C;
     print(e3, 17);
 

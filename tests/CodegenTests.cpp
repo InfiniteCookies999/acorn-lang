@@ -76,7 +76,7 @@ static std::wstring get_executable_path() {
 }
 
 static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file) {
-    
+
     Compiler::SourceVector sources;
     sources.push_back(Source{ file, "" });
 
@@ -95,14 +95,14 @@ static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file
 #elif UNIX_OS
     std::wstring test_executable_directory = executable_path + L"/thread" + std::to_wstring(thread_id + 1);
 #endif
-    
+
     Compiler* compiler = mock_compiler_instance(allocator);
     // We will use the executable directory for the program executable
     // created because if the user tries running the tests from a different
     // directory than the tests directory it makes sense that the executable
     // still ends up in the tests directory.
     compiler->set_output_directory(test_executable_directory);
-    
+
     compiler->set_dont_show_wrote_to_msg();
     compiler->set_stand_alone();
 
@@ -137,12 +137,12 @@ std::wstring program_path{ L"./program" };
 #elif UNIX_OS
     program_path = test_executable_directory + L"/" + program_path;
 #endif
-    
+
     exe_hidden_process(program_path.data(), nullptr, result, exit_code);
     if (exit_code) {
         return { std::format("Processed exited with code {}", exit_code), result };
     }
-    
+
     return { "", result };
 }
 
@@ -150,7 +150,7 @@ static void misc_tests() {
     test("print test", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"print_test.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-            
+
         expect(result, std::identity()).to_be("hello yuki ^-^");
     });
     test("arithmetic test", [&] {
@@ -193,13 +193,13 @@ static void misc_tests() {
         auto [err_msg, result] = run_codegen_test(src(L"ignore_aggr_ret_val_test.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be(""); 
+        expect(result, std::identity()).to_be("");
     });
     test("Ptr array-like memory access", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"ptr_memory_access_test.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("potato");    
+        expect(result, std::identity()).to_be("potato");
     });
     test("Sizeof gets size", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"sizeof_test.ac"));
@@ -891,19 +891,19 @@ static void struct_tests() {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ijk"); 
+        expect(result, std::identity()).to_be("ijk");
     });
     test("Struct bg type rets (aggr var)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs3.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ijk"); 
+        expect(result, std::identity()).to_be("ijk");
     });
     test("Struct sm ret val", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs4.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("i"); 
+        expect(result, std::identity()).to_be("i");
     });
     test("Struct initializer, initialize values", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs5.ac"));
@@ -921,97 +921,97 @@ static void struct_tests() {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs7.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABC"); 
+        expect(result, std::identity()).to_be("ABC");
     });
     test("Struct initializer init field values non-assigned", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs8.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("iBCijCijk"); 
+        expect(result, std::identity()).to_be("iBCijCijk");
     });
     test("Struct arr initialize field values", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs9.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABCABCABCABC"); 
+        expect(result, std::identity()).to_be("ABCABCABCABC");
     });
     test("Struct arr initialize field values 2-dim", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs10.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABCABCABCABCABCABC"); 
+        expect(result, std::identity()).to_be("ABCABCABCABCABCABC");
     });
     test("Struct bg lvalue passed to function", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs11.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABCD"); 
+        expect(result, std::identity()).to_be("ABCD");
     });
     test("Struct bg struct initializer passed to function", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs12.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABCD"); 
+        expect(result, std::identity()).to_be("ABCD");
     });
     test("Struct bg struct from call passed to function", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs13.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABCD"); 
+        expect(result, std::identity()).to_be("ABCD");
     });
     test("Struct sm lvalue passed to function", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs14.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("AB"); 
+        expect(result, std::identity()).to_be("AB");
     });
     test("Struct sm struct initializer passed to function", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs15.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("AB"); 
+        expect(result, std::identity()).to_be("AB");
     });
     test("Struct sm struct from call passed to function", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs16.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("AB"); 
+        expect(result, std::identity()).to_be("AB");
     });
     test("Struct sm return inline field access", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs17.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("A"); 
+        expect(result, std::identity()).to_be("A");
     });
     test("Struct named vals all fields set by names", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs18.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABC"); 
+        expect(result, std::identity()).to_be("ABC");
     });
     test("Struct named vals some fields set by names", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs19.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABCD"); 
+        expect(result, std::identity()).to_be("ABCD");
     });
     test("Struct named vals mixed named+not named all set", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs20.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABCD"); 
+        expect(result, std::identity()).to_be("ABCD");
     });
     test("Struct named vals mixed named+not named some set", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs21.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABCD"); 
+        expect(result, std::identity()).to_be("ABCD");
     });
     test("Struct named vals mixed named+not named some set + gap", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs22.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABCD"); 
+        expect(result, std::identity()).to_be("ABCD");
     });
     test("Struct passed as param and returned (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"structs/structs23.ac"));
@@ -1068,55 +1068,55 @@ static void member_function_tests() {
         auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions1.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("W"); 
+        expect(result, std::identity()).to_be("W");
     });
     test("Member function returns bg aggr type", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("Lets go!"); 
+        expect(result, std::identity()).to_be("Lets go!");
     });
     test("Member function returns sm aggr type", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions3.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("AB"); 
+        expect(result, std::identity()).to_be("AB");
     });
     test("Member functions sets field with this ptr", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions4.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("W"); 
+        expect(result, std::identity()).to_be("W");
     });
     test("Member functions returns pointer to self and inline field access", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions5.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("W"); 
+        expect(result, std::identity()).to_be("W");
     });
     test("Member function calls another member function", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions6.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("W"); 
+        expect(result, std::identity()).to_be("W");
     });
     test("Member function calls another member function with this ptr", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions7.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("W"); 
+        expect(result, std::identity()).to_be("W");
     });
     test("Member function auto-dereference struct ptr call", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions8.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("A"); 
+        expect(result, std::identity()).to_be("A");
     });
     test("Member function returns pointer to 'this' with repeated calls", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"member_functions/member_functions9.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("@"); 
+        expect(result, std::identity()).to_be("@");
     });
 }
 
@@ -1125,31 +1125,31 @@ static void multi_variables_on_one_line_tests() {
         auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test1.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("AB"); 
+        expect(result, std::identity()).to_be("AB");
     });
     test("Multi-var no 4 variables", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test2.ac")); 
+        auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABAB"); 
+        expect(result, std::identity()).to_be("ABAB");
     });
     test("Multi-var default assign", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test3.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("AB"); 
+        expect(result, std::identity()).to_be("AB");
     });
     test("Multi-var struct type variables", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test4.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("ABCD"); 
+        expect(result, std::identity()).to_be("ABCD");
     });
     test("Multi-var global vars", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test5.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("AB"); 
+        expect(result, std::identity()).to_be("AB");
     });
     test("Multi-var struct fields", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"multiline_vars/multiline_vars_test6.ac"));
@@ -1481,7 +1481,7 @@ static void copy_constructor_tests() {
     test("Copy constructor called implicitly when has field with move constructor and explitit copy constructor", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"copy_constructors/copy_constructors_test11.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("called");
     });
 }
@@ -1565,55 +1565,55 @@ static void test_implicit_ptrs() {
     test("Implicit pointer passing an array", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/param_implicit_ptrs_test5.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCDABCDABCDABCD");
     });
     test("Implicit pointer passing an array from func call (sm array)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/param_implicit_ptrs_test6.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("@");
     });
     test("Implicit pointer passing an array from func call (bg array)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/param_implicit_ptrs_test7.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCD");
     });
     test("Implicit return pointer stores to integer", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test1.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("@@@");
     });
     test("Implicit return pointer stores to struct (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("@@@");
     });
     test("Implicit return pointer stores to struct (bg struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test3.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCDABCDABCD");
     });
     test("Implicit return pointer for call arg to integer", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test4.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("@");
     });
     test("Implicit return pointer for call arg to struct (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test5.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("@");
     });
     test("Implicit return pointer for call arg to struct (bg struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"implicit_ptrs/return_implicit_ptrs_test6.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCD");
     });
 }
@@ -1622,73 +1622,73 @@ static void move_constructors_tests() {
     test("Return multiple local variable calls move constructor (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test1.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("calledcalled");
     });
     test("Return multiple local variable calls move constructor (bg struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("calledcalled");
     });
     test("Return multiple local variable and inline return only one calls move constructor (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test3.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("!!!called");
     });
     test("Return multiple local variable and inline return only one calls move constructor (bg struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test4.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("!!!called");
     });
     test("Single local variable variable does not call move constructor (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test5.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("end");
     });
     test("Global multiple return does not call move constructor (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test7.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("end");
     });
     test("Global multiple return does not call move constructor (bg struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test8.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("end");
     });
     test("Explicit call to moveobj call move constructor for initial assign", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test9.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("called#@");
     });
     test("Explicit call to moveobj call move constructor for assign op", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test10.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("called#@");
     });
     test("Call to move constructor when using moveobj on call argument", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test11.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("called@#");
     });
     test("Move constructor called implicitly when has field with move constructor", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test12.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("called");
     });
     test("Move constructor called implicitly when has field with move constructor and explitit move constructor", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"move_constructors/move_constructors_test13.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("called");
     });
 }
@@ -1697,43 +1697,43 @@ static void ternaries_tests() {
     test("Ternary of foldable integers", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test1.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("@#");
     });
     test("Ternary of non-foldable integers", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("@#");
     });
     test("Ternary of select inline structs", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test3.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCD");
     });
     test("Ternary of select non-inline structs", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test4.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCD");
     });
     test("Returning ternary struct inline (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test5.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("AB");
     });
     test("Returning ternary struct inline (bg struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test6.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCDEFGH");
     });
     test("Ternary of non-foldable integers with one const type", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"ternaries/ternaries_test7.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("@#");
     });
 }
@@ -1742,43 +1742,43 @@ static void enums_tests() {
     test("Enum int values", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test1.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCD");
     });
     test("Enum uint64 values", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCD");
     });
     test("Enum const char* values", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test3.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("I love coffeeee1 I love coffeeee2 I love coffeeee3 I love coffeeee4 ");
     });
     test("Enum int values eq and neq", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test4.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("eq2neq1");
     });
     test("Enum const char* values eq and neq", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test5.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("eq2neq1");
     });
     test("Enum int values add gives container type", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test6.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCD");
     });
     test("Enums int value auto-increments index", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"enums/enums_test7.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("ABCDEF");
     });
 }
@@ -1787,19 +1787,19 @@ static void slices_tests() {
     test("Slice assign variable array to slice", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test1.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("Lets go!");
     });
     test("Slice assign inline array to slice", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("Lets go!");
     });
     test("Slice assign variable array to slice and pass to func", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test3.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("Lets go!");
     });
     test("Slice asign variable after declare slice", [&] {
@@ -1811,49 +1811,49 @@ static void slices_tests() {
     test("Global slice assign variable array to slice", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test5.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("Lets go!");
     });
     test("Global slice assign variable array at global scope", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test6.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("Lets go!");
     });
     test("Slice accessing length field", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test7.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("@");
     });
     test("Slice return pointer to global array", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test8.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("Lets go!");
     });
     test("Slice return pointer to array passed to function", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test9.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("Lets go!");
     });
     test("Slice return pointer to array passed to function", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test10.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("Lets go!");
     });
     test("Slice return pointer to array passed to function multi-return", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test11.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("Lets go!");
     });
     test("Slice access ptr through ptr field", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"slices/slices_test12.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
-    
+
         expect(result, std::identity()).to_be("Lets go!");
     });
 }

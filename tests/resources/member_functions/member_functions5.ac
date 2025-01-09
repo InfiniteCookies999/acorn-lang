@@ -33,7 +33,7 @@ struct A {
     int v;
 
     A* foo() {
-      return this;  
+      return this;
     }
 }
 

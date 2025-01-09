@@ -12,10 +12,10 @@
 #define emit_dbg(x) if (should_emit_debug_info) { x; }
 
 namespace acorn {
-    
+
     class DebugInfoEmitter;
     class Context;
-    
+
     class IRGenerator {
     public:
 
@@ -99,7 +99,7 @@ namespace acorn {
         // These objects can always be gaurenteed to be destroyed so
         // any object in this list has its destructor called no matter
         // where a return occured.
-        // 
+        //
         // The entire point to having this list is to reduce the number
         // of instructions needed to be generated since when there are
         // multiple returns the return statements branch to a common
@@ -128,7 +128,7 @@ namespace acorn {
         bool gen_constant_struct_for_global(StructType* struct_type, llvm::Constant*& ll_constant_struct);
         llvm::Constant* gen_constant_array_for_global(Array* arr);
 
-        void finish_incomplete_struct_type_global(llvm::Value* ll_address, 
+        void finish_incomplete_struct_type_global(llvm::Value* ll_address,
                                                   StructType* struct_type,
                                                   const std::function<llvm::Value*()>& address_getter = {});
 
@@ -223,11 +223,11 @@ namespace acorn {
         llvm::Function* gen_no_param_member_function_decl(Struct* structn, llvm::Twine name);
         void gen_call_default_constructor(llvm::Value* ll_address, Struct* structn);
 
-        void gen_abstract_array_loop(Type* base_type, 
-                                     llvm::Value* ll_arr_start_ptr, 
+        void gen_abstract_array_loop(Type* base_type,
+                                     llvm::Value* ll_arr_start_ptr,
                                      llvm::Value* ll_total_arr_length,
                                      const std::function<void(llvm::PHINode*)>& codegen_cb);
-        void gen_abstract_double_array_loop(Type* base_type, 
+        void gen_abstract_double_array_loop(Type* base_type,
                                             llvm::Value* ll_to_arr_start_ptr,
                                             llvm::Value* ll_from_arr_start_ptr,
                                             llvm::Value* ll_total_arr_length,
@@ -239,7 +239,7 @@ namespace acorn {
 
         // This will only unconditionally branch to the given block as long as
         // the current block does not already end in a branch (terminal).
-        // 
+        //
         // This may occur because certain scopes end in a branch such as
         // a return statement and so instead of continuing with the code after
         // the scope it has to jump to the end of the function.
@@ -253,7 +253,7 @@ namespace acorn {
         // // Code that may be not be reached because of the return jump.
         // int a = 5;
         // ...
-        // 
+        //
         void gen_branch_if_not_term(llvm::BasicBlock* ll_bb);
         void gen_branch_if_not_term_with_dbg_loc(llvm::BasicBlock* ll_bb, SourceLoc branch_loc);
         llvm::Twine get_global_name(const char* name);
@@ -308,7 +308,7 @@ namespace acorn {
                                               ArrayType* arr_type,
                                               Struct* structn,
                                               Node* lvalue = nullptr);
-        
+
         void gen_call_array_move_constructors(llvm::Value* ll_to_address,
                                               llvm::Value* ll_from_address,
                                               ArrayType* arr_type,

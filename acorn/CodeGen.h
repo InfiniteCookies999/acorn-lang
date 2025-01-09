@@ -8,7 +8,7 @@ namespace llvm {
 }
 
 namespace acorn {
- 
+
     class Context;
 
     bool init_llvm_native_target();

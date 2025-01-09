@@ -8,7 +8,7 @@ X(LexMultilineCommentMissingClose          , 10006)
 X(LexCharMissingEndQuote                   , 10007)
 X(LexNumberSeperateInExp                   , 10008)
 X(LexExpectedDigitsForExp                  , 10009)
-                                           
+
 X(ParseExpectedExpression                  , 20002)
 X(ParseExceededMaxFuncParams               , 20003)
 X(ParseDuplicateModifier                   , 20005)

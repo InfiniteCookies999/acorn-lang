@@ -4,7 +4,7 @@
  * Represents the kind of a Type in acorn.
  */
 enum TypeId {
-    
+
     Int,
 
     Int8,

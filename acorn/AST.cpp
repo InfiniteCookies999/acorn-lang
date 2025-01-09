@@ -120,7 +120,7 @@ void acorn::iterate_over_range_values(BinOp* range, const std::function<void(uin
 
     auto lnum = static_cast<Number*>(range->lhs);
     auto rnum = static_cast<Number*>(range->rhs);
-        
+
 #define iterate(val) iterate_over_range_values(range, lnum->val, rnum->val, cb);
 
     switch (value_type->get_kind()) {
@@ -134,7 +134,7 @@ void acorn::iterate_over_range_values(BinOp* range, const std::function<void(uin
     case TypeKind::UInt32: iterate(value_u32);   break;
     case TypeKind::UInt64: iterate(value_u64);   break;
     // Just use the biggest size we expect out of these types.
-    // 
+    //
     case TypeKind::ISize:  iterate(value_s64);   break;
     case TypeKind::USize:  iterate(value_u64);   break;
     case TypeKind::Char:   iterate(value_u8);    break;
@@ -148,7 +148,7 @@ void acorn::iterate_over_range_values(BinOp* range, const std::function<void(uin
 uint64_t acorn::get_total_range_values(BinOp* range) {
     auto lnum = static_cast<Number*>(range->lhs);
     auto rnum = static_cast<Number*>(range->rhs);
-        
+
     switch (range->op) {
     case Token::RangeEq:
         return rnum->value_u64 - lnum->value_u64 + 1;

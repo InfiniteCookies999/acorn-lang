@@ -25,11 +25,11 @@ static std::string empty(T) {
 }
 
 void test_lexer() {
-    
+
     context = allocator.alloc_type<Context>();
     new (context) Context(ll_context, *ll_test_model, allocator);
     context->set_max_error_count(999999);
-    
+
     auto mock_lexer = [&](const char* program) {
         Buffer buffer = {
             .content = const_cast<char*>(program),
@@ -39,7 +39,7 @@ void test_lexer() {
         Lexer* lexer = new Lexer(*context, buffer, mock_logger(mock_file->logger));
         return lexer;
     };
-    
+
     section("lexing", [&] {
         test("keywords", [&] {
             const char* program = "int8 int16 int32 int64 uint8 "
@@ -92,7 +92,7 @@ void test_lexer() {
             const char* program = "~ + - * / % ! < > ^ & | ( ) { } = "
                 ">> << ++ -- == != <= >= %= ^= &= *= /= += -= |= >>= <<= ~=";
             Lexer& lexer = *mock_lexer(program);
-            
+
             auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
 
             expect(lexer.next_token().kind, to_string).to_be('~');
@@ -247,7 +247,7 @@ void test_lexer() {
                 "01_23'i8   01_23'i16   01_23'i32   01_23'i64   01_23'u8   01_23'u16   01_23'u32   01_23'u64 ";
             Lexer& lexer = *mock_lexer(program);
 
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);     
+            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
 
             expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
             expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
@@ -278,7 +278,7 @@ void test_lexer() {
         test("invalid type specifiers", [&] {
             const char* program = "523'i11  636'  7'i  62'u  23'7  51'123";
             Lexer& lexer = *mock_lexer(program);
-            
+
             auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
 
             expect(lexer.next_token(), empty<Token>).to_produce_error(ErrCode::LexNumberBadTypeSpec);

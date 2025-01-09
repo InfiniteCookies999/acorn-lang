@@ -37,7 +37,7 @@ void main() {
     if const int* tof = get_false() {
         print("False Case", 10);
     }
-    
+
     if const int* tof = get_true() {
         print("True Case", 9);
     }

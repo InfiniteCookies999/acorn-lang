@@ -34,7 +34,7 @@ int[..] get_slice(int[8] a) {
 }
 
 void main() {
- 
+
     int[8] a = [ 76, 101, 116, 115, 32, 103, 111, 33 ];
     int[..] s = get_slice(a);
 

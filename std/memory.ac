@@ -60,7 +60,7 @@ private native("malloc") void* _malloc(isize size);
  * Compares two blocks of memory `mem1` and `mem2`.
  *
  * If they match returns 0.
- * 
+ *
  * If the first non-equivalent character in `mem1` is larger than
  * the character in `mem2` returns +1.
  *

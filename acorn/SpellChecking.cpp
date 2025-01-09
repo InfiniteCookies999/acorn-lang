@@ -9,7 +9,7 @@ namespace acorn {
 
     // Computes the levenstein distance.
     static size_t lev_row(const llvm::StringRef s1, const llvm::StringRef s2) {
-    
+
         const size_t m = s1.size(), n = s2.size();
 
         if (m == 0) return n;
@@ -116,7 +116,7 @@ namespace acorn {
 
         size_t delete_trail = search.size() - i;
         size_t add_trail    = found.size() - j;
-        
+
         pluses  += std::string(add_trail, '+');
         minuses += std::string(delete_trail, '-');
 
@@ -132,11 +132,11 @@ namespace acorn {
 
 llvm::StringRef acorn::find_closest_spelling_match(const llvm::SmallVector<llvm::StringRef, 64>& comparisons,
                                                    const llvm::StringRef& find_for) {
-    
+
     if (comparisons.empty()) {
         return "";
     }
-    
+
     size_t smallest_cost = std::numeric_limits<size_t>::max();
     size_t selected_index = 0, index = 0;
 
@@ -152,7 +152,7 @@ llvm::StringRef acorn::find_closest_spelling_match(const llvm::SmallVector<llvm:
     if (smallest_cost > find_for.size() / 2) {
         return "";
     }
-    
+
     return comparisons[selected_index];
 }
 
@@ -172,7 +172,7 @@ bool acorn::ErrorSpellChecker::search(Logger& logger, Identifier search_identifi
             add_comparison_underscoring(logger, search, found);
         }).remove_period();
     }
-    
+
     all_searches.clear();
     return !found.empty();
 }

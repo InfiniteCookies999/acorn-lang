@@ -71,7 +71,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       auto_ptr_type(type_table.get_ptr_type(auto_type)),
       const_auto_type(type_table.get_const_type(auto_type)),
       expr_type(Type::create(allocator, TypeKind::Expr)),
-      
+
       main_identifier(Identifier::get("main")),
       length_identifier(Identifier::get("length")),
       ptr_identifier(Identifier::get("ptr")),
@@ -137,7 +137,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "readonly"     , Token::KwReadonly    },
           { "return"       , Token::KwReturn      },
           { "loop"         , Token::KwLoop        },
- 
+
           { "#if"          , Token::KwCTIf        },
           { "#elif"        , Token::KwCTElIf      },
           { "#else"        , Token::KwCTElse      },
@@ -199,10 +199,10 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { '*', 10 },
           { '/', 10 },
           { '%', 10 },
-          
+
           { '+', 9 },
           { '-', 9 },
-          
+
           { Token::LtLt, 8 }, // <<
           { Token::GtGt, 8 }, // >>
 
@@ -213,10 +213,10 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { '>', 6 },
           { Token::LtEq, 6 }, // <=
           { Token::GtEq, 6 }, // >=
-          
+
           { Token::EqEq, 5 }, // ==
           { Token::ExEq, 5 }, // !=
-          
+
           { '&', 4 },
           { '^', 3 },
           { '|', 2 },
@@ -283,7 +283,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
             n->value_s64 = 1;
         } else {
             n->value_s64 = 2;
-        } 
+        }
     }));
 
     universal_constants.insert(new_universal<Number>(allocator, "SYS_BIG_ENDIAN", [this](Number* n) {

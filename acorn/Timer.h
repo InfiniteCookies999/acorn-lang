@@ -9,7 +9,7 @@ namespace acorn {
     public:
 
         void start();
-        
+
         void stop();
 
         double took_ms() const {

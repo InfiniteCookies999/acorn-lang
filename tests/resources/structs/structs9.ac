@@ -45,11 +45,11 @@ void main() {
     write_val(a[1].a);
     write_val(a[1].b);
     write_val(a[1].c);
-    
+
     write_val(a[2].a);
     write_val(a[2].b);
     write_val(a[2].c);
-    
+
     write_val(a[3].a);
     write_val(a[3].b);
     write_val(a[3].c);

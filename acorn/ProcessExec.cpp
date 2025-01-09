@@ -16,7 +16,7 @@
 #elif UNIX_OS
 #include <sys/wait.h>
 #include <poll.h>
-#endif 
+#endif
 
 #include <codecvt>
 
@@ -99,14 +99,14 @@ bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
 
     bool is_running = true;
     while (is_running) {
-        
+
         is_running = !(WaitForSingleObject(process_info.hProcess, 50) == WAIT_OBJECT_0);
 
         while (true) {
-            
+
             char buffer[1024];
             DWORD amount_read = 0, avail = 0;
-            
+
             if (!PeekNamedPipe(write_handle_in, nullptr, 0, nullptr, &avail, nullptr)) {
                 break;
             }
@@ -154,7 +154,7 @@ bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
         acorn_fatal("Failed to fork process");
     } else if (pid == 0) {
         // Child process
-    
+
         add_process_directory(process_dir);
 
         close(pipes[0]); // Closing read end of pipe
@@ -173,12 +173,12 @@ bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
         // Calling execvp will give over control of the this child process
         // to the command.
         int status = execvp(cmd_and_args[0], const_cast<char* const*>(cmd_and_args));
-        
+
         // Check to see if it could not find the specified command.
         if (errno == ENOENT) {
             _exit(127);
         }
-        
+
         // If we get here then failed.
         _exit(EXIT_FAILURE);
 
@@ -304,7 +304,7 @@ bool acorn::exe_process(wchar_t* process, wchar_t* process_dir, bool seperate_wi
         //       one such as xterm.
 
         const char** cmd_and_args = get_cmd_and_args(process);
-        
+
         // Calling execvp will give over control of the this child process
         // to the command.
         int status = execvp(cmd_and_args[0], const_cast<char* const*>(cmd_and_args));

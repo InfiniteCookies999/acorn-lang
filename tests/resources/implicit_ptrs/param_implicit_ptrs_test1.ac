@@ -34,7 +34,7 @@ int bar() {
 }
 
 void foo(int^ a) {
-    write_val(*a);   
+    write_val(*a);
 }
 
 void main() {

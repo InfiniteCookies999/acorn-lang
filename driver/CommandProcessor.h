@@ -35,18 +35,18 @@ private:
     CommandConsumer(acorn::Compiler& compiler, int argc, char* argv[]) :
         compiler(compiler), argc(argc), argv(argv) {
     }
-    
+
     void report_error_missing_arg(const char* missing_error_msg);
 
     std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
-    
+
     acorn::Compiler& compiler;
 
     // The current flag being processed.
     std::wstring flag_name;
 
     std::wstring parsed_value;
-    
+
     // Offset into the consumed arguments.
     int    offset;
     int    argc;

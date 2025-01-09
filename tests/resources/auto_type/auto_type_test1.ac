@@ -30,7 +30,7 @@ void write_val(int val) {
 }
 
 void main() {
-    
+
     auto a = 64;
     auto b = a;
 

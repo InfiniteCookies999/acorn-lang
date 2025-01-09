@@ -35,7 +35,7 @@ void main() {
     int s = 115;
     int o = 111;
     int[4][2] a = [ [L, 101], [t, s], [32, 103], [o, 33] ];
-    
+
     write_val(a[0][0]);
     write_val(a[0][1]);
     write_val(a[1][0]);

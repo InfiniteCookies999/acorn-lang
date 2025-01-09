@@ -13,7 +13,7 @@ namespace llvm {
 namespace acorn {
     class Module;
     class DebugInfoEmitter;
-    
+
     class SourceFile : public Namespace {
     public:
         // Non-full path used for error reporting.
@@ -77,7 +77,7 @@ namespace acorn {
 
         llvm::DenseMap<Identifier, ImportStmt*> imports;
         llvm::SmallVector<Namespace*> static_imports;
-    
+
         bool has_public_access(Decl* decl) const;
 
     };

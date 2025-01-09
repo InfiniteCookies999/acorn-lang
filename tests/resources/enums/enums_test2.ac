@@ -42,7 +42,7 @@ void main() {
 
     En e2 = En.B;
     write_val(e2);
-    
+
     En e3 = En.C;
     write_val(e3);
 

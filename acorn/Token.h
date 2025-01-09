@@ -9,7 +9,7 @@
 namespace acorn {
 
     using tokkind = uint16_t;
-    
+
     class Context;
 
     struct Token {
@@ -149,7 +149,7 @@ namespace acorn {
 
         // Checks if the token is of the given kind.
         [[nodiscard]] constexpr bool is(tokkind kind) const noexcept { return this->kind == kind; }
-    
+
         // Checks if the token is not of the given kind.
         [[nodiscard]] constexpr bool is_not(tokkind kind) const noexcept { return !is(kind); }
 

@@ -6,7 +6,7 @@ struct String {
     readonly char* buffer;
     readonly int   length;
     private  int   capacity;
-    
+
     /*
      * Creates a String with a length of 0.
      */
@@ -108,7 +108,7 @@ struct String {
      */
     String substr(int begin_idx, int end_idx) const {
         // TODO: error handling.
-        
+
         int sublength = end_idx - begin_idx;
         if sublength == 0 {
             return String{};
@@ -172,7 +172,7 @@ struct String {
 
     String^ replace(const char* sub_str    , int sub_length,
                     const char* replace_str, int replace_length) {
-        
+
         if sub_length == 1 && replace_length == 1 {
             // Taking the faster path of replacing characters
             // instead of full strings if we can.
@@ -190,7 +190,7 @@ struct String {
 
         char* head = this.buffer;
         char* end  = this.buffer + this.length;
-        
+
         loop head + sub_length - 1 < end {
             int remaining = as(int) (end - head);
             int index = find_substring(head, remaining, sub_str, sub_length);
@@ -210,17 +210,17 @@ struct String {
                 if ext_buffer_capacity == 0 {
                     ext_buffer_capacity = 1;
                     new_ext_buffer = as(int*) malloc(ext_buffer_capacity * sizeof(int));
-                    
+
                     ext_buffer = new_ext_buffer;
                 } elif ext_buffer_capacity < min_capacity {
                     int ext_buffer_length = ext_buffer_capacity;
                     ext_buffer_capacity *= 2;
                     new_ext_buffer = as(int*) malloc(ext_buffer_capacity * sizeof(int));
-                
+
                     // Not the first allocation so have to copy over.
                     memcpy(new_ext_buffer, ext_buffer, ext_buffer_length * sizeof(int));
                     free(ext_buffer);
-                
+
                     ext_buffer = new_ext_buffer;
                 }
 
@@ -442,7 +442,7 @@ struct String {
         if length == 0 {
             return this;
         }
-        
+
         const char* ptr = buffer;
         loop *ptr <= ' ' {
             ++ptr;
@@ -519,7 +519,7 @@ String to_string(uint64 value, int base = 10) {
  * @base  the numeric base of the value. Defaults to 10.
  */
 String to_string(int64 value, int base = 10) {
-    
+
     bool is_negative = value < 0;
     uint64 value_u64;
     if is_negative {
@@ -542,7 +542,7 @@ String to_string(int64 value, int base = 10) {
         ++length;
     }
 
-    return String{ ptr, length };   
+    return String{ ptr, length };
 }
 
 String to_string(int value, int base = 10) {
@@ -571,7 +571,7 @@ int find_substring(const char* s, int s_length, const char* sub, int sub_length)
 
     auto head = s;
     auto end  = s + s_length;
-    
+
     loop head + sub_length - 1 < end {
         if *head == *sub {
             // Possible start of substring.

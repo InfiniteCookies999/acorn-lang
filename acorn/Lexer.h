@@ -14,7 +14,7 @@ namespace acorn {
         Lexer(const Context& context, Buffer buffer, Logger& logger);
 
         Lexer(Lexer&&) = default;
-        
+
         [[nodiscard]] Token next_token();
 
         int get_total_lines_lexed() const {

@@ -69,7 +69,7 @@ void acorn::set_llvm_module_target(llvm::Module& ll_module, llvm::TargetMachine*
 static std::mutex write_mtx;
 void acorn::write_obj_file(Context& context, const wchar_t* file_path,
                            llvm::Module& ll_module, llvm::TargetMachine* ll_target_machine) {
-    
+
     auto report_error_could_not_open_object_file = [&context](const char* error_msg) {
         Logger::global_error(context, "Could not open object file to write. Error %s", error_msg)
             .end_error(ErrCode::GlobalFailedToWriteObjFile);
@@ -86,7 +86,7 @@ void acorn::write_obj_file(Context& context, const wchar_t* file_path,
                                 CREATE_ALWAYS,
                                 FILE_ATTRIBUTE_NORMAL,
                                 nullptr);
-    
+
     if (handle == INVALID_HANDLE_VALUE) {
         std::string formated_error = std::format("code: %lu", GetLastError());;
         report_error_could_not_open_object_file(formated_error.c_str());
@@ -114,7 +114,7 @@ void acorn::write_obj_file(Context& context, const wchar_t* file_path,
         report_error_could_not_open_object_file(err_code.message().c_str());
         return;
     }
-    
+
 #endif
 
     llvm::legacy::PassManager pass;

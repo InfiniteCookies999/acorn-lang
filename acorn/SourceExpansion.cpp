@@ -11,7 +11,7 @@ if (e1 > e) { e = e1; }           \
 }
 
     static std::pair<const char*, const char*> get_expansion(Node* node) {
-        
+
         auto s = node->uses_expanded_loc ? node->expanded_loc.ptr : node->loc.ptr;;
         auto e = node->uses_expanded_loc ? (node->expanded_loc.ptr + node->expanded_loc.length)
                                          : (node->loc.ptr + node->loc.length);
@@ -132,7 +132,7 @@ if (e1 > e) { e = e1; }           \
 }
 
 void acorn::go_until(const char*& e, char open, char close) {
-        
+
     while (*e != '\0') {
         // It is possible that when calling this the end already
         // passed the opening so just check for either.
@@ -144,9 +144,9 @@ void acorn::go_until(const char*& e, char open, char close) {
         }
         ++e;
     }
-        
+
     int count = 1;
-        
+
     // Only include '\0' for safety but only it should
     // not be needed.
     while (count > 0 && *e != '\0') {
@@ -156,7 +156,7 @@ void acorn::go_until(const char*& e, char open, char close) {
         if (*e == open) {
             ++count;
         }
-            
+
         ++e;
     }
     if (*e == '\0') {
@@ -167,7 +167,7 @@ void acorn::go_until(const char*& e, char open, char close) {
 
 acorn::PointSourceLoc acorn::expand(Node* node) {
     auto [s, e] = get_expansion(node);
-    
+
     // Balacing parenethsis.
     //
     // Balance forward.

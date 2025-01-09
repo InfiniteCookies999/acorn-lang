@@ -185,22 +185,22 @@ int acorn::Compiler::run_program() {
     if (!dont_show_wrote_to_msg && !should_run_seperate_window) {
         std::cout << "\n";
     }
-    
+
     int exit_code;
-    exe_process(absolute_exe_path.data(), 
+    exe_process(absolute_exe_path.data(),
                 absolute_output_directory.data(),
-                should_run_seperate_window, 
+                should_run_seperate_window,
                 exit_code);
     return exit_code;
 }
 
 void acorn::Compiler::initialize_codegen() {
     codegen_timer.start();
-    
+
     std::error_code ec;
     auto output_directory_path = output_directory.empty() ? fs::current_path()
                                                           : fs::path(output_directory);
-    
+
     if (ec) {
         Logger::global_error(context, "Failed to find the current path. Error %s", ec.message())
             .end_error(ErrCode::GlobalFailedToFindCurrentPath);
@@ -236,7 +236,7 @@ void acorn::Compiler::sema_and_irgen() {
     for (auto& entry : context.get_modules()) {
         Sema::check_nodes_wrong_scopes(*entry.second);
     }
-    
+
     if (context.has_errors()) {
         return;
     }
@@ -298,9 +298,9 @@ void acorn::Compiler::sema_and_irgen() {
 
     auto check_decl = [this](Decl* decl) finline {
         sema_timer.start();
-        
+
         Sema sema(context, decl->file, decl->get_logger());
-        if (decl->is(NodeKind::Func)) {    
+        if (decl->is(NodeKind::Func)) {
             sema.check_function(static_cast<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {
             auto var = static_cast<Var*>(decl);
@@ -326,7 +326,7 @@ void acorn::Compiler::sema_and_irgen() {
 
     while (!context.decl_queue_empty()) {
         Node* decl = context.decl_queue_next();
-        
+
         // Semantic analysis.
         if (decl->is_not(NodeKind::ImplicitFunc)) {
             check_decl(static_cast<Decl*>(decl));
@@ -335,7 +335,7 @@ void acorn::Compiler::sema_and_irgen() {
         // Code generation.
         ir_timer.start();
         if (context.has_errors()) continue;
-            
+
         IRGenerator generator(context);
         if (decl->is(NodeKind::Func)) {
             generator.gen_function(static_cast<Func*>(decl));
@@ -376,7 +376,7 @@ void acorn::Compiler::sema_and_irgen() {
         ll_module.addModuleFlag(llvm::Module::Warning, "Debug Info Version", llvm::DEBUG_METADATA_VERSION);
         llvm::NamedMDNode* ll_ident_md = ll_module.getOrInsertNamedMetadata("llvm.ident");
         ll_ident_md->addOperand(llvm::MDNode::get(ll_context, {llvm::MDString::get(ll_context, "acorn compiler")}));
-        
+
         for (auto& [_, modl] : context.get_modules()) {
             for (auto file : modl->get_source_files()) {
                 file->di_emitter->finalize();
@@ -465,9 +465,9 @@ void acorn::Compiler::link() {
                                    get_lib_paths(),
                                    get_libs());
 
-    
+
 #elif UNIX_OS
-    
+
     auto get_lib_paths = [this] {
         std::wstring lib_paths;
         for (const std::wstring& lib_path : library_paths) {
@@ -523,7 +523,7 @@ void acorn::Compiler::link() {
             .end_error(ErrCode::GlobalFailedToDeleteObjFile);
         return;
     }
-    
+
     if (exit_code != 0) {
         context.inc_error_count();
     }
@@ -544,7 +544,7 @@ void acorn::Compiler::link() {
 }
 
 bool acorn::Compiler::validate_sources(const SourceVector& sources) {
-    
+
     bool failed_to_find_source = false;
     for (const auto& source : sources) {
         fs::path path = fs::path(source.path);
@@ -620,7 +620,7 @@ void acorn::Compiler::parse_files(SourceVector& sources) {
                     .end_error(ErrCode::GlobalWrongExtensionTypeForFile);
                 continue; // Skip this file.
             }
-            
+
             // The user specified a path to a file.
             parse_file(*modl, path, path.root_directory());
         }
@@ -641,7 +641,7 @@ void acorn::Compiler::parse_directory(Module& modl, const fs::path& dir_path) {
 }
 
 acorn::Buffer acorn::Compiler::read_file_to_buffer(const std::filesystem::path& path) {
-    
+
     Buffer buffer;
     if (!read_entire_file(path, buffer.content, buffer.length, allocator)) {
         Logger::global_error(context, "Failed to read file \"%s\". "
@@ -649,12 +649,12 @@ acorn::Buffer acorn::Compiler::read_file_to_buffer(const std::filesystem::path& 
             .end_error(ErrCode::GlobalFailedToReadSourceFile);
         return { .length = 0 };
     }
-    
+
     return buffer;
 }
 
-void acorn::Compiler::parse_file(Module& modl, 
-                                 const fs::path& path, 
+void acorn::Compiler::parse_file(Module& modl,
+                                 const fs::path& path,
                                  const fs::path& root_path) {
     auto buffer = read_file_to_buffer(path);
 
@@ -687,7 +687,7 @@ void acorn::Compiler::parse_file(Module& modl,
 }
 
 void acorn::Compiler::find_std_lib_declarations() {
-    
+
     auto find_composite_of_kind = [&, this]<typename T>
         (T*, Namespace* nspace, Identifier decl_name) finline -> T* {
 
@@ -702,7 +702,7 @@ void acorn::Compiler::find_std_lib_declarations() {
         } else {
             acorn_fatal("unknown composite type");
         }
-        
+
         if (Decl* composite = nspace->find_composite(decl_name)) {
             if (composite->is(decl_kind)) {
                 return static_cast<T*>(composite);

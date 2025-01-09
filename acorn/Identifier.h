@@ -44,15 +44,15 @@ namespace acorn {
         static llvm::StringMap<uint32_t>                 mapped_identifiers;
         static llvm::DenseMap<uint32_t, llvm::StringRef> name_mapping;
         static uint32_t                                  id_counter;
-        
+
         Identifier(uint32_t id)
             : id(id) {
         }
 
         uint32_t id;
-        
+
     };
-   
+
     inline bool operator==(Identifier identifier, size_t value) {
         return identifier.id == value;
     }
@@ -64,7 +64,7 @@ namespace acorn {
     inline bool operator==(Identifier lhs, Identifier rhs) {
         return lhs.id == rhs.id;
     }
-    
+
     inline bool operator!=(Identifier lhs, Identifier rhs) {
         return lhs.id != rhs.id;
     }

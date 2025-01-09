@@ -23,7 +23,7 @@ acorn::Namespace* acorn::Module::get_or_create_namespace(Context& context, Ident
     return nspace;
 }
 
-void acorn::Module::add_duplicate_decl(Decl* decl, Decl* prev_decl, 
+void acorn::Module::add_duplicate_decl(Decl* decl, Decl* prev_decl,
                                        ScopeLocation scope_location) {
     auto itr = std::ranges::find_if(redecls, [decl, prev_decl](auto tup) {
         const auto [_, decl1, decl2] = tup;

@@ -45,7 +45,7 @@ struct C {
 
 void foo(bool b) {
     A aa;
-    
+
     if b {
         B bb;
         return;

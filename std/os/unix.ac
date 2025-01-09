@@ -32,7 +32,7 @@ struct Timespec {
     #else
         int32 tv_nsec;
         int32 _pad;
-    #endif    
+    #endif
 #endif
 
 }
@@ -210,7 +210,7 @@ struct Stat {
             uint32 st_mtimensec;	/* Nsecs of last modification.  */
             int32  st_ctime;			/* Time of last status change.  */
             uint32 st_ctimensec;	/* Nsecs of last status change.  */
-        #endif 
+        #endif
     #endif
 
     #if SYS_64

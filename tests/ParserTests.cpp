@@ -50,7 +50,7 @@ void test_parser() {
     context->set_stand_alone();
 
     acorn::initialize_float_parsing(allocator);
-    
+
     auto mock_parser = [&](const char* program) {
         Buffer buffer = {
             .content = const_cast<char*>(program),
@@ -73,7 +73,7 @@ void test_parser() {
                 "123'u8;  123'u16;  123'u32;  123'u64;"
                 "4294967295'u32; -1'u32; -2147483648'u32;";
             Module& modl = mock_parser(program)->modl;
-    
+
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
                                                get_bad_scope_node);
 
@@ -82,11 +82,11 @@ void test_parser() {
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
             expect(static_cast<Number*>(nodes[0])->value_u64, to_string<int32_t>).to_be(123456789);
-            
+
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
             expect(static_cast<Number*>(nodes[1])->value_u64, to_string<int32_t>).to_be(74532);
-            
+
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
             expect(static_cast<Number*>(nodes[2])->value_u64, to_string<int32_t>).to_be(2147483647);
@@ -234,7 +234,7 @@ void test_parser() {
         test("integer parsing overflow", [&] {
             const char* program = "18446744073709551616;";
             mock_parser(program);
-    
+
             expect_none().to_produce_error(ErrCode::ParseIntegerValueCalcOverflow);
 
         });
@@ -290,8 +290,8 @@ void test_parser() {
                 native dllimport void foo2();
                 void foo3(int a, int b, int c) {}
             )";
-            SourceFile& file = *mock_parser(program); 
-            
+            SourceFile& file = *mock_parser(program);
+
             auto funcs = file.get_functions()
                 | std::views::transform(get_second<Identifier, FuncList>)
                 | std::views::join
@@ -348,7 +348,7 @@ void test_parser() {
                                                get_bad_scope_node);
 
             expect(nodes.size(), to_string<size_t>).to_be(15);
-            
+
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->int_type);
             expect(static_cast<Number*>(nodes[0])->value_u64, to_string<uint64_t>).to_be(72047ull);
@@ -356,15 +356,15 @@ void test_parser() {
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->int_type);
             expect(static_cast<Number*>(nodes[1])->value_u64, to_string<uint64_t>).to_be(250ull);
-            
+
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->int_type);
             expect(static_cast<Number*>(nodes[2])->value_s64, to_string<int64_t>).to_be(-709ll);
-            
+
             expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(static_cast<Number*>(nodes[3])->type, type_to_string).to_be(context->int_type);
             expect(static_cast<Number*>(nodes[3])->value_u64, to_string<uint64_t>).to_be(676ull);
-            
+
             expect(nodes[4]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(static_cast<Number*>(nodes[4])->type, type_to_string).to_be(context->int_type);
             expect(static_cast<Number*>(nodes[4])->value_u64, to_string<uint64_t>).to_be(61ull);
@@ -495,7 +495,7 @@ void test_parser() {
 
             expect(nodes[4]->kind, node_kind_to_string).to_be(NodeKind::String);
             expect(static_cast<String*>(nodes[4])->type, type_to_string).to_be(context->const_char32_ptr_type);
-            
+
         });
         test("char literals", [&] {
             const char* program = R"(
@@ -548,7 +548,7 @@ void test_parser() {
                                                get_bad_scope_node);
 
             expect(nodes.size(), to_string<size_t>).to_be(3);
-            
+
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->float64_type);
             expect(std::bit_cast<uint64_t>(static_cast<Number*>(nodes[0])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value1));
@@ -578,7 +578,7 @@ void test_parser() {
                                                get_bad_scope_node);
 
             expect(nodes.size(), to_string<size_t>).to_be(3);
-            
+
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
             expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->float32_type);
             expect(std::bit_cast<uint32_t>(static_cast<Number*>(nodes[0])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value1));
@@ -598,7 +598,7 @@ void test_parser() {
         Code used for testing floating point numbers. It would be unreasonable
         to test the floating point numbers every time so this is left here commented
         out.
-    
+
         acorn::PageAllocator allocator(1024);
 
         int total_overflow_or_underflows = 0;
@@ -631,8 +631,8 @@ void test_parser() {
 
         template<typename F>
         static void test_random_floats(int max_whole_digits,
-                                       int min_exp_value, 
-                                       int max_exp_value, 
+                                       int min_exp_value,
+                                       int max_exp_value,
                                        double exp_dist_mean,
                                        double exp_dist_std_dev,
                                        F&& parse_function) {
@@ -646,7 +646,7 @@ void test_parser() {
             std::uniform_int_distribution<int> has_exponent_dist(0, 2);
             std::normal_distribution<> exponent_value_dist(exp_dist_mean, exp_dist_std_dev);
             std::uniform_int_distribution<int> is_negative_dist(0, 6);
-    
+
             const int total = 10'000'000;
             for (int i = 0; i < total; i++) {
                 std::string text = "";
@@ -654,7 +654,7 @@ void test_parser() {
                 if (negative_chance == 0) {
                     text = "-";
                 }
-    
+
                 int whole_digits = whole_digit_count_dist(generator);
                 for (int j = 0; j < whole_digits; j++) {
                     text += digit_dist(generator) + '0';
@@ -674,7 +674,7 @@ void test_parser() {
                     exp_value = std::max(min_exp_value, std::min(max_exp_value, exp_value));
                     text += std::to_string(exp_value);
                 }
-    
+
                 std::cout << "testing: " << text << "\n";
                 test(text, parse_function);
             }
@@ -707,7 +707,7 @@ void test_parser() {
             test_32bit("-1E-50");
             test_32bit("1E-300");
             test_32bit("1.0E+300");
-    
+
             // Values that gave issues at one point or another.
             test_32bit("58939.23392128");
             test_32bit("379018.7048317439011206813390");
@@ -723,10 +723,10 @@ void test_parser() {
             int max_exp_value = 38;
             double exp_dist_mean = 6.0;
             double exp_dist_std_dev = 10.0;
-            test_random_floats(max_whole_digits, 
-                               min_exp_value, 
-                               max_exp_value, 
-                               exp_dist_mean, 
+            test_random_floats(max_whole_digits,
+                               min_exp_value,
+                               max_exp_value,
+                               exp_dist_mean,
                                exp_dist_std_dev,
                                &acorn::parse_float32_bits);
         }
@@ -757,9 +757,9 @@ void test_parser() {
             double exp_dist_mean = 50.0;
             double exp_dist_std_dev = 95.0;
             test_random_floats(max_whole_digits,
-                               min_exp_value, 
-                               max_exp_value, 
-                               exp_dist_mean, 
+                               min_exp_value,
+                               max_exp_value,
+                               exp_dist_mean,
                                exp_dist_std_dev,
                                &acorn::parse_float64_bits);
         }

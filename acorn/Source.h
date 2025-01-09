@@ -43,7 +43,7 @@ namespace acorn {
     //
     // NOTE: Not extending the SourceLoc because we do not want any
     //       possible implicit conversions.
-    // 
+    //
     struct PointSourceLoc {
         const char* ptr;
         uint16_t    length;

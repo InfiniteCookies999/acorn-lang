@@ -28,7 +28,7 @@ void print(const char* s, int length) {
 void main() {
     int a = 4;
     int* b = &a;
-    
+
     if b {
         print("Ptr Not Null Case1", 18);
     }
@@ -40,11 +40,11 @@ void main() {
     if null {
         print("Ptr Null Case2", 14);
     }
-    
+
     if b != null {
         print("Ptr Not Null Case2", 18);
     }
-    
+
     if null != b {
         print("Ptr Not Null Case3", 18);
     }

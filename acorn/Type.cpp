@@ -218,7 +218,7 @@ acorn::Type* acorn::UnresolvedBracketType::create(PageAllocator& allocator,
     return unresolved_type;
 }
 
-acorn::ArrayType* acorn::ArrayType::create(PageAllocator& allocator, Type* elm_type, 
+acorn::ArrayType* acorn::ArrayType::create(PageAllocator& allocator, Type* elm_type,
                                            uint32_t length, bool is_const) {
     ArrayType* arr_type = allocator.alloc_type<ArrayType>();
     new (arr_type) ArrayType(is_const, elm_type, length);
@@ -252,7 +252,7 @@ std::string acorn::SliceType::to_string() const {
     return elm_type->to_string() + "[..]";
 }
 
-acorn::Type* acorn::AssignDeterminedArrayType::create(PageAllocator& allocator, 
+acorn::Type* acorn::AssignDeterminedArrayType::create(PageAllocator& allocator,
                                                       Type* elm_type,
                                                       bool is_const) {
     auto arr_type = allocator.alloc_type<AssignDeterminedArrayType>();
@@ -265,8 +265,8 @@ std::string acorn::AssignDeterminedArrayType::to_string() const {
     return elm_type->to_string() + "[]";
 }
 
-acorn::RangeType* acorn::RangeType::create(PageAllocator& allocator, 
-                                           Type* value_type, 
+acorn::RangeType* acorn::RangeType::create(PageAllocator& allocator,
+                                           Type* value_type,
                                            bool is_const) {
     auto range_type = allocator.alloc_type<RangeType>();
     new (range_type) RangeType(is_const, value_type);
@@ -320,7 +320,7 @@ acorn::StructType* acorn::StructType::create(PageAllocator& allocator,
     struct_type->contains_const = is_const;
     if (!is_const) {
         struct_type->non_const_version = struct_type;
-    } 
+    }
     return struct_type;
 }
 

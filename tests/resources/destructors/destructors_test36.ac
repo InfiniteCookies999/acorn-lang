@@ -60,7 +60,7 @@ A foo(bool t) {
     if t {
         return a;
     }
-    
+
     return A{};
 }
 

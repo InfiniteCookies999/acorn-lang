@@ -38,9 +38,9 @@ namespace acorn {
         PageAllocator& allocator;
         SourceFile*    file;
         TypeTable&     type_table;
-        
+
         Logger& logger;
-        
+
         Func*   cur_func   = nullptr;
         Struct* cur_struct = nullptr;
 
@@ -120,11 +120,11 @@ namespace acorn {
         // Expression parsing
         //--------------------------------------
 
-        Type* parse_type();        
+        Type* parse_type();
         Type* parse_type_for_decl();
         Type* parse_base_type();
         Type* construct_type_from_identifier(Token name_token, bool is_const);
-        Type* construct_unresolved_bracket_type(Type* base_type, 
+        Type* construct_unresolved_bracket_type(Type* base_type,
                                                 const llvm::SmallVector<Expr*, 8>& exprs);
         Type* parse_optional_function_type(Type* base_type);
         Type* parse_optional_container_types(Type* type);

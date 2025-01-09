@@ -38,7 +38,7 @@ void test_sema() {
         mock_logger(mock_file->logger);
         Parser* parser = new Parser(*context, *mock_modl, mock_file);
         parser->parse();
-        
+
         for (auto& entry : context->get_modules()) {
             Sema::check_nodes_wrong_scopes(*entry.second);
         }
@@ -183,7 +183,7 @@ void test_sema() {
         test("Function call duplicate named arg", [&] {
             mock_sema(R"(
                 void foo(int a, int b) {
-                    
+
                 }
 
                 void main() {

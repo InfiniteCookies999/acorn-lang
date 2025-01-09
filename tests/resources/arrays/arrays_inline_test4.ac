@@ -35,7 +35,7 @@ int8[2] foo() {
 
 void main() {
     int8[2] a = foo();
-    
+
     write_val(a[0]);
     write_val(a[1]);
 }

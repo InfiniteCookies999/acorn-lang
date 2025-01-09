@@ -33,7 +33,7 @@ struct A {
     int v;
 
     void foo() {
-        v = 65;   
+        v = 65;
     }
 }
 

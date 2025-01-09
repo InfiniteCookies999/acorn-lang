@@ -17,9 +17,9 @@
 #define check_and_verify_type(n) check_node(n); yield_if(n)
 
 acorn::Sema::Sema(Context& context, SourceFile* file, Logger& logger)
-    : context(context), 
-      modl(file->modl), 
-      file(file), 
+    : context(context),
+      modl(file->modl),
+      file(file),
       nspace(file->get_namespace()),
       logger(logger),
       type_table(context.type_table) {
@@ -157,7 +157,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_bracket_type(Type* type) {
         }
         return type_table.get_enum_container_type(enum_type);
     }
-    
+
     if (!expr->type->is_integer()) {
         error(expand(expr), "Array length must be an integer type")
             .end_error(ErrCode::SemaArrayLengthNotInteger);
@@ -205,7 +205,7 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
     auto assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(type);
 
     if (from_type->get_kind() != TypeKind::Array) {
-        error(expand(var), "Expected array type for '%s', but found '%s'", 
+        error(expand(var), "Expected array type for '%s', but found '%s'",
               type, from_type)
             .end_error(ErrCode::SemaAssignDetArrTypeReqsArrAssignment);
         return nullptr;
@@ -233,7 +233,7 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
 
         assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(elm_type);
         elm_type = assign_det_arr_type->get_elm_type();
-        
+
         arr_type = static_cast<ArrayType*>(from_elm_type);
         from_elm_type = arr_type->get_elm_type();
 
@@ -249,7 +249,7 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
     if (!fixed_type) {
         return nullptr;
     }
-    
+
     for (auto itr = arr_lengths.rbegin(); itr != arr_lengths.rend(); ++itr) {
         uint32_t arr_length = *itr;
         fixed_type = type_table.get_arr_type(fixed_type, arr_length);
@@ -259,7 +259,7 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
 }
 
 acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
-    
+
     auto unresolved_composite_type = static_cast<UnresolvedCompositeType*>(type);
 
     auto name = unresolved_composite_type->get_struct_name();
@@ -292,7 +292,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
                 if (*end == ';' || *end == ']' || *end == ')') {
                     // could be something like `int a = b *;` in which case we will tell the
                     // user that it expected an expression instead.
-                    
+
                     logger.begin_error(error_loc, "Tried to interpret '%s' as a type but may be part of an incomplete expression",
                                        name);
                     SourceLoc arrow_loc = {
@@ -432,7 +432,7 @@ void acorn::Sema::check_for_duplicate_functions(const FuncList& funcs, Context& 
         // nonsensical information.
         return;
     }
-    
+
     for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
         for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
             if (check_for_duplicate_match(*itr, *itr2)) {
@@ -465,8 +465,8 @@ void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
         }
     };
     for (auto& [location, decl1, decl2] : modl.get_declaration_duplicates()) {
-        report_redeclaration(decl1, 
-                             decl2, 
+        report_redeclaration(decl1,
+                             decl2,
                              get_duplicate_kind_str(decl1),
                              get_duplcate_err_code(decl1));
     }
@@ -568,7 +568,7 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
             importn->set_imported_composite(composite);
         }
     };
-    
+
     auto report_could_not_find = [&logger](ImportStmt::KeyPart& key_part,
                                            const char* fmt,
                                            ErrorSpellChecker& spell_checker) finline{
@@ -633,7 +633,7 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         add_namespace(&modl);
         return;
     }
-    
+
     if (key.size() == 1) {
         if (auto modl = context.find_module(key[0].name)) {
             add_namespace(modl);
@@ -708,7 +708,7 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
                 } else {
                     spell_checker.add_searches(nspace->get_composites());
                     report_could_not_find_composite(key[2], spell_checker);
-                } 
+                }
             } else {
                 spell_checker.add_searches(modl->get_namespaces());
                 report_could_not_find_namespace(key[1], spell_checker);
@@ -814,7 +814,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
                 return false;
             }
         }
-        
+
         check_variable(param);
         if (!param->type) {
             func->is_checking_declaration = false;
@@ -862,7 +862,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
         auto itr = context.ll_intrinsics_table.find(link_name);
         if (itr != context.ll_intrinsics_table.end()) {
             func->ll_intrinsic_id = itr->second;
-            
+
             // Validating that the parameters and return are correct.
 
             for (Var* param : func->params) {
@@ -1219,7 +1219,7 @@ void acorn::Sema::check_variable(Var* var) {
         if (!check_for_incomplete_type()) {
             return cleanup();
         }
-        
+
         if (var->assignment->type == context.funcs_ref_type) {
             var->type = construct_function_type_from_func_ref(var->assignment);
         } else {
@@ -1295,7 +1295,7 @@ void acorn::Sema::check_variable(Var* var) {
     // ensure things such as accessing of function references that are private.
     if (var->assignment && !is_assignable_to(var->type, var->assignment)) {
         bool is_assignable_to = false;
-        
+
         if (var->assignment->is(NodeKind::FuncCall)) {
             FuncCall* call = static_cast<FuncCall*>(var->assignment);
             if (may_implicitly_convert_return_ptr(var->type, call)) {
@@ -1321,7 +1321,7 @@ void acorn::Sema::check_variable(Var* var) {
 }
 
 void acorn::Sema::check_struct(Struct* structn) {
-    
+
     // -- Debug
     // Logger::debug("checking struct: %s", structn->name);
 
@@ -1333,7 +1333,7 @@ void acorn::Sema::check_struct(Struct* structn) {
 
     auto process_field_struct_type_state = [this, structn](SourceLoc field_loc, StructType* field_struct_type) finline {
         auto field_struct = field_struct_type->get_struct();
-        
+
         structn->needs_destruction       |= field_struct->needs_destruction;
         structn->fields_need_destruction |= field_struct->needs_destruction;
 
@@ -1443,7 +1443,7 @@ void acorn::Sema::check_enum(Enum* enumn) {
 
     // TODO: check to make sure the explicit values type is a foldable type?
     bool has_explicit_values_type = values_type != nullptr;
-    
+
     if (has_explicit_values_type) {
         if (is_incomplete_type(values_type)) {
             error(enumn, "Value type '%s' is an incomplete type", values_type)
@@ -1468,7 +1468,7 @@ void acorn::Sema::check_enum(Enum* enumn) {
 
         if (value.assignment) {
             check_node(value.assignment);
-        
+
             if (value.assignment->type) {
                 bool assignment_is_integer = value.assignment->type->is_integer();
 
@@ -1488,7 +1488,7 @@ void acorn::Sema::check_enum(Enum* enumn) {
                 } else {
                     value.index = index_counter;
                 }
-                
+
                 if (values_type) {
                     if (!is_assignable_to(values_type, value.assignment)) {
                         if (has_explicit_values_type) {
@@ -1508,7 +1508,7 @@ void acorn::Sema::check_enum(Enum* enumn) {
             }
         } else {
             has_non_assigning = true;
-            
+
             // No assignment so set it to be equal to one past the last value.
             value.index = index_counter;
         }
@@ -1519,7 +1519,7 @@ void acorn::Sema::check_enum(Enum* enumn) {
 
     if (has_non_assigning && !has_conflicting_values_type &&
         values_type && !values_type->is_integer()) {
-        // Must always assign to all enum slots if the 
+        // Must always assign to all enum slots if the
         for (auto& value : enumn->values) {
             if (!value.assignment) {
                 error(value.name_loc, "Enum values require assignment when the value type of the enum is '%s'",
@@ -1575,7 +1575,7 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
                 // handling the aggregate returning. Additionally for certain memory
                 // handling cases it is important that these two are distinct or it
                 // leads to issues of shared memory.
-                // 
+                //
                 // TODO: We also include a check for if it is a field but this is probably
                 // not needed if it is a field of a local variable. Although there would
                 // then be extra IRGen complications in referencing the memory. For now it
@@ -1624,15 +1624,15 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
     // the variable is the body of the if statement.
     SemScope sem_scope = push_scope();
     if (ifs->cond->is(NodeKind::Var)) {
-            
+
         Var* var = static_cast<Var*>(ifs->cond);
         check_variable(var);
-        
+
         if (!var->assignment) {
             error(var, "Must assign a value")
                 .end_error(ErrCode::SemaExpectedAssignmentIfStmt);
         }
-        
+
         if (var->type) {
             if (!ifs->post_variable_cond && !is_condition(var->type)) {
                 error(expand(var), "Variable expected to have a conditional type")
@@ -1644,7 +1644,7 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
                 }
             }
         }
-        
+
     } else {
         check_node(ifs->cond);
         Expr* cond = static_cast<Expr*>(ifs->cond);
@@ -1652,7 +1652,7 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
             check_is_condition(cond);
         }
     }
-    
+
     check_scope(ifs->scope, &sem_scope);
     all_paths_return = sem_scope.all_paths_return;
     pop_scope();
@@ -1686,7 +1686,7 @@ void acorn::Sema::check_predicate_loop(PredicateLoopStmt* loop) {
 }
 
 void acorn::Sema::check_range_loop(RangeLoopStmt* loop) {
-    
+
     SemScope sem_scope = push_scope();
     if (loop->init_node) {
         check_node(loop->init_node);
@@ -1709,7 +1709,7 @@ void acorn::Sema::check_range_loop(RangeLoopStmt* loop) {
 }
 
 void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
-    
+
     SemScope sem_scope = push_scope();
     loop->var->type = fixup_type(loop->var->parsed_type);
     auto var_type = loop->var->type;
@@ -1752,7 +1752,7 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
                 }
             }
         } else if (loop->container->type->is_range()) {
-            
+
             auto range_type = static_cast<RangeType*>(loop->container->type);
             auto value_type = range_type->get_value_type();
 
@@ -1847,7 +1847,7 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
         CmpNumber()
             : kind(Kind::EMPTY) {
         }
-        
+
         static CmpNumber get(llvm::Constant* ll_value, Type* type) {
             CmpNumber number;
             switch (type->get_kind()) {
@@ -1980,7 +1980,7 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
         for (size_t i = 0; i < prior_values.size(); i++) {
             auto& prior_case = switchn->cases[i];
             if (prior_case.cond && prior_case.cond->type->is_range()) {
-                
+
                 auto range      = static_cast<BinOp*>(prior_case.cond);
                 auto range_type = static_cast<RangeType*>(prior_case.cond->type);
                 auto value_type = range_type->get_value_type();
@@ -1994,10 +1994,10 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
                 }
 
                 auto ll_int_type = llvm::Type::getIntNTy(context.get_ll_context(), value_type->get_number_of_bits());
-                
+
                 auto cmp_lhs = CmpNumber::get(static_cast<Number*>(range->lhs));
                 auto cmp_rhs = CmpNumber::get(static_cast<Number*>(range->rhs));
-                
+
                 if (is_value_in_range(range, value, cmp_lhs, cmp_rhs)) {
                     report_error_for_duplicate(scase, prior_case);
                     break;
@@ -2074,7 +2074,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
 
                 auto cmp_lhs = CmpNumber::get(static_cast<Number*>(cmp_range->lhs));
                 auto cmp_rhs = CmpNumber::get(static_cast<Number*>(cmp_range->rhs));
-                                
+
                 bool found_error = false;
                 switch (cmp_range->op) {
                 case Token::RangeEq: {
@@ -2097,7 +2097,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
                     break;
                 }
                 case Token::RangeLt: {
-                                    
+
                     // end1 > start2 and start1 < end2
                     // or
                     // end2 > start1 and start2 < end1
@@ -2144,9 +2144,9 @@ if (prior_value.value_s64 == value.value_s64) {     \
             check_node(scase.cond);
             if (scase.cond->type) {
                 bool is_bool_type = scase.cond->type->is_ignore_const(context.bool_type);
-                
+
                 if (scase.cond->type->is_range()) {
-                    
+
                     auto range_type = static_cast<RangeType*>(scase.cond->type);
                     auto value_type = range_type->get_value_type();
 
@@ -2172,7 +2172,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
                           scase.cond->type, switchn->on->type)
                         .end_error(ErrCode::SemaCannotCompareCaseType);
                     prior_values.push_back({}); // Need to still add empty to keep indices correct.
-                
+
                 } else if (scase.cond->is_foldable) {
                     auto ll_value = gen_constant(scase.cond);
                     add_foldable_value(CmpNumber::get(ll_value, scase.cond->type), scase);
@@ -2185,7 +2185,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
                     error(scase.cond, "Cannot compare to %s", bool_cond->value ? "true" : "false")
                         .end_error(ErrCode::SemaCaseCannotBeBoolLiteral);
                 }
-                
+
                 if (!scase.cond->is_foldable || is_bool_type) {
                     switchn->all_conds_foldable = false;
                 }
@@ -2212,7 +2212,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
     auto composite = find_composite(name);
 
     if (!composite) {
-        error(initializer->ref, "Failed to find struct type '%s'", 
+        error(initializer->ref, "Failed to find struct type '%s'",
               name)
             .end_error(ErrCode::SemaStructInitFailedToFindStruct);
         return;
@@ -2251,10 +2251,10 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
         initializer->is_foldable = false;
         initializer->called_constructor = found_constructor;
         initializer->type = structn->struct_type;
-        
+
         return;
     }
-    
+
     // Check for duplicate values.
     if (initializer->non_named_vals_offset != -1) {
         bool dup_named_vals = false;
@@ -2270,7 +2270,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
                 if (!other_val->is(NodeKind::NamedValue)) {
                     continue;
                 }
-                
+
                 auto other_named_val = static_cast<NamedValue*>(other_val);
                 if (named_val->name == other_named_val->name) {
                     error(other_named_val, "Duplicated named value '%s'", named_val->name)
@@ -2280,12 +2280,12 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
                 }
             }
         }
-    
+
         if (dup_named_vals) {
             return;
         }
     }
-    
+
     auto& values = initializer->values;
     if (values.size() > structn->fields.size()) {
         error(initializer, "More values than struct fields")
@@ -2323,7 +2323,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
             named_value_high_idx = std::max(field->field_idx, named_value_high_idx);
             named_value->mapped_idx = field->field_idx;
         } else {
-            
+
             field = structn->fields[i];
 
             // Cannot determine the order of the values if the
@@ -2335,9 +2335,9 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
                 return;
             }
         }
-    
+
         if (!is_assignable_to(field->type, value)) {
-            error(expand(value), "Field '%s'. %s", 
+            error(expand(value), "Field '%s'. %s",
                   field->name,
                   get_type_mismatch_error(field->type, value).c_str())
                 .end_error(ErrCode::SemaFieldInitTypeMismatch);
@@ -2356,13 +2356,13 @@ void acorn::Sema::check_this(This* thisn) {
             .end_error(ErrCode::SemaThisNotInStruct);
         return;
     }
-    
+
     thisn->type = type_table.get_ptr_type(cur_struct->struct_type);
     thisn->is_foldable = false;
 }
 
 void acorn::Sema::check_sizeof(SizeOf* sof) {
-    
+
     if (is_incomplete_type(sof->type_with_size)) {
         error(expand(sof), "Cannot get size of unsized type '%s'", sof->type_with_size)
                 .end_error(ErrCode::SemaCannotGetSizeOfUnsizedType);
@@ -2408,7 +2408,7 @@ void acorn::Sema::check_scope(ScopeStmt* scope) {
 
 
 void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
-    
+
     for (Node* stmt : *scope) {
         if (sem_scope && sem_scope->found_terminal) {
             error(stmt, "Unreachable code")
@@ -2425,7 +2425,7 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
             logger.end_error(ErrCode::SemaIncompleteStmt);
             continue;
         }
-                
+
         if (stmt->is(NodeKind::Func)) {
             error(stmt, "Functions cannot be declared within another function")
                 .end_error(ErrCode::SemaNoLocalFuncs);
@@ -2452,15 +2452,15 @@ void acorn::Sema::add_variable_to_local_scope(Var* var) {
 //--------------------------------------
 
 void acorn::Sema::check_binary_op(BinOp* bin_op) {
-    
+
     Expr* lhs = bin_op->lhs;
     Expr* rhs = bin_op->rhs;
 
     auto get_number_type = [this, bin_op](bool enforce_lhs, Type* lhs_type, Type* rhs_type) finline -> Type* {
-        // TODO: If one of the types is a float and the other an integer 
+        // TODO: If one of the types is a float and the other an integer
         //       we may want the bitwidth to be less than or equal to the
         //       size of the float for the integer.
-        
+
         if (lhs_type->is_float()) {
             if (rhs_type->is_float()) {
                 uint32_t lbits = rhs_type->get_number_of_bits();
@@ -2486,13 +2486,13 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     //lhs, rhs, error_cannot_apply, error_mismatched, valid_number_compare
     auto get_add_sub_mul_type = [=, this](bool enforce_lhs, Type* lhs_type, Type* rhs_type) finline->Type* {
         // valid pointer arithmetic cases:
-        // 
+        //
         // ptr + int
         // int + ptr
-        // 
+        //
         // ptr - int
         // ptr - ptr
-        
+
         if (lhs_type->is_pointer() || lhs_type->is_array()) {
             // Pointer arithmetic
             if (bin_op->op == '+' && !rhs_type->is_integer()) {
@@ -2549,18 +2549,18 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         if (!lhs_type->is_number()) {
             report_binary_op_cannot_apply(bin_op, lhs);
             return nullptr;
-        }   
+        }
         if (!rhs_type->is_number()) {
             report_binary_op_cannot_apply(bin_op, rhs);
             return nullptr;
         }
-            
+
         check_division_by_zero(bin_op, rhs);
-        
+
         if (Type* result_type = get_number_type(enforce_lhs, lhs_type, rhs_type)) {
             return result_type;
         }
-        
+
         report_binary_op_mistmatch_types(bin_op);
         return nullptr;
     };
@@ -2595,7 +2595,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         if (Type* result_type = get_integer_type_for_binary_op(enforce_lhs, bin_op, lhs_type, rhs_type)) {
             return result_type;
         }
-        
+
         report_binary_op_mistmatch_types(bin_op);
         return nullptr;
     };
@@ -2649,14 +2649,14 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     case Token::TildeEq:
     case Token::LtLtEq:
     case Token::GtGtEq: {
-        
+
         check_modifiable(bin_op->lhs);
 
         switch (bin_op->op) {
         case '=': {
             if (!is_assignable_to(bin_op->lhs->type, bin_op->rhs)) {
                 bool is_assignable_to = false;
-        
+
                 if (bin_op->rhs->is(NodeKind::FuncCall)) {
                     FuncCall* call = static_cast<FuncCall*>(bin_op->rhs);
                     if (may_implicitly_convert_return_ptr(bin_op->lhs->type, call)) {
@@ -2799,7 +2799,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             report_binary_op_cannot_apply(bin_op, rhs);
             return;
         }
-        
+
         bin_op->type = context.bool_type;
         break;
     }
@@ -2812,7 +2812,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             report_binary_op_cannot_apply(bin_op, rhs);
             return;
         }
-        
+
         if (!lhs_type->is_ignore_const(rhs_type)) {
             report_binary_op_mistmatch_types(bin_op);
             return;
@@ -2907,7 +2907,7 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
             report_binary_op_cannot_apply(bin_op, bin_op->rhs);
             return;
         }
-        
+
         check_division_by_zero(bin_op, bin_op->rhs);
 
         bin_op->type = type_table.get_enum_container_type(lhs_enum_type);
@@ -2916,7 +2916,7 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
     case '<': case '>':
     case Token::GtEq: case Token::LtEq:
     case Token::EqEq: case Token::ExEq: {
-        
+
         bool lhs_is_enum = bin_op->lhs->type->is_enum(),
              rhs_is_enum = bin_op->rhs->type->is_enum();
         if (!lhs_is_enum) {
@@ -2980,7 +2980,7 @@ acorn::Type* acorn::Sema::get_integer_type_for_binary_op(bool enforce_lhs,
 
     // Allow numeric operations on integer types when one of them is
     // an integer literal but without an explicit type.
-    
+
     if (lhs_type->is_integer() && rhs_type->is_integer()) {
         if (bin_op->rhs->is(NodeKind::Number) &&
             (rhs_type->is(context.int_type) || rhs_type->is(context.char_type))) {
@@ -3039,7 +3039,7 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
                 .end_error(ErrCode::SemaUnaryOpAddressAccessNotLvalue);
             return;
         }
- 
+
         Type* elm_type = expr->type;
         if (is_readonly_field_without_access(expr)) {
             if (!elm_type->is_const()) {
@@ -3048,7 +3048,7 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
         }
 
         unary_op->type = type_table.get_ptr_type(expr->type);
-        
+
         unary_op->is_foldable = false;
         break;
     }
@@ -3086,7 +3086,7 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
 
 template<bool is_spell_checking>
 void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call) {
-    
+
     ErrorSpellChecker spell_checker(context.should_show_spell_checking());
 
     bool search_relative = search_nspace == nspace;
@@ -3110,13 +3110,13 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
                 .end_error(ErrCode::SemaCannotMakeCallsInComptimeIf);
             return;
         }
-        
+
         if (auto* universal = context.get_universal_constant(ref->ident)) {
             ref->set_universal_ref(universal);
             ref->type = ref->universal_ref->type;
             return;
         }
-        
+
         spell_checker.add_searches(context.get_universal_constants());
 
         auto& logger = error(expand(ref), "Could not find identifier '%s'", ref->ident);
@@ -3260,10 +3260,10 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         spell_checker.search(logger, ref->ident);
         return;
     }
-    
+
     switch (ref->found_kind) {
     case IdentRef::VarKind: {
-        
+
         Var* var_ref = ref->var_ref;
         if (var_ref->is_global) {
             ensure_global_variable_checked(ref->loc, ref->var_ref);
@@ -3362,7 +3362,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
                     .end_error(ErrCode::SemaCannotAccessFieldIsPrivate);
             }
         }
-        
+
 
         if (struct_type->is_const() && !dot->type->is_const()) {
             // The constness must be passed onto the field to prevent modification of fields.
@@ -3419,7 +3419,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
 }
 
 void acorn::Sema::check_function_call(FuncCall* call) {
-    
+
     bool args_have_errors = false;
     for (Expr* arg : call->args) {
         if (arg->is(NodeKind::MoveObj)) {
@@ -3433,7 +3433,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
 
     bool is_funcs_ref = true;
     if (call->site->is(NodeKind::IdentRef)) {
-        
+
         IdentRef* ref = static_cast<IdentRef*>(call->site);
         check_ident_ref(ref, nspace, true);
         yield_if(ref);
@@ -3455,7 +3455,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         }
     } else {
         check_and_verify_type(call->site);
-        
+
         is_funcs_ref = false;
     }
 
@@ -3463,7 +3463,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         check_function_type_call(call, static_cast<FunctionType*>(call->site->type));
         return;
     }
-    
+
     if (!is_funcs_ref) {
         error(expand(call->site), "Type '%s' is not callable", call->site->type)
             .end_error(ErrCode::SemaTypeNoCallable);
@@ -3471,9 +3471,9 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
 
     IdentRef* ref = static_cast<IdentRef*>(call->site);
-    auto called_func = check_function_decl_call(call, 
-                                                call->args, 
-                                                call->non_named_args_offset, 
+    auto called_func = check_function_decl_call(call,
+                                                call->args,
+                                                call->non_named_args_offset,
                                                 *ref->funcs_ref);
     if (!called_func) {
         return;
@@ -3482,7 +3482,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     call->is_foldable = false;
     call->called_func = called_func;
     call->type = called_func->return_type;
-    
+
 }
 
 void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_type) {
@@ -3525,7 +3525,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                                    llvm::SmallVector<Expr*>& args,
                                                    size_t non_named_args_offset,
                                                    FuncList& candidates) {
-    
+
     //class A {
     //public:
     //    int* v;
@@ -3549,14 +3549,14 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
             logger.begin_error(call_node->loc,
                                "Circular dependency while checking function declaration '%s'",
                                canidate->name);
-            
+
             const char* func_end_ptr = canidate->loc.ptr;
             if (call_node->is(NodeKind::FuncCall)) {
                 go_until(func_end_ptr, '(', ')');
             } else {
                 go_until(func_end_ptr, '{', '}');
             }
-            
+
             bool within_func_params = call_node->loc.ptr >= canidate->loc.ptr && call_node->loc.ptr <= func_end_ptr;
             if (!within_func_params) {
                 logger.add_line([canidate](Logger& logger) {
@@ -3589,7 +3589,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                 if (!other_arg->is(NodeKind::NamedValue)) {
                     continue;
                 }
-                
+
                 auto other_named_arg = static_cast<NamedValue*>(other_arg);
                 if (named_arg->name == other_named_arg->name) {
                     error(other_named_arg, "Duplicated named argument '%s'", named_arg->name)
@@ -3625,7 +3625,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
             auto named_arg = static_cast<NamedValue*>(arg_value);
             param = called_func->find_parameter(named_arg->name);
             named_arg->mapped_idx = param->param_idx;
-            
+
             arg_value = named_arg->assignment;
         } else {
             param = called_func->params[i];
@@ -3692,14 +3692,14 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm:
     const uint32_t INCORRECT_NUM_ARGS_CAP      = MAX_NOT_ASSIGNABLE_CAP * 2;
 
     uint32_t score = 0;
-    
+
     uint32_t mimatched_types = 0;
     uint32_t not_assignable_types = 0;
     bool implicitly_converts_ptr_arg = false;
-    auto status = compare_as_call_candidate<true>(candidate, 
-                                                  args, 
-                                                  mimatched_types, 
-                                                  not_assignable_types, 
+    auto status = compare_as_call_candidate<true>(candidate,
+                                                  args,
+                                                  mimatched_types,
+                                                  not_assignable_types,
                                                   implicitly_converts_ptr_arg);
     switch (status) {
     case CallCompareStatus::INCORRECT_ARGS:
@@ -3715,14 +3715,14 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate, const llvm:
         score += MAX_ARGS_SCORE_CAP;
         score += not_assignable_types;
     }
-    
+
     return score;
 }
 
 acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
                                                    llvm::SmallVector<Expr*>& args,
                                                    bool& selected_implicitly_converts_ptr_arg) {
-    
+
     Func* selected = nullptr;
     uint32_t best_mimatched_types = 0;
 
@@ -3739,10 +3739,10 @@ acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
         uint32_t mimatched_types = 0;
         uint32_t not_assignable_types = 0;
         bool implicitly_converts_ptr_arg = false;
-        auto status = compare_as_call_candidate<false>(canidate, 
-                                                       args, 
-                                                       mimatched_types, 
-                                                       not_assignable_types, 
+        auto status = compare_as_call_candidate<false>(canidate,
+                                                       args,
+                                                       mimatched_types,
+                                                       not_assignable_types,
                                                        implicitly_converts_ptr_arg);
         if (status != CallCompareStatus::SUCCESS) {
             continue;
@@ -3778,7 +3778,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
 
         if (candidate->uses_native_varargs &&
             i >= candidate->params.size() - 1) {
-            
+
             if (arg_value->type->is_aggregate()) {
                 return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
             }
@@ -3798,7 +3798,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
             auto named_arg = static_cast<NamedValue*>(arg_value);
             arg_value = named_arg->assignment;
             param = candidate->find_parameter(named_arg->name);
-            
+
             // Check to make sure we found the parameter by the given name.
             if (!param) {
                 return CallCompareStatus::INCORRECT_PARAM_BY_NAME_NOT_FOUND;
@@ -3818,7 +3818,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                 return CallCompareStatus::OUT_OF_ORDER_PARAMS;
             }
         }
-        
+
         if (!is_assignable_to(param->type, arg_value)) {
 
             bool is_assignable = false;
@@ -3830,7 +3830,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                     }
                 }
             }
-            
+
             if (!is_assignable && arg_value->is(NodeKind::FuncCall)) {
                 auto arg_call = static_cast<FuncCall*>(arg_value);
                 if (may_implicitly_convert_return_ptr(param->type, arg_call)) {
@@ -3838,7 +3838,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                     is_assignable = true;
                 }
             }
-            
+
             if (!is_assignable) {
                 if constexpr (for_score_gathering) {
                     ++not_assignable_types;
@@ -3857,7 +3857,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
     return CallCompareStatus::SUCCESS;
 }
 
-bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const 
+bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const
                                              llvm::SmallVector<Expr*>& args) const {
     if (candidate->default_params_offset == -1) {
         if (!candidate->uses_native_varargs) {
@@ -3879,10 +3879,10 @@ bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const
     return true;
 }
 
-void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc, 
-                                             const FuncList& candidates, 
+void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
+                                             const FuncList& candidates,
                                              const llvm::SmallVector<Expr*>& args) const {
-    
+
     auto function_decl_to_string = [](const Func* canidate) {
         std::string str = canidate->name.to_string().str();
         str += "(";
@@ -3901,7 +3901,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
     const char* func_type_str = candidates[0]->is_constructor ? "constructor" : "function";
 
     if (candidates.size() == 1) {
-        
+
         Func* canidate = candidates[0];
 
         logger.begin_error(error_loc, "Invalid call to %s: %s", func_type_str, function_decl_to_string(canidate));
@@ -3944,7 +3944,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
 #define err_line(fmt, ...) logger.add_line(("%s- " fmt), indent ? "  " : "", ##__VA_ARGS__)
 
     constexpr bool is_func_decl = std::is_same_v<std::remove_const_t<F>, Func>;
-        
+
     auto get_num_params = [candidate]() constexpr -> size_t {
         if constexpr (is_func_decl) {
             return candidate->params.size();
@@ -3960,7 +3960,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
             return has_correct_number_of_args(candidate, args);
         } else {
             return num_params == args.size();
-        }  
+        }
     };
 
     if (!check_correct_number_of_args()) {
@@ -3989,14 +3989,14 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
     bool named_args_out_of_order = false;
     uint32_t named_arg_high_idx = 0;
     for (size_t i = 0; i < args.size(); i++) {
-        
+
         Expr* arg_value = args[i];
         Var* param = nullptr;
 
         if constexpr (is_func_decl) {
             if (candidate->uses_native_varargs &&
                 i >= candidate->params.size() - 1) {
-                
+
                 if (arg_value->type->is_aggregate()) {
                     err_line("Arg %s of type '%s' cannot be used in a native varargs list",
                              i + 1, arg_value->type);
@@ -4014,12 +4014,12 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         }
 
         if (arg_value->is(NodeKind::NamedValue)) {
-            
+
             if constexpr (is_func_decl) {
                 auto named_arg = static_cast<NamedValue*>(arg_value);
                 arg_value = named_arg->assignment;
                 param = candidate->find_parameter(named_arg->name);
-            
+
                 if (!param) {
                     err_line("Could not find param '%s' for named arg", named_arg->name);
                     return;
@@ -4061,7 +4061,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                     }
                 }
             }
-            
+
             if (!is_assignable && arg_value->is(NodeKind::FuncCall)) {
                 auto arg_call = static_cast<FuncCall*>(arg_value);
                 if (may_implicitly_convert_return_ptr(param_type, arg_call)) {
@@ -4166,7 +4166,7 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
     if (!elm_type) {
         elm_type = dest_elm_type;
     }
-    
+
     for (Expr* value : arr->elms) {
         if (value) {
             create_cast(value, elm_type);
@@ -4181,7 +4181,7 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
     check_and_verify_type(mem_access->index);
 
     if (mem_access->site->type->is(context.expr_type)) {
-            
+
         auto expr_type = get_type_of_type_expr(mem_access->site);
         auto unresolved_type = UnresolvedBracketType::create(context.get_allocator(), expr_type, mem_access->index);
         auto fixed_expr_type = fixup_unresolved_bracket_type(unresolved_type);
@@ -4223,7 +4223,7 @@ void acorn::Sema::check_ternary(Ternary* ternary) {
             return;
         }
     }
-    
+
     check_node(ternary->lhs);
     check_node(ternary->rhs);
 
@@ -4272,12 +4272,12 @@ void acorn::Sema::check_reflect(Reflect* reflect) {
             .end_error(ErrCode::SemaCannotReflectWhenStandAlone);
         return;
     }
-    
+
     check_and_verify_type(reflect->expr);
 
     switch (reflect->reflect_kind) {
     case ReflectKind::TypeInfo: {
-        
+
         if (reflect->expr->type == context.expr_type) {
             reflect->type_info_type = get_type_of_type_expr(reflect->expr);
         } else {
@@ -4298,19 +4298,19 @@ void acorn::Sema::check_reflect(Reflect* reflect) {
 void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) {
     if (cur_global_var) {
         cur_global_var->dependency = var;
-        
+
         if (var->is_being_checked) {
             if (cur_global_var->dependency == cur_global_var) {
                 report_error_cannot_use_variable_before_assigned(error_loc, cur_global_var);
             } else {
-                display_circular_dep_error(error_loc, 
+                display_circular_dep_error(error_loc,
                                            cur_global_var,
-                                           "Global variables form a circular dependency", 
+                                           "Global variables form a circular dependency",
                                            ErrCode::SemaGlobalCircularDependency);
             }
         }
     }
-    
+
     if (!var->has_been_checked) {
         Sema sema(context, var->file, var->get_logger());
         sema.check_variable(var);
@@ -4332,7 +4332,7 @@ bool acorn::Sema::ensure_struct_checked(SourceLoc error_loc, Struct* structn) {
 void acorn::Sema::ensure_enum_checked(SourceLoc error_loc, Enum* enumn) {
     if (cur_enum) {
         cur_enum->dependency = enumn;
-        
+
         if (cur_enum->is_being_checked) {
             display_circular_dep_error(error_loc,
                                        cur_enum,
@@ -4547,7 +4547,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
         if (from_type->is_array()) {
             auto from_arr_type = static_cast<ArrayType*>(from_type);
             auto from_elm_type = from_arr_type->get_elm_type();
-            
+
             auto to_slice_type = static_cast<SliceType*>(to_type);
             auto to_elm_type   = to_slice_type->get_elm_type();
 
@@ -4621,7 +4621,7 @@ bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type,
     if (from_type->does_contain_const()) {
         from_type = from_type->remove_all_const();
     }
-   
+
     return true;
 }
 
@@ -4634,7 +4634,7 @@ bool acorn::Sema::has_valid_constness(Type* to_type, Type* from_type) const {
     }
 
     if (to_type->is_pointer()) {
-        
+
         auto to_type_itr = to_type;
         auto from_type_itr = from_type;
         do {
@@ -4835,7 +4835,7 @@ void acorn::Sema::check_division_by_zero(Node* error_node, Expr* expr) {
 
     if (auto ll_constant = gen_constant(expr)) {
         if (!ll_constant->isZeroValue()) return;
-        
+
         error(error_node, "Division by zero")
             .end_error(ErrCode::SemaDivisionByZero);
     }
@@ -5008,13 +5008,13 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
 
     if (to_type->is_integer() && to_type->is_not(context.char_type) &&
         expr->is(NodeKind::Number) && expr->is_foldable && expr->type->is_integer()) {
-   
+
         return get_error_msg_for_value_not_fit_type(static_cast<Number*>(expr));
     } else if (to_type->is_function() && expr->type->get_kind() == TypeKind::FuncsRef) {
-        
+
         auto ref = static_cast<IdentRef*>(expr);
         auto func = (*ref->funcs_ref)[0];
-        
+
         auto types = func->params | std::views::transform([](Var* param) { return param->type; })
                                   | std::ranges::to<llvm::SmallVector<Type*>>();
 

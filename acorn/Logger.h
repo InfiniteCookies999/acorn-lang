@@ -32,7 +32,7 @@ namespace acorn {
     class Logger;
     class GlobalLogger;
 
-    
+
     class FatalException : std::exception {
     public:
         const char* what() { return "failed"; }
@@ -44,7 +44,7 @@ namespace acorn {
     template<typename L>
     class AbstractLogger {
     public:
-        
+
         AbstractLogger(Context& context, Stream stream)
             : context(context), stream(stream) {
         }
@@ -97,7 +97,7 @@ namespace acorn {
     protected:
         Context& context;
         Stream   stream;
-    
+
         struct ErrorLine {
             bool                    add_period;
             std::function<void(L&)> print_cb;
@@ -153,7 +153,7 @@ namespace acorn {
             char buffer[22];
             char* p = buffer + sizeof(buffer) - 1;
             *p = '\0';
-            
+
             bool neg = false;
             if constexpr (std::is_signed_v<T>) {
                 if (v < 0) {
@@ -412,7 +412,7 @@ namespace acorn {
         PointSourceLoc main_location;
         size_t         facing_length = 0;
         std::function<void()> primary_print_cb;
-        
+
         struct ArrowMsg {
             std::string   msg;
             ArrowPosition position;

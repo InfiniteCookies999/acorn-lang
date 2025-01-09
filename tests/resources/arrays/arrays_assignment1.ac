@@ -39,7 +39,7 @@ void main() {
     a[5] = 103;
     a[6] = 111;
     a[7] = 33;
-    
+
     write_val(a[0]);
     write_val(a[1]);
     write_val(a[2]);

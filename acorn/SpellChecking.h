@@ -9,7 +9,7 @@
 #include "Identifier.h"
 
 namespace acorn {
-    
+
     class Logger;
 
     llvm::StringRef find_closest_spelling_match(const llvm::SmallVector<llvm::StringRef, 64>& comparisons,

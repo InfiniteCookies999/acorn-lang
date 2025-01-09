@@ -34,7 +34,7 @@ void TestCase::run() {
     try {
         cb();
     } catch (TestCaseFailedException e) {
-        
+
     }
     std::lock_guard lock(test_print_mutex);
     std::cout << std::string(4 * depth, ' ') << "(Test) '" << name << "'";
@@ -51,7 +51,7 @@ void TestCase::run() {
         set_color(acorn::Color::BrightRed);
         std::cout << "[!] ";
         set_color(acorn::Color::BrightWhite);
-        
+
         std::string file = std::string(cpp_fail_file);
 #ifdef _WIN32
         auto idx = file.find_last_of("\\");
@@ -93,13 +93,13 @@ void TestSection::run() {
 
         unsigned number_of_threads = 0;
         unsigned maximum_threads   = number_of_supported_threads < 1 ? 1 : number_of_supported_threads;
-    
+
         std::atomic<int> test_idx = 0;
         std::vector<std::thread> test_threads;
 
         static std::atomic<bool> fatal_encountered = false;
         acorn::fatal_interceptor = [&test_threads]() {
-            
+
             auto current_thread_id = std::this_thread::get_id();
 
             // Ensuring all threads are safely joined before
@@ -116,7 +116,7 @@ void TestSection::run() {
         for(int thr_id = 0; thr_id < maximum_threads; thr_id++) {
             test_threads.push_back(std::thread([&test_idx, &tests=this->tests, thr_id] {
                 thread_id = thr_id;
-            
+
                 while (true) {
                     if (fatal_encountered) {
                         break;
@@ -205,7 +205,7 @@ void run_tests() {
         single_run_case->run();
         return;
     }
-    
+
     for (TestSection* section : sections) {
         section->run();
     }

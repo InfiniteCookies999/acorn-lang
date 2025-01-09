@@ -21,7 +21,7 @@ namespace llvm {
 }
 
 namespace acorn {
-    
+
     class DebugInfoEmitter;
 
     struct Source {

@@ -17,12 +17,12 @@ import .unix.Stat;
  */
 
 enum FileFlag :: uint32 {
-    
+
     /*
      * Read from the file.
      */
     IN  = 0x0001,
-    
+
     /*
      * Write to the file.
      */
@@ -80,7 +80,7 @@ struct FileHandle {
     moveobj FileHandle(FileHandle* file_handle) {
         this.handle     = file_handle.handle;
         this.auto_close = file_handle.auto_close;
-        
+
 #if OS_GROUP_WINDOWS
         file_handle.handle = null;
 #elif OS_GROUP_UNIX
@@ -189,7 +189,7 @@ String read(const char* path) {
 
     char* buffer = as(char*) module.malloc(size + 1); // +1 for null terminator.
     int bytes_read = handle.read_buffer(buffer, size);
-    
+
     if bytes_read != size {
         // TODO: proper error handling.
         module.println("Read the incorrect number of bytes from file :(");
@@ -393,7 +393,7 @@ FileHandle open(const char* path, FileFlag[uint32] flags) {
 
     return FileHandle{ handle };
 #elif OS_GROUP_UNIX
-    
+
     // TODO: O_LARGEFILE -- Allow working for large file sizes.
 
     int32 os_flags = 0;

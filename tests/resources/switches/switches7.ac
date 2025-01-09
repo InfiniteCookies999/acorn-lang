@@ -26,7 +26,7 @@ void print(const char* s, int length) {
 }
 
 void main() {
-    
+
     int a = 4;
     int b = 4;
 

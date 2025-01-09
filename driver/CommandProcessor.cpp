@@ -61,7 +61,7 @@ void CommandConsumer::parse_int(const std::function<void(int)>& then) {
         prev_value = value;
         value = value * 10;
         value += ((int)c - '0');
-    
+
         if (value / 10 < prev_value) {
             acorn::Logger::global_error(*compiler.get_context(),
                                         "Integer overflow when parsing integer for flag %s", flag_name)
@@ -122,9 +122,9 @@ CommandLineProcessor::Flag& CommandLineProcessor::add_flag(llvm::StringRef flag_
 }
 
 int CommandLineProcessor::process(llvm::StringRef flag_name, int idx) {
-    
+
     for (Flag& flag : flags) {
-        
+
         if (flag.only_starts_with) {
             if (!flag_name.starts_with(flag.flag_name) &&
                 std::ranges::find_if(flag.aliases, [flag_name](llvm::StringRef alias) {
@@ -143,7 +143,7 @@ int CommandLineProcessor::process(llvm::StringRef flag_name, int idx) {
             return idx + 1;
         }
 
-        consumer.offset = idx + 1; 
+        consumer.offset = idx + 1;
         consumer.flag_name = consumer.wconverter.from_bytes(flag_name.data());
 
         flag.callback(consumer);
@@ -153,6 +153,6 @@ int CommandLineProcessor::process(llvm::StringRef flag_name, int idx) {
 
     acorn::Logger::global_error(*compiler.get_context(), "Unknown flag: -%s", flag_name)
         .end_error(acorn::ErrCode::GlobalUnknownCompilerFlag);
-    
+
     return idx + 1;
 }

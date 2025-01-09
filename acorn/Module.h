@@ -31,7 +31,7 @@ namespace acorn {
 
         void mark_bad_scope(ScopeLocation location, Node* node, Logger& logger);
 
-        void add_duplicate_decl(Decl* decl, Decl* prev_decl, 
+        void add_duplicate_decl(Decl* decl, Decl* prev_decl,
                                 ScopeLocation scope_location);
 
         Namespace* get_or_create_namespace(Context& context, Identifier ident);

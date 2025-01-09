@@ -35,7 +35,7 @@ void print(uint64 value, int base=10) {
     const BUFFER_SIZE = 21;
     char[BUFFER_SIZE] buffer = ---;
     char* ptr = uint64_to_chars(value, buffer + BUFFER_SIZE - 1, base);
-    
+
     int length = as(int) ((buffer + BUFFER_SIZE) - ptr);
     print(ptr, length);
 }
@@ -53,7 +53,7 @@ void print(bool b) {
 }
 
 // -- println functions
-// 
+//
 
 void println(const char* s) {
     print(s);

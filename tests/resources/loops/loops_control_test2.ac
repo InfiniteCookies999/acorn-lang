@@ -32,7 +32,7 @@ void main() {
         if a == 5 {
             break;
         }
-        
+
         write('a');
     }
 }

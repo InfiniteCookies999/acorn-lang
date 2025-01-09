@@ -16,7 +16,7 @@ namespace llvm {
 }
 
 namespace acorn {
-    
+
     class PageAllocator;
     class TypeTable;
     struct Expr;
@@ -32,7 +32,7 @@ namespace acorn {
     class EnumType;
 
     enum class TypeKind {
-        
+
         Int,
 
         Int8,
@@ -46,7 +46,7 @@ namespace acorn {
         UInt32,
         UInt64,
         USize,
-        
+
         Char,
         Char16,
         Char32,
@@ -76,11 +76,11 @@ namespace acorn {
         Invalid,
 
     };
-    
+
     class Type {
     public:
         friend TypeTable;
-        
+
         static Type* create(PageAllocator& allocator, TypeKind kind, bool is_const = false);
 
         TypeKind get_kind() const { return kind;  }
@@ -108,16 +108,16 @@ namespace acorn {
                     kind == TypeKind::Float32 || kind == TypeKind::Float64;
         }
 
-        bool is_float() const { 
-            return kind == TypeKind::Float32 || kind == TypeKind::Float64; 
+        bool is_float() const {
+            return kind == TypeKind::Float32 || kind == TypeKind::Float64;
         }
-        
+
         bool is_unsigned() const {
             return !is_signed();
         }
 
         bool is_comparable() const;
-        
+
         bool is_container() const {
             return is_pointer() || is_array() || is_slice();
         }
@@ -141,7 +141,7 @@ namespace acorn {
         }
 
         bool is_sized() const;
-             
+
         uint32_t get_number_of_bits() const;
 
         // True if the type needs to have it's destructor called.
@@ -219,7 +219,7 @@ namespace acorn {
         UnresolvedBracketType(bool is_const, Expr* expr, Type* elm_type) :
             ContainerType(TypeKind::UnresolvedArrayType, is_const, elm_type), expr(expr) {
         }
-        
+
         Expr* expr;
     };
 
@@ -261,7 +261,7 @@ namespace acorn {
         }
 
     protected:
-        SliceType(bool is_const, Type* elm_type) 
+        SliceType(bool is_const, Type* elm_type)
             : ContainerType(TypeKind::SliceType, is_const, elm_type) {
         }
 
@@ -273,8 +273,8 @@ namespace acorn {
     class AssignDeterminedArrayType : public ContainerType {
     public:
 
-        static Type* create(PageAllocator& allocator, 
-                            Type* elm_type, 
+        static Type* create(PageAllocator& allocator,
+                            Type* elm_type,
                             bool is_const = false);
 
         std::string to_string() const;
@@ -288,8 +288,8 @@ namespace acorn {
     class RangeType : public Type {
     public:
 
-        static RangeType* create(PageAllocator& allocator, 
-                                 Type* value_type, 
+        static RangeType* create(PageAllocator& allocator,
+                                 Type* value_type,
                                  bool is_const = false);
 
         Type* get_value_type() const { return value_type; }
@@ -307,7 +307,7 @@ namespace acorn {
     struct FunctionTypeKey {
         Type*                    return_type;
         llvm::SmallVector<Type*> param_types;
-    
+
         FunctionTypeKey(Type* return_type, llvm::SmallVector<Type*> param_types)
             : return_type(return_type), param_types(std::move(param_types)) {
         }
@@ -453,7 +453,7 @@ namespace acorn {
 namespace llvm {
 template<>
 struct DenseMapInfo<acorn::FunctionTypeKey*> {
-    
+
     static acorn::FunctionTypeKey* getEmptyKey() {
         return reinterpret_cast<acorn::FunctionTypeKey*>(-1);
     }
@@ -464,11 +464,11 @@ struct DenseMapInfo<acorn::FunctionTypeKey*> {
 
     static unsigned getHashValue(const acorn::FunctionTypeKey* key) {
         return static_cast<unsigned>(
-            hash_combine(key->return_type, 
+            hash_combine(key->return_type,
                          hash_combine_range(key->param_types.begin(), key->param_types.end())));
     }
 
-    static bool isEqual(const acorn::FunctionTypeKey* lhs, 
+    static bool isEqual(const acorn::FunctionTypeKey* lhs,
                         const acorn::FunctionTypeKey* rhs) {
         if (lhs == getEmptyKey() || rhs == getEmptyKey()) {
             return lhs == rhs;

@@ -14,7 +14,7 @@ R"(
 Usage: acorn <options> <sources>
 
 Common options (for more options use -more-options):
- 
+
     -o=<name>, -out-name, -output-name
         Sets the name of the executable.
 
@@ -43,7 +43,7 @@ Options:
 
     -o=<name>, -out-name, -output-name
         Sets the name of the executable.
-    
+
     -d=<dir>, -directory, -out-directory, -output-directory
         Sets the directory to place the output files such as
         the executable. Will create the director(ies) if they
@@ -94,7 +94,7 @@ Options:
         Stops performing spell checking when an identifier is
         not found and it tries to find an identifier with a
         closely matching string.
-    
+
     -show-linker-command, -show-linker-cmd
         Shows the command that is ran to perform linking.
 
@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
     acorn::Compiler compiler(allocator);
 
     CommandLineProcessor processor(compiler, argc, argv);
-    
+
     processor.add_flag("release", { "r", "rel" }, &acorn::Compiler::set_released_build);
     processor.add_flag("show-times", &acorn::Compiler::set_should_show_times);
     processor.add_flag("show-llvm-ir", { "show-llvm" }, &acorn::Compiler::set_should_show_llvm_ir);
@@ -154,7 +154,7 @@ int main(int argc, char* argv[]) {
 
         consumer.next(&acorn::Compiler::add_library_path, "Missing library path");
     }, true);
-    processor.add_flag("l", [&compiler](CommandConsumer& consumer) {    
+    processor.add_flag("l", [&compiler](CommandConsumer& consumer) {
         std::wstring value = consumer.get_flag_name().substr(1);
         if (!value.empty()) {
             compiler.add_library(value);

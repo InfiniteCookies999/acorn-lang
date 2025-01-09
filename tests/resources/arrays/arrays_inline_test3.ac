@@ -35,7 +35,7 @@ int[8] foo() {
 
 void main() {
     int[8] a = foo();
-    
+
     write_val(a[0]);
     write_val(a[1]);
     write_val(a[2]);

@@ -37,7 +37,7 @@ void main() {
             write('b');
             continue;
         }
-        
+
         write('a');
     }
 }

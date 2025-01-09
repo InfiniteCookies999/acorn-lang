@@ -35,7 +35,7 @@ void main() {
     int[8] a = [ 76, 101, 116, 115, 32, 103, 111, 33 ];
 
     s = a;
-    
+
     write_val(s[0]);
     write_val(s[1]);
     write_val(s[2]);

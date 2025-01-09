@@ -40,7 +40,7 @@ struct A {
 void main() {
     A a;
     int8[2] arr = a.foo();
-    
+
     write_val(arr[0]);
     write_val(arr[1]);
 }

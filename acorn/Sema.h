@@ -32,7 +32,7 @@ namespace acorn {
         static void report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code);
 
         static void check_nodes_wrong_scopes(Module& modl);
-        
+
         static void resolve_imports(Context& context, SourceFile* file);
         static void resolve_import(Context& context, ImportStmt* importn);
 
@@ -117,14 +117,14 @@ namespace acorn {
         void add_variable_to_local_scope(Var* var);
 
         // Expression checking
-        //--------------------------------------        
+        //--------------------------------------
 
         void check_binary_op(BinOp* bin_op);
         void check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_type, EnumType* rhs_enum_type);
         void report_binary_op_cannot_apply(BinOp* bin_op, Expr* expr);
         void report_binary_op_mistmatch_types(BinOp* bin_op);
         Type* get_integer_type_for_binary_op(bool enforce_lhs,
-                                             BinOp* bin_op, 
+                                             BinOp* bin_op,
                                              Type* lhs_type,
                                              Type* rhs_type) const;
         void check_unary_op(UnaryOp* unary_op);
@@ -159,7 +159,7 @@ namespace acorn {
                                                     uint32_t& mimatched_types,
                                                     uint32_t& not_assignable_types,
                                                     bool& implicitly_converts_ptr_arg) const;
-        bool has_correct_number_of_args(const Func* candidate, 
+        bool has_correct_number_of_args(const Func* candidate,
                                         const llvm::SmallVector<Expr*>& args) const;
         void display_call_mismatch_info(PointSourceLoc error_loc,
                                         const FuncList& candidates,
@@ -208,7 +208,7 @@ namespace acorn {
         Decl* find_composite(Identifier name);
 
         llvm::Constant* gen_constant(Expr* expr);
-        
+
         std::string get_type_mismatch_error(Type* to_type, Expr* expr) const;
         std::string get_type_mismatch_error(Type* to_type, Type* from_type) const;
 

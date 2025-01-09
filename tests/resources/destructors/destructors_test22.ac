@@ -30,7 +30,7 @@ struct A {
     int64 b;
     int64 c;
     int64 d;
-    
+
     ~A() {
         print("called", 6);
     }

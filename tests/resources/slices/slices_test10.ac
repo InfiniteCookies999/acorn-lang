@@ -36,12 +36,12 @@ int[..] get_slice(int[4] a, bool t) {
     if t {
         return s1;
     }
-    
+
     return s2;
 }
 
 void main() {
- 
+
     int[4] a1 = [ 76, 101, 116, 115 ];
     int[4] a2 = [ 32, 103, 111, 33 ];
 

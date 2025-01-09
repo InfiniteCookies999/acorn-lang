@@ -32,9 +32,9 @@ struct Messages {
 }
 
 void main() {
-    
+
     Messages messages;
-    
+
     messages.msg1 = "I Love";
     messages.msg2 = " ";
     messages.msg3 = "Coffee!";

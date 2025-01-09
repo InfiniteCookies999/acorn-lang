@@ -98,10 +98,10 @@ static std::string create_string_literal() {
     return "\"" + s + "\"";
 }
 
-static std::string create_float_literal(int max_whole_digits, 
-                                        int exp_dist_mean, 
-                                        int exp_dist_std_dev, 
-                                        int min_exp_value, 
+static std::string create_float_literal(int max_whole_digits,
+                                        int exp_dist_mean,
+                                        int exp_dist_std_dev,
+                                        int min_exp_value,
                                         int max_exp_value) {
 
     std::uniform_int_distribution<int> whole_digit_count_dist(1, max_whole_digits);
@@ -117,7 +117,7 @@ static std::string create_float_literal(int max_whole_digits,
     if (negative_chance == 0) {
         text = "-";
     }
-    
+
     int whole_digits = whole_digit_count_dist(generator);
     for (int j = 0; j < whole_digits; j++) {
         text += digit_dist(generator) + '0';
@@ -183,7 +183,7 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
             ostream << " ";
         }
     };
-    
+
     std::uniform_int_distribution<uint16_t> dist(0, static_cast<uint16_t>(token_ids.size() - (size_t)1));
     for (int i = 0; i < OUTPUT_TOKENS; i++) {
         if (i % 15 == 0 && i != 0) {

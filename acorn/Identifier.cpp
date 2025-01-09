@@ -18,13 +18,13 @@ acorn::Identifier acorn::Identifier::get(llvm::StringRef identifier) {
     // reading if we double check when writing.
     //
     std::lock_guard lock(mtx);
-    
+
     auto [itr, success] = mapped_identifiers.try_emplace(identifier, id_counter);
     if (success) {
         name_mapping.insert({ id_counter, identifier });
         ++id_counter;
     }
-    
+
     return itr->second;
 }
 

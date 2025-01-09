@@ -29,7 +29,7 @@ acorn::Lexer::Lexer(const Context& context, Buffer buffer, Logger& logger) :
 }
 
 acorn::Token acorn::Lexer::next_token() {
-    
+
     bool whitespace = false;
 
 RestartLexingLabel:
@@ -47,7 +47,7 @@ case c1:                                        \
     case ' ': case '\t': case '\v': case '\f':
         ++ptr;
         goto RestartLexingLabel;
-    
+
     // Encountered a new line.
     case '\n': {
         if (whitespace) {
@@ -109,7 +109,7 @@ case c1:                                        \
     }
     case ',':
         return new_token_and_eat(',');
-    
+
     two_tok('=', '=', Token::EqEq);
     two_tok('*', '=', Token::MulEq);
     two_tok('%', '=', Token::ModEq);
@@ -259,7 +259,7 @@ case c1:                                        \
 }
 
 void acorn::Lexer::eat_single_line_comment() {
-    
+
     while (*ptr != '\r' && *ptr != '\n' && *ptr != '\0') {
         ++ptr;
     }
@@ -277,7 +277,7 @@ void acorn::Lexer::eat_single_line_comment() {
 }
 
 void acorn::Lexer::eat_multiline_comment() {
-    
+
     ptr += 2; // Skip '/*'
 
     int depth = 1;
@@ -353,7 +353,7 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
             return finish_int_number(Token::OctLiteral, start);
         }
     }
-    
+
     // Parsing leading whole digits.
     while (is_digit(*ptr) || *ptr == NUMBER_SEPERATOR) {
         ++ptr;
@@ -407,14 +407,14 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
 }
 
 acorn::Token acorn::Lexer::finish_int_number(tokkind kind, const char* start) {
-    
+
     if (*(ptr - 1) == NUMBER_SEPERATOR) {
         auto error_loc = SourceLoc{ start, static_cast<uint16_t>(ptr - start) };
         logger.begin_error(error_loc, "Numbers cannot end with _")
               .end_error(ErrCode::LexNumberCannotEndUnderscore);
         return new_token(Token::InvalidNumberLiteral, start);
     }
-    
+
     if (*ptr == '\'') {
         auto invalid_type_spec = [this, start]() finline{
             auto error_loc = SourceLoc{ start, static_cast<uint16_t>(ptr - start) };
@@ -423,7 +423,7 @@ acorn::Token acorn::Lexer::finish_int_number(tokkind kind, const char* start) {
                   .end_error(ErrCode::LexNumberBadTypeSpec);
             return new_token(Token::InvalidNumberLiteral, start);
         };
-        
+
         // Explicit type specification.
         ++ptr;
         if (!(*ptr == 'i' || *ptr == 'u')) {
@@ -520,7 +520,7 @@ FinishedStringLexLab:
         ++ptr;
     } else {
         invalid = true;
-        
+
 
 
         // Underlining the entire string so that there is not just a weird hanging messing
@@ -532,12 +532,12 @@ FinishedStringLexLab:
         logger.begin_error(loc, "Expected closing \" for string")
             .end_error(ErrCode::LexStringMissingEndQuote);
     }
-    
+
     return new_token(start, static_cast<uint16_t>(ptr - start), !invalid ? kind : Token::InvalidStringLiteral);
 }
 
 acorn::Token acorn::Lexer::next_char() {
-    
+
     const char* start = ptr;
     ++ptr; // Skip initial '
 
@@ -577,7 +577,7 @@ acorn::Token acorn::Lexer::next_char() {
 }
 
 acorn::Token acorn::Lexer::next_comptime() {
-    
+
     const char* start = ptr;
 
     ++ptr; // Eating the '#' character.

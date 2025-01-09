@@ -8,7 +8,7 @@
 #include "../Type.h"
 
 namespace acorn {
-    
+
     std::string  to_string(llvm::Type* type);
 
     llvm::Type* gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Module& ll_module);

@@ -256,7 +256,7 @@ namespace acorn {
 
     private:
         PageAllocator& allocator;
-        
+
         llvm::DenseMap<Identifier, acorn::Module*> modls;
 
         std::mutex main_function_mtx;

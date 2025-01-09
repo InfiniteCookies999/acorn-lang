@@ -6,7 +6,7 @@
 
 llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     Expr* lhs = bin_op->lhs, *rhs = bin_op->rhs;
-    
+
     auto apply_op_eq = [this, bin_op, lhs, rhs](tokkind op) finline {
         auto ll_address = gen_node(lhs);
         auto ll_value = gen_numeric_binary_op(op,
@@ -54,7 +54,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 
         // Generate children
         gen_branch_on_condition(bin_op->lhs, ll_lhs_true_bb, ll_end_bb);
-        
+
         auto ll_result = llvm::PHINode::Create(
             llvm::Type::getInt1Ty(ll_context), // Incoming values are booleans.
             2,                                 // At least 2 blocks but could be more.
@@ -135,7 +135,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 // TODO: At the moment we assume there will be no signed overflow
 //       for signed calculation but not for unsigned. This is because
 //       we want stuff like 'uint32 a = -1' to be defined behavior.
-// 
+//
 //       We may want to be more strict and throw an exception if it
 //       happens. That or just always wrap around.
 //
@@ -147,7 +147,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 
 llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op,
                                                        llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
-    
+
     auto is_ptr_or_arr = [](Type* type) finline {
         return type->is_pointer() || type->is_array();
     };
@@ -282,7 +282,7 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
 
 llvm::Value* acorn::IRGenerator::gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
     if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
-        return builder.CreateFCmpOEQ(ll_lhs, ll_rhs, "eq");    
+        return builder.CreateFCmpOEQ(ll_lhs, ll_rhs, "eq");
     return builder.CreateICmpEQ(ll_lhs, ll_rhs, "eq");
 }
 
@@ -344,7 +344,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
             return builder.CreateICmpEQ(gen_rvalue(expr), ll_null);
         }
         return builder.CreateXor(gen_rvalue(expr), 1, "not");
-    }    
+    }
     case '&':
         // To get the address of the lvalue all we have to do is
         // get the value from gen_value since if we do not call
@@ -397,8 +397,8 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
     }
 }
 
-llvm::Value* acorn::IRGenerator::gen_ternary(Ternary* ternary, 
-                                             llvm::Value* ll_dest_addr, 
+llvm::Value* acorn::IRGenerator::gen_ternary(Ternary* ternary,
+                                             llvm::Value* ll_dest_addr,
                                              Node* lvalue,
                                              bool is_assign_op,
                                              bool try_move) {

@@ -31,7 +31,7 @@ void write_val(int val) {
 
 void main() {
     int[8] a = [ [0]=76, [1]=101, [2]=116, [3]=115, [4]=32, [5]=103, [6]=111, [7]=33 ];
-   
+
     write_val(a[0]);
     write_val(a[1]);
     write_val(a[2]);
