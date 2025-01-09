@@ -69,7 +69,7 @@ acorn::SourceLoc acorn::Func::get_function_const_location() const {
     const char* start_ptr = loc.ptr + loc.length;
     go_until(start_ptr, '(', ')');
     // Skip over whitespace until we reach 'const' keyword.
-    while (std::isspace(*start_ptr)) {
+    while (is_whitespace(*start_ptr)) {
         ++start_ptr;
     }
 

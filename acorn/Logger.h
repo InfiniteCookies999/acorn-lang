@@ -244,7 +244,8 @@ namespace acorn {
         enum class ArrowPosition {
             At,
             After,
-            Alongside
+            Alongside,
+            None
         };
 
         // Data used for printing errors.
@@ -257,6 +258,8 @@ namespace acorn {
             bool        exceeded_start, exceeded_end;
             size_t      start_width;
             size_t      end_width;
+            int         prim_line_cutoff_lead_trim;
+            size_t      primary_line_number;
         };
 
         Logger(Context& context, SourceFile& file)

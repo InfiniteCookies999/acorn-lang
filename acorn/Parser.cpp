@@ -1963,7 +1963,7 @@ acorn::Expr* acorn::Parser::parse_postfix(Expr* term) {
         // Language spec. if there is a whitespace then it does not consider it a post
         // inc/dec.
         const char* prev_ch_ptr = cur_token.loc.ptr - 1;
-        if (std::isspace(*prev_ch_ptr)) {
+        if (is_whitespace(*prev_ch_ptr)) {
             return term;
         }
         UnaryOp* unary_op = new_node<UnaryOp>(cur_token);
@@ -2590,6 +2590,7 @@ acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char
         char c = *ptr;
 
         if (c == NUMBER_SEPERATOR) {
+            ++ptr;
             continue;
         } else if (c == '\'') {
             break;

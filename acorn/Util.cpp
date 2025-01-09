@@ -93,14 +93,14 @@ uint64_t acorn::next_pow2(uint64_t value) {
 }
 
 std::string acorn::trim_leading(const std::string& s) {
-    auto view = s | std::views::drop_while(isspace);
+    auto view = s | std::views::drop_while(is_whitespace);
     std::string result(view.begin(), view.end());
     return result;
 }
 
 std::string acorn::trim_trailing(const std::string& s) {
     auto view = s | std::views::reverse
-                  | std::views::drop_while(isspace)
+                  | std::views::drop_while(is_whitespace)
                   | std::views::reverse;
     std::string result(view.begin(), view.end());
     return result;
@@ -108,6 +108,10 @@ std::string acorn::trim_trailing(const std::string& s) {
 
 std::string acorn::trim(const std::string& s) {
     return trim_leading(trim_trailing(s));
+}
+
+bool acorn::is_whitespace(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
 }
 
 llvm::SmallVector<std::string> acorn::split_by_whitespace(const std::string& s) {

@@ -100,7 +100,7 @@ Options:
 
     -max-errors=<count>
         Sets how many errors will be encountered before
-        giving up and exiting compilation.
+        giving up and exiting compilation (Default is 30).
 
     -max-call-err-funcs=<count>
         Sets how many overloaded functions to show mismatch

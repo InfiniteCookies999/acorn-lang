@@ -288,7 +288,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
             if (*end == '*') {
                 auto star_loc = end;
                 ++end;
-                while (std::isspace(*end))  ++end;
+                while (is_whitespace(*end))  ++end;
                 if (*end == ';' || *end == ']' || *end == ')') {
                     // could be something like `int a = b *;` in which case we will tell the
                     // user that it expected an expression instead.
@@ -310,7 +310,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
         };
 
         while (true) {
-            while (std::isspace(*end))  ++end;
+            while (is_whitespace(*end))  ++end;
             if (try_detect_multiply_parse_error(end, error_loc)) {
                 return nullptr;
             } else if (*end == '[') {
@@ -2406,8 +2406,12 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
         }
 
         if (is_incomplete_statement(stmt)) {
-            error(stmt, "Incomplete statement")
-                .end_error(ErrCode::SemaIncompleteStmt);
+            if (stmt->is_expression()) {
+                logger.begin_error(expand(stmt), "Incomplete statement");
+            } else {
+                logger.begin_error(stmt->loc, "Incomplete statement");
+            }
+            logger.end_error(ErrCode::SemaIncompleteStmt);
             continue;
         }
                 
@@ -2651,7 +2655,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
                 }
 
                 if (!is_assignable_to) {
-                    error(expand(bin_op->lhs), get_type_mismatch_error(bin_op->lhs->type, bin_op->rhs).c_str())
+                    error(expand(bin_op), get_type_mismatch_error(bin_op->lhs->type, bin_op->rhs).c_str())
                         .end_error(ErrCode::SemaVariableTypeMismatch);
                     return;
                 }

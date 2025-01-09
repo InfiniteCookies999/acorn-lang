@@ -103,6 +103,10 @@ namespace acorn {
 
     std::string trim(const std::string& s);
 
+    // Our own is_space because std::isspace if passed a char
+    // may think it is utf8 then fail asserts.
+    bool is_whitespace(char c);
+
     llvm::SmallVector<std::string> split_by_whitespace(const std::string& s);
 
     size_t get_system_page_size();

@@ -202,7 +202,7 @@ acorn::PointSourceLoc acorn::expand(Node* node) {
     return PointSourceLoc{
         s,
         static_cast<uint16_t>(e - s),
-        node->uses_expanded_loc ? node->expanded_loc.ptr    : node->loc.ptr,
-        node->uses_expanded_loc ? node->expanded_loc.length : node->loc.length
+        node->uses_expanded_loc ? node->expanded_loc.point        : node->loc.ptr,
+        node->uses_expanded_loc ? node->expanded_loc.point_length : node->loc.length
     };
 }

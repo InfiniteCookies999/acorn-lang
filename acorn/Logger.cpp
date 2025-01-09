@@ -229,29 +229,6 @@ static const long long CUTOFF_LIMIT = 30;
 
 namespace acorn {
 
-    // Gets characters behind the error location for helping display
-    // where the error took place at.
-    static const char* capture_backwards(Buffer buffer, const char* ptr) {
-        const char* buf_beg = buffer.content;
-        const char* start = ptr;
-
-        // Move backwards till we hit a new line or start of the buffer.
-        size_t count = 0;
-        while (ptr > buf_beg && *ptr != '\n' && *ptr != '\r' && count++ < CUTOFF_LIMIT) {
-            --ptr;
-        }
-
-        if (*ptr == '\r') {
-            ++ptr;
-        }
-        if (*ptr == '\n') {
-            ++ptr;
-        }
-
-        // Subtract one because it starts within the token.
-        return ptr;
-    }
-
     static std::string tabs_to_spaces(const std::string& s) {
         return std::regex_replace(s, std::regex("\t"), "    ");
     }
@@ -264,7 +241,7 @@ namespace acorn {
         const char* cur_line_ptr = start;
 
         const char* ptr = start;
-        while (ptr != end) {
+        while (ptr < end) {
             if (*ptr == '\r' || *ptr == '\n') {
                 
                 if (*ptr == '\r' && *(ptr + 1) == '\n') {
@@ -300,183 +277,400 @@ namespace acorn {
         bool        exceeded;
     };
 
-    static PtrCalcInfo calc_start_ptr(const char* ptr, const char* buffer_start, const char* low_point) {
-        
-        long long count = 0;
-        while (ptr > buffer_start) {
-            long long whitespace_count = 0;
-            while (ptr > buffer_start && (*ptr == ' ' || *ptr == '\t')) {
-                if (*ptr == ' ') whitespace_count += 1;
-                else             whitespace_count += 4;
-                --ptr;
-            }
-            if (*ptr == '\n' || *ptr == '\r') {
-                // The whitespace was leading.
-                while (ptr > buffer_start && (*ptr == '\n' || *ptr == '\r')) {
-                    if (ptr < low_point) {
-                        count += whitespace_count;
-                        goto CalcStartFinishedLab;
-                    }
-                    --ptr;
-                }
-                // Skipping over trailing whitespace so it does
-                // not get included in the count.
-                while (ptr > buffer_start && (*ptr == ' ' || *ptr == '\t')) --ptr;
-            } else {
-                count += whitespace_count;
-                if (count >= CUTOFF_LIMIT) goto CalcStartFinishedLab;
-            }
-            // Eating characters while not whitespace or new lines.
-            while (ptr > buffer_start &&
-                   *ptr != ' ' && *ptr != '\t' && *ptr != '\n' && *ptr != '\r') {
-                --ptr;
-                ++count;
-                if (count >= CUTOFF_LIMIT) {
-                    goto CalcStartFinishedLab;
-                }
-            }
-        }
-
-    CalcStartFinishedLab:
-        ptr += std::max(count - CUTOFF_LIMIT, 0ll);
-        if (*ptr == '\r' || *ptr == '\n') {
-            ++ptr;
-        }
-
-        return {ptr, count >= CUTOFF_LIMIT};
+    static bool is_newline(char ch) {
+        return ch == '\r' || ch == '\n';
     }
 
-    static PtrCalcInfo calc_end_ptr(const char* ptr, const char* buffer_end, const char* high_point) {
-        
-        // TODO: There are still cases where this leads to less than ideal output. Because
-        //       we are not including the leading whitespace it is possible that there is
-        //       is way more leading whitespace on the next new line than the first line
-        //       resulting in a very long line output. What should happen is it should start
-        //       calculating whitespace again if it exceeds the line with the shortest leading
-        //       whitespace. Obviously since we don't have the line information at this point
-        //       this approach is not possible.
-        const char* start = ptr;
-        long long count = 0;
-        while (ptr < buffer_end) {
-            long long whitespace_count = 0;
-            while (ptr < buffer_end && (*ptr == ' ' || *ptr == '\t')) {
-                if (*ptr == ' ') whitespace_count += 1;
-                else             whitespace_count += 4;
-                ++ptr;
+    static bool compare_leading_whitespace(int* count,
+                                           int leading_count,
+                                           int pline_leading_count,
+                                           int pline_leading_cutoff_count) {
+        int cutoff_whitespace = leading_count - pline_leading_count;
+        if (cutoff_whitespace < 0) {
+            // TODO
+            // It is possible the characters are behind the cut off so checking
+            // that and discardinging the whole line if so.
+
+            // Characters cut off due to them being behind the cutoff.
+            //
+            // (66 + 33
+            //       ...            44) + 66;
+            //
+            int is_behind = (leading_count - pline_leading_cutoff_count) < 0;
+            if (is_behind) {
+                return false;
             }
-            if (*ptr == '\n' || *ptr == '\r') {
-                // The whitespace was trailing whitespace so it
-                // does not get included in the count.
-                while (ptr < buffer_end && (*ptr == '\n' || *ptr == '\r')) {
-                    if (ptr > high_point) {
-                        count += whitespace_count;
-                        goto CalcEndFinishedLab;
+            // else there is nothing to add to the count the characters are behind
+            // the primary line but not to the point that they are cut off.
+        } else {
+            // the whitespace goes past the shared whitespace with the primary
+            // line so this must be considered part of the count.
+            *count += cutoff_whitespace;
+        }
+
+        return true;
+    }
+
+    static PtrCalcInfo traverse_backwards(const char* ptr,
+                                          const char* low_point,
+                                          const char* buffer_start,
+                                          int& pline_leading_count,
+                                          int& pline_leading_cutoff_count,
+                                          int& total_backwards_line_characters) {
+
+        int count = 0;
+
+        auto eat_line_characters = [buffer_start, &count](const char*& ptr) {
+            int possible_leading_count = 0;
+            while (ptr > buffer_start && !is_newline(*ptr)) {
+                if (is_whitespace(*ptr)) {
+                    if (*ptr == '\t') possible_leading_count += 4;
+                    else              possible_leading_count += 1;
+                } else {
+                    count += possible_leading_count + 1;
+                    possible_leading_count = 0;
+                        
+                    if (count >= CUTOFF_LIMIT) {
+                        break;
                     }
+                }
+                --ptr;
+            }
+            return possible_leading_count;
+        };
+
+        // Handling the primary line first since it has extra rules
+        // that must be handled very carefully.
+        
+        pline_leading_count = eat_line_characters(ptr);
+        
+        total_backwards_line_characters = count + pline_leading_count;
+
+        // Try and take 30 characters and the remainder are cut off.
+        pline_leading_cutoff_count = total_backwards_line_characters - CUTOFF_LIMIT;
+        if (pline_leading_cutoff_count < 0) pline_leading_cutoff_count = 0;
+        
+        // Checking if the primary line has too many characters and ending early.
+        if (count >= CUTOFF_LIMIT) {
+            return { ptr, true };
+        }
+
+        // Should not be possible that the non cut off leading count is larger than
+        // the entire leading whitespace amount.
+        assert(pline_leading_cutoff_count >= 0 && "");
+
+        int line_count = 0;
+        const char* prev_line_start = ptr;
+        while (ptr > buffer_start) {
+            
+            ++line_count;
+            if (line_count >= 2 || ptr <= low_point) {
+                break;
+            }
+
+            prev_line_start = ptr;
+
+            // Eating the new line. New lines are not included in the count.
+            if (*ptr == '\n' && ptr - 1 > buffer_start && *(ptr - 1) == '\r') {
+                ptr -= 2; // Skip over '\r\n'.
+            } else {
+                ptr -= 1; // Skip over '\r'.
+            }
+
+            // Traversing backwards so it is completely fine to simply
+            // eat the characters without incrementing the count since
+            // it is trailing.
+            while (is_whitespace(*ptr) && !is_newline(*ptr)) {
+                --ptr;
+            }
+
+            int leading_count = eat_line_characters(ptr);
+
+            if (!compare_leading_whitespace(&count, leading_count, pline_leading_count, pline_leading_cutoff_count)) {
+                // Well the characters were cut off so discarding this line entirely.
+                ptr = prev_line_start;
+                break;
+            }
+
+            // Not stopping the pointer traversal when there is leading whitespace
+            // is good since common whitespace will just be cut off later and the
+            // `start_width` will be processed to handle it correctly.
+            if (count >= CUTOFF_LIMIT) {
+                // Just cut off the line because it is too far over to the right.
+                ptr = prev_line_start;
+                break;
+            }
+        }
+
+        // The comparison to `low_point` must above the next loop because we traverse
+        // forward over whitespace to prevent empty lines but that also traverses forward
+        // over trailing whitespace which means the `ptr` may have reached the `low_point`
+        // but then once the pointer is moved forward it no longer has that information.
+        bool exceeded = count >= CUTOFF_LIMIT || pline_leading_cutoff_count > 0 || ptr > low_point;
+
+        // Traversing forward again to see if the lines are only made
+        // up of whitespace. This can happen since it is possible that
+        // when a line is discarded that there was an empty line between
+        // the discarded line and a previously included line leading to
+        // an empty line being includeded.
+        const char* forward_ptr = ptr;
+        while (is_whitespace(*forward_ptr)) {
+            if (is_newline(*forward_ptr)) {
+                // Hit a new line before encountering non-whitespace
+                // means the whole line gets discarded!
+                if (*ptr == '\r' && *(ptr + 1) == '\n') {
+                    ptr += 2; // Skip '\r\n'.
+                } else {
+                    ptr += 1;
+                }
+                
+                ptr = forward_ptr;
+            }
+            ++forward_ptr;
+        }
+
+        // Moving the pointer forward one if it did not hit
+        // the beginning of the buffer because the pointer
+        // is moved before checking the character.
+        if (ptr != buffer_start) {
+            ++ptr;
+        }        
+        return { ptr, exceeded };
+    }
+
+
+    static PtrCalcInfo traverse_forward(const char* ptr,
+                                        const char* high_point,
+                                        const char* buffer_end,
+                                        int pline_leading_count,
+                                        int pline_leading_cutoff_count,
+                                        int total_backwards_line_characters) {
+
+        const char* ptr_line_start = nullptr;
+
+        int count      = 0;
+        int line_count = 0;
+
+        int possible_trailing_whitespace = 0;
+        const char* prev_line_start = ptr;
+        while (ptr < buffer_end) {
+
+            if (is_newline(*ptr)) {
+
+                // Reset trailing whitespace for the next line.
+                possible_trailing_whitespace = 0;
+
+                ++line_count;
+                if (line_count >= 4 || ptr >= high_point) {
+                    break;
+                }
+
+                prev_line_start = ptr;
+                
+                // Eating the new line. New lines are not included in the count.
+                if (*ptr == '\r' && ptr + 1 < buffer_end && *(ptr + 1) == '\n') {
+                    ptr += 2; // Skip '\r\n'.
+                } else {
+                    ptr += 1;
+                }
+
+                // Counting leading whitespace to determine how much of it
+                // can be cut off.
+                int leading_count = 0;
+                while (is_whitespace(*ptr) && !is_newline(*ptr)) {
+                    if (*ptr == '\t') leading_count += 4;
+                    else              leading_count += 1;
                     ++ptr;
                 }
-                // Skipping over leading whitespace.
-                while (ptr < buffer_end && (*ptr == ' ' || *ptr == '\t')) ++ptr;
-            } else {
-                count += whitespace_count;
-                if (count >= CUTOFF_LIMIT) {
-                    goto CalcEndFinishedLab;
-                }
-            }
-            // Eating characters while not whitespace or new lines.
-            while (ptr < buffer_end &&
-                   *ptr != ' ' && *ptr != '\t' && *ptr != '\n' && *ptr != '\r') {
-                ++ptr;
-                ++count;
-                if (count >= CUTOFF_LIMIT) {
-                    goto CalcEndFinishedLab;
-                }
-            }
-        }
 
-    CalcEndFinishedLab:
-        ptr -= std::max(count - CUTOFF_LIMIT, 0ll);
-        if (*ptr == '\r' || *ptr == '\n' || ptr == buffer_end) {
+                // Want to ignore the leading whitespace that exists up until the point
+                // so `total_backwards_line_characters` is ignored.
+                //
+                //                  |-- point
+                //                  V
+                //         int[2] a = 314 + 5234
+                //                  + 1223 + 21;
+                //         |        |
+                //         *--------*
+                //         |
+                //         whitespae needing ignored
+                if (!compare_leading_whitespace(&count, leading_count, total_backwards_line_characters, pline_leading_cutoff_count)) {
+                    // Well the characters were cut off so discarding this line entirely.
+                    ptr = prev_line_start;
+                    break;
+                }
+            }
+
+            if (is_whitespace(*ptr)) {
+                if (*ptr == '\t') possible_trailing_whitespace += 4;
+                else              possible_trailing_whitespace += 1;
+            } else {
+                count += possible_trailing_whitespace + 1;
+                possible_trailing_whitespace = 0;
+
+                if (count >= CUTOFF_LIMIT) {
+                    
+                    // Need to traverse backwards a bit to not include
+                    // a bunch of extra characters that are not meant to be included.
+                    while (count > CUTOFF_LIMIT) {
+                        if (*ptr == '\t') count -= 4;
+                        else              count -= 1;
+                        --ptr;
+                    }
+
+                    // It is possible the last character lands on the end point in which
+                    // case the exceeded clause should not be considered overflowed since
+                    // every relevent character in on the line.
+                    if (ptr == high_point) {
+                        --count;
+                    }
+
+                    break;
+                }
+            }
+
+            ++ptr;
+        }
+        
+        // The comparison to `high_point` must above the next loop because we traverse
+        // back over whitespace to prevent empty lines but that also traverses backwards
+        // over trailing whitespace which means the `ptr` may have reached the `high_point`
+        // but then once the pointer is moved forward it no longer has that information.
+        bool exceeded = count >= CUTOFF_LIMIT || ptr < high_point;
+        
+        // Because the algorithm will continue to the next line when the count
+        // has not been reached it is possible that it gets to the next line finds out
+        // that the whitespace overflows the line. This can lead to empty lines so now
+        // traversing backwards to avoid any empty.
+        while (is_whitespace(*ptr)) {
             --ptr;
         }
 
-        // We do not want to include the trailing whitespace because
-        // later on calculations are done using the end point we calculate
-        // here and each line is trailed which can lead to inconsistencies.
-        while (*ptr == ' ' || *ptr == '\t' && ptr > start) {
-            --ptr;
-        }
+        return { ptr, exceeded };
+    }
+
+    static std::pair<PtrCalcInfo, PtrCalcInfo> get_range_pointers(PointSourceLoc location,
+                                                                  Buffer buffer,
+                                                                  Logger::ArrowPosition arrow_position,
+                                                                  int& pline_leading_cutoff_count) {
         
-        // If the end of the line is all whitespace then there is no reason
-        // to consider it as having exceeded and include the ... later on
-        // since there are no more characters that are meaningfully relevent
-        // to the line.
-        bool ends_in_whitespace = true;
-        const char* eptr = ptr + 1;
-        while (true) {
-            if (*eptr == ' ' || *eptr == '\t') {
-                ++eptr;
-            } else if (*eptr == '\r' || *eptr == '\n') {
-                break;
+        auto point_begin  = location.point;
+        auto point_end    = location.point + location.point_length;
+
+        auto low_point    = location.ptr;
+        auto high_point   = location.ptr + location.length;
+
+        auto buffer_begin = buffer.content;
+        auto buffer_end   = buffer.content + buffer.length;
+
+        // Check for case in which a single token is really long such as a very
+        // long string.
+        if (location.point_length > 30) {
+            if (arrow_position == Logger::ArrowPosition::After) {
+                point_begin = point_end - 20;
             } else {
-                ends_in_whitespace = false;
-                break;
+                point_end = point_begin + 20;
             }
         }
 
-        return {ptr, count >= CUTOFF_LIMIT && !ends_in_whitespace};
+        int pline_leading_count        = 0;
+        int total_backwards_line_characters = 0;
+
+        auto start_info = traverse_backwards(point_begin,
+                                             low_point,
+                                             buffer_begin,
+                                             pline_leading_count,
+                                             pline_leading_cutoff_count,
+                                             total_backwards_line_characters);
+        auto end_info   = traverse_forward(point_end,
+                                           high_point, 
+                                           buffer_end, 
+                                           pline_leading_count, 
+                                           pline_leading_cutoff_count,
+                                           total_backwards_line_characters);
+
+        return { start_info, end_info };
     }
 
-    static std::pair<PtrCalcInfo, PtrCalcInfo> get_range_pointers(PointSourceLoc location, Buffer buffer) {
-        const char* start_ptr = location.point;
-        const char* end_ptr   = location.point + location.point_length;
-        
-        auto start_info = calc_start_ptr(start_ptr, buffer.content, location.ptr);
-        auto end_info   = calc_end_ptr(end_ptr, buffer.content + buffer.length, location.ptr + location.length - 1);
-        return {start_info, end_info};
-    }
+    static Logger::ErrorInfo collect_error_information(PointSourceLoc location,
+                                                       SourceFile& file,
+                                                       Logger::ArrowPosition arrow_position) {
 
-    static Logger::ErrorInfo collect_error_information(PointSourceLoc location, SourceFile& file) {
-       
-        //  [ start_width ]
-        //  |             |
-        //  |             location.ptr (Because the error is about the assignment)
-        //  |             |
-        //  |             |
-        //  |             |                        [ end width        ]
-        //  v             v                        v                  v
-        //  int*        a = 14142 + 5233 + 66 + 212; // example comment
-        //  ^           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
-        //  |                                      |
-        //  start_info.ptr                         end_info.ptr
-
-        auto [start_info, end_info] = get_range_pointers(location, file.buffer);
+        int prim_line_cutoff_lead_trim = 0;
+        auto [start_info, end_info] = get_range_pointers(location,
+                                                         file.buffer,
+                                                         arrow_position,
+                                                         prim_line_cutoff_lead_trim);
         Logger::InfoLines lines = convert_to_lines(start_info.ptr, end_info.ptr + 1);
 
         // Convert tabs to spaces for all ours lines.
-        std::ranges::for_each(lines, [](auto& line_info) {
-            std::string trimmed_line = trim_trailing(std::get<0>(line_info));
-            return std::pair<std::string, const char*>{
-                trimmed_line,
-                std::get<1>(line_info)
-            };
-        });
-
-        auto [start_line_number, _] = file.line_table.get_line_and_column_number(start_info.ptr);
+        lines = lines
+              | std::views::transform([](auto& line_info) {
+                   return std::pair<std::string, const char*>{
+                       trim_trailing(std::get<0>(line_info)),
+                       std::get<1>(line_info)
+                   };
+                })
+              | std::ranges::to<Logger::InfoLines>();
+        
+        auto [start_line_number    , _1] = file.line_table.get_line_and_column_number(start_info.ptr);
+        auto [primary_line_number  , _2] = file.line_table.get_line_and_column_number(location.point);
+        auto [location_start_number, _3] = file.line_table.get_line_and_column_number(location.ptr);
 
         auto last_line_number = start_line_number + lines.size() - 1;
         const auto line_number_pad = std::string(count_digits(last_line_number), ' ');
 
-        const auto end_pt = end_info.ptr + 1, org_end_pt = location.ptr + location.length;
+        const char* end_pt = end_info.ptr + 1;
+        const char* org_end_pt = location.ptr + location.length;
+
+        size_t start_width = 0, end_width = 0;
+        if (!lines.empty()) {
+
+            { // Calculate the start width
+                const char* ptr = start_info.ptr;
+                
+                bool traverse_to_loc = location_start_number == primary_line_number;
+                
+                while ((!traverse_to_loc && is_whitespace(*ptr)) ||
+                       (traverse_to_loc && ptr < location.ptr)) {
+                    if (*ptr == '\t') start_width += 4;
+                    else              start_width += 1;
+                    ++ptr;
+                }
+                
+                start_width -= prim_line_cutoff_lead_trim;
+            }
+
+            // Calculate the end width
+            if (org_end_pt < end_pt) {
+                const char* ptr = org_end_pt;
+                size_t trail_count = 0;
+                while (ptr != end_pt) {
+                    if (is_whitespace(*ptr)) {
+                        // May be trailing in which case it is not included
+                        // in the end_width since calculations made here are
+                        // related to what is displayed.
+                        if (*ptr == '\t') trail_count += 4;
+                        else              trail_count += 1;
+                    } else {
+                        end_width += trail_count + 1;
+                        trail_count = 0;
+                    }
+                    ++ptr;
+                }
+            } // else had to cut off early so end width.
+        }
+
         return Logger::ErrorInfo{
             std::move(lines),
             start_line_number,
             last_line_number,
             line_number_pad,
             start_info.exceeded, end_info.exceeded,
-            // start_width
-            static_cast<size_t>(location.ptr > start_info.ptr ? location.ptr - start_info.ptr : 0),
-            // end_width
-            static_cast<size_t>(end_pt > org_end_pt ? end_pt - org_end_pt : 0)
+            start_width,
+            end_width,
+            prim_line_cutoff_lead_trim,
+            primary_line_number
         };
     }
 }
@@ -535,22 +729,37 @@ void acorn::Logger::print_error_location(const ErrorInfo& info) {
     bool is_at_arrow_msg        = has_arrow_msg && arrow_msg.position == ArrowPosition::At;
     bool is_alongside_arrow_msg = has_arrow_msg && arrow_msg.position == ArrowPosition::Alongside;
 
+    size_t primary_line_leading_trim = static_cast<size_t>(info.prim_line_cutoff_lead_trim);
     for (const auto& line_info : info.lines) {
         bool is_first = &line_info == &info.lines.front();
         bool is_last  = &line_info == &info.lines.back();
         
+        std::string line = tabs_to_spaces(std::get<0>(line_info));
+        line = line.substr(primary_line_leading_trim, line.length());
+
         // Displaying the line number and bar.
         auto line_number_pad_width = count_digits(info.last_line_number) - count_digits(line_number);
         auto line_number_pad = std::string(line_number_pad_width, ' ');
-        fmt_print(" %s%s%s %s|%s ", BrightYellow, line_number++, line_number_pad, BrightWhite, White);
+        fmt_print(" %s%s%s %s|%s ",
+                  line_number == info.primary_line_number ? BrightYellow : DarkGray,
+                  line_number,
+                  line_number_pad,
+                  BrightWhite,
+                  White);
+        ++line_number;
 
         // Printing the line.
         if (is_first && info.exceeded_start)
             fmt_print("%s...%s ", Green, White);
         else if (info.exceeded_start)
             print("    "); // Want to make sure the lines are still aligned as seen in the file.
-        
-        std::string line = trim_trailing(std::get<0>(line_info));
+
+        if (line.empty()) {
+            print("\n");
+            continue;
+        }
+
+
         print(line);
 
         if (is_last && info.exceeded_end)
@@ -578,11 +787,11 @@ void acorn::Logger::print_error_location(const ErrorInfo& info) {
                         char previous_char = *(msg_start_ptr - 1);
                         char next_char     = *(msg_start_ptr + 1);
                         fmt_print(" %s", BrightWhite);
-                        if (!std::isspace(previous_char)) {
+                        if (!is_whitespace(previous_char)) {
                             print(previous_char);
                         }
                         print(*msg_start_ptr);
-                        if (!std::isspace(next_char)) {
+                        if (!is_whitespace(next_char)) {
                             print(next_char);
                         }
                     }
@@ -613,13 +822,17 @@ void acorn::Logger::print_error_location(const ErrorInfo& info) {
             size_t underscore_offset = dots_width;
             if (is_first)
                 underscore_offset += info.start_width;
+            // TODO: shouldn't this be count leading whitespace?
+            //       because this gets used to calculate underscore_width
+            //       this messing up for \v or other odd characters could
+            //       potentially break.
             else underscore_offset += count_leading_spaces(line);
 
             print_bar(false);
             total_printed_characters_for_line += underscore_offset;
             print(std::string(underscore_offset, ' '));
 
-            size_t underscore_width = line.length() - underscore_offset + dots_width;
+            size_t underscore_width = (line.length() + dots_width) - underscore_offset;
             // This can happen sometimes when at the end of the buffer or within a new line.
             if (underscore_width == 0) underscore_width = 1;
             if (is_last) underscore_width -= info.end_width;
@@ -664,7 +877,7 @@ void acorn::Logger::print_error_location(const ErrorInfo& info) {
             remaining_spaces += 5; // For dots and dot spaces
 
             char previous_char = *(msg_start_ptr - 1);
-            if (!std::isspace(previous_char)) {
+            if (!is_whitespace(previous_char)) {
                 remaining_spaces += 1;
             }
 
@@ -702,7 +915,9 @@ void acorn::Logger::end_error(ErrCode error_code) {
         return;
     }
 
-    ErrorInfo info = collect_error_information(main_location, file);
+    ErrorInfo info = collect_error_information(main_location,
+                                               file,
+                                               arrow_msg.msg.empty() ? ArrowPosition::None : arrow_msg.position);
 
     // Placed after collecting information to reduce the time locked.
     mtx.lock();

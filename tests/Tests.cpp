@@ -10,14 +10,14 @@
 int main() {
 
     test_lexer();
-    
+
     test_parser();
-    
+
     test_sema();
 
     test_codegen();
-    
+
     run_tests();
-    
+
     return 0;
 }

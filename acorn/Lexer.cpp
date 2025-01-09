@@ -250,7 +250,7 @@ case c1:                                        \
                   .add_arrow_msg(Logger::ArrowPosition::At, "remove this character")
                   .end_error(ErrCode::LexInvalidChar);
         } else {
-            error("Invalid character (utf-8): '%s'", unknown_char).end_error(ErrCode::LexInvalidChar);
+            error("Invalid character (ascii code): '%s'", unknown_char).end_error(ErrCode::LexInvalidChar);
         }
         ++ptr;
         goto RestartLexingLabel;
@@ -355,13 +355,14 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
     }
     
     // Parsing leading whole digits.
-    tokkind kind = Token::IntLiteral;
     while (is_digit(*ptr) || *ptr == NUMBER_SEPERATOR) {
         ++ptr;
     }
 
     if ((*ptr == '.' && *(ptr+1) != '.') ||
         *ptr == 'E' || *ptr == 'e') {
+
+        bool has_errors = false;
 
         if (*ptr == '.') {
             ++ptr;
@@ -385,7 +386,7 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
                 if (*ptr == NUMBER_SEPERATOR) {
                     error("Numberic seperators cannot go in the exponent")
                         .end_error(ErrCode::LexNumberSeperateInExp);
-                    kind = Token::InvalidNumberLiteral;
+                    has_errors = true;
                 } else {
                     encountered_exp_digits = true;
                 }
@@ -395,14 +396,14 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
             if (!encountered_exp_digits) {
                 error("Expected digits for exponent")
                     .end_error(ErrCode::LexExpectedDigitsForExp);
-                kind = Token::InvalidNumberLiteral;
+                has_errors = true;
             }
         }
 
-        return finish_float_number(start);
+        return finish_float_number(start, has_errors);
     }
 
-    return finish_int_number(kind, start);
+    return finish_int_number(Token::IntLiteral, start);
 }
 
 acorn::Token acorn::Lexer::finish_int_number(tokkind kind, const char* start) {
@@ -456,7 +457,7 @@ acorn::Token acorn::Lexer::finish_int_number(tokkind kind, const char* start) {
     return new_token(kind, start);
 }
 
-acorn::Token acorn::Lexer::finish_float_number(const char* start) {
+acorn::Token acorn::Lexer::finish_float_number(const char* start, bool has_errors) {
     tokkind kind = Token::Float64Literal;;
 
     if (*ptr == 'f') {
@@ -466,7 +467,7 @@ acorn::Token acorn::Lexer::finish_float_number(const char* start) {
         ++ptr;
     }
 
-    return new_token(kind, start);
+    return new_token(has_errors ? Token::InvalidNumberLiteral : kind, start);
 }
 
 bool acorn::Lexer::skip_unicode_seq_digits(size_t n) {
@@ -508,6 +509,7 @@ acorn::Token acorn::Lexer::next_string() {
             break;
         }
         default:
+            // TODO: check for character validation?
             ++ptr;
         }
     }
@@ -518,7 +520,16 @@ FinishedStringLexLab:
         ++ptr;
     } else {
         invalid = true;
-        error("Expected closing \" for string")
+        
+
+
+        // Underlining the entire string so that there is not just a weird hanging messing
+        // at the end of the line with the whitespace.
+        SourceLoc loc = SourceLoc{
+            .ptr = start,
+            .length = static_cast<uint16_t>(ptr - start)
+        };
+        logger.begin_error(loc, "Expected closing \" for string")
             .end_error(ErrCode::LexStringMissingEndQuote);
     }
     
