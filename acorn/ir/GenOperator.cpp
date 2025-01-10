@@ -351,7 +351,6 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         // gen_rvalue it generates the address.
         return gen_node(expr);
     case '*': {
-        // TODO: can we just call gen_rvalue here instead?
         auto ll_ptr = gen_node(expr);
 
         if (expr->is(NodeKind::BinOp)) {
@@ -377,6 +376,10 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
             return ll_ptr;
         } else if (expr->is(NodeKind::This)) {
             // We store the 'this' pointer by value not by address.
+            return ll_ptr;
+        } else if (expr->is(NodeKind::Cast)) {
+            // Because casting calls gen_rvalue the value has already been
+            // loading.
             return ll_ptr;
         }
 

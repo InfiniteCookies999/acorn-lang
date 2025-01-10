@@ -169,7 +169,7 @@ static void misc_tests() {
         auto [err_msg, result] = run_codegen_test(src(L"ptr_dereferencing.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("hoh");
+        expect(result, std::identity()).to_be("hohho");
     });
     test("Default params all default", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"default_param_values/default_param_values1.ac"));

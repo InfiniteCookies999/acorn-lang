@@ -44,4 +44,14 @@ void main() {
         char c = *get_str();
         print_char(c);
     }
+    {
+        const char* ptr = "hello world!";
+        char c = *as(const char*) ptr;
+        print_char(c);
+    }
+    {
+        const char* ptr = "hello world!";
+        char c = *as(const char*) (ptr + 4);
+        print_char(c);
+    }
 }
