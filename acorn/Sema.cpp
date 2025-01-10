@@ -3373,7 +3373,6 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             }
         }
 
-
         if (struct_type->is_const() && !dot->type->is_const()) {
             // The constness must be passed onto the field to prevent modification of fields.
             dot->type = type_table.get_const_type(dot->type);
@@ -4605,6 +4604,16 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             auto to_elm_type   = to_slice_type->get_elm_type();
 
             return from_elm_type->is(to_elm_type);
+        }
+
+        return to_type->is(from_type);
+    }
+    case TypeKind::Struct: {
+        if (!context.should_stand_alone() && to_type->is(context.std_any_struct->struct_type)) {
+            if (is_incomplete_type(from_type)) {
+                return false;
+            }
+            return true;
         }
 
         return to_type->is(from_type);

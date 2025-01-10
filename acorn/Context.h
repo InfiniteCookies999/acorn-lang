@@ -102,12 +102,14 @@ namespace acorn {
         Identifier type_struct_identifier;
         Identifier struct_type_info_struct_identifier;
         Identifier field_type_info_struct_identifier;
+        Identifier any_struct_identifier;
 
         ImportStmt* std_string_struct_import;
         Enum*       std_type_id_enum;
         Struct*     std_type_struct;
         Struct*     std_struct_type_info_struct;
         Struct*     std_field_type_info_struct;
+        Struct*     std_any_struct;
         Type*       const_std_type_ptr;
 
         llvm::DenseMap<Type*, llvm::GlobalVariable*> ll_type_info_global_addresses;

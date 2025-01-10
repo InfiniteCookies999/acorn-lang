@@ -84,6 +84,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       type_struct_identifier(Identifier::get("Type")),
       struct_type_info_struct_identifier(Identifier::get("StructTypeInfo")),
       field_type_info_struct_identifier(Identifier::get("FieldTypeInfo")),
+      any_struct_identifier(Identifier::get("Any")),
 
       reflect_identifiers({
           { "#type_info", ReflectKind::TypeInfo }

@@ -744,5 +744,8 @@ void acorn::Compiler::find_std_lib_declarations() {
         if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.field_type_info_struct_identifier)) {
             context.std_field_type_info_struct = structn;
         }
+        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.any_struct_identifier)) {
+            context.std_any_struct = structn;
+        }
     }
 }

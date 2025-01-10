@@ -207,7 +207,7 @@ namespace acorn {
         void gen_default_value(llvm::Value* ll_address, Type* type, Node* lvalue = nullptr);
         llvm::Constant* gen_zero(Type* type);
         llvm::Constant* gen_one(Type* type);
-        llvm::Value* gen_cast(Type* to_type, Type* from_type, llvm::Value* ll_value);
+        llvm::Value* gen_cast(Type* to_type, Expr* value, llvm::Value* ll_value);
         llvm::Value* gen_enum_index(uint64_t index, Type* index_type);
         llvm::Value* gen_enum_value_from_enum_array(EnumType* enum_type, llvm::Value* ll_index);
         llvm::Value* gen_store_array_in_slice(llvm::Type* ll_slice_type,
@@ -266,6 +266,8 @@ namespace acorn {
                                                   bool is_const,
                                                   llvm::Constant* ll_initial_value,
                                                   llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::PrivateLinkage);
+
+        void store_value_to_any(llvm::Value* ll_any_address, Expr* value, llvm::Value* ll_value);
 
         llvm::Align get_alignment(Type* type) const { return get_alignment(gen_type(type)); }
         llvm::Align get_alignment(llvm::Type* ll_type) const;

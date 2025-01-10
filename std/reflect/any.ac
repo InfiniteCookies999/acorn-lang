@@ -1,0 +1,10 @@
+#file(namespace=reflect)
+
+/*
+ * May store a value for any value of any type in acorn
+ * with reflection type information about the type.
+ */
+public struct Any {
+    const Type* type;
+    void* ptr;
+}
