@@ -3,6 +3,7 @@
 #include "../Logger.h"
 #include "../Util.h"
 #include "DebugGen.h"
+#include "Context.h"
 
 llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     Expr* lhs = bin_op->lhs, *rhs = bin_op->rhs;
@@ -132,15 +133,6 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     }
 }
 
-// TODO: At the moment we assume there will be no signed overflow
-//       for signed calculation but not for unsigned. This is because
-//       we want stuff like 'uint32 a = -1' to be defined behavior.
-//
-//       We may want to be more strict and throw an exception if it
-//       happens. That or just always wrap around.
-//
-//       In C++ it is defined behavior for unsigned but not signed.
-
 // We use CreateInBoundsGEP because accessing memory beyond the bounds of
 // valid memory is considered undefined behavior and it allows LLVM to
 // perform better optimizations.
@@ -166,16 +158,16 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
             ll_off = builder.CreateIntCast(ll_off, gen_ptrsize_int_type(), true);
             if (mem_type->is_pointer()) {
                 auto elm_type = static_cast<PointerType*>(mem_type)->get_elm_type();
-                return builder.CreateInBoundsGEP(gen_type(elm_type), ll_mem, ll_off, "ptr.add");
+                auto ll_elm_type = elm_type->is_not(context.void_type) ? gen_type(elm_type)
+                                                                       : builder.getInt8Ty();
+                return builder.CreateInBoundsGEP(ll_elm_type, ll_mem, ll_off, "ptr.add");
             }
 
             return builder.CreateInBoundsGEP(gen_type(mem_type), ll_mem, { gen_isize(0), ll_off }, "arr.add");
         } else {
-            if (bin_op->type->is_float())
-                return builder.CreateFAdd(ll_lhs, ll_rhs, "add");
-            else if (bin_op->type->is_signed())
-                return builder.CreateNSWAdd(ll_lhs, ll_rhs, "add");
-            else return builder.CreateAdd(ll_lhs, ll_rhs, "add");
+            if (bin_op->type->is_integer())
+                return builder.CreateAdd(ll_lhs, ll_rhs, "add");
+            return builder.CreateFAdd(ll_lhs, ll_rhs, "add");
         }
     }
     case '-': {
@@ -203,18 +195,14 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
 
             return builder.CreateInBoundsGEP(gen_type(mem_type), ll_mem, { gen_isize(0), ll_neg }, "arr.sub");
         } else {
-            if (bin_op->type->is_float())
-                return builder.CreateFSub(ll_lhs, ll_rhs, "sub");
-            if (bin_op->type->is_signed())
-                return builder.CreateNSWSub(ll_lhs, ll_rhs, "sub");
-            else return builder.CreateSub(ll_lhs, ll_rhs, "sub");
+            if (bin_op->type->is_integer())
+                return builder.CreateSub(ll_lhs, ll_rhs, "sub");
+            return builder.CreateFSub(ll_lhs, ll_rhs, "sub");
         }
     }
     case '*':
         if (bin_op->type->is_integer())
-            if (bin_op->type->is_signed())
-                return builder.CreateNSWMul(ll_lhs, ll_rhs, "mul");
-            else return builder.CreateMul(ll_lhs, ll_rhs, "mul");
+            return builder.CreateMul(ll_lhs, ll_rhs, "mul");
         else return builder.CreateFMul(ll_lhs, ll_rhs, "mul");
     case '/':
         if (bin_op->type->is_integer())
@@ -300,9 +288,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
                 auto elm_type = static_cast<PointerType*>(type)->get_elm_type();
                 ll_value = builder.CreateInBoundsGEP(gen_type(elm_type), ll_value, gen_isize(1), "ptr.inc");
             } else {
-                if (type->is_signed())
-                    ll_value = builder.CreateNSWAdd(ll_value, gen_one(type), "inc");
-                else ll_value = builder.CreateAdd(ll_value, gen_one(type), "inc");
+                ll_value = builder.CreateAdd(ll_value, gen_one(type), "inc");
             }
         } else {
             if (type->is_pointer()) {
@@ -310,9 +296,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
                 auto elm_type = static_cast<PointerType*>(type)->get_elm_type();
                 ll_value = builder.CreateInBoundsGEP(gen_type(elm_type), ll_value, gen_isize(-1), "ptr.dec");
             } else {
-                if (type->is_signed())
-                    ll_value = builder.CreateNSWSub(ll_value, gen_one(type), "dec");
-                else ll_value = builder.CreateSub(ll_value, gen_one(type), "dec");
+                ll_value = builder.CreateSub(ll_value, gen_one(type), "dec");
             }
         }
         builder.CreateStore(ll_value, ll_addr);
@@ -329,12 +313,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
             return builder.CreateFNeg(ll_value, "neg");
 
         auto ll_zero = gen_zero(unary_op->type);
-
-        if (unary_op->type->is_signed()) {
-            return builder.CreateNSWSub(ll_zero, ll_value, "neg");
-        } else {
-            return builder.CreateSub(ll_zero, ll_value, "neg");
-        }
+        return builder.CreateSub(ll_zero, ll_value, "neg");
     }
     case '~':
         return builder.CreateXor(gen_rvalue(expr), -1, "neg");

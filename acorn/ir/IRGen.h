@@ -172,6 +172,7 @@ namespace acorn {
         llvm::Constant* gen_reflect_type_info_struct_info(StructType* struct_type);
         llvm::Constant* gen_reflect_type_info_field_info(Var* field,
                                                          uint64_t offset_in_bytes);
+        llvm::Constant* gen_reflect_type_info_enum_info(EnumType* enum_type);
 
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
         llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue = nullptr);
@@ -261,6 +262,10 @@ namespace acorn {
                                                         llvm::Type* ll_type,
                                                         llvm::Constant* ll_initial_value,
                                                         llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::PrivateLinkage);
+        llvm::GlobalVariable* gen_const_global_struct_variable(const char* name,
+                                                              llvm::StructType* ll_struct_type,
+                                                               llvm::SmallVector<llvm::Constant*>& ll_values,
+                                                              llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::PrivateLinkage);
         llvm::GlobalVariable* gen_global_variable(const llvm::Twine& name,
                                                   llvm::Type* ll_type,
                                                   bool is_const,

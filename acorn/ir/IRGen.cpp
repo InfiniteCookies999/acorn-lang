@@ -2035,6 +2035,9 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
         gen_function_decl(func);
 
         return func->ll_func;
+    } else if (ref->is_enum_value_ref()) {
+        auto enum_type = static_cast<EnumType*>(ref->type);
+        return gen_enum_index(ref->enum_value_ref->index, enum_type->get_index_type());
     }
 
     acorn_fatal("unreachable: gen_ident_reference()");
@@ -2107,6 +2110,12 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
         try_move = true;
         auto move_obj = static_cast<MoveObj*>(arg);
         arg = move_obj->value;
+    }
+
+    if (!context.should_stand_alone()) {
+        if (arg->cast_type && arg->cast_type->is(context.std_any_struct->struct_type)) {
+            return gen_rvalue(arg);
+        }
     }
 
     if (arg->type->is_struct()) {
@@ -2718,11 +2727,11 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
         process_destructor_state(arr->type, ll_dest_addr);
     }
 
-    auto to_type = arr->get_final_type();
-    if (to_type->is_slice()) {
-        // If casting to a slice type we need to generate the array as per
-        // usual.
-        to_type = arr->type;
+    // Check for a cast to an array because it is possible the user is assigning the array to
+    // a variable with an array of a larger size.
+    auto to_type = arr->type;
+    if (arr->cast_type && arr->cast_type->is_array()) {
+        to_type = arr->cast_type;
     }
 
     auto arr_type = static_cast<ArrayType*>(to_type);
@@ -2912,9 +2921,15 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
         } else {
             return gen_ident_reference(dot);
         }
-    } else if (dot->enum_value) {
-        auto enum_type = static_cast<EnumType*>(dot->type);
-        return gen_enum_index(dot->enum_value->index, enum_type->get_index_type());
+    } else if (dot->is_enum_value) {
+        auto enum_type = static_cast<EnumType*>(dot->site->type);
+
+        auto ll_index = gen_rvalue(dot->site);
+        if (enum_type->get_values_type()->is_integer()) {
+            return ll_index;
+        }
+
+        return gen_enum_value_from_enum_array(enum_type, ll_index);
     } else {
         return gen_ident_reference(dot);
     }
@@ -3288,7 +3303,7 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
         return llvm::Constant::getNullValue(builder.getPtrTy());
     case TypeKind::Array:
     case TypeKind::Struct:
-    case TypeKind::SliceType:
+    case TypeKind::Slice:
         return llvm::ConstantAggregateZero::get(gen_type(type));
     default:
         acorn_fatal("gen_zero(): Missing case");
@@ -3319,7 +3334,7 @@ llvm::Constant* acorn::IRGenerator::gen_one(Type* type) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_cast(Cast* cast) {
-    return gen_cast(cast->explicit_cast_type, cast->value, gen_rvalue(cast->value));
+    return gen_cast(cast->type, cast->value, gen_rvalue(cast->value));
 }
 
 llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Value* ll_value) {
@@ -3337,9 +3352,6 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
             // but there may be GEP issues if the cast happens inline. That and clang uses GEP
             // to perform a cast from an array to a pointer.
             return ll_value;
-        } else if (from_type->is_enum()) {
-            auto enum_type = static_cast<EnumType*>(from_type);
-            return gen_enum_value_from_enum_array(enum_type, ll_value);
         }
         goto NoCastFound;
     }
@@ -3368,9 +3380,6 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
             } else {
                 return builder.CreateFPToUI(ll_value, gen_type(to_type), "cast");
             }
-        } else if (from_type->is_enum()) {
-            // When working with integer types there is no difference in the index vs. the value.
-            return ll_value;
         }
         goto NoCastFound;
     }
@@ -3403,7 +3412,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
 
         goto NoCastFound;
     }
-    case TypeKind::SliceType: {
+    case TypeKind::Slice: {
         if (from_type->is_array()) {
             // Creating a temporary slice and storing the array into it.
             auto ll_slice_type = gen_type(to_type);
@@ -3416,7 +3425,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
         goto NoCastFound;
     }
     case TypeKind::Struct: {
-        if (!context.should_stand_alone() && from_type->is(context.std_any_struct->struct_type)) {
+        if (!context.should_stand_alone() && to_type->is(context.std_any_struct->struct_type)) {
             auto any_struct_type = context.std_any_struct->struct_type;
             auto ll_any_struct_type = gen_struct_type(any_struct_type);
             auto ll_address = gen_unseen_alloca(ll_any_struct_type, "tmp.any.obj");
@@ -3728,6 +3737,16 @@ llvm::GlobalVariable* acorn::IRGenerator::gen_const_global_variable(const llvm::
                                                                     llvm::Constant* ll_initial_value,
                                                                     llvm::GlobalValue::LinkageTypes linkage) {
     return gen_global_variable(name, ll_type, true, ll_initial_value, linkage);
+}
+
+llvm::GlobalVariable* acorn::IRGenerator::gen_const_global_struct_variable(const char* name,
+                                                                           llvm::StructType* ll_struct_type,
+                                                                           llvm::SmallVector<llvm::Constant*>& ll_values,
+                                                                           llvm::GlobalValue::LinkageTypes linkage) {
+
+    auto ll_global_name = llvm::Twine(name) + llvm::Twine(context.global_counter++);
+    auto ll_global_data = llvm::ConstantStruct::get(ll_struct_type, ll_values);
+    return gen_global_variable(ll_global_name, ll_struct_type, true, ll_global_data);
 }
 
 llvm::GlobalVariable* acorn::IRGenerator::gen_global_variable(const llvm::Twine& name,

@@ -78,7 +78,7 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = ArrayType::create(allocator, arr_type->get_elm_type(), arr_type->get_length(), is_const);
         break;
     }
-    case TypeKind::SliceType: {
+    case TypeKind::Slice: {
         auto slice_type = static_cast<SliceType*>(type);
         auto new_slice_type = SliceType::create(allocator, slice_type->get_elm_type(), is_const);
         new_slice_type->set_ll_struct_type(slice_type->get_ll_struct_type());

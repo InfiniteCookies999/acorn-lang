@@ -34,14 +34,14 @@ enum En {
 
 void main() {
     En e1 = En.A;
-    print(e1, 17);
+    print(e1.value, 17);
 
     En e2 = En.B;
-    print(e2, 17);
+    print(e2.value, 17);
 
     En e3 = En.C;
-    print(e3, 17);
+    print(e3.value, 17);
 
     En e4 = En.D;
-    print(e4, 17);
+    print(e4.value, 17);
 }

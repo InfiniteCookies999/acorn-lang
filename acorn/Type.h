@@ -60,7 +60,7 @@ namespace acorn {
         NamespaceRef,  // A reference to an identifier to a namespace.
         Pointer,
         Array,
-        SliceType,
+        Slice,
         EmptyArray,
         UnresolvedArrayType, // Length could not be resolved during parsing.
         Null,
@@ -83,7 +83,7 @@ namespace acorn {
 
         static Type* create(PageAllocator& allocator, TypeKind kind, bool is_const = false);
 
-        TypeKind get_kind() const { return kind;  }
+        TypeKind get_kind() const { return kind; }
 
         bool is_const() const { return vconst; }
         bool does_contain_const() const { return contains_const; }
@@ -133,7 +133,7 @@ namespace acorn {
         bool is_function() const  { return kind == TypeKind::Function;  }
         bool is_struct() const    { return kind == TypeKind::Struct;    }
         bool is_enum() const      { return kind == TypeKind::Enum;      }
-        bool is_slice() const     { return kind == TypeKind::SliceType; }
+        bool is_slice() const     { return kind == TypeKind::Slice; }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
@@ -262,7 +262,7 @@ namespace acorn {
 
     protected:
         SliceType(bool is_const, Type* elm_type)
-            : ContainerType(TypeKind::SliceType, is_const, elm_type) {
+            : ContainerType(TypeKind::Slice, is_const, elm_type) {
         }
 
         // The struct type containing the pointer to memory and the length.

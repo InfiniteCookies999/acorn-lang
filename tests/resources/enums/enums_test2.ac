@@ -38,14 +38,14 @@ enum En {
 
 void main() {
     En e1 = En.A;
-    write_val(e1);
+    write_val(e1.value);
 
     En e2 = En.B;
-    write_val(e2);
+    write_val(e2.value);
 
     En e3 = En.C;
-    write_val(e3);
+    write_val(e3.value);
 
     En e4 = En.D;
-    write_val(e4);
+    write_val(e4.value);
 }

@@ -338,7 +338,7 @@ namespace acorn {
         EnumType* enum_type;
 
         struct Value {
-            size_t     index;
+            uint64_t   index;
             Identifier name;
             SourceLoc  name_loc;
             Expr*      assignment;
@@ -582,22 +582,25 @@ namespace acorn {
             FuncsKind,
             UniversalKind,
             NamespaceKind,
-            CompositeKind
+            CompositeKind,
+            EnumValueKind
         } found_kind = NoneKind;
 
         union {
-            Var*        var_ref = nullptr;
-            FuncList*   funcs_ref;
-            Expr*       universal_ref;
-            Namespace*  nspace_ref;
-            Decl*       composite_ref;
+            Var*         var_ref = nullptr;
+            FuncList*    funcs_ref;
+            Expr*        universal_ref;
+            Namespace*   nspace_ref;
+            Decl*        composite_ref;
+            Enum::Value* enum_value_ref;
         };
 
-        bool is_var_ref() const       { return found_kind == VarKind;       }
-        bool is_funcs_ref() const     { return found_kind == FuncsKind;     }
-        bool is_universal_ref() const { return found_kind == UniversalKind; }
-        bool is_namespace_ref() const { return found_kind == NamespaceKind; }
-        bool is_composite_ref() const { return found_kind == CompositeKind; }
+        bool is_var_ref() const        { return found_kind == VarKind;       }
+        bool is_funcs_ref() const      { return found_kind == FuncsKind;     }
+        bool is_universal_ref() const  { return found_kind == UniversalKind; }
+        bool is_namespace_ref() const  { return found_kind == NamespaceKind; }
+        bool is_composite_ref() const  { return found_kind == CompositeKind; }
+        bool is_enum_value_ref() const { return found_kind == EnumValueKind; }
 
         void set_var_ref(Var* var) {
             var_ref    = var;
@@ -623,6 +626,11 @@ namespace acorn {
             composite_ref = composite;
             found_kind = CompositeKind;
         }
+
+        void set_enum_value_ref(Enum::Value* value) {
+            enum_value_ref = value;
+            found_kind = EnumValueKind;
+        }
     };
 
     struct DotOperator : IdentRef {
@@ -630,8 +638,8 @@ namespace acorn {
         }
 
         bool is_array_length = false;
-        bool is_slice_ptr = false;
-        Enum::Value* enum_value = nullptr;
+        bool is_slice_ptr    = false;
+        bool is_enum_value   = false;
         Expr* site;
     };
 

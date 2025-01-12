@@ -59,12 +59,14 @@ namespace acorn {
         // Limits to calculate comparison scores for which function to call.
         //
         //     const uint32_t IMPLICIT_MISMATCHED_TYPES_LIMIT = 0;
-        static const uint32_t PREFER_NON_CONST_LIMIT         = MAX_FUNC_PARAMS * 4;
-        static const uint32_t NOT_ASSIGNABLE_TYPES_LIMIT     = PREFER_NON_CONST_LIMIT * 2;
-        static const uint32_t NON_CONST_FROM_CONST_OBJ_LIMIT = NOT_ASSIGNABLE_TYPES_LIMIT * 2;
+        static const uint32_t PREFER_NON_CONST_LIMIT            = MAX_FUNC_PARAMS * 2;
+        static const uint32_t IMPLICIT_CAST_TO_ANY_LIMIT        = PREFER_NON_CONST_LIMIT * MAX_FUNC_PARAMS * 2;
+
+        static const uint32_t NON_CONST_FROM_CONST_OBJ_LIMIT    = IMPLICIT_CAST_TO_ANY_LIMIT * 2;
+        static const uint32_t NOT_ASSIGNABLE_TYPES_LIMIT        = NON_CONST_FROM_CONST_OBJ_LIMIT * 2;
         // These get the same value because there is no preference of one over the other.
-        static const uint32_t INCORRECT_PARAM_NAME_OR_ORD_LIMIT = NON_CONST_FROM_CONST_OBJ_LIMIT * 2;
-        static const uint32_t INCORRECT_NUM_ARGS_LIMIT          = NON_CONST_FROM_CONST_OBJ_LIMIT * 2;
+        static const uint32_t INCORRECT_PARAM_NAME_OR_ORD_LIMIT = NOT_ASSIGNABLE_TYPES_LIMIT * MAX_FUNC_PARAMS * 2;
+        static const uint32_t INCORRECT_NUM_ARGS_LIMIT          = NOT_ASSIGNABLE_TYPES_LIMIT * MAX_FUNC_PARAMS * 2;
 
         bool is_comptime_if_cond = false;
         bool should_request_gen_queue;

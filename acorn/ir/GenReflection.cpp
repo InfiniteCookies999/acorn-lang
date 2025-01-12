@@ -48,8 +48,8 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_of_type_info(Type* type) {
         auto ll_size_in_bytes = builder.getInt32(static_cast<uint32_t>(sizeof_type_in_bytes(ll_type_info_type)));
         ll_values.push_back(ll_size_in_bytes);
     }
-    { // const Type* element_type
-        if (type->is_pointer() || type->is_array()) {
+    { // const Type* elm_type
+        if (type->is_container()) {
             auto ctr_type = static_cast<ContainerType*>(type);
             ll_values.push_back(gen_reflect_type_info(ctr_type->get_elm_type()));
         } else {
@@ -68,6 +68,14 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_of_type_info(Type* type) {
         if (type->is_struct()) {
             auto struct_type = static_cast<StructType*>(type);
             ll_values.push_back(gen_reflect_type_info_struct_info(struct_type));
+        } else {
+            ll_values.push_back(llvm::Constant::getNullValue(builder.getPtrTy()));
+        }
+    }
+    { // const EnumTypeInfo* enum_info
+        if (type->is_enum()) {
+            auto enum_type = static_cast<EnumType*>(type);
+            ll_values.push_back(gen_reflect_type_info_enum_info(enum_type));
         } else {
             ll_values.push_back(llvm::Constant::getNullValue(builder.getPtrTy()));
         }
@@ -113,11 +121,7 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_struct_info(StructType
         ll_values.push_back(ll_global_fields_array);
     }
 
-    auto ll_global_name = llvm::Twine("global.type.struct.info.") + llvm::Twine(context.global_counter++);
-    auto ll_global_data = llvm::ConstantStruct::get(ll_struct_type, ll_values);
-    auto ll_global = gen_global_variable(ll_global_name, ll_struct_type, true, ll_global_data);
-
-    return ll_global;
+    return gen_const_global_struct_variable("global.type.struct.info.", ll_struct_type, ll_values);
 }
 
 llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_field_info(Var* field,
@@ -140,4 +144,98 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_field_info(Var* field,
     }
 
     return llvm::ConstantStruct::get(ll_struct_type, ll_values);
+}
+
+llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_enum_info(EnumType* enum_type) {
+
+    auto enumn = enum_type->get_enum();
+
+    auto ll_struct_type = gen_struct_type(context.std_enum_type_info_struct->struct_type);
+
+    uint64_t num_values = static_cast<uint64_t>(enumn->values.size());
+    uint64_t num_buckets = next_pow2(num_values * 2);
+    uint64_t index_mapping_mask = num_buckets - 1;
+
+    llvm::SmallVector<llvm::Constant*> ll_values;
+    ll_values.reserve(5);
+    { // int num_values
+        ll_values.push_back(builder.getInt32(static_cast<uint32_t>(enumn->values.size())));
+    }
+    { // uint64 index_mapping_mask
+        ll_values.push_back(builder.getInt64(index_mapping_mask));
+    }
+    { // uint64[2]* index_mappings
+
+        llvm::SmallVector<llvm::Constant*> ll_buckets(num_buckets);
+
+        auto ll_bucket_type = llvm::ArrayType::get(builder.getInt64Ty(), 2);
+
+        // TODO: Could calculate highest cluster count and retry with a larger
+        //       hash table if the count exceeds a certain value.
+        uint64_t value_count = 0;
+        for (const auto& value : enumn->values) {
+             uint64_t hash = value.index & index_mapping_mask;
+             uint64_t bucket_index = hash;
+
+             while (true) {
+                 if (!ll_buckets[bucket_index]) {
+
+                     auto ll_bucket = llvm::ConstantArray::get(ll_bucket_type, {
+                        builder.getInt64(value.index),
+                        builder.getInt64(value_count)
+                     });
+
+                     ll_buckets[bucket_index] = ll_bucket;
+                     break;
+                 }
+
+                 ++bucket_index;
+                 bucket_index &= index_mapping_mask;
+             }
+
+             ++value_count;
+        }
+
+        for (size_t i = 0; i < ll_buckets.size(); i++) {
+            if (!ll_buckets[i]) {
+                auto ll_bucket = llvm::ConstantArray::get(ll_bucket_type, {
+                    builder.getInt64(UINT64_MAX),
+                    builder.getInt64(UINT64_MAX)
+                });
+
+                ll_buckets[i] = ll_bucket;
+            }
+        }
+
+        auto ll_buckets_type = llvm::ArrayType::get(ll_bucket_type, num_buckets);
+        auto ll_buckets_array = llvm::ConstantArray::get(ll_buckets_type, ll_buckets);
+
+        auto ll_global_name = llvm::Twine("global.type.enum.info.mapping.") + llvm::Twine(context.global_counter++);
+        auto ll_global_array = gen_global_variable(ll_global_name, ll_buckets_type, true, ll_buckets_array);
+
+        ll_values.push_back(ll_global_array);
+    }
+    { // const char** value_names
+
+        llvm::SmallVector<llvm::Constant*> ll_value_names;
+        ll_value_names.reserve(enumn->values.size());
+        for (const auto& value : enumn->values) {
+            auto ll_string_name = llvm::Twine("global.str.") + llvm::Twine(context.global_counter++);
+            auto ll_name = builder.CreateGlobalString(value.name.to_string(), ll_string_name);
+            ll_value_names.push_back(ll_name);
+        }
+
+        auto ll_names_array_type  = llvm::ArrayType::get(builder.getPtrTy(), enumn->values.size());
+        auto ll_names_array_value = llvm::ConstantArray::get(ll_names_array_type, ll_value_names);
+
+        auto ll_global_name = llvm::Twine("global.enum.info.value_names.") + llvm::Twine(context.global_counter++);
+        auto ll_global_names_array = gen_global_variable(ll_global_name, ll_names_array_type, true, ll_names_array_value);
+
+        ll_values.push_back(ll_global_names_array);
+    }
+    { // const Type* index_type
+        ll_values.push_back(gen_reflect_type_info(enum_type->get_index_type()));
+    }
+
+    return gen_const_global_struct_variable("global.type.enum.info.", ll_struct_type, ll_values);
 }

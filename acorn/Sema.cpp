@@ -1461,8 +1461,8 @@ void acorn::Sema::check_enum(Enum* enumn) {
         }
     }
 
-    size_t count = 0;
-    size_t index_counter = 0;
+    size_t   count = 0;
+    uint64_t index_counter = 0;
     bool has_non_assigning = false;
     bool has_conflicting_values_type = false;
     for (auto& value : enumn->values) {
@@ -1888,6 +1888,10 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
                 number.value_f64 = llvm::cast<llvm::ConstantFP>(ll_value)->getValueAPF().convertToDouble();
                 number.kind = Kind::DOUBLE;
                 break;
+            case TypeKind::Enum: {
+                auto enum_type = static_cast<EnumType*>(type);
+                return get(ll_value, enum_type->get_index_type());
+            }
             default:
                 acorn_fatal("Unreachable. Not a foldable type");
             }
@@ -1988,7 +1992,7 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
 
         for (size_t i = 0; i < prior_values.size(); i++) {
             auto& prior_case = switchn->cases[i];
-            if (prior_case.cond && prior_case.cond->type->is_range()) {
+            if (prior_case.cond && prior_case.cond->type && prior_case.cond->type->is_range()) {
 
                 auto range      = static_cast<BinOp*>(prior_case.cond);
                 auto range_type = static_cast<RangeType*>(prior_case.cond->type);
@@ -2146,11 +2150,41 @@ if (prior_value.value_s64 == value.value_s64) {     \
         }
     };
 
+
+    Enum* switch_on_enum = nullptr;
+    if (switchn->on->type->is_enum()) {
+        auto enum_type = static_cast<EnumType*>(switchn->on->type);
+        switch_on_enum = enum_type->get_enum();
+    }
+
     size_t case_count = 0;
     for (SwitchCase scase : switchn->cases) {
-
         if (scase.cond) {
-            check_node(scase.cond);
+            bool cond_foldable = false;
+            if (switch_on_enum && scase.cond->is(NodeKind::IdentRef)) {
+                auto ref = static_cast<IdentRef*>(scase.cond);
+
+                // First check if the identifier refers to an identifier in the enum.
+                auto itr = std::ranges::find_if(switch_on_enum->values, [ref](const Enum::Value& value) {
+                    return value.name == ref->ident;
+                });
+                if (itr != switch_on_enum->values.end()) {
+                    ref->set_enum_value_ref(itr);
+                    scase.cond->type = switchn->on->type;
+                    cond_foldable = true;
+                } else {
+                    check_ident_ref(ref, nspace, false);
+                    cond_foldable = ref->is_foldable || ref->is_enum_value_ref();
+                }
+            } else {
+                check_node(scase.cond);
+                cond_foldable = scase.cond->is_foldable;
+                if (scase.cond->is(NodeKind::DotOperator)) {
+                    auto dot = static_cast<DotOperator*>(scase.cond);
+                    cond_foldable = dot->is_enum_value_ref();
+                }
+            }
+
             if (scase.cond->type) {
                 bool is_bool_type = scase.cond->type->is_ignore_const(context.bool_type);
 
@@ -2164,7 +2198,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
                               scase.cond->type, value_type)
                             .end_error(ErrCode::SemaCannotCompareCaseType);
                         prior_values.push_back({}); // Need to still add empty to keep indices correct.
-                    } else if (scase.cond->is_foldable) {
+                    } else if (cond_foldable) {
                         check_for_range_duplicates(scase, value_type);
                     } else {
                         // TODO: We should allow for this?
@@ -2182,7 +2216,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
                         .end_error(ErrCode::SemaCannotCompareCaseType);
                     prior_values.push_back({}); // Need to still add empty to keep indices correct.
 
-                } else if (scase.cond->is_foldable) {
+                } else if (cond_foldable) {
                     auto ll_value = gen_constant(scase.cond);
                     add_foldable_value(CmpNumber::get(ll_value, scase.cond->type), scase);
                 } else {
@@ -2195,7 +2229,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
                         .end_error(ErrCode::SemaCaseCannotBeBoolLiteral);
                 }
 
-                if (!scase.cond->is_foldable || is_bool_type) {
+                if (!cond_foldable || is_bool_type) {
                     switchn->all_conds_foldable = false;
                 }
             } else {
@@ -3387,6 +3421,13 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         auto slice_type = static_cast<SliceType*>(dot->site->type);
         dot->is_slice_ptr = true;
         dot->type = type_table.get_ptr_type(slice_type->get_elm_type());
+    } else if (dot->ident == context.value_identifier && dot->site->type->is_enum()) {
+        auto enum_type = static_cast<EnumType*>(dot->site->type);
+
+        dot->is_enum_value = true;
+        dot->type = enum_type->get_values_type();
+        dot->is_foldable = false;
+
     } else if (dot->site->type->is_struct()) {
         auto struct_type = static_cast<StructType*>(dot->site->type);
         check_struct_ident_ref(struct_type);
@@ -3412,8 +3453,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
                 dot->type = enumn->enum_type;
                 // It should be fine to take the address here since the array is no
                 // longer modified after parsing.
-                dot->enum_value = &value;
-                dot->is_foldable = enumn->enum_type->get_values_type()->is_number();
+                dot->set_enum_value_ref(&value);
             } else {
                 error(expand(dot), "Could not find value '%s' in enum '%s'",
                       dot->ident, enumn->name)
@@ -3835,10 +3875,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
 
             if (!is_assignable) {
                 if constexpr (for_score_gathering) {
-                    if (!encountered_mismatched_types) {
-                        score += NOT_ASSIGNABLE_TYPES_LIMIT;
-                    }
-                    ++score;
+                    score += NOT_ASSIGNABLE_TYPES_LIMIT;
                     encountered_mismatched_types = true;
                     continue;
                 } else {
@@ -4129,9 +4166,9 @@ void acorn::Sema::check_cast(Cast* cast) {
     cast->type = fixed_cast_type;
 
     check_and_verify_type(cast->value);
-    if (!is_castable_to(cast->explicit_cast_type, cast->value)) {
+    if (!is_castable_to(fixed_cast_type, cast->value)) {
         error(expand(cast), "Cannot cast from '%s' to '%s'",
-              cast->value->type, cast->explicit_cast_type)
+              cast->value->type, fixed_cast_type)
             .end_error(ErrCode::SemaInvalidCast);
     }
 }
@@ -4404,14 +4441,10 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
     if (expr->type->is_enum()) {
         if (to_type->is_ignore_const(expr->type)) {
             return true;
+        } else if (to_type->is_struct() && to_type->is(context.std_any_struct->struct_type)) {
+            return true;
         } else {
-            // Enums have the opportunity to be casts into their values type.
-            auto enum_type = static_cast<EnumType*>(expr->type);
-            auto values_type = enum_type->get_values_type();
-            if (!try_remove_const_for_compare(to_type, values_type, expr)) {
-                return false;
-            }
-            return to_type->is(values_type);
+            return false;
         }
     } else if (expr->type->get_container_enum_type()) {
         return expr->type->is_ignore_const(to_type);
@@ -4595,7 +4628,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
 
         return to_type->is(from_type);
     }
-    case TypeKind::SliceType: {
+    case TypeKind::Slice: {
         if (from_type->is_array()) {
             auto from_arr_type = static_cast<ArrayType*>(from_type);
             auto from_elm_type = from_arr_type->get_elm_type();
@@ -4956,11 +4989,11 @@ void acorn::Sema::check_modifiers_for_composite(Decl* decl, const char* composit
     check_modifier_incompatibilities(decl);
     if (decl->has_modifier(Modifier::DllImport)) {
         error(decl->get_modifier_location(Modifier::DllImport), "%s cannot have dllimport modifier", composite_type_str)
-            .end_error(ErrCode::CompositeCannotHaveDllImportModifier);
+            .end_error(ErrCode::SemaCompositeCannotHaveDllImportModifier);
     }
     if (decl->has_modifier(Modifier::Native)) {
         error(decl->get_modifier_location(Modifier::Native), "%s cannot have native modifier", composite_type_str)
-            .end_error(ErrCode::CompositeCannotHaveNativeModifier);
+            .end_error(ErrCode::SemaCompositeCannotHaveNativeModifier);
     }
 }
 

@@ -40,11 +40,11 @@ enum En {
 
 void main() {
 
-    write_val(En.A);
-    write_val(En.B);
-    write_val(En.C);
-    write_val(En.D);
-    write_val(En.E);
-    write_val(En.F);
+    write_val(En.A.value);
+    write_val(En.B.value);
+    write_val(En.C.value);
+    write_val(En.D.value);
+    write_val(En.E.value);
+    write_val(En.F.value);
 
 }

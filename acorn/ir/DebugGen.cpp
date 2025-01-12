@@ -354,6 +354,60 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 		di_cached_types.insert({ type, di_arr_type });
 		return di_arr_type;
 	}
+	case TypeKind::Slice: {
+		auto slice_type = static_cast<SliceType*>(type);
+		auto ll_slice_type = gen_type(slice_type, context.get_ll_context(), context.get_ll_module());
+		auto ll_struct_type = llvm::cast<llvm::StructType>(ll_slice_type);
+
+		auto ll_struct_layout = context.get_ll_module().getDataLayout().getStructLayout(ll_struct_type);
+		uint64_t size_in_bits = ll_struct_layout->getSizeInBits();
+
+		auto di_struct_type = builder.createStructType(
+			nullptr,
+			ll_struct_type->getName(),
+			di_unit->getFile(),
+			0,
+			size_in_bits,
+			0, // TODO: Alignment
+			llvm::DINode::FlagTypePassByValue,
+			nullptr,
+			llvm::DINodeArray(), // We fill in later because we need to prevent circular dependency.
+			0, // RunTimeLang. Clang ignores this
+			nullptr,
+			ll_struct_type->getName() // Unique name
+		);
+		di_cached_types.insert({ type, di_struct_type });
+
+		auto di_ptr_member_type = builder.createMemberType(
+			di_struct_type,
+			"ptr",
+			di_unit->getFile(),
+			0,
+			size_in_bits,
+			0, // TODO: Alignment
+			0, // bits offset
+			llvm::DINode::DIFlags::FlagZero,
+			emit_type(context.void_ptr_type)
+		);
+		auto di_length_member_type = builder.createMemberType(
+			di_struct_type,
+			"length",
+			di_unit->getFile(),
+			0,
+			size_in_bits,
+			0, // TODO: Alignment
+			ll_struct_layout->getElementOffsetInBits(1), // bits offset
+			llvm::DINode::DIFlags::FlagZero,
+			emit_type(context.int_type)
+		);
+
+		builder.replaceArrays(di_struct_type, builder.getOrCreateArray({
+			di_ptr_member_type,
+			di_length_member_type
+		}));
+
+		return di_struct_type;
+	}
 	case TypeKind::Function: {
 		unsigned ptr_size_in_bits = context.get_ll_module().getDataLayout().getPointerSizeInBits();
 
@@ -441,6 +495,10 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 		builder.replaceArrays(di_struct_type, builder.getOrCreateArray(di_field_types));
 
 		return di_struct_type;
+	}
+	case TypeKind::Enum: {
+		auto enum_type = static_cast<EnumType*>(type);
+		return emit_type(enum_type->get_index_type());
 	}
 	default:
 		acorn_fatal("unreachable");

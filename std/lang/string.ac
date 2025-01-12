@@ -521,19 +521,14 @@ String to_string(uint64 value, int base = 10) {
 String to_string(int64 value, int base = 10) {
 
     bool is_negative = value < 0;
-    uint64 value_u64;
     if is_negative {
-        // Casting to a 64 bit unsigned first because it should be garenteed
-        // to have well defined behavior but not signed.
-        value_u64 = -(as(uint64) value);
-    } else {
-        value_u64 = as(uint64) value;
+        value = -value;
     }
 
     const BUFFER_SIZE = 21 + 1;
     char[BUFFER_SIZE] buffer;
 
-    char* ptr = uint64_to_chars(value_u64, buffer + BUFFER_SIZE - 1, base);
+    char* ptr = uint64_to_chars(as(uint64) value, buffer + BUFFER_SIZE - 1, base);
     int length = as(int)(buffer + BUFFER_SIZE) - as(int)ptr;
 
     if is_negative {

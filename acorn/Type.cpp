@@ -159,7 +159,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Range:     return str2(static_cast<const RangeType*>(this)->to_string());
     case TypeKind::Pointer:   return str2(static_cast<const PointerType*>(this)->to_string());
     case TypeKind::Array:     return str2(static_cast<const ArrayType*>(this)->to_string());
-    case TypeKind::SliceType: return str2(static_cast<const SliceType*>(this)->to_string());
+    case TypeKind::Slice: return str2(static_cast<const SliceType*>(this)->to_string());
     case TypeKind::Function:  return str2(static_cast<const FunctionType*>(this)->to_string());
     case TypeKind::Struct:    return str(static_cast<const StructType*>(this)->to_string());
     case TypeKind::Enum:      return str(static_cast<const EnumType*>(this)->to_string());

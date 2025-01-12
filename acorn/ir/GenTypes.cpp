@@ -50,7 +50,7 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Mod
         auto enum_type = static_cast<EnumType*>(type);
         return gen_type(enum_type->get_index_type(), ll_context, ll_module);
     }
-    case TypeKind::SliceType: {
+    case TypeKind::Slice: {
         auto slice_type = static_cast<SliceType*>(type);
         if (auto ll_slice_type = slice_type->get_ll_struct_type()) {
             return ll_slice_type;

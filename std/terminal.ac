@@ -2,6 +2,11 @@
 
 import .win32;
 import .unix;
+import .reflect.Any;
+import .reflect.Type;
+import .reflect.StructTypeInfo;
+import .reflect.EnumTypeInfo;
+import .reflect.TypeId;
 
 void print(const char* s, int length) {
 #if OS_GROUP_WINDOWS
@@ -40,6 +45,15 @@ void print(uint64 value, int base=10) {
     print(ptr, length);
 }
 
+void print(int64 value, int base=10) {
+    if value < 0 {
+        print('-');
+        value = -value;
+    }
+
+    print(as(uint64) value, base);
+}
+
 void print(char c) {
     print(&c, 1);
 }
@@ -52,8 +66,142 @@ void print(bool b) {
     }
 }
 
+void print(Any value) {
+    print_any(value.ptr, value.type);
+}
+
+void print(void* ptr) {
+
+    const BUFFER_SIZE = sizeof(void*) * 2 + 2;
+    char[BUFFER_SIZE] buffer = ---;
+
+    auto buffer_end = buffer + buffer.length - 1;
+    auto int_ptr_start = uint64_to_chars(as(uint64) ptr, buffer_end, base=16);
+
+    int zeros_length = as(int) (int_ptr_start - as(const char*) buffer);
+    memset(buffer, '0', zeros_length);
+    buffer[1] = 'x';
+
+    print(buffer, buffer.length);
+
+}
+
+private void print_any(void* ptr, const Type* type) {
+    switch type.id {
+    case Int:     print(as(int64)  *as(int*)    ptr);
+    case Int8:    print(as(int64)  *as(int8*)   ptr);
+    case Int16:   print(as(int64)  *as(int16*)  ptr);
+    case Int32:   print(as(int64)  *as(int32*)  ptr);
+    case Int64:   print(as(int64)  *as(int64*)  ptr);
+    case ISize:   print(as(int64)  *as(isize*)  ptr);
+    case UInt8:   print(as(uint64) *as(uint8*)  ptr);
+    case UInt16:  print(as(uint64) *as(uint16*) ptr);
+    case UInt32:  print(as(uint64) *as(uint32*) ptr);
+    case UInt64:  print(as(uint64) *as(uint64*) ptr);
+    case USize:   print(as(uint64) *as(usize*)  ptr);
+    case Char:    print(*as(char*) ptr);
+    // Just print out the numeric value of the characters.
+    case Char16:  print(as(uint64) *as(char16*) ptr);
+    case Char32:  print(as(uint64) *as(char32*) ptr);
+    // TODO: case Float32: case Float64:
+    case Bool:    print(*as(bool*) ptr);
+    case Pointer:
+        if type.elm_type.id == TypeId.Char {
+            print(*as(char**) ptr);
+        } else {
+            print(*as(void**) ptr);
+        }
+    case Function: print(*as(void**) ptr);
+    case Struct:
+        if type == #type_info(String) {
+            print(as(String*) ptr);
+        } else {
+            print_struct(ptr, type.struct_info);
+        }
+    //case Slice:
+
+        //int length = *as(const int*)(ptr + sizeof(void*));
+        //const void* elements = *as(const void**) ptr;
+//
+        //print_array_like_value(elements, type.elm_type, length);
+
+    case Array: print_array_like_value(ptr, type.elm_type, type.array_length);
+    case Enum:  print_enum(ptr, type.enum_info);
+    }
+}
+
+private void print_array_like_value(void* array, const Type* elm_type, int length) {
+    print('[');
+
+    int elm_byte_size = elm_type.size_in_bytes;
+    loop int i : 0..<length {
+        void* offset_into_array = array + (i * elm_byte_size);
+
+        if elm_type.is_string()  print('"');
+        print_any(offset_into_array, elm_type);
+        if elm_type.is_string()  print('"');
+
+        if i+1 != length {
+            print(", ");
+        }
+    }
+
+    print(']');
+}
+
+private void print_struct(void* ptr, const StructTypeInfo* struct_info) {
+    print(struct_info.name);
+    print("{ ");
+
+    loop int i : 0..<struct_info.num_fields {
+        auto field_info = struct_info.fields + i;
+        print(field_info.name);
+        print("=");
+
+        void* field_data = ptr + field_info.offset_in_bytes;
+
+        if field_info.type.is_string()  print('"');
+        print_any(field_data, field_info.type);
+        if field_info.type.is_string()  print('"');
+
+        if i+1 != struct_info.num_fields {
+            print(", ");
+        }
+    }
+
+    print(" }");
+}
+
+private void print_enum(const void* ptr, const EnumTypeInfo* enum_info) {
+    uint64 index;
+    switch enum_info.index_type.id {
+    case Int:     index = as(uint64) *as(const int*)    ptr;
+    case Int8:    index = as(uint64) *as(const int8*)   ptr;
+    case Int16:   index = as(uint64) *as(const int16*)  ptr;
+    case Int32:   index = as(uint64) *as(const int32*)  ptr;
+    case Int64:   index = as(uint64) *as(const int64*)  ptr;
+    case ISize:   index = as(uint64) *as(const isize*)  ptr;
+    case UInt8:   index = as(uint64) *as(const uint8*)  ptr;
+    case UInt16:  index = as(uint64) *as(const uint16*) ptr;
+    case UInt32:  index = as(uint64) *as(const uint32*) ptr;
+    case UInt64:  index = as(uint64) *as(const uint64*) ptr;
+    case USize:   index = as(uint64) *as(const usize*)  ptr;
+    case Char:    index = as(uint64) *as(const char*)   ptr;
+    case Char16:  index = as(uint64) *as(const char16*) ptr;
+    case Char32:  index = as(uint64) *as(const char32*) ptr;
+    }
+
+    const char* name = enum_info.get_value_name(index);
+    print(name);
+}
+
 // -- println functions
 //
+
+void println(void* ptr) {
+    print(ptr);
+    print("\n");
+}
 
 void println(const char* s) {
     print(s);
@@ -70,6 +218,11 @@ void println(uint64 value, int base=10) {
     print("\n");
 }
 
+void println(int64 value, int base=10) {
+    print(value, base);
+    print("\n");
+}
+
 void println(char c) {
     print(c);
     print("\n");
@@ -82,5 +235,10 @@ void println(bool b) {
 
 void println(const String^ s) {
     print(s);
+    print("\n");
+}
+
+void println(Any any) {
+    print(any);
     print("\n");
 }
