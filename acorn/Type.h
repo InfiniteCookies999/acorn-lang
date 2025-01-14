@@ -62,11 +62,11 @@ namespace acorn {
         Array,
         Slice,
         EmptyArray,
-        UnresolvedArrayType, // Length could not be resolved during parsing.
+        UnresolvedBracket, // Length could not be resolved during parsing.
         Null,
         AssignDeterminedArray,
         Function,
-        UnresolvedCompositeType,
+        UnresolvedComposite,
         Struct,
         Enum,
         EnumContainer,
@@ -133,7 +133,7 @@ namespace acorn {
         bool is_function() const  { return kind == TypeKind::Function;  }
         bool is_struct() const    { return kind == TypeKind::Struct;    }
         bool is_enum() const      { return kind == TypeKind::Enum;      }
-        bool is_slice() const     { return kind == TypeKind::Slice; }
+        bool is_slice() const     { return kind == TypeKind::Slice;     }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
@@ -217,7 +217,7 @@ namespace acorn {
 
     private:
         UnresolvedBracketType(bool is_const, Expr* expr, Type* elm_type) :
-            ContainerType(TypeKind::UnresolvedArrayType, is_const, elm_type), expr(expr) {
+            ContainerType(TypeKind::UnresolvedBracket, is_const, elm_type), expr(expr) {
         }
 
         Expr* expr;
@@ -351,7 +351,7 @@ namespace acorn {
                             SourceLoc  name_location,
                             bool is_const = false);
 
-        Identifier get_struct_name() const {
+        Identifier get_composite_name() const {
             return name;
         }
 
@@ -361,7 +361,7 @@ namespace acorn {
 
     protected:
         UnresolvedCompositeType(bool is_const, Identifier name, SourceLoc error_location)
-            : Type(TypeKind::UnresolvedCompositeType, is_const),
+            : Type(TypeKind::UnresolvedComposite, is_const),
               name(name),
               error_location(error_location) {
         }

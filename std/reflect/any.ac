@@ -6,5 +6,5 @@
  */
 public struct Any {
     const Type* type;
-    void* ptr;
+    const void* ptr;
 }

@@ -70,7 +70,7 @@ void print(Any value) {
     print_any(value.ptr, value.type);
 }
 
-void print(void* ptr) {
+void print(const void* ptr) {
 
     const BUFFER_SIZE = sizeof(void*) * 2 + 2;
     char[BUFFER_SIZE] buffer = ---;
@@ -86,56 +86,58 @@ void print(void* ptr) {
 
 }
 
-private void print_any(void* ptr, const Type* type) {
+private void print_any(const void* ptr, const Type* type) {
     switch type.id {
-    case Int:     print(as(int64)  *as(int*)    ptr);
-    case Int8:    print(as(int64)  *as(int8*)   ptr);
-    case Int16:   print(as(int64)  *as(int16*)  ptr);
-    case Int32:   print(as(int64)  *as(int32*)  ptr);
-    case Int64:   print(as(int64)  *as(int64*)  ptr);
-    case ISize:   print(as(int64)  *as(isize*)  ptr);
-    case UInt8:   print(as(uint64) *as(uint8*)  ptr);
-    case UInt16:  print(as(uint64) *as(uint16*) ptr);
-    case UInt32:  print(as(uint64) *as(uint32*) ptr);
-    case UInt64:  print(as(uint64) *as(uint64*) ptr);
-    case USize:   print(as(uint64) *as(usize*)  ptr);
-    case Char:    print(*as(char*) ptr);
+    case Int:     print(as(int64)  *as(const int*)    ptr);
+    case Int8:    print(as(int64)  *as(const int8*)   ptr);
+    case Int16:   print(as(int64)  *as(const int16*)  ptr);
+    case Int32:   print(as(int64)  *as(const int32*)  ptr);
+    case Int64:   print(as(int64)  *as(const int64*)  ptr);
+    case ISize:   print(as(int64)  *as(const isize*)  ptr);
+    case UInt8:   print(as(uint64) *as(const uint8*)  ptr);
+    case UInt16:  print(as(uint64) *as(const uint16*) ptr);
+    case UInt32:  print(as(uint64) *as(const uint32*) ptr);
+    case UInt64:  print(as(uint64) *as(const uint64*) ptr);
+    case USize:   print(as(uint64) *as(const usize*)  ptr);
+    case Char:    print(*as(const char*) ptr);
     // Just print out the numeric value of the characters.
-    case Char16:  print(as(uint64) *as(char16*) ptr);
-    case Char32:  print(as(uint64) *as(char32*) ptr);
+    case Char16:  print(as(uint64) *as(const char16*) ptr);
+    case Char32:  print(as(uint64) *as(const char32*) ptr);
     // TODO: case Float32: case Float64:
-    case Bool:    print(*as(bool*) ptr);
+    case Bool:    print(*as(const bool*) ptr);
     case Pointer:
         if type.elm_type.id == TypeId.Char {
-            print(*as(char**) ptr);
+            print(*as(const (const char*)*) ptr);
+        } elif type.elm_type == #type_info(String) {
+            print(as(const String*) ptr);
         } else {
-            print(*as(void**) ptr);
+            print(*as(const (const void*)*) ptr);
         }
-    case Function: print(*as(void**) ptr);
+    case Function: print(*as(const (const void*)*) ptr);
     case Struct:
         if type == #type_info(String) {
-            print(as(String*) ptr);
+            print(as(const String*) ptr);
         } else {
             print_struct(ptr, type.struct_info);
         }
-    //case Slice:
+    case Slice:
 
-        //int length = *as(const int*)(ptr + sizeof(void*));
-        //const void* elements = *as(const void**) ptr;
-//
-        //print_array_like_value(elements, type.elm_type, length);
+        int length = *as(const int*)(ptr + sizeof(void*));
+        auto elements = *as(const (const void*)*) ptr;
+
+        print_array_like_value(elements, type.elm_type, length);
 
     case Array: print_array_like_value(ptr, type.elm_type, type.array_length);
     case Enum:  print_enum(ptr, type.enum_info);
     }
 }
 
-private void print_array_like_value(void* array, const Type* elm_type, int length) {
+private void print_array_like_value(const void* array, const Type* elm_type, int length) {
     print('[');
 
     int elm_byte_size = elm_type.size_in_bytes;
     loop int i : 0..<length {
-        void* offset_into_array = array + (i * elm_byte_size);
+        const void* offset_into_array = array + (i * elm_byte_size);
 
         if elm_type.is_string()  print('"');
         print_any(offset_into_array, elm_type);
@@ -149,7 +151,7 @@ private void print_array_like_value(void* array, const Type* elm_type, int lengt
     print(']');
 }
 
-private void print_struct(void* ptr, const StructTypeInfo* struct_info) {
+private void print_struct(const void* ptr, const StructTypeInfo* struct_info) {
     print(struct_info.name);
     print("{ ");
 
@@ -158,7 +160,7 @@ private void print_struct(void* ptr, const StructTypeInfo* struct_info) {
         print(field_info.name);
         print("=");
 
-        void* field_data = ptr + field_info.offset_in_bytes;
+        const void* field_data = ptr + field_info.offset_in_bytes;
 
         if field_info.type.is_string()  print('"');
         print_any(field_data, field_info.type);
@@ -198,7 +200,7 @@ private void print_enum(const void* ptr, const EnumTypeInfo* enum_info) {
 // -- println functions
 //
 
-void println(void* ptr) {
+void println(const void* ptr) {
     print(ptr);
     print("\n");
 }

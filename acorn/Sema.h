@@ -209,7 +209,7 @@ namespace acorn {
         bool is_castable_to(Type* to_type, Expr* expr) const;
         bool try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr) const;
         bool has_valid_constness(Type* to_type, Type* from_type) const;
-        void check_modifiable(Expr* expr);
+        bool check_modifiable(Expr* expr);
         bool is_lvalue(Expr* expr) const;
         bool is_readonly_field_without_access(Expr* expr) const;
         bool is_incomplete_type(Type* type) const;
@@ -232,6 +232,14 @@ namespace acorn {
 
         std::string get_type_mismatch_error(Type* to_type, Expr* expr) const;
         std::string get_type_mismatch_error(Type* to_type, Type* from_type) const;
+        Type* get_array_type_for_mismatch_error(Array* arr) const;
+        Type* get_array_type_for_mismatch_error(Array* arr,
+                                                llvm::SmallVector<size_t>& lengths,
+                                                size_t depth) const;
+        //llvm::SmallVector<size_t> get_array_lengths_for_mismatch_error(Array* arr) const;
+        //void get_array_lengths_for_mismatch_error(Array* arr,
+        //                                          llvm::SmallVector<size_t>& lengths,
+        //                                          size_t depth) const;
 
         template<typename... TArgs>
         [[nodiscard]] Logger& error(PointSourceLoc loc, const char* fmt, TArgs... args) {

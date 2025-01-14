@@ -1339,6 +1339,12 @@ acorn::Type* acorn::Parser::parse_base_type() {
     bool is_const = cur_token.is(Token::KwConst);
     if (is_const) {
         next_token();
+        if (cur_token.is('(')) {
+            next_token();
+            Type* type = parse_type();
+            expect(')', "for const type");
+            return type_table.get_const_type(type);
+        }
     }
 
 #define ty_const(t) \

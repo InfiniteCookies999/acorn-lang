@@ -237,8 +237,46 @@ uint64_t acorn::ArrayType::get_total_linear_length() const {
     return length;
 }
 
+namespace acorn {
+    static std::string array_like_type_to_string(const ContainerType* container_type) {
+        std::string s = "";
+
+        Type* base_type = nullptr;
+        {
+            auto elm_type = container_type->get_elm_type();
+            Type* type_itr = elm_type;
+            while (type_itr->get_kind() == TypeKind::Array ||
+                   type_itr->get_kind() == TypeKind::AssignDeterminedArray) {
+                auto ctr_type = static_cast<const ContainerType*>(type_itr);
+                type_itr = ctr_type->get_elm_type();
+            }
+            base_type = type_itr;
+        }
+
+        s += base_type->to_string();
+
+        while (true) {
+            if (container_type->is_array()) {
+                auto arr_type = static_cast<const ArrayType*>(container_type);
+                s += "[" + std::to_string(arr_type->get_length()) + "]";
+            } else {
+                auto assign_det_arr = static_cast<const AssignDeterminedArrayType*>(container_type);
+                s += "[]";
+            }
+
+            auto elm_type = container_type->get_elm_type();
+            if (elm_type->is_array() || elm_type->get_kind() == TypeKind::AssignDeterminedArray) {
+                container_type = static_cast<const ContainerType*>(elm_type);
+            } else {
+                break;
+            }
+        }
+        return s;
+    }
+}
+
 std::string acorn::ArrayType::to_string() const {
-    return elm_type->to_string() + "[" + std::to_string(length) + "]";
+    return array_like_type_to_string(this);
 }
 
 acorn::SliceType* acorn::SliceType::create(PageAllocator& allocator, Type* elm_type, bool is_const) {
@@ -262,7 +300,7 @@ acorn::Type* acorn::AssignDeterminedArrayType::create(PageAllocator& allocator,
 }
 
 std::string acorn::AssignDeterminedArrayType::to_string() const {
-    return elm_type->to_string() + "[]";
+    return array_like_type_to_string(this);
 }
 
 acorn::RangeType* acorn::RangeType::create(PageAllocator& allocator,

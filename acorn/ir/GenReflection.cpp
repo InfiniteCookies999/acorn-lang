@@ -45,8 +45,12 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_of_type_info(Type* type) {
         ll_values.push_back(ll_type_id);
     }
     { // int size_in_bytes
-        auto ll_size_in_bytes = builder.getInt32(static_cast<uint32_t>(sizeof_type_in_bytes(ll_type_info_type)));
-        ll_values.push_back(ll_size_in_bytes);
+        if (type->get_kind() != TypeKind::Void) {
+            auto ll_size_in_bytes = builder.getInt32(static_cast<uint32_t>(sizeof_type_in_bytes(ll_type_info_type)));
+            ll_values.push_back(ll_size_in_bytes);
+        } else {
+            ll_values.push_back(builder.getInt32(0));
+        }
     }
     { // const Type* elm_type
         if (type->is_container()) {

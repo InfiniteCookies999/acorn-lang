@@ -2113,7 +2113,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
     }
 
     if (!context.should_stand_alone()) {
-        if (arg->cast_type && arg->cast_type->is(context.std_any_struct->struct_type)) {
+        if (arg->cast_type && arg->cast_type->is(context.std_any_struct_type)) {
             return gen_rvalue(arg);
         }
     }
@@ -3042,7 +3042,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
     };
 
     if (!context.should_stand_alone()) {
-        if (value->cast_type && value->cast_type->is(context.std_any_struct->struct_type)) {
+        if (value->cast_type && value->cast_type->is(context.std_any_struct_type)) {
             value->cast_type = nullptr;
             store_value_to_any(ll_address, value, gen_node(value));
             return;
@@ -3425,9 +3425,8 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
         goto NoCastFound;
     }
     case TypeKind::Struct: {
-        if (!context.should_stand_alone() && to_type->is(context.std_any_struct->struct_type)) {
-            auto any_struct_type = context.std_any_struct->struct_type;
-            auto ll_any_struct_type = gen_struct_type(any_struct_type);
+        if (!context.should_stand_alone() && to_type->is(context.std_any_struct_type)) {
+            auto ll_any_struct_type = gen_struct_type(context.std_any_struct_type);
             auto ll_address = gen_unseen_alloca(ll_any_struct_type, "tmp.any.obj");
             store_value_to_any(ll_address, value, ll_value);
             return ll_address;
@@ -3766,14 +3765,12 @@ llvm::GlobalVariable* acorn::IRGenerator::gen_global_variable(const llvm::Twine&
 
 void acorn::IRGenerator::store_value_to_any(llvm::Value* ll_any_address, Expr* value, llvm::Value* ll_value) {
 
-    auto any_struct_type = context.std_any_struct->struct_type;
-    auto ll_any_struct_type = gen_struct_type(any_struct_type);
+    auto ll_any_struct_type = gen_struct_type(context.std_any_struct_type);
 
     auto ll_field_type_addr = builder.CreateStructGEP(ll_any_struct_type, ll_any_address, 0);
     auto ll_reflect_type = gen_reflect_type_info(value->type);
     builder.CreateStore(ll_reflect_type, ll_field_type_addr);
 
-    // TODO: This needs more work for when dealing with return values.
     bool has_address = value->type->is_aggregate(); // If it is an aggregate it always has an address.
     if (value->kind == NodeKind::IdentRef ||
         value->kind == NodeKind::DotOperator) {

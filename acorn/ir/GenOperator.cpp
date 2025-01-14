@@ -158,8 +158,8 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
             ll_off = builder.CreateIntCast(ll_off, gen_ptrsize_int_type(), true);
             if (mem_type->is_pointer()) {
                 auto elm_type = static_cast<PointerType*>(mem_type)->get_elm_type();
-                auto ll_elm_type = elm_type->is_not(context.void_type) ? gen_type(elm_type)
-                                                                       : builder.getInt8Ty();
+                auto ll_elm_type = elm_type->get_kind() != TypeKind::Void ? gen_type(elm_type)
+                                                                          : builder.getInt8Ty();
                 return builder.CreateInBoundsGEP(ll_elm_type, ll_mem, ll_off, "ptr.add");
             }
 

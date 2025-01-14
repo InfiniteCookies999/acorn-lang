@@ -9,6 +9,10 @@ acorn::TypeTable::TypeTable(PageAllocator& allocator, Context& context)
 }
 
 acorn::Type* acorn::TypeTable::get_const_type(Type* type) {
+    if (type->is_const()) {
+        return type;
+    }
+
     std::lock_guard lock(const_types_mtx);
 
     auto itr = const_types.find(type);
@@ -88,6 +92,24 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
     case TypeKind::Function: {
         auto func_type = static_cast<FunctionType*>(type);
         new_type = FunctionType::create(allocator, func_type->get_key(), is_const);
+        break;
+    }
+    case TypeKind::UnresolvedBracket: {
+        auto un_arr_type = static_cast<UnresolvedBracketType*>(type);
+        new_type = UnresolvedBracketType::create(allocator, un_arr_type->get_elm_type(), un_arr_type->get_expr(), is_const);
+        break;
+    }
+    case TypeKind::UnresolvedComposite: {
+        auto un_composite_type = static_cast<UnresolvedCompositeType*>(type);
+        new_type = UnresolvedCompositeType::create(allocator,
+                                                   un_composite_type->get_composite_name(),
+                                                   un_composite_type->get_error_location(),
+                                                   is_const);
+        break;
+    }
+    case TypeKind::AssignDeterminedArray: {
+        auto assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(type);
+        new_type = AssignDeterminedArrayType::create(allocator, assign_det_arr_type->get_elm_type(), is_const);
         break;
     }
     default:
@@ -171,14 +193,14 @@ acorn::ArrayType* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length
     // Read comment under get_ptr_type for explaination as to what is happening here.
     if (elm_type->does_contain_const()) {
         arr_type->contains_const = true;
-        Type* non_const_elm_ptr_version = elm_type->non_const_version;
+        Type* non_const_elm_type = elm_type->non_const_version;
 
-        auto itr = arr_types.find({ non_const_elm_ptr_version, length });
+        auto itr = arr_types.find({ non_const_elm_type, length });
         if (itr != arr_types.end()) {
             arr_type->non_const_version = itr->second;
         } else {
-            auto new_non_const_ptr_type = ArrayType::create(allocator, non_const_elm_ptr_version, length);
-            arr_types.insert({ { elm_type, length }, new_non_const_ptr_type });
+            auto new_non_const_ptr_type = ArrayType::create(allocator, non_const_elm_type, length);
+            arr_types.insert({ { non_const_elm_type, length }, new_non_const_ptr_type });
             arr_type->non_const_version = new_non_const_ptr_type;
         }
     } else {
@@ -258,6 +280,7 @@ acorn::FunctionType* acorn::TypeTable::get_function_type(Type* return_type, llvm
     auto new_key = allocator.alloc_type<FunctionTypeKey>();
     new (new_key) FunctionTypeKey(return_type, std::move(cmp_key.param_types));
     auto func_type = FunctionType::create(allocator, new_key);
+    func_type->non_const_version = func_type;
     func_types.insert({ new_key, func_type });
 
     return func_type;

@@ -79,56 +79,59 @@ bool acorn::Sema::find_main_function(Context& context) {
 }
 
 acorn::Type* acorn::Sema::fixup_type(Type* type) {
-    if (type->get_kind() == TypeKind::UnresolvedArrayType) {
+    if (type->get_kind() == TypeKind::UnresolvedBracket) {
         return fixup_unresolved_bracket_type(type);
-    } else if (type->get_kind() == TypeKind::UnresolvedCompositeType) {
+    } else if (type->get_kind() == TypeKind::UnresolvedComposite) {
         return fixup_unresolved_composite_type(type);
     } else if (type->get_kind() == TypeKind::Function) {
         return fixup_function_type(type);
-    }
-    auto type_kind = type->get_kind();
-    if (type_kind == TypeKind::Pointer || type_kind == TypeKind::Array) {
-        auto container_type = static_cast<ContainerType*>(type);
-        auto base_type = container_type->get_base_type();
-        auto fixed_base_type = fixup_type(base_type);
-        if (!fixed_base_type) {
-            return nullptr;
-        }
+    } else if (type->is_pointer()) {
 
-        if (fixed_base_type != base_type) {
-            if (type_kind == TypeKind::Pointer) {
-                Type* fixed_ptr_type = type_table.get_ptr_type(fixed_base_type);
-                Type* elm_type = container_type->get_elm_type();
-                while (elm_type->is_pointer()) {
-                    fixed_ptr_type = type_table.get_ptr_type(fixed_ptr_type);
-                    container_type = static_cast<ContainerType*>(elm_type);
-                    elm_type = container_type->get_elm_type();
-                }
-                return fixed_ptr_type;
-            } else {
-                llvm::SmallVector<uint32_t, 8> arr_lengths;
-                auto arr_type = static_cast<ArrayType*>(container_type);
-                arr_lengths.push_back(arr_type->get_length());
+        auto ptr_type = static_cast<PointerType*>(type);
+        auto elm_type = ptr_type->get_elm_type();
+        auto fixed_elm_type = fixup_type(elm_type);
 
-                Type* elm_type = arr_type->get_elm_type();
-                while (elm_type->is_array()) {
-                    arr_type = static_cast<ArrayType*>(elm_type);
-                    arr_lengths.push_back(arr_type->get_length());
-                    elm_type = arr_type->get_elm_type();
-                }
-
-                auto fixed_arr_type = type_table.get_arr_type(fixed_base_type, arr_lengths.back());
-                for (auto itr = arr_lengths.rbegin() + 1; itr != arr_lengths.rend(); ++itr) {
-                    uint32_t length = *itr;
-                    fixed_arr_type = type_table.get_arr_type(fixed_arr_type, length);
-                }
-                return fixed_arr_type;
-            }
+        if (fixed_elm_type == elm_type) {
+            return ptr_type;
         } else {
-            return type;
+            Type* fixed_ptr_type = type_table.get_ptr_type(fixed_elm_type);
+            if (ptr_type->is_const()) {
+                return type_table.get_const_type(fixed_ptr_type);
+            }
+            return fixed_ptr_type;
         }
+    } else if (type->is_slice()) {
+
+        auto slice_type = static_cast<SliceType*>(type);
+        auto elm_type = slice_type->get_elm_type();
+        auto fixed_elm_type = fixup_type(elm_type);
+
+        if (fixed_elm_type == elm_type) {
+            return slice_type;
+        } else {
+            Type* fixed_slice_type = type_table.get_slice_type(fixed_elm_type);
+            if (slice_type->is_const()) {
+                return type_table.get_const_type(fixed_slice_type);
+            }
+            return fixed_slice_type;
+        }
+    } else if (type->is_array()) {
+        auto arr_type = static_cast<ArrayType*>(type);
+        auto elm_type = arr_type->get_elm_type();
+        auto fixed_elm_type = fixup_type(elm_type);
+
+        if (fixed_elm_type == elm_type) {
+            return arr_type;
+        } else {
+            Type* fixed_arr_type = type_table.get_arr_type(fixed_elm_type, arr_type->get_length());
+            if (arr_type->is_const()) {
+                return type_table.get_const_type(fixed_arr_type);
+            }
+            return fixed_arr_type;
+        }
+    } else {
+        return type;
     }
-    return type;
 }
 
 acorn::Type* acorn::Sema::fixup_unresolved_bracket_type(Type* type) {
@@ -155,7 +158,11 @@ acorn::Type* acorn::Sema::fixup_unresolved_bracket_type(Type* type) {
                 .end_error(ErrCode::SemaEnumContainerTypeWrongValueType);
             return nullptr;
         }
-        return type_table.get_enum_container_type(enum_type);
+        auto fixed_type = type_table.get_enum_container_type(enum_type);
+        if (type->is_const()) {
+            return type_table.get_const_type(fixed_type);
+        }
+        return fixed_type;
     }
 
     if (!expr->type->is_integer()) {
@@ -193,7 +200,11 @@ acorn::Type* acorn::Sema::fixup_unresolved_bracket_type(Type* type) {
         }
 
         // Everything is okay we can create a new array out of it!
-        return type_table.get_arr_type(fixed_elm_type, length);
+        auto fixed_type = type_table.get_arr_type(fixed_elm_type, length);
+        if (type->is_const()) {
+            return type_table.get_const_type(fixed_type);
+        }
+        return fixed_type;
     }
 
     return nullptr;
@@ -206,7 +217,7 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
 
     if (from_type->get_kind() != TypeKind::Array) {
         error(expand(var), "Expected array type for '%s', but found '%s'",
-              type, from_type)
+                type, from_type)
             .end_error(ErrCode::SemaAssignDetArrTypeReqsArrAssignment);
         return nullptr;
     }
@@ -220,22 +231,33 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
     arr_lengths.push_back(arr_type->get_length());
 
     auto report_dimensions_error = [this, var, type, from_type]() finline {
-        error(expand(var), "Wrong array dimensions for '%s', but found '%s'",
-              type, from_type)
-           .end_error(ErrCode::SemaAssignDetArrWrongDimensions);
+        error(expand(var), "Wrong array dimensions for '%s', found '%s'",
+                type, from_type)
+            .end_error(ErrCode::SemaAssignDetArrWrongDimensions);
     };
 
-    while (elm_type->get_kind() == TypeKind::AssignDeterminedArray) {
+    ContainerType* ctr_type = assign_det_arr_type;
+    while (elm_type->get_kind() == TypeKind::AssignDeterminedArray  ||
+           elm_type->get_kind() == TypeKind::Array) {
         if (from_elm_type->get_kind() != TypeKind::Array) {
             report_dimensions_error();
             return nullptr;
         }
 
-        assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(elm_type);
-        elm_type = assign_det_arr_type->get_elm_type();
+        ctr_type = static_cast<ContainerType*>(elm_type);
+        elm_type = ctr_type->get_elm_type();
 
         arr_type = static_cast<ArrayType*>(from_elm_type);
         from_elm_type = arr_type->get_elm_type();
+
+        if (ctr_type->is_array()) {
+            auto to_arr_type = static_cast<ArrayType*>(ctr_type);
+            if (to_arr_type->get_length() != arr_type->get_length()) {
+                // Return the given type so it says the types could not
+                // be assigned to each other.
+                return type;
+            }
+        }
 
         arr_lengths.push_back(arr_type->get_length());
     }
@@ -255,14 +277,14 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
         fixed_type = type_table.get_arr_type(fixed_type, arr_length);
     }
 
-   return fixed_type;
+    return fixed_type;
 }
 
 acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
 
     auto unresolved_composite_type = static_cast<UnresolvedCompositeType*>(type);
 
-    auto name = unresolved_composite_type->get_struct_name();
+    auto name = unresolved_composite_type->get_composite_name();
     auto found_composite = find_composite(name);
 
     if (!found_composite) {
@@ -1231,7 +1253,31 @@ void acorn::Sema::check_variable(Var* var) {
             var->type = var->assignment->type;
         }
         if (var->parsed_type == context.const_auto_type) {
-            var->type = type_table.get_const_type(var->type);
+            if (var->assignment->is(NodeKind::Array)) {
+                auto arr_type = static_cast<ArrayType*>(var->type);
+
+                llvm::SmallVector<uint32_t, 8> lengths;
+                Type* elm_type = nullptr;
+                while (true) {
+                    elm_type = arr_type->get_elm_type();
+                    lengths.push_back(arr_type->get_length());
+
+                    if (!elm_type->is_array()) {
+                        break;
+                    }
+                    arr_type = static_cast<ArrayType*>(elm_type);
+                }
+
+                auto base_type = type_table.get_const_type(elm_type);
+                auto new_arr_type = type_table.get_arr_type(base_type, lengths.back());
+                for (auto itr = lengths.rbegin() + 1; itr != lengths.rend(); ++itr) {
+                    new_arr_type = type_table.get_arr_type(new_arr_type, *itr);
+                }
+                var->type = type_table.get_const_type(new_arr_type);
+
+            } else if (!var->type->is_const()) {
+                var->type = type_table.get_const_type(var->type);
+            }
         }
     } else if (var->parsed_type == context.auto_ptr_type) {
         if (!var->assignment) {
@@ -2694,7 +2740,9 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     case Token::LtLtEq:
     case Token::GtGtEq: {
 
-        check_modifiable(bin_op->lhs);
+        if (!check_modifiable(bin_op->lhs)) {
+            return;
+        }
 
         switch (bin_op->op) {
         case '=': {
@@ -2885,7 +2933,9 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
     switch (bin_op->op) {
     case '=': {
 
-        check_modifiable(bin_op->lhs);
+        if (!check_modifiable(bin_op->lhs)) {
+            return;
+        }
 
         // Make sure the destination is an enum type.
         if (!lhs_enum_type || !rhs_enum_type) {
@@ -2922,7 +2972,9 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
                 .end_error(ErrCode::SemaVariableTypeMismatch);
         }
 
-        check_modifiable(bin_op->lhs);
+        if (!check_modifiable(bin_op->lhs)) {
+            return;
+        }
         bin_op->type = type_table.get_enum_container_type(lhs_enum_type);
 
         break;
@@ -3885,8 +3937,12 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         }
 
         if (param->type->is_not(arg_value->type)) {
-            // Lowest order case considered least important.
-            ++score;
+            if (!context.should_stand_alone() && param->type->is_struct() && param->type->is(context.std_any_struct_type)) {
+                score += IMPLICIT_CAST_TO_ANY_LIMIT;
+            } else {
+                // Lowest order case considered least important.
+                ++score;
+            }
         }
     }
 
@@ -4212,6 +4268,7 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
                 error(expand(elm), "Expected element type '%s' but found '%s'",
                       dest_elm_type, elm->type)
                     .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
+                values_have_errors = true;
             }
         } else if (!elm_type) {
             elm_type = elm->type;
@@ -4223,6 +4280,7 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
                     error(expand(elm), "Incompatible element types. First found '%s' but now '%s'",
                           elm_type, elm->type)
                         .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
+                    values_have_errors = true;
                 } else {
                     elm_type = elm->type;
                     value_for_elm_type = elm;
@@ -4441,7 +4499,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
     if (expr->type->is_enum()) {
         if (to_type->is_ignore_const(expr->type)) {
             return true;
-        } else if (to_type->is_struct() && to_type->is(context.std_any_struct->struct_type)) {
+        } else if (to_type->is_struct() && !context.should_stand_alone() && to_type->is(context.std_any_struct_type)) {
             return true;
         } else {
             return false;
@@ -4577,6 +4635,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             }
             return true;
         }
+
         return to_type->is(from_type);
     }
     case TypeKind::Function: {
@@ -4642,7 +4701,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
         return to_type->is(from_type);
     }
     case TypeKind::Struct: {
-        if (!context.should_stand_alone() && to_type->is(context.std_any_struct->struct_type)) {
+        if (!context.should_stand_alone() && to_type->is(context.std_any_struct_type)) {
             if (is_incomplete_type(from_type)) {
                 return false;
             }
@@ -4677,6 +4736,8 @@ bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) const {
 bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr) const {
 
     if (to_type->is_array() && from_type->does_contain_const()) {
+
+        // TODO: This should probably be moved to has_valid_constness.
         if (!from_type->is_array()) {
             // Check for array to pointer.
             if (from_type->is_pointer()) {
@@ -4728,52 +4789,67 @@ bool acorn::Sema::has_valid_constness(Type* to_type, Type* from_type) const {
         return true;
     }
 
-    if (to_type->is_pointer()) {
+    // TODO: slice types!
+    if (from_type->is_pointer()) {
 
-        auto to_type_itr = to_type;
-        auto from_type_itr = from_type;
-        do {
-            if (!from_type_itr->is_pointer()) {
-                // The pointers do not have the same depth.
-                return false;
+        while (from_type->is_pointer()) {
+
+            if (!to_type->is_pointer()) {
+                // This case is like:
+                //
+                // const int** a;
+                // int* b = as(int*) a;
+                //      ^
+                //      `b` points to the address of the other pointer
+                //          but the other pointer isn't specified as having
+                //          a constant address, so it is fine.
+                //
+                return true;
             }
 
-            auto to_ptr_type = static_cast<PointerType*>(to_type_itr);
-            auto from_ptr_type = static_cast<PointerType*>(from_type_itr);
+            auto to_ptr_type   = static_cast<PointerType*>(to_type);
+            auto from_ptr_type = static_cast<PointerType*>(from_type);
 
-            auto to_elm_type = to_ptr_type->get_elm_type();
+            auto to_elm_type   = to_ptr_type->get_elm_type();
             auto from_elm_type = from_ptr_type->get_elm_type();
 
             if (from_elm_type->is_const() && !to_elm_type->is_const()) {
-                // Underlying memory is const by the assignment's not
-                // const memory.
                 return false;
             }
-            to_type_itr = to_elm_type;
-            from_type_itr = from_elm_type;
-        } while (to_type_itr->is_pointer());
-    } else if (to_type->is_array() && from_type->does_contain_const()) {
-        if (!from_type->is_array()) return false;
 
-        auto to_arr_Type = static_cast<ArrayType*>(to_type);
-        Type* to_base_type = to_arr_Type->get_base_type();
+            to_type   = to_elm_type;
+            from_type = from_elm_type;
 
-        auto from_arr_Type = static_cast<ArrayType*>(from_type);
-        Type* from_base_type = from_arr_Type->get_base_type();
+        }
 
+        return true;
+    } else if (from_type->is_array()) {
+        if (!to_type->is_array()) {
+            return false;
+        }
+
+        auto to_arr_type   = static_cast<ArrayType*>(to_type);
+        auto from_arr_type = static_cast<ArrayType*>(from_type);
+
+        auto to_base_type   = to_arr_type->get_base_type();
+        auto from_base_type = from_arr_type->get_base_type();
+
+        // TODO: Isn't this wrong?
         if (!has_valid_constness(to_base_type, from_base_type)) {
             return false;
         }
+
+        return true;
     }
 
     return true;
 }
 
-void acorn::Sema::check_modifiable(Expr* expr) {
+bool acorn::Sema::check_modifiable(Expr* expr) {
     if (!is_lvalue(expr)) {
         error(expand(expr), "Expected to be a modifiable value")
             .end_error(ErrCode::SemaExpectedModifiable);
-        return;
+        return false;
     }
     if (expr->type->is_const()) {
         if (expr->is(NodeKind::IdentRef) &&
@@ -4788,9 +4864,12 @@ void acorn::Sema::check_modifiable(Expr* expr) {
                 error(expand(expr), "Cannot reassign to a const variable")
                     .end_error(ErrCode::SemaReassignConstVariable);
             }
+
+            return false;
         } else {
             error(expand(expr), "Cannot assign to a const address")
                 .end_error(ErrCode::SemaReassignConstAddress);
+            return false;
         }
     }
     if (is_readonly_field_without_access(expr)) {
@@ -4798,7 +4877,10 @@ void acorn::Sema::check_modifiable(Expr* expr) {
         error(expand(expr), "Cannot assign to field '%s', it is marked readonly",
               dot->var_ref->name)
             .end_error(ErrCode::SemaCannotAssignToReadonly);
+        return false;
     }
+
+    return true;
 }
 
 bool acorn::Sema::is_lvalue(Expr* expr) const {
@@ -5143,17 +5225,57 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
 
         return get_type_mismatch_error(to_type, from_type);
     } else {
+
+        // Recreating the array because when assigning to variables it is possible
+        // they end up with different dimensions.
+        if (expr->is(NodeKind::Array)) {
+            auto arr = static_cast<Array*>(expr);
+            Type* expr_type = get_array_type_for_mismatch_error(arr);
+            return get_type_mismatch_error(to_type, expr_type);
+        }
+
         return get_type_mismatch_error(to_type, expr->type);
     }
 }
 
+acorn::Type* acorn::Sema::get_array_type_for_mismatch_error(Array* arr) const {
+    llvm::SmallVector<size_t> lengths;
+    return get_array_type_for_mismatch_error(arr, lengths, 0);
+}
+
+acorn::Type* acorn::Sema::get_array_type_for_mismatch_error(Array* arr,
+                                                            llvm::SmallVector<size_t>& lengths,
+                                                            size_t depth) const {
+    if (lengths.size() == depth) {
+        lengths.push_back(arr->elms.size());
+    } else if (lengths[depth] < arr->elms.size()) {
+        lengths[depth] = arr->elms.size();
+    }
+
+    Type* elm_type = nullptr;
+    for (auto elm : arr->elms) {
+        if (elm->is(NodeKind::Array)) {
+            auto elm_arr = static_cast<Array*>(elm);
+            elm_type = get_array_type_for_mismatch_error(elm_arr, lengths, depth + 1);
+        } else {
+
+            if (!elm_type) {
+                elm_type = elm->type;
+            } else if (elm_type->is_not(elm->type)) {
+                elm_type = elm->type;
+            }
+        }
+    }
+
+    size_t length = lengths[depth];
+    return type_table.get_arr_type(elm_type, length);
+}
+
 std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Type* from_type) const {
     if (from_type->is(context.funcs_ref_type)) {
-        return std::format("Mismatched types. Expected '{}' but found a reference to a function",
-            to_type->to_string());
+        return std::format("Cannot assign a reference to a function to type '{}'", to_type->to_string());
     } else {
-        return std::format("Mismatched types. Expected '{}' but found '{}'",
-            to_type->to_string(), from_type->to_string());
+        return std::format("Cannot assign type '{}' to '{}'", from_type->to_string(), to_type->to_string());
     }
 }
 
