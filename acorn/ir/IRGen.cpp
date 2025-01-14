@@ -372,6 +372,13 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
             // point to the incoming parameter value.
             param->ll_address = ll_cur_func->getArg(param_idx++);
             emit_dbg(di_emitter->emit_function_variable(param, builder));
+            if (should_emit_debug_info) {
+                // Well seems that debug information will not properly recognize the parameter unless there
+                // is a store instruction so storing the pointer to an address then never touching that
+                // address again.
+                auto ll_address = gen_alloca(builder.getPtrTy(), "aggr.dbg.info.addr");
+                builder.CreateStore(param->ll_address, ll_address);
+            }
         }
 
         process_destructor_state(param->type, param->ll_address);
@@ -804,6 +811,9 @@ void acorn::IRGenerator::destroy_global_variables() {
     builder.SetInsertPoint(ll_entry);
 
     for (Var* var : context.globals_needing_destroyed) {
+        if (context.should_emit_debug_info()) {
+            di_emitter = var->file->di_emitter;
+        }
         gen_call_destructors(var->type, var->ll_address);
     }
 

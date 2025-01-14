@@ -233,6 +233,8 @@ void acorn::Compiler::initialize_codegen() {
 void acorn::Compiler::sema_and_irgen() {
 
     sema_timer.start();
+    // Check for nodes being placed in the wrong scope first such as if
+    // statements at global scope.
     for (auto& entry : context.get_modules()) {
         Sema::check_nodes_wrong_scopes(*entry.second);
     }
@@ -249,14 +251,17 @@ void acorn::Compiler::sema_and_irgen() {
         }
     }
 
+    // Resolve all imports for all files.
+    //
     for (auto& entry : context.get_modules()) {
         for (auto source_file : entry.second->get_source_files()) {
             Sema::resolve_imports(context, source_file);
         }
     }
 
+    // Ensure that the main entry point function exists.
+    //
     Sema::find_main_function(context);
-
     if (!context.get_main_function()) {
         Logger::global_error(context, "Could not find 'main' (entry point) function")
             .add_line("Expected declaration of: 'void main()'")
@@ -265,6 +270,9 @@ void acorn::Compiler::sema_and_irgen() {
     }
     context.queue_gen(context.get_main_function());
 
+    // Check to make sure that there are no duplicate declarations within
+    // any namespaces.
+    //
     for (auto& entry : context.get_modules()) {
         for (auto source_file : entry.second->get_source_files()) {
             auto nspace = source_file->get_namespace();
@@ -283,6 +291,8 @@ void acorn::Compiler::sema_and_irgen() {
         return;
     }
 
+    // Allocate debug emitters for each file if this is being ran within debug mode.
+    //
     ir_timer.start();
     if (context.should_emit_debug_info()) {
         // The debug builder requires one builder per file so we actually
@@ -357,6 +367,7 @@ void acorn::Compiler::sema_and_irgen() {
     ir_timer.stop();
 
     // Checking any declarations that were not checked.
+    //
     for (Decl* decl : context.get_unchecked()) {
         check_decl(decl);
     }
@@ -365,6 +376,8 @@ void acorn::Compiler::sema_and_irgen() {
         return;
     }
 
+    // Finalizing the Debug information for each file.
+    //
     if (context.should_emit_debug_info()) {
         ir_timer.start();
         auto& ll_module  = context.get_ll_module();
