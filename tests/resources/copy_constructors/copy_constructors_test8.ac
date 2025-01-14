@@ -33,7 +33,7 @@ struct A {
 
     const char* m;
 
-    copyobj A(A* c) {
+    copyobj A(const A* c) {
         print(c.m, 8);
     }
 }

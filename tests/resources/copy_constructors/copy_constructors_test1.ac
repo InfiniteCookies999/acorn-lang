@@ -26,7 +26,7 @@ void print(const char* s, int length) {
 }
 
 struct A {
-    copyobj A(A* c) {
+    copyobj A(const A* c) {
         print("called", 6);
     }
 }

@@ -35,7 +35,7 @@ struct A {
     int v2;
     int v3;
 
-    copyobj A(A* o) {
+    copyobj A(const A* o) {
         v1 = o.v1 + 1;
         v2 = o.v2 + 1;
         v3 = o.v3 + 1;

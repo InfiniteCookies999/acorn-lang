@@ -31,7 +31,7 @@ struct A {
     int64 c;
     int64 d;
 
-    copyobj A(A* c) {
+    copyobj A(const A* c) {
         print("called", 6);
     }
 }

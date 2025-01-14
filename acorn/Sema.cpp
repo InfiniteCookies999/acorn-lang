@@ -1452,9 +1452,11 @@ void acorn::Sema::check_struct(Struct* structn) {
             }
         }
     }
-    auto check_move_or_copy_has_correct_param_type = [this, structn](Func* constructor, bool is_copy) finline {
+    auto check_move_or_copy_has_correct_param_type = [this, structn](Func* constructor,
+                                                                     Type* base_type,
+                                                                     bool is_copy) finline {
         if (constructor->has_checked_declaration || check_function_decl(constructor)) {
-            auto struct_ptr_type = type_table.get_ptr_type(structn->struct_type);
+            auto struct_ptr_type = type_table.get_ptr_type(base_type);
             if (constructor->params.size() != 1) {
                 error(constructor,
                       "%s constructor expected to have expactly one parameter of type '%s'",
@@ -1473,10 +1475,11 @@ void acorn::Sema::check_struct(Struct* structn) {
         }
     };
     if (structn->copy_constructor) {
-        check_move_or_copy_has_correct_param_type(structn->copy_constructor, true);
+        auto const_struct_type = type_table.get_const_type(structn->struct_type);
+        check_move_or_copy_has_correct_param_type(structn->copy_constructor, const_struct_type, true);
     }
     if (structn->move_constructor) {
-        check_move_or_copy_has_correct_param_type(structn->move_constructor, false);
+        check_move_or_copy_has_correct_param_type(structn->move_constructor, structn->struct_type, false);
     }
 
     cur_struct = prev_struct;

@@ -14,7 +14,7 @@ struct String {
         buffer = &DEFAULT_CHAR;
     }
 
-    copyobj String(String* o) {
+    copyobj String(const String* o) {
         this.length   = o.length;
         this.capacity = o.capacity;
         this.buffer   = as(char*) malloc(length + 1); // +1 for null terminator.
