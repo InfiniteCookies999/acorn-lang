@@ -335,6 +335,8 @@ namespace acorn {
 
         llvm::Value* gen_handle_returned_aggregate_obj(FuncCall* call, llvm::Value* ll_ret, const char* tmp_obj_name);
 
+        llvm::GlobalVariable* gen_foldable_global_variable(IdentRef* ref);
+
         void gen_nop();
 
     };

@@ -2212,6 +2212,11 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg_for_implicit_ptr(Expr* ar
         // the "casting".
         arg->cast_type = nullptr;
 
+        // Read comment under gen_unary_op for the & operator for an explaination.
+        if ((arg->is(NodeKind::DotOperator) || arg->is(NodeKind::IdentRef)) && arg->is_foldable) {
+            return gen_foldable_global_variable(static_cast<IdentRef*>(arg));
+        }
+
         if (arg->kind == NodeKind::IdentRef ||
             arg->kind == NodeKind::DotOperator) {
             auto ref = static_cast<IdentRef*>(arg);
@@ -3771,12 +3776,18 @@ void acorn::IRGenerator::gen_store_value_to_any(llvm::Value* ll_any_address, Exp
     auto ll_reflect_type = gen_reflect_type_info(value->type);
     builder.CreateStore(ll_reflect_type, ll_field_type_addr);
 
-    bool has_address = value->type->is_aggregate(); // If it is an aggregate it always has an address.
+    // If it is an aggregate it always has an address (unless optimized integer returning).
+    bool has_address = value->type->is_aggregate();
     if (value->kind == NodeKind::IdentRef ||
         value->kind == NodeKind::DotOperator) {
         IdentRef* ref = static_cast<IdentRef*>(value);
         if (ref->is_var_ref()) {
             has_address = true;
+            // Check for a foldable reference to a variable since these do not have addresses
+            // either.
+            if (value->is_foldable) {
+                ll_value = gen_foldable_global_variable(ref);
+            }
         }
     } else if (value->kind == NodeKind::UnaryOp) {
         UnaryOp* unary_op = static_cast<UnaryOp*>(value);
@@ -3795,7 +3806,6 @@ void acorn::IRGenerator::gen_store_value_to_any(llvm::Value* ll_any_address, Exp
             has_address = false;
         }
     }
-
 
     auto ll_field_value_addr = builder.CreateStructGEP(ll_any_struct_type, ll_any_address, 1);
 
@@ -4126,6 +4136,22 @@ llvm::Value* acorn::IRGenerator::gen_handle_returned_aggregate_obj(FuncCall* cal
     }
 
     return ll_ret;
+}
+
+llvm::GlobalVariable* acorn::IRGenerator::gen_foldable_global_variable(IdentRef* ref) {
+
+    auto itr = context.ll_foldable_globals.find(ref->var_ref);
+    if (itr != context.ll_foldable_globals.end()) {
+        return itr->second;
+    }
+
+    auto ll_const_value = llvm::cast<llvm::Constant>(gen_rvalue(ref->var_ref->assignment));
+
+    auto ll_name = llvm::Twine("global.foldable.") + llvm::Twine(context.global_counter++);
+    auto ll_global = gen_const_global_variable(ll_name, gen_type(ref->type), ll_const_value);
+    context.ll_foldable_globals.insert({ ref->var_ref, ll_global });
+
+    return ll_global;
 }
 
 void acorn::IRGenerator::gen_nop() {

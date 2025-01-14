@@ -207,6 +207,12 @@ static void misc_tests() {
 
         expect(result, std::identity()).to_be("ABCD");
     });
+    test("Addressing foldable ident ref", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"address_foldable_ident_ref_test.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@@@");
+    });
 }
 
 static void global_variable_tests() {

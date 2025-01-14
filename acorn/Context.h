@@ -133,6 +133,12 @@ namespace acorn {
         llvm::SmallVector<Var*, 32> globals_needing_destroyed;
         llvm::BasicBlock*           ll_global_init_call_bb    = nullptr;
         llvm::BasicBlock*           ll_global_cleanup_call_bb = nullptr;
+        // A map between expressions that are foldable and global variables
+        // generated for them if the user ever references the memory of the
+        // variables. Normally a variable would not be needed and the value
+        // would simply be folded but if the user tries to take an address
+        // of such a variable then the variable must exist in memory.
+        llvm::DenseMap<Var*, llvm::GlobalVariable*> ll_foldable_globals;
 
         llvm::LLVMContext& get_ll_context() const { return ll_context; }
         llvm::Module& get_ll_module()       const { return ll_module;  }

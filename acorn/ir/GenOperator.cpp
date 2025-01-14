@@ -324,11 +324,19 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         }
         return builder.CreateXor(gen_rvalue(expr), 1, "not");
     }
-    case '&':
-        // To get the address of the lvalue all we have to do is
-        // get the value from gen_value since if we do not call
-        // gen_rvalue it generates the address.
-        return gen_node(expr);
+    case '&': {
+        if (expr->is_foldable) {
+            // The expression is foldable so it does not have an address. To fix this
+            // issue a global variable will be created and then the address of that will
+            // be taken instead.
+            return gen_foldable_global_variable(static_cast<IdentRef*>(expr));
+        } else {
+            // To get the address of the lvalue all we have to do is
+            // get the value from gen_value since if we do not call
+            // gen_rvalue it generates the address.
+            return gen_node(expr);
+        }
+    }
     case '*': {
         auto ll_ptr = gen_node(expr);
 
