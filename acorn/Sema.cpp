@@ -2573,7 +2573,6 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         return get_integer_type_for_binary_op(enforce_lhs, bin_op, lhs_type, rhs_type);
     };
 
-    //lhs, rhs, error_cannot_apply, error_mismatched, valid_number_compare
     auto get_add_sub_mul_type = [=, this](bool enforce_lhs, Type* lhs_type, Type* rhs_type) finline->Type* {
         // valid pointer arithmetic cases:
         //
@@ -3078,13 +3077,17 @@ acorn::Type* acorn::Sema::get_integer_type_for_binary_op(bool enforce_lhs,
     // an integer literal but without an explicit type.
 
     if (lhs_type->is_integer() && rhs_type->is_integer()) {
-        if (bin_op->rhs->is(NodeKind::Number) &&
-            (rhs_type->is(context.int_type) || rhs_type->is(context.char_type))) {
-            return lhs_type->remove_all_const();
+        if (bin_op->rhs->is(NodeKind::Number)) {
+            auto number = static_cast<Number*>(bin_op->rhs);
+            if (!number->uses_strict_type) {
+                return lhs_type->remove_all_const();
+            }
         }
-        if (!enforce_lhs && bin_op->lhs->is(NodeKind::Number) &&
-            (lhs_type->is(context.int_type) || lhs_type->is(context.char_type))) {
-            return rhs_type->remove_all_const();
+        if (!enforce_lhs && bin_op->lhs->is(NodeKind::Number)) {
+            auto number = static_cast<Number*>(bin_op->lhs);
+            if (!number->uses_strict_type) {
+                return rhs_type->remove_all_const();
+            }
         }
     }
 
@@ -4529,9 +4532,12 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
         if (expr->is_foldable && expr->is(NodeKind::Number)) {
 
             Number* number = static_cast<Number*>(expr);
+            if (number->uses_strict_type) {
+                return false;
+            }
 
             // TODO: We want to allow for certain floats to be assignable such
-            //       as 1e+9 because those are even numbers.
+            //       as 1e+9 because those are integers.
             if (from_type->is_float()) {
                 return false;
             }
@@ -4571,7 +4577,11 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
         return to_type->is(from_type);
     }
     case TypeKind::Float32: case TypeKind::Float64: {
-        if (expr->is(NodeKind::Number) && from_type == context.int_type) {
+        if (expr->is(NodeKind::Number) && expr->type->get_kind() == TypeKind::Int) {
+            auto number = static_cast<Number*>(expr);
+            if (number->uses_strict_type) {
+                return false;
+            }
             return true;
         }
         return to_type->is(from_type);
@@ -5146,8 +5156,11 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
         }
     }
 
-    if (to_type->is_integer() && to_type->is_not(context.char_type) &&
-        expr->is(NodeKind::Number) && expr->is_foldable && expr->type->is_integer()) {
+    if (to_type->is_integer() &&
+        expr->is(NodeKind::Number) &&
+        !static_cast<Number*>(expr)->uses_strict_type &&
+        expr->is_foldable &&
+        expr->type->is_integer()) {
 
         return get_error_msg_for_value_not_fit_type(static_cast<Number*>(expr));
     } else if (to_type->is_function() && expr->type->get_kind() == TypeKind::FuncsRef) {

@@ -2372,8 +2372,10 @@ acorn::Number* acorn::Parser::parse_int_literal() {
     auto number = parse_number_literal<10, void_table, false>(text.data(), text.end());
     char last_char = text.back();
     if (last_char == 'f') {
+        number->uses_strict_type = true;
         number->type = context.float32_type;
     } else if (last_char == 'd') {
+        number->uses_strict_type = true;
         number->type = context.float64_type;
     }
     return number;
@@ -2643,6 +2645,7 @@ acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char
     }
 
     if (*ptr == '\'') {
+        number->uses_strict_type = true;
         ++ptr;
         bool is_signed = *ptr == 'i';
         ++ptr;

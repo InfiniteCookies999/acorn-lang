@@ -547,6 +547,8 @@ namespace acorn {
             float    value_f32;
             double   value_f64;
         };
+
+        bool uses_strict_type = false;
     };
 
     struct Bool : Expr {
