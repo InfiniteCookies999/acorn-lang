@@ -209,5 +209,32 @@ void test_sema() {
             )");
             expect_none().to_produce_error(ErrCode::SemaDuplicatedNamedStructInitVal);
         });
+        test("Const lossness in array to pointer", [&] {
+            mock_sema(R"(
+                void main() {
+                    const int[5] a;
+                    int* p = a;
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);
+        });
+        test("Const lossness in multi array to pointer", [&] {
+            mock_sema(R"(
+                void main() {
+                    const int[5][5] a;
+                    int[5]* p = a;
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);
+        });
+        test("multi array to pointer, pointer has wrong element type", [&] {
+            mock_sema(R"(
+                void main() {
+                    const int[5][5] a;
+                    const int* p = a;
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);
+        });
     });
 }

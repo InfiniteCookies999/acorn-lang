@@ -2,7 +2,26 @@
 
 /*
  * May store a value for any value of any type in acorn
- * with reflection type information about the type.
+ * with reflection type information about the value stored.
+ *
+ * Because `Any` tries to simplify the storing of the value
+ * to just be a `const void*` in the `ptr` field use of `ptr`
+ * may involve some casting to get the value you want. During
+ * the process of casting you may loose any guarantee of
+ * const correctness, so it is recommended to enforce constness
+ * at all pointer depths.
+ *
+ * For example, when pointers are stored to `Any` the `ptr`
+ * field will take on the address of the pointer since `Any`
+ * stores the address of the value provided. But if you want
+ * to get the pointer back then you would require doing the
+ * following:
+ *    `const p = *as(const (const <type>*)*) any.ptr`.
+ * But you could just as well have done:
+ *    `<type>* p = *as(const (<type>*)*) any.ptr`
+ * However, this may result in the constness of the original
+ * pointer being lost. Therefore, it is never recommended to
+ * do this when working with `Any`.
  */
 public struct Any {
     const Type* type;

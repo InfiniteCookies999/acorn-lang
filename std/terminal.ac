@@ -109,7 +109,7 @@ private void print_any(const void* ptr, const Type* type) {
         if type.elm_type.id == TypeId.Char {
             print(*as(const (const char*)*) ptr);
         } elif type.elm_type == #type_info(String) {
-            print(as(const String*) ptr);
+            print(*as(const (const String*)*) ptr);
         } else {
             print(*as(const (const void*)*) ptr);
         }

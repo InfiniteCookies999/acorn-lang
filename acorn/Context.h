@@ -161,6 +161,10 @@ namespace acorn {
 
         void add_canidate_main_function(Func* main_func);
 
+        inline bool is_std_any_type(Type* type) const {
+            return !is_stand_alone && type->remove_all_const()->is(std_any_struct_type);
+        }
+
         llvm::SmallVector<Func*>& get_canidate_main_funcs() {
             return canidate_main_funcs;
         }

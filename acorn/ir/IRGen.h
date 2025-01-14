@@ -272,7 +272,7 @@ namespace acorn {
                                                   llvm::Constant* ll_initial_value,
                                                   llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::PrivateLinkage);
 
-        void store_value_to_any(llvm::Value* ll_any_address, Expr* value, llvm::Value* ll_value);
+        void gen_store_value_to_any(llvm::Value* ll_any_address, Expr* value, llvm::Value* ll_value);
 
         llvm::Align get_alignment(Type* type) const { return get_alignment(gen_type(type)); }
         llvm::Align get_alignment(llvm::Type* ll_type) const;

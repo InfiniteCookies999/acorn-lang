@@ -209,7 +209,7 @@ namespace acorn {
         bool is_castable_to(Type* to_type, Expr* expr) const;
         bool try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr) const;
         bool has_valid_constness(Type* to_type, Type* from_type) const;
-        bool check_modifiable(Expr* expr);
+        bool check_modifiable(Expr* expr, Expr* error_node, bool is_assignment = true);
         bool is_lvalue(Expr* expr) const;
         bool is_readonly_field_without_access(Expr* expr) const;
         bool is_incomplete_type(Type* type) const;

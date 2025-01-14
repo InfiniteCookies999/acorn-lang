@@ -2740,7 +2740,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     case Token::LtLtEq:
     case Token::GtGtEq: {
 
-        if (!check_modifiable(bin_op->lhs)) {
+        if (!check_modifiable(bin_op->lhs, bin_op)) {
             return;
         }
 
@@ -2933,7 +2933,7 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
     switch (bin_op->op) {
     case '=': {
 
-        if (!check_modifiable(bin_op->lhs)) {
+        if (!check_modifiable(bin_op->lhs, bin_op)) {
             return;
         }
 
@@ -2972,7 +2972,7 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
                 .end_error(ErrCode::SemaVariableTypeMismatch);
         }
 
-        if (!check_modifiable(bin_op->lhs)) {
+        if (!check_modifiable(bin_op->lhs, bin_op)) {
             return;
         }
         bin_op->type = type_table.get_enum_container_type(lhs_enum_type);
@@ -3160,16 +3160,16 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
     }
     case Token::AddAdd: case Token::SubSub:
     case Token::PostAddAdd: case Token::PostSubSub: {
-        if (!is_lvalue(expr)) {
-            error(expand(unary_op), "Operator %s expects the value to have an address",
-                  token_kind_to_string(context, unary_op->op))
-                .end_error(ErrCode::SemaUnaryOpIncDecNotLValue);
+
+        if (!check_modifiable(expr, unary_op, false)) {
             return;
         }
+
         if (!(expr->type->is_integer() || expr->type->is_pointer())) {
             error_no_applies();
             return;
         }
+
         unary_op->type = expr->type;
         unary_op->is_foldable = false;
         break;
@@ -3937,7 +3937,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         }
 
         if (param->type->is_not(arg_value->type)) {
-            if (!context.should_stand_alone() && param->type->is_struct() && param->type->is(context.std_any_struct_type)) {
+            if (context.is_std_any_type(param->type)) {
                 score += IMPLICIT_CAST_TO_ANY_LIMIT;
             } else {
                 // Lowest order case considered least important.
@@ -4499,7 +4499,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
     if (expr->type->is_enum()) {
         if (to_type->is_ignore_const(expr->type)) {
             return true;
-        } else if (to_type->is_struct() && !context.should_stand_alone() && to_type->is(context.std_any_struct_type)) {
+        } else if (context.is_std_any_type(to_type)) {
             return true;
         } else {
             return false;
@@ -4701,7 +4701,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
         return to_type->is(from_type);
     }
     case TypeKind::Struct: {
-        if (!context.should_stand_alone() && to_type->is(context.std_any_struct_type)) {
+        if (context.is_std_any_type(to_type)) {
             if (is_incomplete_type(from_type)) {
                 return false;
             }
@@ -4735,36 +4735,7 @@ bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) const {
 
 bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr) const {
 
-    if (to_type->is_array() && from_type->does_contain_const()) {
-
-        // TODO: This should probably be moved to has_valid_constness.
-        if (!from_type->is_array()) {
-            // Check for array to pointer.
-            if (from_type->is_pointer()) {
-                auto to_arr_Type = static_cast<ArrayType*>(to_type);
-                auto from_ptr_type = static_cast<PointerType*>(from_type);
-
-                auto to_elm_type = to_arr_Type->get_elm_type();
-                auto from_elm_type = from_ptr_type->get_elm_type();
-
-                if (from_elm_type->does_contain_const() && !to_elm_type->does_contain_const()) {
-                    return false;
-                }
-            }
-
-            return false;
-        }
-
-        auto to_arr_Type = static_cast<ArrayType*>(to_type);
-        Type* to_base_type = to_arr_Type->get_base_type();
-
-        auto from_arr_Type = static_cast<ArrayType*>(from_type);
-        Type* from_base_type = from_arr_Type->get_base_type();
-
-        if (!has_valid_constness(to_base_type, from_base_type)) {
-            return false;
-        }
-    } else if (to_type->is_pointer() && expr && expr->is(NodeKind::Null)) {
+    if (to_type->is_pointer() && expr && expr->is(NodeKind::Null)) {
         // Ignore this case because null can assign to all pointers
         // so we do not want to decense the pointers.
     } else if (!has_valid_constness(to_type, from_type)) {
@@ -4789,68 +4760,47 @@ bool acorn::Sema::has_valid_constness(Type* to_type, Type* from_type) const {
         return true;
     }
 
-    // TODO: slice types!
-    if (from_type->is_pointer()) {
+    while (from_type->is_container()) {
 
-        while (from_type->is_pointer()) {
-
-            if (!to_type->is_pointer()) {
-                // This case is like:
-                //
-                // const int** a;
-                // int* b = as(int*) a;
-                //      ^
-                //      `b` points to the address of the other pointer
-                //          but the other pointer isn't specified as having
-                //          a constant address, so it is fine.
-                //
-                return true;
-            }
-
-            auto to_ptr_type   = static_cast<PointerType*>(to_type);
-            auto from_ptr_type = static_cast<PointerType*>(from_type);
-
-            auto to_elm_type   = to_ptr_type->get_elm_type();
-            auto from_elm_type = from_ptr_type->get_elm_type();
-
-            if (from_elm_type->is_const() && !to_elm_type->is_const()) {
-                return false;
-            }
-
-            to_type   = to_elm_type;
-            from_type = from_elm_type;
-
+        if (!to_type->is_container()) {
+            // This case is like:
+            //
+            // const int** a;
+            // int* b = as(int*) a;
+            //      ^
+            //      `b` points to the address of the other pointer
+            //          but the other pointer isn't specified as having
+            //          a constant address, so it is fine.
+            //
+            return true;
         }
 
-        return true;
-    } else if (from_type->is_array()) {
-        if (!to_type->is_array()) {
+        auto to_ctr_type   = static_cast<ContainerType*>(to_type);
+        auto from_ctr_type = static_cast<ContainerType*>(from_type);
+
+        auto to_elm_type   = to_ctr_type->get_elm_type();
+        auto from_elm_type = from_ctr_type->get_elm_type();
+
+        if (from_elm_type->is_const() && !to_elm_type->is_const()) {
             return false;
         }
 
-        auto to_arr_type   = static_cast<ArrayType*>(to_type);
-        auto from_arr_type = static_cast<ArrayType*>(from_type);
+        to_type = to_elm_type;
+        from_type = from_elm_type;
 
-        auto to_base_type   = to_arr_type->get_base_type();
-        auto from_base_type = from_arr_type->get_base_type();
-
-        // TODO: Isn't this wrong?
-        if (!has_valid_constness(to_base_type, from_base_type)) {
-            return false;
-        }
-
-        return true;
     }
 
     return true;
 }
 
-bool acorn::Sema::check_modifiable(Expr* expr) {
+bool acorn::Sema::check_modifiable(Expr* expr, Expr* error_node, bool is_assignment) {
+
     if (!is_lvalue(expr)) {
-        error(expand(expr), "Expected to be a modifiable value")
+        error(expand(error_node), "Expected to be a modifiable value")
             .end_error(ErrCode::SemaExpectedModifiable);
         return false;
     }
+
     if (expr->type->is_const()) {
         if (expr->is(NodeKind::IdentRef) &&
             static_cast<IdentRef*>(expr)->found_kind == IdentRef::VarKind) {
@@ -4858,24 +4808,25 @@ bool acorn::Sema::check_modifiable(Expr* expr) {
             auto ref = static_cast<IdentRef*>(expr);
             if (ref->var_ref->is_field() && !ref->var_ref->type->is_const() &&
                 cur_func && cur_func->is_constant) {
-                error(expand(expr), "Cannot reassign to field in a const member function")
+                error(expand(error_node), "Cannot %s field in a const function",
+                      is_assignment ? "reassign to" : "modify a")
                     .end_error(ErrCode::SemaReassignConstVariable);
             } else {
-                error(expand(expr), "Cannot reassign to a const variable")
+                error(expand(error_node), "Cannot %s a const variable", is_assignment ? "reassign to" : "modify")
                     .end_error(ErrCode::SemaReassignConstVariable);
             }
 
             return false;
         } else {
-            error(expand(expr), "Cannot assign to a const address")
+            error(expand(error_node), "Cannot %s a const address", is_assignment ? "assign to" : "modify")
                 .end_error(ErrCode::SemaReassignConstAddress);
             return false;
         }
     }
     if (is_readonly_field_without_access(expr)) {
         auto dot = static_cast<DotOperator*>(expr);
-        error(expand(expr), "Cannot assign to field '%s', it is marked readonly",
-              dot->var_ref->name)
+        error(expand(error_node), "Cannot %s field '%s', it is marked readonly",
+              is_assignment ? "assign to" : "modify", dot->var_ref->name)
             .end_error(ErrCode::SemaCannotAssignToReadonly);
         return false;
     }

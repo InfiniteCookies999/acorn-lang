@@ -122,6 +122,10 @@ struct Type {
         return id <= TypeId.ISize;
     }
 
+    bool is_any_pointer() const {
+        return id == TypeId.Pointer || id == TypeId.Function || id == TypeId.Null;
+    }
+
     bool is_string() const {
         if id == TypeId.Pointer {
             return elm_type.id == TypeId.Char;
