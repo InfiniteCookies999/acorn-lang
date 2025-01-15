@@ -136,7 +136,12 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 // We use CreateInBoundsGEP because accessing memory beyond the bounds of
 // valid memory is considered undefined behavior and it allows LLVM to
 // perform better optimizations.
-
+//
+// Many of the operations here differ from how clang emits arithmetic since
+// we avoid the use of NSW operations. This is because acorn preferences
+// defined behavior for arithmetic. NSW does not guarantee defined behavior
+// but it does provide better performance which is the trade-off.
+//
 llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op,
                                                        llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
 
@@ -157,7 +162,8 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
 
             ll_off = builder.CreateIntCast(ll_off, gen_ptrsize_int_type(), true);
             if (mem_type->is_pointer()) {
-                auto elm_type = static_cast<PointerType*>(mem_type)->get_elm_type();
+                auto ptr_type = static_cast<PointerType*>(mem_type);
+                auto elm_type = ptr_type->get_elm_type();
                 auto ll_elm_type = elm_type->get_kind() != TypeKind::Void ? gen_type(elm_type)
                                                                           : builder.getInt8Ty();
                 return builder.CreateInBoundsGEP(ll_elm_type, ll_mem, ll_off, "ptr.add");
@@ -189,7 +195,8 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
             auto ll_neg  = builder.CreateSub(ll_zero, ll_off, "neg");
             ll_neg = builder.CreateIntCast(ll_neg, gen_ptrsize_int_type(), true);
             if (mem_type->is_pointer()) {
-                auto elm_type = static_cast<PointerType*>(mem_type)->get_elm_type();
+                auto ptr_type = static_cast<PointerType*>(mem_type);
+                auto elm_type = ptr_type->get_elm_type();
                 return builder.CreateInBoundsGEP(gen_type(elm_type), ll_mem, ll_neg, "ptr.sub");
             }
 
@@ -285,7 +292,8 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         if (add) {
             if (type->is_pointer()) {
                 // Pointer arithmetic
-                auto elm_type = static_cast<PointerType*>(type)->get_elm_type();
+                auto ptr_type = static_cast<PointerType*>(type);
+                auto elm_type = ptr_type->get_elm_type();
                 ll_value = builder.CreateInBoundsGEP(gen_type(elm_type), ll_value, gen_isize(1), "ptr.inc");
             } else {
                 ll_value = builder.CreateAdd(ll_value, gen_one(type), "inc");
@@ -293,7 +301,8 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         } else {
             if (type->is_pointer()) {
                 // Pointer arithmetic
-                auto elm_type = static_cast<PointerType*>(type)->get_elm_type();
+                auto ptr_type = static_cast<PointerType*>(type);
+                auto elm_type = ptr_type->get_elm_type();
                 ll_value = builder.CreateInBoundsGEP(gen_type(elm_type), ll_value, gen_isize(-1), "ptr.dec");
             } else {
                 ll_value = builder.CreateSub(ll_value, gen_one(type), "dec");

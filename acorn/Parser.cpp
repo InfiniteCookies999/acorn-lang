@@ -2767,7 +2767,7 @@ acorn::Expr* acorn::Parser::parse_array() {
                                     arr->elms[index] = expr;
                                 }
                             } else {
-                                for (uint32_t i = arr->elms.size(); i < index; i++) {
+                                for (size_t i = arr->elms.size(); i < index; i++) {
                                     arr->elms.push_back(nullptr);
                                 }
                                 arr->elms.push_back(expr);

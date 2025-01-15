@@ -333,7 +333,7 @@ namespace acorn {
                                             const std::function<void(llvm::Value*, llvm::Value*)>& gen_cb,
                                             Node* lvalue = nullptr);
 
-        llvm::Value* gen_handle_returned_aggregate_obj(FuncCall* call, llvm::Value* ll_ret, const char* tmp_obj_name);
+        llvm::Value* gen_handle_returned_aggregate_obj(Type* aggr_type, llvm::Value* ll_ret, const char* tmp_obj_name);
 
         llvm::GlobalVariable* gen_foldable_global_variable(IdentRef* ref);
 

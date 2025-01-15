@@ -1361,11 +1361,6 @@ void acorn::Sema::check_variable(Var* var) {
         }
     } else if (var->assignment) {
         create_cast(var->assignment, var->type);
-
-        if (var->type->is_pointer() && var->assignment->is(NodeKind::Array)) {
-            error(expand(var), "Cannot assign an array directly to a pointer")
-                .end_error(ErrCode::SemaCannotAssignArrayDirectlyToPtr);
-        }
     }
 
     return cleanup();
@@ -2767,12 +2762,8 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             }
 
             if (lhs_type->is_array()) {
-                auto arr_type = static_cast<ArrayType*>(lhs_type);
-                auto base_type = arr_type->get_base_type();
-                if (base_type->is_const()) {
-                    error(expand(bin_op->lhs), "Cannot reassign to arrays with constant memory")
-                        .end_error(ErrCode::SemaCannotReassignToArrayWithConstMem);
-                }
+                error(expand(bin_op), "Cannot reassign to arrays")
+                    .end_error(ErrCode::SemaCannotRassignToArrays);
             }
 
             break;
@@ -4204,8 +4195,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
             }
 
             if (!is_assignable) {
-                err_line("Wrong type for arg %s. Expected '%s' but found '%s'",
-                         i + 1, param_type, arg_value->type);
+                err_line("Arg %s %s", i + 1, get_type_mismatch_error(param_type, arg_value));
             }
         }
     }
@@ -4607,7 +4597,15 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             auto to_elm_type = to_arr_Type->get_elm_type();
             auto from_elm_type = from_ptr_type->get_elm_type();
 
-            return to_elm_type->is(from_elm_type) || to_elm_type->is(context.void_type);
+            if (!(to_elm_type->is(from_elm_type) || to_elm_type->is(context.void_type))) {
+                return false;
+            }
+
+            if (expr->is(NodeKind::Array) || expr->is(NodeKind::FuncCall)) {
+                return false;
+            }
+
+            return true;
         } else if (from_type->is_pointer()) {
             return to_type->is(from_type) || to_type->is(context.void_ptr_type);
         } else if (expr->is(NodeKind::Null)) {
@@ -5191,6 +5189,27 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
         }
 
         return get_type_mismatch_error(to_type, from_type);
+    } else if (to_type->is_pointer() && expr->type->is_array()) {
+
+        auto from_type = expr->type;
+        auto cmp_to_type = to_type;
+        if (try_remove_const_for_compare(cmp_to_type, from_type, expr)) {
+            auto to_arr_Type   = static_cast<ArrayType*>(cmp_to_type);
+            auto from_ptr_type = static_cast<PointerType*>(from_type);
+
+            auto to_elm_type   = to_arr_Type->get_elm_type();
+            auto from_elm_type = from_ptr_type->get_elm_type();
+
+            if (to_elm_type->is(from_elm_type) || to_elm_type->is(context.void_type)) {
+                if (expr->is(NodeKind::Array)) {
+                    return "Cannot an assign array directly to a pointer";
+                } else if (expr->is(NodeKind::FuncCall)) {
+                    return "Cannot assign an array from a function call to a pointer";
+                }
+            }
+        }
+
+        return get_type_mismatch_error(to_type, expr->type);
     } else {
 
         // Recreating the array because when assigning to variables it is possible

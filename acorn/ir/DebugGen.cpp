@@ -28,8 +28,8 @@ void acorn::DebugInfoEmitter::emit_function(Func* func) {
 		di_scope = di_unit;
 	}
 
-	auto [line_number      , _1] = func->file->line_table.get_line_and_column_number(func->loc);
-	auto [scope_line_number, _2] = func->file->line_table.get_line_and_column_number(func->scope->loc);
+	size_t line_number       = func->file->line_table.get_line_number(func->loc);
+	size_t scope_line_number = func->file->line_table.get_line_number(func->scope->loc);
 
 	llvm::SmallVector<llvm::Metadata*> di_func_types;
 	di_func_types.push_back(emit_type(func->return_type));
@@ -52,9 +52,9 @@ void acorn::DebugInfoEmitter::emit_function(Func* func) {
 		func->name.to_string(),
 		func->ll_func->getName(), // Linkage name
 		di_unit->getFile(),
-		line_number,
+		static_cast<unsigned>(line_number),
 		di_func_type,
-		scope_line_number,
+		static_cast<unsigned>(scope_line_number),
 		llvm::DINode::DIFlags::FlagPrototyped,
 		llvm::DISubprogram::DISPFlags::SPFlagDefinition,
 		nullptr,
@@ -116,7 +116,7 @@ void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction, S
 	llvm::DIScope* di_scope = di_lexical_scopes.back();
 	auto di_location = llvm::DILocation::get(
 		context.get_ll_context(),
-		line_number,
+		static_cast<unsigned>(line_number),
 		// Emission of column number seems to confuse the debugger and cause it to make multiple steps for an instruction on a single line.
 		// This is probably because it breaks once per unique location and adding the column number makes the location non-unique to the line
 		// its on.
@@ -140,15 +140,15 @@ void acorn::DebugInfoEmitter::emit_function_variable(Var* var, llvm::IRBuilder<>
 		di_scope,
 		var->name.to_string(),
 		di_unit->getFile(),
-		line_number,
+		static_cast<unsigned>(line_number),
 		emit_type(var->type),
 		true // Always perserve
 	);
 
 	auto di_location = llvm::DILocation::get(
 		context.get_ll_context(),
-		line_number,
-		column_number,
+		static_cast<unsigned>(line_number),
+		static_cast<unsigned>(column_number),
 		di_scope
 	);
 
@@ -165,14 +165,14 @@ void acorn::DebugInfoEmitter::emit_global_variable(Var* global) {
 	// Ensure the compilation unit exists for this global.
 	emit_file(global->file);
 
-	auto [line_number, _] = global->file->line_table.get_line_and_column_number(global->loc);
+	size_t line_number = global->file->line_table.get_line_number(global->loc);
 
 	auto di_global = builder.createGlobalVariableExpression(
 		di_unit,
 		global->name.to_string(),
 		global->ll_address->getName(), // Linkage name
 		di_unit->getFile(),
-		line_number,
+		static_cast<unsigned>(line_number),
 		emit_type(global->type),
 		false, // TODO: is local?
 		true // Is defined
@@ -189,8 +189,8 @@ void acorn::DebugInfoEmitter::emit_scope_start(SourceLoc loc) {
 	auto di_lexical_block = builder.createLexicalBlock(
 		di_lexical_scopes.back(),
 		di_unit->getFile(),
-		line_number,
-		column_number
+		static_cast<unsigned>(line_number),
+		static_cast<unsigned>(column_number)
 	);
 	di_lexical_scopes.push_back(di_lexical_block);
 }
@@ -441,7 +441,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 		// of C++ types which they map to.
 		uint64_t size_in_bits = ll_struct_layout->getSizeInBits();
 
-		auto [line_number, _] = file->line_table.get_line_and_column_number(structn->loc);
+		size_t line_number = file->line_table.get_line_number(structn->loc);
 
 		llvm::DINode::DIFlags di_flags = llvm::DINode::FlagZero; // TODO: flags
 
@@ -451,7 +451,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 			nullptr, // TODO: Scope?
 			structn->name.to_string(),
 			di_unit->getFile(),
-			line_number,
+			static_cast<unsigned>(line_number),
 			size_in_bits,
 			0, // TODO: Alignment
 			di_flags | llvm::DINode::FlagTypePassByValue,
@@ -468,13 +468,13 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 
 			uint64_t size_in_bits = context.get_ll_module().getDataLayout().getTypeAllocSize(ll_type);
 
-			auto [line_number, _] = file->line_table.get_line_and_column_number(field->loc);
+			size_t line_number = file->line_table.get_line_number(field->loc);
 
 			return builder.createMemberType(
 				di_struct_type,
 				field->name.to_string(),
 				di_unit->getFile(),
-				line_number,
+				static_cast<unsigned>(line_number),
 				size_in_bits,
 				0, // TODO: Alignment
 				bits_offset,

@@ -14,6 +14,16 @@ void acorn::LineTable::build_table() {
     }
 }
 
+size_t acorn::LineTable::get_line_number(SourceLoc location) {
+    auto [line_number, _] = get_line_and_column_number(location);
+    return line_number;
+}
+
+size_t acorn::LineTable::get_line_number(const char* ptr) {
+    auto [line_number, _] = get_line_and_column_number(ptr);
+    return line_number;
+}
+
 std::pair<size_t, size_t> acorn::LineTable::get_line_and_column_number(SourceLoc location) {
     return get_line_and_column_number(location.ptr);
 }

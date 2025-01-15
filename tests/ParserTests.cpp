@@ -570,7 +570,7 @@ void test_parser() {
             )";
 
             const float value1 = 5421.743166f + 314.781f;
-            const float value2 = 412.712f - 521.341 / 6.3f;
+            const float value2 = 412.712f - 521.341f / 6.3f;
             const float value3 = 125.624f * 412.721f / 4.542156f + 63.213f;
             Module& modl = mock_parser(program)->modl;
 

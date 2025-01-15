@@ -584,11 +584,17 @@ static void array_tests() {
 
         expect(result, std::identity()).to_be("Lets go!");
     });
-    test("Array pass to function then reassign", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test30.ac"));
+    test("Array call one func with ret of other func sm ret", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test31.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("@@@@@@@@");
+        expect(result, std::identity()).to_be("@");
+    });
+    test("Array call one func with ret of other func bg ret", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"arrays/arrays_test32.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCD");
     });
 }
 

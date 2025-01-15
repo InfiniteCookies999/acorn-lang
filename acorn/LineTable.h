@@ -15,6 +15,9 @@ namespace acorn {
 
         void build_table();
 
+        size_t get_line_number(SourceLoc location);
+        size_t get_line_number(const char* ptr);
+
         std::pair<size_t, size_t> get_line_and_column_number(SourceLoc location);
         std::pair<size_t, size_t> get_line_and_column_number(const char* ptr);
 
