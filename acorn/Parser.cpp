@@ -338,7 +338,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
         (peek1.is('*') && peek2.is(Token::Identifier)) ||  // ident* ident
         (peek1.is('*') && peek2.is('[')) || // ident*[
         (peek1.is('$')) ||                  // ident$
-        (peek1.is('*') && peek2.is('!')) || // ident*!
+        (peek1.is('*') && peek2.is('$')) || // ident*$
         (peek1.is('^'))                     // ident^
         ) {
 
@@ -383,8 +383,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
             // Variable declarations.
             auto type = construct_type_from_identifier(name_token, false);
             type = construct_unresolved_bracket_type(type, indexes);
-            type = parse_optional_container_types(type);
-            type = parse_optional_function_type(type);
+            type = parse_optional_type_trailing_info(type);
             if (!is_for_expr) {
                 return parse_decl(0, type);
             } else {
@@ -1321,8 +1320,7 @@ acorn::Type* acorn::Parser::parse_type() {
         return type;
     }
 
-    type = parse_optional_container_types(type);
-    type = parse_optional_function_type(type);
+    type = parse_optional_type_trailing_info(type);
 
     if (type->is(context.const_void_type)) {
         SourceLoc error_loc = SourceLoc::from_ptrs(first_token.loc.ptr,
@@ -1461,70 +1459,73 @@ acorn::Type* acorn::Parser::construct_unresolved_bracket_type(Type* base_type,
     return type;
 }
 
-acorn::Type* acorn::Parser::parse_optional_function_type(Type* base_type) {
-    if (cur_token.is('$')) {
-        next_token();
-        next_token();
-        llvm::SmallVector<Type*> param_types;
-        if (cur_token.is_not(')')) {
-            bool more_param_types = true;
-            while (more_param_types) {
-
-                auto type = parse_type();
-                param_types.push_back(type);
-                if (type == context.void_type) {
-                    error(prev_token, "Parameter type cannot be void")
-                        .end_error(ErrCode::ParseFuncParamTypeCannotBeVoid);
-                }
-
-                // Allow for an optional name in the parameter type.
-                if (cur_token.is(Token::Identifier)) {
-                    next_token();
-                }
-
-                more_param_types = cur_token.is(',');
-                if (more_param_types) {
-                    next_token();
-                }
-            }
-        }
-        expect(')', "for function type");
-
-        return type_table.get_function_type(base_type, param_types);
-    }
-    return base_type;
-}
-
-acorn::Type* acorn::Parser::parse_optional_container_types(Type* type) {
-    while (cur_token.is('*') || cur_token.is('[')) {
+acorn::Type* acorn::Parser::parse_optional_type_trailing_info(Type* type) {
+    while (cur_token.is('*') || cur_token.is('[') || cur_token.is('$')) {
         if (cur_token.is('*')) {
             type = type_table.get_ptr_type(type);
             next_token();
-        } else if (peek_token(0).is(Token::DotDot)) {
-            next_token(); // Consuming '[' token.
-            next_token(); // Consuming '..' token.
-            expect(']', "for slice type");
-            type = type_table.get_slice_type(type);
-            continue;
-        } else {
-            llvm::SmallVector<Expr*, 8> arr_lengths;
+        } else if (cur_token.is('[')) {
+            if (peek_token(0).is(Token::DotDot)) {
+                next_token(); // Consuming '[' token.
+                next_token(); // Consuming '..' token.
+                expect(']', "for slice type");
+                type = type_table.get_slice_type(type);
+            } else {
+                llvm::SmallVector<Expr*, 8> arr_lengths;
 
-            while (cur_token.is('[')) {
-                ++bracket_count;
-                next_token();
+                while (cur_token.is('[')) {
+                    ++bracket_count;
+                    next_token();
 
-                arr_lengths.push_back(cur_token.is_not(']') ? parse_expr()
-                                                            : nullptr);
+                    arr_lengths.push_back(cur_token.is_not(']') ? parse_expr()
+                                                                : nullptr);
 
-                expect(']');
-                --bracket_count;
+                    expect(']');
+                    --bracket_count;
+                }
+
+                type = construct_unresolved_bracket_type(type, arr_lengths);
             }
-
-            type = construct_unresolved_bracket_type(type, arr_lengths);
+        } else {
+            type = parse_function_type(type);
         }
     }
 
     return type;
+}
+
+acorn::Type* acorn::Parser::parse_function_type(Type* base_type) {
+
+    next_token();
+    expect('(', "for function type");
+
+    llvm::SmallVector<Type*> param_types;
+    if (cur_token.is_not(')')) {
+        bool more_param_types = true;
+        while (more_param_types) {
+
+            auto type = parse_type();
+            param_types.push_back(type);
+            if (type == context.void_type) {
+                error(prev_token, "Parameter type cannot be void")
+                    .end_error(ErrCode::ParseFuncParamTypeCannotBeVoid);
+            }
+
+            // Allow for an optional name in the parameter type.
+            if (cur_token.is(Token::Identifier)) {
+                next_token();
+            }
+
+            more_param_types = cur_token.is(',');
+            if (more_param_types) {
+                next_token();
+            }
+        }
+    }
+
+    expect(')', "for function type");
+
+    return type_table.get_function_type(base_type, std::move(param_types));
 }
 
 acorn::Expr* acorn::Parser::parse_assignment_and_expr() {
@@ -2092,8 +2093,7 @@ acorn::Expr* acorn::Parser::parse_memory_access(Expr* site) {
 
             auto type = UnresolvedCompositeType::create(allocator, ref->ident, ref->loc, false);
             type = construct_unresolved_bracket_type(type, indexes);
-            type = parse_optional_container_types(type);
-            type = parse_optional_function_type(type);
+            type = parse_optional_type_trailing_info(type);
 
             TypeExpr* type_expr = new_node<TypeExpr>(cur_token);
             type_expr->expr_type = type;
@@ -2162,8 +2162,7 @@ acorn::Expr* acorn::Parser::parse_term() {
             Token ident_token = cur_token;
             next_token();
             Type* type = construct_type_from_identifier(ident_token, false);
-            type = parse_optional_container_types(type);
-            type = parse_optional_function_type(type);
+            type = parse_optional_type_trailing_info(type);
 
             TypeExpr* type_expr = new_node<TypeExpr>(ident_token);
             type_expr->expr_type = type;
@@ -2183,8 +2182,7 @@ acorn::Expr* acorn::Parser::parse_term() {
             Token ident_token = cur_token;
             next_token();
             Type* type = construct_type_from_identifier(ident_token, false);
-            type = parse_optional_container_types(type);
-            type = parse_optional_function_type(type);
+            type = parse_optional_type_trailing_info(type);
 
             TypeExpr* type_expr = new_node<TypeExpr>(ident_token);
             type_expr->expr_type = type;

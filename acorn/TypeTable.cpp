@@ -270,7 +270,7 @@ acorn::RangeType* acorn::TypeTable::get_range_type(Type* value_type) {
 acorn::FunctionType* acorn::TypeTable::get_function_type(Type* return_type, llvm::SmallVector<Type*> param_types) {
     std::lock_guard lock(func_types_mtx);
 
-    FunctionTypeKey cmp_key = FunctionTypeKey(return_type, param_types);
+    FunctionTypeKey cmp_key = FunctionTypeKey(return_type, std::move(param_types));
 
     auto itr = func_types.find(&cmp_key);
     if (itr != func_types.end()) {

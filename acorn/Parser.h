@@ -126,8 +126,8 @@ namespace acorn {
         Type* construct_type_from_identifier(Token name_token, bool is_const);
         Type* construct_unresolved_bracket_type(Type* base_type,
                                                 const llvm::SmallVector<Expr*, 8>& exprs);
-        Type* parse_optional_function_type(Type* base_type);
-        Type* parse_optional_container_types(Type* type);
+        Type* parse_optional_type_trailing_info(Type* type);
+        Type* parse_function_type(Type* base_type);
 
         Expr* parse_assignment_and_expr();
         Expr* parse_assignment_and_expr(Expr* lhs);
