@@ -1224,19 +1224,6 @@ void acorn::Sema::check_variable(Var* var) {
                 .end_error(ErrCode::SemaMustHaveAssignmentToDetAuto);
     };
 
-    auto construct_function_type_from_func_ref = [this](Expr* expr) finline {
-        // TODO: In the future we will want to allow for selecting for
-        // overloaded functions somehow.
-        auto ref = static_cast<IdentRef*>(expr);
-        auto func = (*ref->funcs_ref)[0];
-
-        llvm::SmallVector<Type*> param_types;
-        for (Var* param : func->params) {
-            param_types.push_back(param->type);
-        }
-        return type_table.get_function_type(func->return_type, param_types);
-    };
-
     if (var->parsed_type == context.auto_type || var->parsed_type == context.const_auto_type) {
         if (!var->assignment) {
             report_error_auto_must_have_assignment(var->parsed_type);
@@ -1247,11 +1234,8 @@ void acorn::Sema::check_variable(Var* var) {
             return cleanup();
         }
 
-        if (var->assignment->type == context.funcs_ref_type) {
-            var->type = construct_function_type_from_func_ref(var->assignment);
-        } else {
-            var->type = var->assignment->type;
-        }
+        var->type = var->assignment->type;
+
         if (var->parsed_type == context.const_auto_type) {
             if (var->assignment->is(NodeKind::Array)) {
                 auto arr_type = static_cast<ArrayType*>(var->type);
@@ -1289,11 +1273,7 @@ void acorn::Sema::check_variable(Var* var) {
             return cleanup();
         }
 
-        if (var->assignment->type == context.funcs_ref_type) {
-            var->type = construct_function_type_from_func_ref(var->assignment);
-        } else {
-            var->type = var->assignment->type;
-        }
+        var->type = var->assignment->type;
 
         if (!var->type->is_pointer()) {
             error(expand(var), "Variable with 'auto*' type expects assignment to be a pointer type but found '%s'",
@@ -3383,7 +3363,37 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         break;
     }
     case IdentRef::FuncsKind: {
-        ref->type = context.funcs_ref_type;
+
+        if (is_for_call) {
+            ref->type = context.funcs_ref_type;
+            return;
+        }
+
+        // Cannot simply check this here when making a function call because
+        // of function overloading and the call operator being able to choose
+        // which function is best based on context.
+        auto func = (*ref->funcs_ref)[0];
+        if (func->structn) {
+            auto dot = static_cast<DotOperator*>(ref);
+            if (dot->site->is_not(NodeKind::TypeExpr)) {
+                auto struct_name = func->structn->name.to_string().str();
+                auto func_name   = ref->ident.to_string().str();
+                auto example_str = struct_name + "." + func_name;
+                error(expand(ref), "Must access member function references by type not object")
+                    .add_line("Use: '%s' instead", example_str)
+                    .end_error(ErrCode::SemaCannotAccessFuncsRefFromObj);
+                return;
+            }
+        }
+
+        // TODO: In the future we will want to allow for selecting for
+        // overloaded functions somehow.
+
+        auto param_types = func->params | std::views::transform([](Var* param) { return param->type; })
+                                        | std::ranges::to<llvm::SmallVector<Type*>>();
+
+        ref->type = type_table.get_function_type(func->return_type, param_types);
+        ref->is_foldable = false;
         break;
     }
     case IdentRef::UniversalKind: {
@@ -3508,6 +3518,41 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
                       dot->ident, enumn->name)
                     .end_error(ErrCode::SemaEnumCouldNotFindValue);
             }
+        } else if (composite->is(NodeKind::Struct) && !is_for_call) {
+            // Check to see if the user is trying to access the member function of
+            // a struct.
+            auto structn = static_cast<Struct*>(composite);
+            auto funcs = structn->nspace->find_functions(dot->ident);
+            if (!funcs) {
+                report_error_cannot_access_field();
+                return;
+            }
+
+            auto func = (*funcs)[0];
+
+            if (func->has_modifier(Modifier::Private)) {
+                if (!cur_func || cur_func->structn != func->structn) {
+                    error(expand(dot), "Cannot access function '%s', it is marked private",
+                          func->name)
+                        .end_error(ErrCode::SemaCannotAccessFuncIsPrivate);
+                    return;
+                }
+            }
+
+            auto param_types = func->params | std::views::transform([](Var* param) { return param->type; })
+                                            | std::ranges::to<llvm::SmallVector<Type*>>();
+
+            Type* struct_type = structn->struct_type;
+            if (func->is_constant) {
+                struct_type = type_table.get_const_type(struct_type);
+            }
+            auto struct_ptr_type = type_table.get_ptr_type(struct_type);
+            param_types.insert(param_types.begin(), struct_ptr_type);
+
+            dot->set_funcs_ref(funcs);
+            dot->type = type_table.get_function_type(func->return_type, param_types);
+            dot->is_foldable = false;
+
         } else {
             report_error_cannot_access_field();
         }
@@ -3741,36 +3786,6 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
 
         create_cast(arg_value, param->type);
     }
-
-    /*if (called_func->structn && !called_func->is_constant && !called_func->is_constructor) {
-        auto call = static_cast<FuncCall*>(call_node);
-        if (call->site->is(NodeKind::IdentRef) && cur_func) {
-            // Calling one member function from another.
-            if (cur_func->is_constant) {
-                error(expand(call), "Cannot call non-const member function from const member function")
-                    .end_error(ErrCode::SemaCallNonConstMemeberFuncFromConst);
-            }
-        } else {
-            auto report_cannot_call_non_const_member_func = [this, call](DotOperator* dot) finline {
-                error(expand(call), "Cannot call non-const member function with const memory of type '%s'",
-                      dot->site->type)
-                      .end_error(ErrCode::SemaCallNonConstMemeberFuncFromConst);
-            };
-
-            auto dot = static_cast<DotOperator*>(call->site);
-            if (dot->site->type->is_struct()) {
-                if (dot->site->type->is_const()) {
-                    report_cannot_call_non_const_member_func(dot);
-                }
-            } else {
-                auto ptr_type = static_cast<PointerType*>(dot->site->type);
-                auto elm_type = ptr_type->get_elm_type();
-                if (elm_type->is_struct() && elm_type->is_const()) {
-                    report_cannot_call_non_const_member_func(dot);
-                }
-            }
-        }
-    }*/
 
     // TODO: This needs to move to being part of compare as canidate because the problem is that
     // it should be able to still choose a non-private function first as long as some of the arguments
@@ -4261,8 +4276,7 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
 
         if (dest_elm_type) {
             if (!is_assignable_to(dest_elm_type, elm)) {
-                error(expand(elm), "Expected element type '%s' but found '%s'",
-                      dest_elm_type, elm->type)
+                error(expand(elm), "%s", get_type_mismatch_error(dest_elm_type, elm))
                     .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
                 values_have_errors = true;
             }
@@ -4273,8 +4287,8 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
             if (!is_assignable_to(elm_type, elm)) {
                 // Check the reverse case.
                 if (!is_assignable_to(elm->type, value_for_elm_type)) {
-                    error(expand(elm), "Incompatible element types. First found '%s' but now '%s'",
-                          elm_type, elm->type)
+                    error(expand(elm), "Incompatible element types. %s",
+                          get_type_mismatch_error(elm_type, elm))
                         .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
                     values_have_errors = true;
                 } else {
@@ -4291,6 +4305,13 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
 
     if (!elm_type) {
         elm_type = dest_elm_type;
+    }
+
+    // TODO: could allow for function references here and convert the types.
+    if (is_incomplete_type(elm_type)) {
+        error(expand(arr), "Array has incomplete element type '%s'", elm_type)
+            .end_error(ErrCode::SemaArrayIncompleteElmType);
+        return;
     }
 
     for (Expr* value : arr->elms) {
@@ -4649,55 +4670,6 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
 
         return to_type->is(from_type);
     }
-    case TypeKind::Function: {
-        if (from_type->get_kind() == TypeKind::FuncsRef) {
-            auto to_func_type = static_cast<FunctionType*>(to_type);
-
-            // TODO: in the future we want to allow selection of the
-            //       specific function they ask for.
-            auto ref = static_cast<IdentRef*>(expr);
-            auto func = (*ref->funcs_ref)[0];
-            if (func->return_type->is_not(to_func_type->get_return_type())) {
-                return false;
-            }
-            bool passes_struct_ptr = func->structn != nullptr;
-            size_t param_offset = (passes_struct_ptr ? 1 : 0);
-
-            auto& param_types = to_func_type->get_param_types();
-            if ((func->params.size() + param_offset) != param_types.size()) {
-                return false;
-            }
-
-            if (passes_struct_ptr) {
-                Type* struct_type = func->structn->struct_type;
-                if (func->is_constant) {
-                    struct_type = type_table.get_const_type(struct_type);
-                }
-
-                auto struct_ptr_type = type_table.get_ptr_type(struct_type);
-
-                if (param_types[0]->is_not(struct_ptr_type)) {
-                    return false;
-                }
-            }
-
-            for (size_t i = param_offset; i < param_types.size(); i++) {
-                if (param_types[i]->is_not(func->params[i - param_offset]->type)) {
-                    return false;
-                }
-            }
-
-            if (func->has_modifier(Modifier::Private)) {
-                if (!cur_func || cur_func->structn != func->structn) {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        return to_type->is(from_type);
-    }
     case TypeKind::Slice: {
         if (from_type->is_array()) {
             auto from_arr_type = static_cast<ArrayType*>(from_type);
@@ -4882,6 +4854,7 @@ bool acorn::Sema::is_incomplete_type(Type* type) const {
     case TypeKind::Range:
     case TypeKind::Auto:
     case TypeKind::Expr:
+    case TypeKind::FuncsRef:
         return true;
     case TypeKind::Pointer: {
         return type == context.auto_ptr_type;
@@ -5163,32 +5136,7 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
         expr->is_foldable &&
         expr->type->is_integer()) {
 
-        return get_error_msg_for_value_not_fit_type(static_cast<Number*>(expr));
-    } else if (to_type->is_function() && expr->type->get_kind() == TypeKind::FuncsRef) {
-
-        auto ref = static_cast<IdentRef*>(expr);
-        auto func = (*ref->funcs_ref)[0];
-
-        auto types = func->params | std::views::transform([](Var* param) { return param->type; })
-                                  | std::ranges::to<llvm::SmallVector<Type*>>();
-        if (func->structn) {
-            Type* struct_type = func->structn->struct_type;
-            if (func->is_constant) {
-                struct_type = type_table.get_const_type(struct_type);
-            }
-
-            auto struct_ptr_type = type_table.get_ptr_type(struct_type);
-            types.insert(types.begin(), struct_ptr_type);
-        }
-
-        auto from_type = type_table.get_function_type(func->return_type, types);
-        // It is possible the types match but the function is private!
-        if (to_type->is(from_type)) {
-            std::string name = func->name.to_string().str();
-            return std::format("Cannot access function '{}', it is marked private", name);
-        }
-
-        return get_type_mismatch_error(to_type, from_type);
+        return get_error_msg_for_value_not_fit_type(to_type);
     } else if (to_type->is_pointer() && expr->type->is_array()) {
 
         auto from_type = expr->type;

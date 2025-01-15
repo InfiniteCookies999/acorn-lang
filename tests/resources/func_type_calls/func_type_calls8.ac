@@ -46,7 +46,7 @@ struct A {
 
 void main() {
     A a;
-    B$(A*) f = a.foo;
+    B$(A*) f = A.foo;
     B b = f(&a);
     write_val(b.v1);
     write_val(b.v2);

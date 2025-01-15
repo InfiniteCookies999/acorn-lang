@@ -11,6 +11,7 @@ namespace acorn {
     struct Number;
     class SourceFile;
     class Logger;
+    class Type;
 
     enum class ErrCode {
 #define X(name, val) name = val,
@@ -28,7 +29,8 @@ namespace acorn {
         return ErrCodeStrs [code];
     }
 
-    std::string get_error_msg_for_value_not_fit_type(Number* number);
+    // This is here because it is used by both sema and parsing.
+    std::string get_error_msg_for_value_not_fit_type(Type* type);
 
     void print_source_location(Logger& logger, SourceFile* file, SourceLoc location);
 

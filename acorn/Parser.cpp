@@ -2651,7 +2651,7 @@ acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char
         ++ptr;
 
         auto report_fits_error = [this, number]() finline {
-            auto err_msg = get_error_msg_for_value_not_fit_type(number);
+            auto err_msg = get_error_msg_for_value_not_fit_type(number->type);
             logger.begin_error(number->loc, "%s", err_msg)
                 .end_error(ErrCode::ParseIntegerValueNotFitType);
         };

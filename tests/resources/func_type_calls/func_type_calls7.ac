@@ -39,7 +39,7 @@ struct A {
 
 void main() {
     A a;
-    void$(A*, int) f = a.foo;
+    void$(A*, int) f = A.foo;
     f(&a, 64);
     write_val(a.v1);
 }
