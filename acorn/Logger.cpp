@@ -287,7 +287,6 @@ namespace acorn {
                                            int pline_leading_cutoff_count) {
         int cutoff_whitespace = leading_count - pline_leading_count;
         if (cutoff_whitespace < 0) {
-            // TODO
             // It is possible the characters are behind the cut off so checking
             // that and discardinging the whole line if so.
 
@@ -311,6 +310,29 @@ namespace acorn {
         return true;
     }
 
+    // This function helps in collecting the start of where within the file buffer
+    // to begin showing a visual display of the error.
+    //
+    // This function takes `ptr`, which is the start of the primary location of the
+    // error, and tries to move the `ptr` backwards until it has either reached the
+    // start of the line that `low_point` lies on (where `low_point` is the start of
+    // the part of an expression that errored out) or until a condition is reached in
+    // which it would be unreasonable to keep collecting characters since it would
+    // cause the display to look bad.
+    //
+    // Stopping conditions:
+    // 1. If processing the line that the `ptr` starts on it will stop if the total
+    //    non-whitespace characters reaches `CUTOFF_LIMIT`.
+    // 2. If processing lines other than the line that `ptr` starts on then it will
+    //    stop and discard the line entirely if the non-whitespace character plus
+    //    leading whitespace that is not shared between this line and the line that
+    //    `ptr` starts on reaches `CUTOFF_LIMIT`. This is because it would result in
+    //    display of characters that are pushed very far over to the right and not
+    //    look correct.
+    // 3. The characters wind up behind the visual display and would be cutoff due
+    //    to the trimming of leading whitespace from shared lines.
+    // 4. If the line count reaches above 2.
+    //
     static PtrCalcInfo traverse_backwards(const char* ptr,
                                           const char* low_point,
                                           const char* buffer_start,
@@ -346,7 +368,7 @@ namespace acorn {
 
         total_backwards_line_characters = count + pline_leading_count;
 
-        // Try and take 30 characters and the remainder are cut off.
+        // Try and take `CUTOFF_LIMIT` characters and the remainder are cut off.
         pline_leading_cutoff_count = total_backwards_line_characters - CUTOFF_LIMIT;
         if (pline_leading_cutoff_count < 0) pline_leading_cutoff_count = 0;
 
@@ -438,7 +460,23 @@ namespace acorn {
         return { ptr, exceeded };
     }
 
-
+    // This function helps in collecting the end of where within the file buffer
+    // to show a visual display of the error.
+    //
+    // This function takes `ptr`, which is the end of the primary location of the
+    // error, and tries to move the `ptr` forwards until it has either reached the
+    // end of the line that `high_point` lies on (where `high_point` is the end of
+    // the expression that errored out) or until a condition is reached in which it
+    // would be unreasonable to keep collecting characters since it would cause the
+    // display to look bad.
+    //
+    // Stopping conditions:
+    // 1. If the total distance between where `ptr` started and where `ptr` is at
+    //    has reached above `CUTOFF_LIMIT`.
+    // 2. The characters wind up behind the visual display and would be cutoff due
+    //    to the trimming of leading whitespace from shared lines.
+    // 3. If the line count reaches above 4.
+    //
     static PtrCalcInfo traverse_forward(const char* ptr,
                                         const char* high_point,
                                         const char* buffer_end,
@@ -549,6 +587,9 @@ namespace acorn {
         return { ptr, exceeded };
     }
 
+    // Get pointers that represent the start and end of where within the file to show a visual
+    // display of the error.
+    //
     static std::pair<PtrCalcInfo, PtrCalcInfo> get_range_pointers(PointSourceLoc location,
                                                                   Buffer buffer,
                                                                   Logger::ArrowPosition arrow_position,
