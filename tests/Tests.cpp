@@ -9,8 +9,6 @@
 
 int main() {
 
-    int a[][2] = {{1,2}, {3,4}};
-
     test_lexer();
 
     test_parser();

@@ -1314,11 +1314,20 @@ void acorn::Sema::check_variable(Var* var) {
         return cleanup();
     }
 
-    if (!var->assignment && var->type->is_const() &&
-        !var->has_modifier(Modifier::Native) && !var->is_param()) {
-        error(var, "Variables declared const must be assigned a value")
-            .end_error(ErrCode::SemaVariableConstNoValue);
-        return cleanup();
+    if (!var->assignment && !var->has_modifier(Modifier::Native) && !var->is_param()) {
+        if (var->type->is_const()) {
+            error(var, "Variables declared const must be assigned a value")
+                .end_error(ErrCode::SemaVariableConstNoValue);
+            return cleanup();
+        } else if (var->type->is_array()) {
+            auto arr_type = static_cast<ArrayType*>(var->type);
+            auto base_type = arr_type->get_base_type();
+            if (base_type->is_const()) {
+                error(var, "Variables with const arrays must be assigned a value")
+                    .end_error(ErrCode::SemaVariableConstNoValue);
+                return cleanup();
+            }
+        }
     }
 
     // !! WARNING: If this code ever changes to not call `is_asignable_to` when

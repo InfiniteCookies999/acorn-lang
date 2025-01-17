@@ -212,7 +212,7 @@ void test_sema() {
         test("Const lossness in array to pointer", [&] {
             mock_sema(R"(
                 void main() {
-                    const int[5] a;
+                    const int[5] a = [];
                     int* p = a;
                 }
             )");
@@ -221,7 +221,7 @@ void test_sema() {
         test("Const lossness in multi array to pointer", [&] {
             mock_sema(R"(
                 void main() {
-                    const int[5][5] a;
+                    const int[5][5] a = [];
                     int[5]* p = a;
                 }
             )");
@@ -230,7 +230,7 @@ void test_sema() {
         test("multi array to pointer, pointer has wrong element type", [&] {
             mock_sema(R"(
                 void main() {
-                    const int[5][5] a;
+                    const int[5][5] a = [];
                     const int* p = a;
                 }
             )");
