@@ -3787,16 +3787,6 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         create_cast(arg_value, param->type);
     }
 
-    // TODO: This needs to move to being part of compare as canidate because the problem is that
-    // it should be able to still choose a non-private function first as long as some of the arguments
-    // match.
-    if (called_func->has_modifier(Modifier::Private) && called_func->structn) {
-        if (!cur_func || (cur_func->structn != called_func->structn)) {
-            error(expand(call_node), "Cannot call function marked private")
-                .end_error(ErrCode::SemaCannotCallFunctionMarkedPrivate);
-        }
-    }
-
     return called_func;
 }
 
@@ -3814,6 +3804,8 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate,
     case CallCompareStatus::INCORRECT_PARAM_BY_NAME_NOT_FOUND:
     case CallCompareStatus::OUT_OF_ORDER_PARAMS:
         return INCORRECT_PARAM_NAME_OR_ORD_LIMIT;
+    case CallCompareStatus::CANNOT_ACCESS_PRIVATE:
+        return CANNOT_ACCESS_PRIVATE_LIMIT;
     default:
         break;
     }
@@ -3866,6 +3858,12 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         return CallCompareStatus::NON_CONST_FROM_CONST_OBJECT;
     } else if (!is_const_object && candidate->is_constant) {
         score += PREFER_NON_CONST_LIMIT;
+    }
+
+    if (candidate->has_modifier(Modifier::Private) && candidate->structn) {
+        if (!cur_func || (cur_func->structn != candidate->structn)) {
+            return CallCompareStatus::CANNOT_ACCESS_PRIVATE;
+        }
     }
 
     bool named_args_out_of_order = false;
@@ -4094,6 +4092,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                 // Calling one member function from another.
                 if (cur_func->is_constant) {
                     err_line("Cannot call non-const function from const function");
+                    return;
                 }
             } else {
 
@@ -4105,16 +4104,24 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                 if (dot->site->type->is_struct()) {
                     if (dot->site->type->is_const()) {
                         report_error(dot);
+                        return;
                     }
                 } else {
                     auto ptr_type = static_cast<PointerType*>(dot->site->type);
                     auto elm_type = ptr_type->get_elm_type();
                     if (elm_type->is_struct() && elm_type->is_const()) {
                         report_error(dot);
+                        return;
                     }
                 }
             }
+        }
 
+        if (candidate->has_modifier(Modifier::Private) && candidate->structn) {
+            if (!cur_func || (cur_func->structn != candidate->structn)) {
+                err_line("It is private");
+                return;
+            }
         }
     }
 

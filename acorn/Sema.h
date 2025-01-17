@@ -67,6 +67,7 @@ namespace acorn {
         // These get the same value because there is no preference of one over the other.
         static const uint32_t INCORRECT_PARAM_NAME_OR_ORD_LIMIT = NOT_ASSIGNABLE_TYPES_LIMIT * MAX_FUNC_PARAMS * 2;
         static const uint32_t INCORRECT_NUM_ARGS_LIMIT          = NOT_ASSIGNABLE_TYPES_LIMIT * MAX_FUNC_PARAMS * 2;
+        static const uint32_t CANNOT_ACCESS_PRIVATE_LIMIT       = NOT_ASSIGNABLE_TYPES_LIMIT * MAX_FUNC_PARAMS * 2;
 
         bool is_comptime_if_cond = false;
         bool should_request_gen_queue;
@@ -160,6 +161,7 @@ namespace acorn {
         enum class CallCompareStatus {
             INCORRECT_ARGS,
             INCORRECT_PARAM_BY_NAME_NOT_FOUND,
+            CANNOT_ACCESS_PRIVATE,
             OUT_OF_ORDER_PARAMS,
             ARGS_NOT_ASSIGNABLE,
             NON_CONST_FROM_CONST_OBJECT,
@@ -236,10 +238,6 @@ namespace acorn {
         Type* get_array_type_for_mismatch_error(Array* arr,
                                                 llvm::SmallVector<size_t>& lengths,
                                                 size_t depth) const;
-        //llvm::SmallVector<size_t> get_array_lengths_for_mismatch_error(Array* arr) const;
-        //void get_array_lengths_for_mismatch_error(Array* arr,
-        //                                          llvm::SmallVector<size_t>& lengths,
-        //                                          size_t depth) const;
 
         template<typename... TArgs>
         [[nodiscard]] Logger& error(PointSourceLoc loc, const char* fmt, TArgs... args) {

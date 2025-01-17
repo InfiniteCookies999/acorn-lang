@@ -177,7 +177,7 @@ X(SemaEnumValuesTypeIncomplete              , 20128)
 X(SemaFuncsCannotHaveReadonlyModifier       , 20129)
 X(SemaOnlyFieldsCanHaveReadonlyModifier     , 20130)
 X(SemaCannotAccessFieldIsPrivate            , 20131)
-X(SemaCannotCallFunctionMarkedPrivate       , 20132)
+
 X(SemaCannotAssignToReadonly                , 20133)
 X(SemaCompositeCannotHaveDllImportModifier  , 20134)
 X(SemaCompositeCannotHaveNativeModifier     , 20135)
