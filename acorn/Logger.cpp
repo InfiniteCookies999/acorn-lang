@@ -158,7 +158,11 @@ void acorn::GlobalLogger::end_error(ErrCode error_code) {
 
     print_cb();
 
-    fmt_print("%s.\n", White);
+    print(White);
+    if (primary_has_period) {
+        print(".");
+    }
+    print("\n");
 
     if (context.inc_error_count()) {
         print_exceeded_errors_msg(context);
@@ -739,7 +743,11 @@ void acorn::Logger::print_header(ErrCode error_code, const std::string& line_num
 
     primary_print_cb();
 
-    fmt_print("%s.\n", White);
+    print(White);
+    if (primary_has_period) {
+        print(".");
+    }
+    print("\n");
 
     facing_length -= line_number_pad.size() + 4;
     bool first_line = true;
@@ -985,5 +993,6 @@ void acorn::Logger::end_error(ErrCode error_code) {
     main_location = {};
     primary_print_cb = {};
     line_printers.clear();
+    primary_has_period = true;
 
 }

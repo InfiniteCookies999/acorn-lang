@@ -154,6 +154,7 @@ namespace acorn {
         Func* find_best_call_candidate(FuncList& candidates,
                                        llvm::SmallVector<Expr*>& args,
                                        bool& selected_implicitly_converts_ptr_arg,
+                                       bool& is_ambiguous,
                                        bool is_const_object);
         uint32_t get_function_call_score(const Func* candidate,
                                          const llvm::SmallVector<Expr*>& args,
@@ -191,6 +192,10 @@ namespace acorn {
                                         const llvm::SmallVector<Expr*>& args,
                                         bool indent,
                                         Node* call_node) const;
+        void display_call_ambiguous_info(PointSourceLoc error_loc,
+                                         FuncList& candidates,
+                                         llvm::SmallVector<Expr*>& args,
+                                         bool is_const_object) const;
 
         void check_cast(Cast* cast);
         void check_named_value(NamedValue* named_value);

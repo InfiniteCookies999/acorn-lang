@@ -77,6 +77,24 @@ acorn::SourceLoc acorn::Func::get_function_const_location() const {
     return SourceLoc::from_ptrs(start_ptr, start_ptr + 5);
 }
 
+std::string acorn::Func::get_decl_string() const {
+    std::string str = name.to_string().str();
+    str += "(";
+    size_t count = 0;
+    for (Var* param : params) {
+        str += param->type->to_string();
+        if (count + 1 != params.size()) {
+            str += ", ";
+        }
+        ++count;
+    }
+    str += ")";
+    if (is_constant) {
+        str += " const";
+    }
+    return str;
+}
+
 acorn::Var* acorn::Func::find_parameter(Identifier name) const {
     auto itr = std::ranges::find_if(params, [name](Var* param) {
         return param->name == name;

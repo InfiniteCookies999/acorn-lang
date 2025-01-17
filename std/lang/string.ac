@@ -75,7 +75,7 @@ struct String {
      *                    the allocation size of the `buffer` is the
      *                    `length` passed.
      */
-    String(char* buffer, int length, bool copy_buffer = true) {
+    String(char* buffer, int length, bool copy_buffer) {
         this.length   = length;
         this.capacity = length;
         if copy_buffer {

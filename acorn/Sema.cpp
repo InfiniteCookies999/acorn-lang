@@ -3749,10 +3749,19 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         }
     }
 
+    bool is_ambiguous = false;
     bool selected_implicitly_converts_ptr_arg = false;
-    auto called_func = find_best_call_candidate(candidates, args, selected_implicitly_converts_ptr_arg, is_const_object);
+    auto called_func = find_best_call_candidate(candidates,
+                                                args,
+                                                selected_implicitly_converts_ptr_arg,
+                                                is_ambiguous,
+                                                is_const_object);
     if (!called_func) {
         display_call_mismatch_info(expand(call_node), call_node, candidates, args);
+        return nullptr;
+    }
+    if (is_ambiguous) {
+        display_call_ambiguous_info(expand(call_node), candidates, args, is_const_object);
         return nullptr;
     }
 
@@ -3816,10 +3825,11 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate,
 acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
                                                    llvm::SmallVector<Expr*>& args,
                                                    bool& selected_implicitly_converts_ptr_arg,
+                                                   bool& is_ambiguous,
                                                    bool is_const_object) {
 
     Func* selected = nullptr;
-    uint32_t best_score = 0;
+    uint32_t best_score = std::numeric_limits<uint32_t>::max();
 
     for (Func* canidate : candidates) {
 
@@ -3834,8 +3844,9 @@ acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
             selected = canidate;
             best_score = score;
             selected_implicitly_converts_ptr_arg = implicitly_converts_ptr_arg;
+            is_ambiguous = false;
         } else if (best_score == score) {
-            // TODO: deal this should deal with ambiguity.
+            is_ambiguous = true;
         }
     }
     return selected;
@@ -3946,7 +3957,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
             }
         }
 
-        if (param->type->is_not(arg_value->type)) {
+        if (param->type->remove_all_const()->is_not(arg_value->type->remove_all_const())) {
             if (context.is_std_any_type(param->type)) {
                 score += IMPLICIT_CAST_TO_ANY_LIMIT;
             } else {
@@ -3986,31 +3997,13 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
                                              const FuncList& candidates,
                                              const llvm::SmallVector<Expr*>& args) const {
 
-    auto function_decl_to_string = [](const Func* canidate) {
-        std::string str = canidate->name.to_string().str();
-        str += "(";
-        size_t count = 0;
-        for (Var* param : canidate->params) {
-            str += param->type->to_string();
-            if (count + 1 != canidate->params.size()) {
-                str += ", ";
-            }
-            ++count;
-        }
-        str += ")";
-        if (canidate->is_constant) {
-            str += " const";
-        }
-        return str;
-    };
-
     const char* func_type_str = candidates[0]->is_constructor ? "constructor" : "function";
 
     if (candidates.size() == 1) {
 
         Func* canidate = candidates[0];
 
-        logger.begin_error(error_loc, "Invalid call to %s: %s", func_type_str, function_decl_to_string(canidate));
+        logger.begin_error(error_loc, "Invalid call to %s: %s", func_type_str, canidate->get_decl_string());
         logger.add_empty_line();
         display_call_mismatch_info(canidate, args, false, call_node);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
@@ -4029,7 +4022,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
         logger.begin_error(error_loc, "Could not find a valid overloaded %s to call", func_type_str);
         for (auto [_, candidate] : candidates_and_scores | std::views::take(context.get_max_call_err_funcs())) {
             logger.add_empty_line();
-            logger.add_line("Could not match: %s", function_decl_to_string(candidate));
+            logger.add_line("Could not match: %s", candidate->get_decl_string());
             display_call_mismatch_info(candidate, args, true, call_node);
         }
         int64_t remaining = static_cast<int64_t>(candidates.size()) - static_cast<int64_t>(context.get_max_call_err_funcs());
@@ -4223,6 +4216,44 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
     }
 
 #undef err_line
+}
+
+void acorn::Sema::display_call_ambiguous_info(PointSourceLoc error_loc,
+                                              FuncList& candidates,
+                                              llvm::SmallVector<Expr*>& args,
+                                              bool is_const_object) const {
+
+    llvm::SmallVector<Func*, 16> ambiguous_funcs;
+    Func* selected = nullptr;
+    uint32_t best_score = 0;
+
+    for (Func* canidate : candidates) {
+
+        uint32_t score = 0;
+        bool implicitly_converts_ptr_arg = false;
+        auto status = compare_as_call_candidate<false>(canidate, args, is_const_object, score, implicitly_converts_ptr_arg);
+        if (status != CallCompareStatus::SUCCESS) {
+            continue;
+        }
+
+        if (!selected || best_score > score) {
+            selected = canidate;
+            best_score = score;
+            ambiguous_funcs.clear();
+        }
+
+        ambiguous_funcs.push_back(canidate);
+    }
+
+    logger.begin_error(error_loc, "Ambiguous function call. Functions:").remove_period();
+    for (Func* ambiguous_func : ambiguous_funcs) {
+        logger.add_line([ambiguous_func](Logger& l) {
+            l.print(ambiguous_func->get_decl_string());
+        });
+    }
+    logger.end_error(ErrCode::SemaAmbiguousFuncCall);
+
+
 }
 
 void acorn::Sema::check_cast(Cast* cast) {

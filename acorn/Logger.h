@@ -73,6 +73,8 @@ namespace acorn {
         L& remove_period() {
             if (!line_printers.empty()) {
                 line_printers.back().add_period = false;
+            } else {
+                primary_has_period = false;
             }
             return static_cast<L&>(*this);
         }
@@ -103,6 +105,7 @@ namespace acorn {
             std::function<void(L&)> print_cb;
         };
         llvm::SmallVector<ErrorLine> line_printers;
+        bool primary_has_period = true;
 
         // Print support functions
         // -----------------------------
@@ -409,8 +412,8 @@ namespace acorn {
     private:
         SourceFile& file;
 
-        PointSourceLoc main_location;
-        size_t         facing_length = 0;
+        PointSourceLoc        main_location;
+        size_t                facing_length = 0;
         std::function<void()> primary_print_cb;
 
         struct ArrowMsg {

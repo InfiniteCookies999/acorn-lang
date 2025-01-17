@@ -220,6 +220,8 @@ namespace acorn {
         // type information.
         SourceLoc get_function_const_location() const;
 
+        std::string get_decl_string() const;
+
     };
 
     struct ImplicitFunc : Node {
