@@ -1185,7 +1185,13 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
                            false,   // is assignment op
                            try_move
             );
-        } else if (is_main) {
+        } else if (ret->value) {
+            // It is possible there is a function call still performed in the
+            // return that should be called.
+            gen_rvalue(ret->value);
+        }
+
+        if (!not_void && is_main) {
             // Special case for main because even if the user declares main as having
             // type void it still must return an integer.
             builder.CreateStore(builder.getInt32(0), ll_ret_addr);
@@ -1301,7 +1307,13 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
             // Return non-aggregate value.
             ll_ret_value = gen_rvalue(ret->value);
         }
-    } else if (is_main) {
+    } else if (ret->value) {
+        // It is possible there is a function call still performed in the
+        // return that should be called.
+        gen_rvalue(ret->value);
+    }
+
+    if (!not_void && is_main) {
         // Special case for main. Read above for explaination.
         ll_ret_value = builder.getInt32(0);
     }

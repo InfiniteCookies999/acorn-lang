@@ -213,6 +213,18 @@ static void misc_tests() {
 
         expect(result, std::identity()).to_be("@@@");
     });
+    test("Returning value for void ret single", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"ret_value_for_void_ret_test1.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("called");
+    });
+    test("Returning value for void ret multiple", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"ret_value_for_void_ret_test2.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("called1called2");
+    });
 }
 
 static void global_variable_tests() {
