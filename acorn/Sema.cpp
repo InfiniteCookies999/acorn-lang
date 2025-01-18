@@ -1768,8 +1768,8 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
     check_node(loop->container);
 
     if (loop->container->type) {
-        if (loop->container->type->is_array()) {
-            auto arr_type = static_cast<ArrayType*>(loop->container->type);
+        if (loop->container->type->is_array() || loop->container->type->is_slice()) {
+            auto arr_type = static_cast<ContainerType*>(loop->container->type);
             auto elm_type = arr_type->get_elm_type();
 
             if (var_type == context.auto_type) {

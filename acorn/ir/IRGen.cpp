@@ -1541,25 +1541,10 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
     push_scope();
     ir_scope->is_loop_scope = true;
 
-    if (loop->container->type->is_array()) {
-
-        // Calculate beginning and end of the array for determining
-        // the stop condition later.
-        //
-        auto ll_ptr_type = builder.getPtrTy();
-        auto arr_type = static_cast<ArrayType*>(loop->container->type);
-        auto elm_type = arr_type->get_elm_type();
-        auto ll_elm_type = gen_type(elm_type);
-        auto ll_arr_itr_ptr = gen_unseen_alloca(ll_ptr_type, "arr.itr.ptr");
-
-        auto ll_arr_length = gen_isize(arr_type->get_length());
-        auto ll_arr_type = gen_type(arr_type);
-
-        auto ll_arr_beg = gen_node(loop->container);
-
-        auto ll_arr_end = gen_array_memory_access(ll_arr_beg, gen_type(arr_type), ll_arr_length);
-        builder.CreateStore(ll_arr_beg, ll_arr_itr_ptr);
-
+    auto iterator_over_array = [=, this](llvm::Type* ll_ptr_type,
+                                         llvm::Type* ll_elm_type,
+                                         llvm::Value* ll_arr_itr_ptr,
+                                         llvm::Value* ll_arr_end) finline {
         // Branch into the condition block and determine when to stop
         // iterating.
         //
@@ -1609,6 +1594,29 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
             builder.CreateStore(ll_index_value, loop->var->ll_address);
             emit_dbg(di_emitter->emit_location(builder, loop->var->loc));
         }
+    };
+
+    if (loop->container->type->is_array()) {
+
+        // Calculate beginning and end of the array for determining
+        // the stop condition later.
+        //
+        auto ll_ptr_type = builder.getPtrTy();
+        auto arr_type = static_cast<ArrayType*>(loop->container->type);
+        auto elm_type = arr_type->get_elm_type();
+        auto ll_elm_type = gen_type(elm_type);
+        auto ll_arr_itr_ptr = gen_unseen_alloca(ll_ptr_type, "arr.itr.ptr");
+
+        auto ll_arr_length = gen_isize(arr_type->get_length());
+        auto ll_arr_type = gen_type(arr_type);
+
+        auto ll_arr_beg = gen_node(loop->container);
+
+        auto ll_arr_end = gen_array_memory_access(ll_arr_beg, gen_type(arr_type), ll_arr_length);
+        builder.CreateStore(ll_arr_beg, ll_arr_itr_ptr);
+
+        iterator_over_array(ll_ptr_type, ll_elm_type, ll_arr_itr_ptr, ll_arr_end);
+
     } else if (loop->container->type->is_range()) {
 
         auto range_type = static_cast<RangeType*>(loop->container->type);
@@ -1665,6 +1673,31 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         emit_dbg(di_emitter->emit_scope_start(loop->scope->loc));
 
         emit_dbg(di_emitter->emit_function_variable(loop->var, builder));
+
+    } else if (loop->container->type->is_slice()) {
+
+        // Calculate beginning and end of the array for determining
+        // the stop condition later.
+        //
+        auto ll_ptr_type = builder.getPtrTy();
+        auto slice_type = static_cast<SliceType*>(loop->container->type);
+        auto elm_type = slice_type->get_elm_type();
+        auto ll_elm_type = gen_type(elm_type);
+        auto ll_arr_itr_ptr = gen_unseen_alloca(ll_ptr_type, "arr.itr.ptr");
+        auto ll_slice_type = llvm::cast<llvm::StructType>(gen_type(slice_type));
+
+        auto ll_slice = gen_node(loop->container);
+
+        auto ll_arr_beg = builder.CreateStructGEP(ll_slice_type, ll_slice, 0);
+        ll_arr_beg = builder.CreateLoad(builder.getPtrTy(), ll_arr_beg);
+
+        auto ll_slice_length = builder.CreateStructGEP(ll_slice_type, ll_slice, 1);
+        ll_slice_length = builder.CreateLoad(builder.getInt32Ty(), ll_slice_length);
+
+        auto ll_arr_end = builder.CreateInBoundsGEP(ll_elm_type, ll_arr_beg, ll_slice_length);
+        builder.CreateStore(ll_arr_beg, ll_arr_itr_ptr);
+
+        iterator_over_array(ll_ptr_type, ll_elm_type, ll_arr_itr_ptr, ll_arr_end);
 
     } else {
         acorn_fatal("unreachable iteration type");

@@ -725,6 +725,18 @@ static void loop_tests() {
 
         expect(result, std::identity()).to_be("Pizza!");
     });
+    test("Iterator loop over slice of integers", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test16.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ramen");
+    });
+    test("Iterator loop over slice of integers by ptr", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"loops/loops_test17.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@@@@@");
+    });
 }
 
 static void logical_bin_ops_tests() {
