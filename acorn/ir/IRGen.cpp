@@ -1696,7 +1696,7 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         auto elm_type = slice_type->get_elm_type();
         auto ll_elm_type = gen_type(elm_type);
         auto ll_arr_itr_ptr = gen_unseen_alloca(ll_ptr_type, "arr.itr.ptr");
-        auto ll_slice_type = llvm::cast<llvm::StructType>(gen_type(slice_type));
+        auto ll_slice_type = gen_type(slice_type);
 
         auto ll_slice = gen_node(loop->container);
 
@@ -2362,6 +2362,10 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     bool is_member_func = called_func->structn;
     size_t ll_num_args = uses_default_param_values ? called_func->params.size()
                                                    : args.size();
+    if (called_func->uses_varargs) {
+        // The extra arguments are placed into the slice.
+        ll_num_args = called_func->params.size();
+    }
     size_t arg_offset = 0;
 
     if (is_member_func) {
@@ -2393,32 +2397,130 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         std::fill(ll_args.begin() + default_params_offset, ll_args.end(), nullptr);
     }
 
+    bool forwards_varargs = false;
+    llvm::Value* ll_varargs_slice = nullptr;
+    llvm::Value* ll_varargs_array = nullptr;
+    llvm::ArrayType* ll_varargs_arr_type = nullptr;
+    if (called_func->uses_varargs) {
+
+        forwards_varargs = cur_func && cur_func->forwards_varargs(args.back());
+        if (!forwards_varargs) {
+
+            auto last_param = called_func->params.back();
+            auto slice_type = static_cast<SliceType*>(last_param->type);
+            auto ll_slice_type = gen_type(slice_type);
+            auto ll_elm_type = gen_type(slice_type->get_elm_type());
+            size_t num_elements = args.size() - called_func->params.size() + 1;
+            auto ll_num_elements = builder.getInt32(static_cast<uint32_t>(num_elements));
+
+            ll_varargs_slice = gen_unseen_alloca(ll_slice_type, "varargs.slice");
+
+            ll_varargs_arr_type = llvm::ArrayType::get(ll_elm_type, num_elements);
+            ll_varargs_array = gen_unseen_alloca(ll_varargs_arr_type, "varargs.array");
+
+            auto ll_slice_ptr_addr = builder.CreateStructGEP(ll_slice_type, ll_varargs_slice, 0);
+            builder.CreateStore(ll_varargs_array, ll_slice_ptr_addr);
+
+            auto ll_slice_length_addr = builder.CreateStructGEP(ll_slice_type, ll_varargs_slice, 1);
+            builder.CreateStore(ll_num_elements, ll_slice_length_addr);
+
+        }
+    }
+
     // Generating the argument values.
-    for (size_t i = 0; i < args.size(); ++i) {
-        Expr* arg = args[i];
+    size_t arg_idx = 0;
+    for (arg_idx = 0; arg_idx < args.size(); ++arg_idx) {
+        Expr* arg = args[arg_idx];
         if (arg->is(NodeKind::NamedValue)) {
             auto named_arg = static_cast<NamedValue*>(arg);
-            size_t arg_idx = arg_offset + named_arg->mapped_idx;
+            size_t ll_arg_idx = arg_offset + named_arg->mapped_idx;
             Var* param = called_func->params[named_arg->mapped_idx];
             if (param->has_implicit_ptr) {
-                ll_args[arg_idx] = gen_function_call_arg(named_arg->assignment);
+                ll_args[ll_arg_idx] = gen_function_call_arg(named_arg->assignment);
             } else {
-                ll_args[arg_idx] = gen_function_call_arg_for_implicit_ptr(named_arg->assignment);
+                ll_args[ll_arg_idx] = gen_function_call_arg_for_implicit_ptr(named_arg->assignment);
             }
         } else {
-            size_t arg_idx = arg_offset + i;
+            size_t ll_arg_idx = arg_offset + arg_idx;
             if (called_func->uses_native_varargs) {
-                ll_args[arg_idx] = gen_function_call_arg(arg);
+                ll_args[ll_arg_idx] = gen_function_call_arg(arg);
                 continue;
             }
 
-            Var* param = called_func->params[i];
-            if (!param->has_implicit_ptr) {
-                ll_args[arg_idx] = gen_function_call_arg(arg);
+            if (called_func->uses_varargs && arg_idx >= called_func->params.size() - 1) {
+                break;
             } else {
-                ll_args[arg_idx] = gen_function_call_arg_for_implicit_ptr(arg);
+                Var* param = called_func->params[arg_idx];
+                if (!param->has_implicit_ptr) {
+                    ll_args[ll_arg_idx] = gen_function_call_arg(arg);
+                } else {
+                    ll_args[ll_arg_idx] = gen_function_call_arg_for_implicit_ptr(arg);
+                }
             }
         }
+    }
+
+    if (forwards_varargs) {
+        size_t last_index = called_func->params.size() - 1;
+        ll_args[last_index] = gen_node(args.back());
+    } else if (called_func->uses_varargs) {
+        // Inserting the variadic arguments into the slice.
+
+        size_t num_elements = args.size() - called_func->params.size() + 1;
+        size_t last_index = called_func->params.size() - 1;
+
+        Var* last_param = called_func->params[last_index];
+        auto slice_type = static_cast<SliceType*>(last_param->type);
+
+        bool all_args_foldable = !last_param->has_implicit_ptr;
+        for (size_t i = arg_idx; i < arg_idx + num_elements; i++) {
+            Expr* arg = args[i];
+            all_args_foldable &= arg->is_foldable;
+        }
+
+        if (all_args_foldable) {
+
+            bool elms_are_arrays = slice_type->get_elm_type()->is_array();
+            auto ll_elm_type = ll_varargs_arr_type->getElementType();
+
+            llvm::SmallVector<llvm::Constant*> ll_values;
+            ll_values.reserve(ll_varargs_arr_type->getNumElements());
+
+            auto get_element = [this, elms_are_arrays, ll_elm_type](Expr* elm) finline {
+                if (elms_are_arrays) {
+                    auto elm_arr = static_cast<Array*>(elm);
+                    auto elm_arr_type = static_cast<ArrayType*>(elm_arr->get_final_type());
+                    return gen_constant_array(elm_arr, elm_arr_type, llvm::cast<llvm::ArrayType>(ll_elm_type));
+                } else {
+                    return llvm::cast<llvm::Constant>(gen_rvalue(elm));
+                }
+            };
+
+            for (size_t i = arg_idx; i < arg_idx + num_elements; i++) {
+                Expr* arg = args[i];
+                ll_values.push_back(get_element(arg));
+            }
+
+            auto ll_const_arr = llvm::ConstantArray::get(ll_varargs_arr_type, ll_values);
+
+            uint64_t total_linear_length = num_elements;
+            total_linear_length *= sizeof_type_in_bytes(ll_elm_type);
+
+            gen_store_constant_array_to_global(ll_varargs_arr_type, ll_elm_type, ll_const_arr, ll_varargs_array, total_linear_length);
+
+        } else {
+            for (size_t i = 0; i < num_elements; i++) {
+                auto ll_index = builder.CreateInBoundsGEP(ll_varargs_arr_type->getElementType(),
+                                                          ll_varargs_array,
+                                                          { gen_isize(i) });
+                Expr* arg = args[arg_idx];
+                gen_assignment(ll_index, slice_type->get_elm_type(), arg);
+
+                ++arg_idx;
+            }
+        }
+
+        ll_args[last_index] = ll_varargs_slice;
     }
 
     // Fill in slots with default parameter values.
@@ -2855,21 +2957,12 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
     // will then be copied over using memcpy into the destination array.
     if (arr->is_foldable) {
 
-        llvm::Align ll_alignment = get_alignment(ll_elm_type);
-
         auto ll_const_arr = gen_constant_array(arr, arr_type, ll_arr_type);
-        auto ll_global_arr = gen_const_global_variable("const_array", ll_arr_type, ll_const_arr);
-        ll_global_arr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-        ll_global_arr->setAlignment(ll_alignment);
-
-        auto ll_base_type = gen_type(arr_type->get_base_type());
-
         uint64_t total_linear_length = arr_type->get_total_linear_length();
-        builder.CreateMemCpy(
-            ll_dest_addr, ll_alignment,
-            ll_global_arr, ll_alignment,
-            total_linear_length * sizeof_type_in_bytes(ll_base_type)
-        );
+        auto ll_base_type = gen_type(arr_type->get_base_type());
+        total_linear_length *= sizeof_type_in_bytes(ll_base_type);
+        gen_store_constant_array_to_global(ll_arr_type, ll_elm_type, ll_const_arr, ll_dest_addr, total_linear_length);
+
         if (should_emit_debug_info && lvalue) {
             di_emitter->emit_location(builder, lvalue->loc);
         }
@@ -2945,6 +3038,25 @@ llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, ArrayType* ar
     }
 
     return llvm::ConstantArray::get(ll_arr_type, ll_values);
+}
+
+llvm::GlobalVariable* acorn::IRGenerator::gen_store_constant_array_to_global(llvm::Type* ll_arr_type,
+                                                                             llvm::Type* ll_elm_type,
+                                                                             llvm::Constant* ll_const_arr,
+                                                                             llvm::Value* ll_dest_addr,
+                                                                             uint64_t total_linear_length) {
+
+    auto ll_global_arr = gen_const_global_variable("const.array", ll_arr_type, ll_const_arr);
+    ll_global_arr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+    llvm::Align ll_alignment = get_alignment(ll_elm_type);
+    ll_global_arr->setAlignment(ll_alignment);
+
+    builder.CreateMemCpy(
+        ll_dest_addr, ll_alignment,
+        ll_global_arr, ll_alignment,
+        total_linear_length
+    );
+    return ll_global_arr;
 }
 
 llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {

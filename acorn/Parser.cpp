@@ -514,7 +514,16 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
                 next_token(); // Consuming '^' token.
                 type = type_table.get_ptr_type(type);
             }
+
+            bool uses_var_args = cur_token.is(Token::DotDotDot);
+            if (uses_var_args) {
+                func->uses_varargs = true;
+                type = type_table.get_slice_type(type);
+                next_token();
+            }
+
             Var* param = parse_variable(0, type);
+
             param->param_idx = param_idx++;
             param->has_implicit_ptr = has_implicit_ptr;
 
@@ -530,6 +539,11 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
 
             more_params = cur_token.is(',');
             if (more_params) {
+                if (uses_var_args) {
+                    error(cur_token, "Variadic parameters should come last")
+                        .end_error(ErrCode::ParseVarArgsNotLast);
+                }
+
                 next_token(); // Consuming ',' token.
             }
         } while (more_params);
@@ -1473,7 +1487,7 @@ acorn::Type* acorn::Parser::parse_optional_type_trailing_info(Type* type) {
             } else {
                 llvm::SmallVector<Expr*, 8> arr_lengths;
 
-                while (cur_token.is('[')) {
+                while (cur_token.is('[') && !peek_token(0).is(Token::DotDot)) {
                     ++bracket_count;
                     next_token();
 

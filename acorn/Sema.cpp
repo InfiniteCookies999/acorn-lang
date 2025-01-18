@@ -957,11 +957,11 @@ bool acorn::Sema::check_function_decl(Func* func) {
         }
     }
 
-    if (func->uses_native_varargs && func->default_params_offset != -1) {
+    if ((func->uses_native_varargs || func->uses_varargs) && func->default_params_offset != -1) {
         for (Var* param : func->params) {
             if (!param->assignment) continue;
-            error(param, "Functions with native variadic parameters cannot have parameters with default values")
-                .end_error(ErrCode::SemaFuncWithNativeVarArgNoParamDefaultVal);
+            error(param, "Functions with variadic parameters cannot have parameters with default values")
+                .end_error(ErrCode::SemaFuncWithVarArgNoParamDefaultVal);
         }
     }
 
@@ -3760,6 +3760,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
 
     bool is_ambiguous = false;
     bool selected_implicitly_converts_ptr_arg = false;
+    bool passes_varargs_along = false;
     auto called_func = find_best_call_candidate(candidates,
                                                 args,
                                                 selected_implicitly_converts_ptr_arg,
@@ -3774,35 +3775,47 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         return nullptr;
     }
 
+    bool uses_varargs = called_func->uses_varargs || called_func->uses_native_varargs;
+
     // Creating casts from the argument to the parameter.
+    size_t last_index = called_func->params.size() - 1;
     for (size_t i = 0; i < args.size(); i++) {
 
-        if (called_func->uses_native_varargs &&
-            i >= called_func->params.size() - 1) {
+        if (called_func->uses_native_varargs && i >= last_index) {
             continue;
         }
 
         auto arg_value = args[i];
         Var* param;
+        Type* param_type;
         if (arg_value->is(NodeKind::NamedValue)) {
             auto named_arg = static_cast<NamedValue*>(arg_value);
             param = called_func->find_parameter(named_arg->name);
+            param_type = param->type;
             named_arg->mapped_idx = param->param_idx;
 
             arg_value = named_arg->assignment;
         } else {
-            param = called_func->params[i];
+            if (called_func->uses_varargs && i >= last_index) {
+                param = called_func->params[last_index];
+                auto slice_type = static_cast<SliceType*>(param->type);
+                param_type = slice_type->get_elm_type();
+            } else {
+                param = called_func->params[i];
+                param_type = param->type;
+            }
         }
 
         if (selected_implicitly_converts_ptr_arg && arg_value->is(NodeKind::FuncCall)) {
             auto arg_call = static_cast<FuncCall*>(arg_value);
-            if (may_implicitly_convert_return_ptr(param->type, arg_call)) {
+            if (may_implicitly_convert_return_ptr(param_type, arg_call)) {
                 arg_call->implicitly_converts_return = true;
                 continue; // Do not continue to creating the cast.
             }
         }
 
-        create_cast(arg_value, param->type);
+        create_cast(arg_value, param_type);
+
     }
 
     return called_func;
@@ -3824,6 +3837,10 @@ uint32_t acorn::Sema::get_function_call_score(const Func* candidate,
         return INCORRECT_PARAM_NAME_OR_ORD_LIMIT;
     case CallCompareStatus::CANNOT_ACCESS_PRIVATE:
         return CANNOT_ACCESS_PRIVATE_LIMIT;
+    case CallCompareStatus::CANNOT_USE_VARARGS_AS_NAMED_ARG:
+        return CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT;
+    case CallCompareStatus::FORWARD_VARIADIC_WITH_OTHERS:
+        return FORWARD_VARIADIC_WITH_OTHERS_LIMIT;
     default:
         break;
     }
@@ -3869,6 +3886,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                                                                       bool& implicitly_converts_ptr_arg) const {
 
     bool encountered_mismatched_types = false;
+    bool forwards_varargs = false;
 
     if (!has_correct_number_of_args(candidate, args)) {
         return CallCompareStatus::INCORRECT_ARGS;
@@ -3886,14 +3904,19 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         }
     }
 
+    if (candidate->uses_varargs || candidate->uses_native_varargs) {
+        score += IS_VARARGS_LIMIT;
+    }
+
+    size_t last_index = candidate->params.size() - 1;
     bool named_args_out_of_order = false;
     uint32_t named_arg_high_idx = 0;
     for (size_t i = 0; i < args.size(); i++) {
         Expr* arg_value = args[i];
+        Type* param_type;
         Var* param;
 
-        if (candidate->uses_native_varargs &&
-            i >= candidate->params.size() - 1) {
+        if (candidate->uses_native_varargs && last_index) {
 
             if (arg_value->type->is_aggregate()) {
                 return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
@@ -3920,12 +3943,44 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                 return CallCompareStatus::INCORRECT_PARAM_BY_NAME_NOT_FOUND;
             }
 
+            param_type = param->type;
+
+            if (candidate->uses_varargs && i >= last_index) {
+                return CallCompareStatus::CANNOT_USE_VARARGS_AS_NAMED_ARG;
+            }
+
             if (param->param_idx != i) {
                 named_args_out_of_order = true;
             }
             named_arg_high_idx = std::max(param->param_idx, named_arg_high_idx);
         } else {
-            param = candidate->params[i];
+
+            if (candidate->uses_varargs && i >= last_index) {
+                param = candidate->params[last_index];
+                auto slice_type = static_cast<SliceType*>(param->type);
+                param_type = slice_type->get_elm_type();
+
+                if (forwards_varargs) {
+                    return CallCompareStatus::FORWARD_VARIADIC_WITH_OTHERS;
+                }
+
+                // Checking for special condition in which a function passes its own variadic arguments
+                // to another function that takes variadic arguments.
+                if (cur_func && cur_func->forwards_varargs(arg_value)) {
+                    if (i > last_index) {
+                        return CallCompareStatus::FORWARD_VARIADIC_WITH_OTHERS;
+                    }
+
+                    // Do not proceed to check the argument because it forwards
+                    // the variadic parameters.
+                    forwards_varargs = true;
+                    continue;
+                }
+
+            } else {
+                param = candidate->params[i];
+                param_type = param->type;
+            }
 
             // Cannot determine the order of the arguments if the
             // non-named arguments come after the named arguments
@@ -3935,11 +3990,11 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
             }
         }
 
-        if (!is_assignable_to(param->type, arg_value)) {
+        if (!is_assignable_to(param_type, arg_value)) {
 
             bool is_assignable = false;
             if (param->has_implicit_ptr && arg_value->is_not(NodeKind::MoveObj)) {
-                auto ptr_type = static_cast<PointerType*>(param->type);
+                auto ptr_type = static_cast<PointerType*>(param_type);
                 if (may_implicitly_convert_ptr(ptr_type, arg_value)) {
                     if (arg_value->is_not(NodeKind::MoveObj)) {
                         is_assignable = true;
@@ -3949,7 +4004,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
 
             if (!is_assignable && arg_value->is(NodeKind::FuncCall)) {
                 auto arg_call = static_cast<FuncCall*>(arg_value);
-                if (may_implicitly_convert_return_ptr(param->type, arg_call)) {
+                if (may_implicitly_convert_return_ptr(param_type, arg_call)) {
                     implicitly_converts_ptr_arg = true;
                     is_assignable = true;
                 }
@@ -3966,8 +4021,8 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
             }
         }
 
-        if (param->type->remove_all_const()->is_not(arg_value->type->remove_all_const())) {
-            if (context.is_std_any_type(param->type)) {
+        if (param_type->remove_all_const()->is_not(arg_value->type->remove_all_const())) {
+            if (context.is_std_any_type(param_type)) {
                 score += IMPLICIT_CAST_TO_ANY_LIMIT;
             } else {
                 // Lowest order case considered least important.
@@ -3982,8 +4037,14 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
 bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const
                                              llvm::SmallVector<Expr*>& args) const {
     if (candidate->default_params_offset == -1) {
-        if (!candidate->uses_native_varargs) {
+        if (!(candidate->uses_native_varargs || candidate->uses_varargs)) {
             if (candidate->params.size() != args.size()) {
+                return false;
+            }
+        } else if (candidate->uses_varargs) {
+            // Subtract off one because the last parameter represents
+            // the variadic parameters and doesn't require it to be provided.
+            if (args.size() < candidate->params.size() - 1) {
                 return false;
             }
         } else {
@@ -4082,8 +4143,17 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
             }
         }
 
+        if constexpr (is_func_decl) {
+            if (candidate->uses_native_varargs || candidate->uses_varargs) {
+                err_line("Incorrect number of args. Expected at least %s but found %s",
+                         num_params - (candidate->uses_varargs ? 1 : 0), args.size());
+                return;
+            }
+        }
+
         err_line("Incorrect number of args. Expected %s but found %s",
-                 num_params, args.size());
+                    num_params, args.size());
+
         return;
     }
 
@@ -4129,12 +4199,24 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
 
     auto get_param_type = [candidate](Var* param, size_t arg_idx) constexpr -> Type* {
         if constexpr (is_func_decl) {
-            return param->type;
+            size_t last_index = candidate->params.size() - 1;
+            if (candidate->uses_varargs && arg_idx >= last_index) {
+                auto slice_type = static_cast<SliceType*>(param->type);
+                return slice_type->get_elm_type();
+            } else {
+                return param->type;
+            }
         } else {
             return candidate->get_param_types()[arg_idx];
         }
     };
 
+    size_t last_index = 0;
+    if constexpr (is_func_decl) {
+        last_index = candidate->params.size() - 1;;
+    }
+
+    bool forwards_varargs = false;
     bool named_args_out_of_order = false;
     uint32_t named_arg_high_idx = 0;
     for (size_t i = 0; i < args.size(); i++) {
@@ -4143,8 +4225,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         Var* param = nullptr;
 
         if constexpr (is_func_decl) {
-            if (candidate->uses_native_varargs &&
-                i >= candidate->params.size() - 1) {
+            if (candidate->uses_native_varargs && i >= last_index) {
 
                 if (arg_value->type->is_aggregate()) {
                     err_line("Arg %s of type '%s' cannot be used in a native varargs list",
@@ -4174,6 +4255,11 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                     return;
                 }
 
+                if (candidate->uses_varargs && i >= candidate->params.size() - 1) {
+                    err_line("Cannot use the parameter name of a variadic parameter");
+                    return;
+                }
+
                 named_arg_high_idx = std::max(param->param_idx, named_arg_high_idx);
                 if (param->param_idx != i) {
                     named_args_out_of_order = true;
@@ -4184,7 +4270,34 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
             }
         } else {
             if constexpr (is_func_decl) {
-                param = candidate->params[i];
+                if (candidate->uses_varargs && i >= last_index) {
+                    param = candidate->params[last_index];
+                    auto slice_type = static_cast<SliceType*>(param->type);
+
+                    if (forwards_varargs) {
+                        err_line("Cannot pass arguments after forwarding variadic to variadic parameter");
+                        return;
+                    }
+
+                    // Checking for special condition in which a function passes its own variadic arguments
+                    // to another function that takes variadic arguments.
+                    if (cur_func && cur_func->forwards_varargs(arg_value)) {
+                        if (i > last_index) {
+                            err_line("Cannot forward variadic to variadic parameter after passing other");
+                            logger.remove_period();
+                            logger.add_line("  arguments to variadic parameter");
+                            return;
+                        }
+
+                        // Do not proceed to check the argument because it forwards
+                        // the variadic parameters.
+                        forwards_varargs = true;
+                        continue;
+                    }
+
+                } else {
+                    param = candidate->params[i];
+                }
 
                 if (named_args_out_of_order || named_arg_high_idx > i) {
                     // Do not continue reporting errors because the arguments
@@ -4240,6 +4353,7 @@ void acorn::Sema::display_call_ambiguous_info(PointSourceLoc error_loc,
 
         uint32_t score = 0;
         bool implicitly_converts_ptr_arg = false;
+        bool passes_varargs_along = false;
         auto status = compare_as_call_candidate<false>(canidate, args, is_const_object, score, implicitly_converts_ptr_arg);
         if (status != CallCompareStatus::SUCCESS) {
             continue;
@@ -4249,9 +4363,10 @@ void acorn::Sema::display_call_ambiguous_info(PointSourceLoc error_loc,
             selected = canidate;
             best_score = score;
             ambiguous_funcs.clear();
+            ambiguous_funcs.push_back(canidate);
+        } else if (best_score == score) {
+            ambiguous_funcs.push_back(canidate);
         }
-
-        ambiguous_funcs.push_back(canidate);
     }
 
     logger.begin_error(error_loc, "Ambiguous function call. Functions:").remove_period();
@@ -4317,10 +4432,6 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
             continue;
         }
 
-        if (!elm->is_foldable) {
-            arr->is_foldable = false;
-        }
-
         if (dest_elm_type) {
             if (!is_assignable_to(dest_elm_type, elm)) {
                 error(expand(elm), "%s", get_type_mismatch_error(dest_elm_type, elm))
@@ -4361,9 +4472,14 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
         return;
     }
 
-    for (Expr* value : arr->elms) {
-        if (value) {
-            create_cast(value, elm_type);
+    for (Expr* elm : arr->elms) {
+        if (elm) {
+            create_cast(elm, elm_type);
+
+            // Must go after after cast because casting may change foldability
+            if (!elm->is_foldable) {
+                arr->is_foldable = false;
+            }
         }
     }
 
@@ -4763,66 +4879,6 @@ bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) const {
     }
 }
 
-bool acorn::Sema::try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr) const {
-
-    if (to_type->is_pointer() && expr && expr->is(NodeKind::Null)) {
-        // Ignore this case because null can assign to all pointers
-        // so we do not want to decense the pointers.
-    } else if (!has_valid_constness(to_type, from_type)) {
-        return false;
-    }
-
-    if (to_type->does_contain_const()) {
-        to_type = to_type->remove_all_const();
-    }
-    if (from_type->does_contain_const()) {
-        from_type = from_type->remove_all_const();
-    }
-
-    return true;
-}
-
-bool acorn::Sema::has_valid_constness(Type* to_type, Type* from_type) const {
-
-    // There is nothing that can be violated if the from_type does not
-    // even contain const.
-    if (!from_type->does_contain_const()) {
-        return true;
-    }
-
-    while (from_type->is_container()) {
-
-        if (!to_type->is_container()) {
-            // This case is like:
-            //
-            // const int** a;
-            // int* b = as(int*) a;
-            //      ^
-            //      `b` points to the address of the other pointer
-            //          but the other pointer isn't specified as having
-            //          a constant address, so it is fine.
-            //
-            return true;
-        }
-
-        auto to_ctr_type   = static_cast<ContainerType*>(to_type);
-        auto from_ctr_type = static_cast<ContainerType*>(from_type);
-
-        auto to_elm_type   = to_ctr_type->get_elm_type();
-        auto from_elm_type = from_ctr_type->get_elm_type();
-
-        if (from_elm_type->is_const() && !to_elm_type->is_const()) {
-            return false;
-        }
-
-        to_type = to_elm_type;
-        from_type = from_elm_type;
-
-    }
-
-    return true;
-}
-
 bool acorn::Sema::check_modifiable(Expr* expr, Expr* error_node, bool is_assignment) {
 
     if (!is_lvalue(expr)) {
@@ -5006,6 +5062,9 @@ void acorn::Sema::create_cast(Expr* expr, Type* to_type) {
     // but at that point it is unclear if the type needs casting or not?
     if (expr->type->remove_all_const()->is_not(to_type->remove_all_const())) {
         expr->cast_type = to_type;
+        if (to_type->is_struct() || to_type->is_enum()) {
+            expr->is_foldable = false;
+        }
     }
 }
 

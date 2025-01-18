@@ -211,6 +211,7 @@ namespace acorn {
         bool is_move_constructor     = false;
         bool has_implicit_return_ptr = false;
         bool uses_native_varargs     = false;
+        bool uses_varargs            = false;
         bool is_constant             = false;
         Var* aggr_ret_var = nullptr;
 
@@ -221,6 +222,8 @@ namespace acorn {
         SourceLoc get_function_const_location() const;
 
         std::string get_decl_string() const;
+
+        bool forwards_varargs(Expr* arg_value) const;
 
     };
 

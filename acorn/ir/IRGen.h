@@ -196,6 +196,11 @@ namespace acorn {
         llvm::Value* gen_cast(Cast* cast);
         llvm::Value* gen_array(Array* arr, llvm::Value* ll_dest_addr, Node* lvalue = nullptr);
         llvm::Constant* gen_constant_array(Array* arr, ArrayType* arr_type, llvm::ArrayType* ll_arr_type);
+        llvm::GlobalVariable* gen_store_constant_array_to_global(llvm::Type* ll_arr_type,
+                                                                 llvm::Type* ll_elm_type,
+                                                                 llvm::Constant* ll_const_arr,
+                                                                 llvm::Value* ll_dest_addr,
+                                                                 uint64_t total_linear_length);
         llvm::Value* gen_memory_access(MemoryAccess* mem_access);
         llvm::Value* gen_dot_operator(DotOperator* dot);
 

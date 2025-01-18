@@ -1918,6 +1918,57 @@ static void slices_tests() {
     });
 }
 
+static void varargs_tests() {
+    test("Varargs pass foldable integers", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"varargs/varargs_test1.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Varargs pass non-foldable integers", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"varargs/varargs_test2.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Varargs pass foldable arrays", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"varargs/varargs_test3.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Varargs pass non-foldable arrays", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"varargs/varargs_test4.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Varargs forward", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"varargs/varargs_test5.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("Lets go!");
+    });
+    test("Varargs with other arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"varargs/varargs_test6.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@?Lets go!");
+    });
+    test("Varargs with other named arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"varargs/varargs_test7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@?Lets go!");
+    });
+    test("Varargs with other named arguments mixed", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"varargs/varargs_test8.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@?Lets go!");
+    });
+}
+
 void test_codegen() {
 
     executable_path = get_executable_path();
@@ -1965,5 +2016,6 @@ void test_codegen() {
         ternaries_tests();
         enums_tests();
         slices_tests();
+        varargs_tests();
     }, true);
 }

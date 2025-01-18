@@ -95,6 +95,32 @@ std::string acorn::Func::get_decl_string() const {
     return str;
 }
 
+bool acorn::Func::forwards_varargs(Expr* arg_value) const {
+    if (!uses_varargs) return false;
+    if (arg_value->is_not(NodeKind::IdentRef)) return false;
+
+    auto ref = static_cast<IdentRef*>(arg_value);
+    auto last_param = params.back();
+
+    if (!ref->is_var_ref()) return false;
+
+    auto var = ref->var_ref;
+    if (!var->is_param()) return false;
+    if (ref->var_ref != last_param) return false;
+
+    auto candidate_last_param = params.back();
+    auto this_slice_type = last_param->type;
+    auto candidate_slice_type = candidate_last_param->type;
+
+    if (!has_valid_constness(this_slice_type, candidate_slice_type)) {
+        return false;
+    }
+
+    this_slice_type = this_slice_type->remove_all_const();
+    candidate_slice_type = candidate_slice_type->remove_all_const();
+    return this_slice_type->is(candidate_slice_type);
+}
+
 acorn::Var* acorn::Func::find_parameter(Identifier name) const {
     auto itr = std::ranges::find_if(params, [name](Var* param) {
         return param->name == name;

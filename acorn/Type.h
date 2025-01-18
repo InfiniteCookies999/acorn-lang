@@ -17,6 +17,7 @@ namespace llvm {
 
 namespace acorn {
 
+    class Type;
     class PageAllocator;
     class TypeTable;
     struct Expr;
@@ -76,6 +77,9 @@ namespace acorn {
         Invalid,
 
     };
+
+    bool try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr);
+    bool has_valid_constness(Type* to_type, Type* from_type);
 
     class Type {
     public:

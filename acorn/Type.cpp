@@ -6,6 +6,68 @@
 #include "TypeTable.h"
 #include "Context.h"
 #include "ir/GenTypes.h"
+#include "AST.h"
+
+
+bool acorn::try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr) {
+
+    if (to_type->is_pointer() && expr && expr->is(NodeKind::Null)) {
+        // Ignore this case because null can assign to all pointers
+        // so we do not want to decense the pointers.
+    } else if (!has_valid_constness(to_type, from_type)) {
+        return false;
+    }
+
+    if (to_type->does_contain_const()) {
+        to_type = to_type->remove_all_const();
+    }
+    if (from_type->does_contain_const()) {
+        from_type = from_type->remove_all_const();
+    }
+
+    return true;
+}
+
+bool acorn::has_valid_constness(Type* to_type, Type* from_type) {
+
+    // There is nothing that can be violated if the from_type does not
+    // even contain const.
+    if (!from_type->does_contain_const()) {
+        return true;
+    }
+
+    while (from_type->is_container()) {
+
+        if (!to_type->is_container()) {
+            // This case is like:
+            //
+            // const int** a;
+            // int* b = as(int*) a;
+            //      ^
+            //      `b` points to the address of the other pointer
+            //          but the other pointer isn't specified as having
+            //          a constant address, so it is fine.
+            //
+            return true;
+        }
+
+        auto to_ctr_type   = static_cast<ContainerType*>(to_type);
+        auto from_ctr_type = static_cast<ContainerType*>(from_type);
+
+        auto to_elm_type   = to_ctr_type->get_elm_type();
+        auto from_elm_type = from_ctr_type->get_elm_type();
+
+        if (from_elm_type->is_const() && !to_elm_type->is_const()) {
+            return false;
+        }
+
+        to_type = to_elm_type;
+        from_type = from_elm_type;
+
+    }
+
+    return true;
+}
 
 acorn::Type* acorn::Type::create(PageAllocator& allocator, TypeKind kind, bool is_const) {
     Type* type = allocator.alloc_type<Type>();

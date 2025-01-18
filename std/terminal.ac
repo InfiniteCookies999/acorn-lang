@@ -70,6 +70,20 @@ void print(Any value) {
     print_any(value.ptr, value.type);
 }
 
+void print(const char* fmt, Any... args) {
+    int arg_index = 0;
+    loop auto ptr = fmt; *ptr != '\0'; {
+        if *ptr == '%' && *(ptr+1) == 's' {
+            ptr += 2;
+            Any arg = args[arg_index++];
+            print(arg);
+        } else {
+            print(*ptr);
+            ++ptr;
+        }
+    }
+}
+
 void print(const void* ptr) {
 
     const BUFFER_SIZE = sizeof(void*) * 2 + 2;
@@ -242,5 +256,10 @@ void println(const String^ s) {
 
 void println(Any any) {
     print(any);
+    print("\n");
+}
+
+void println(const char* fmt, Any... args) {
+    print(fmt, args);
     print("\n");
 }
