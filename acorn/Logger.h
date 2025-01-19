@@ -251,8 +251,16 @@ namespace acorn {
             None
         };
 
+        struct LineInfo {
+            std::string unprocessed_text;
+            const char* line_start_ptr;
+            bool is_first; // Is this the first line being printed.
+            bool is_last;  // Is this the last line being printed.
+            size_t dots_width;
+        };
+
         // Data used for printing errors.
-        using InfoLines = llvm::SmallVector<std::pair<std::string, const char*>, 8>;
+        using InfoLines = llvm::SmallVector<LineInfo, 8>;
         struct ErrorInfo {
             InfoLines   lines;
             size_t      start_line_number;
@@ -380,7 +388,43 @@ namespace acorn {
 
     private:
         void print_header(ErrCode error_code, const std::string& line_number_pad);
+
         void print_error_location(const ErrorInfo& info);
+
+        void print_error_location_line(const ErrorInfo& info,
+                                       const LineInfo& line_info,
+                                       size_t primary_line_leading_trim,
+                                       bool has_arrow_msg,
+                                       bool is_alongside_arrow_msg,
+                                       bool is_at_arrow_msg,
+                                       bool is_arrow_after,
+                                       const size_t line_number);
+        void print_line_number_bar(const ErrorInfo& info, size_t line_number);
+
+        void print_arrow_after_msg(const ErrorInfo& info,
+                                   const LineInfo& line_info,
+                                   const std::string& line,
+                                   size_t& total_printed_characters_for_line);
+
+        void print_underline(const ErrorInfo& info,
+                             const LineInfo& line_info,
+                             bool is_at_arrow_msg,
+                             const std::string& line,
+                             size_t& total_printed_characters_for_line);
+        void print_individual_underlines(const LineInfo& line_info,
+                                         size_t primary_line_leading_trim,
+                                         size_t& total_printed_characters_for_line);
+
+        void calc_alongwith_arrow_msg_info_and_print_location(const LineInfo& line_info,
+                                                              size_t line_number,
+                                                              bool& alongside_arrow_msg_on_line,
+                                                              bool& alongside_arrow_msg_after_dots);
+        void print_alongwith_arrow_msg_on_last_line(const LineInfo& line_info,
+                                                    size_t total_printed_characters_for_line);
+        void print_alongwith_arrow_msg_after_dots(const LineInfo& line_info,
+                                                  size_t total_printed_characters_for_line);
+
+        void print_line_bar(const ErrorInfo& info, bool include_new_line = true);
     public:
         void end_error(ErrCode error_code);
 
@@ -409,6 +453,10 @@ namespace acorn {
             error_code_interceptor = interceptor;
         }
 
+        void add_individual_underline(PointSourceLoc underline_loc) {
+            individual_underlines.push_back(underline_loc);
+        }
+
     private:
         SourceFile& file;
 
@@ -421,6 +469,8 @@ namespace acorn {
             ArrowPosition position;
             SourceLoc     location;
         } arrow_msg;
+
+        llvm::SmallVector<PointSourceLoc> individual_underlines;
 
         // This is not the total number of accumulated errors. This
         // would be the number of errors currented found within the

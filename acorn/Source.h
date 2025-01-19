@@ -49,6 +49,10 @@ namespace acorn {
         uint16_t    length;
         const char* point;
         uint16_t    point_length;
+
+        const char* end() const {
+            return ptr + length;
+        }
     };
 }
 

@@ -90,6 +90,9 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
         auto ptr_type = static_cast<PointerType*>(type);
         auto elm_type = ptr_type->get_elm_type();
         auto fixed_elm_type = fixup_type(elm_type);
+        if (!fixed_elm_type) {
+            return nullptr;
+        }
 
         if (fixed_elm_type == elm_type) {
             return ptr_type;
@@ -105,6 +108,9 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
         auto slice_type = static_cast<SliceType*>(type);
         auto elm_type = slice_type->get_elm_type();
         auto fixed_elm_type = fixup_type(elm_type);
+        if (!fixed_elm_type) {
+            return nullptr;
+        }
 
         if (fixed_elm_type == elm_type) {
             return slice_type;
@@ -119,6 +125,9 @@ acorn::Type* acorn::Sema::fixup_type(Type* type) {
         auto arr_type = static_cast<ArrayType*>(type);
         auto elm_type = arr_type->get_elm_type();
         auto fixed_elm_type = fixup_type(elm_type);
+        if (!fixed_elm_type) {
+            return nullptr;
+        }
 
         if (fixed_elm_type == elm_type) {
             return arr_type;
@@ -3662,7 +3671,7 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
     auto display_error = [this, call, func_type]() finline {
         logger.begin_error(expand(call), "Invalid call to function type: %s", func_type);
         logger.add_empty_line();
-        display_call_mismatch_info(func_type, call->args, false, call);
+        display_call_mismatch_info(func_type, call->args, false, true, call);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
     };
 
@@ -4075,7 +4084,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
 
         logger.begin_error(error_loc, "Invalid call to %s: %s", func_type_str, canidate->get_decl_string());
         logger.add_empty_line();
-        display_call_mismatch_info(canidate, args, false, call_node);
+        display_call_mismatch_info(canidate, args, false, true, call_node);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
 
     } else {
@@ -4093,7 +4102,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
         for (auto [_, candidate] : candidates_and_scores | std::views::take(context.get_max_call_err_funcs())) {
             logger.add_empty_line();
             logger.add_line("Could not match: %s", candidate->get_decl_string());
-            display_call_mismatch_info(candidate, args, true, call_node);
+            display_call_mismatch_info(candidate, args, true, false, call_node);
         }
         int64_t remaining = static_cast<int64_t>(candidates.size()) - static_cast<int64_t>(context.get_max_call_err_funcs());
         if (remaining > 0) {
@@ -4109,9 +4118,16 @@ template<typename F>
 void acorn::Sema::display_call_mismatch_info(const F* candidate,
                                              const llvm::SmallVector<Expr*>& args,
                                              bool indent,
+                                             bool should_show_invidual_underlines,
                                              Node* call_node) const {
 
-#define err_line(fmt, ...) logger.add_line(("%s- " fmt), indent ? "  " : "", ##__VA_ARGS__)
+#define err_line(n, fmt, ...)                                         \
+{                                                                     \
+    if (n && should_show_invidual_underlines) {                       \
+        logger.add_individual_underline(expand(n));                   \
+    }                                                                 \
+    logger.add_line(("%s- " fmt), indent ? "  " : "", ##__VA_ARGS__); \
+}
 
     constexpr bool is_func_decl = std::is_same_v<std::remove_const_t<F>, Func>;
 
@@ -4137,7 +4153,8 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         if constexpr (is_func_decl) {
             if (candidate->default_params_offset != -1) {
                 size_t min_params = candidate->default_params_offset;
-                err_line("Incorrect number of args. Expected between %s-%s but found %s",
+                err_line(nullptr,
+                         "Incorrect number of args. Expected between %s-%s but found %s",
                          min_params, num_params, args.size());
                 return;
             }
@@ -4145,14 +4162,16 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
 
         if constexpr (is_func_decl) {
             if (candidate->uses_native_varargs || candidate->uses_varargs) {
-                err_line("Incorrect number of args. Expected at least %s but found %s",
+                err_line(nullptr,
+                         "Incorrect number of args. Expected at least %s but found %s",
                          num_params - (candidate->uses_varargs ? 1 : 0), args.size());
                 return;
             }
         }
 
-        err_line("Incorrect number of args. Expected %s but found %s",
-                    num_params, args.size());
+        err_line(nullptr,
+                 "Incorrect number of args. Expected %s but found %s",
+                 num_params, args.size());
 
         return;
     }
@@ -4163,13 +4182,14 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
             if (call->site->is(NodeKind::IdentRef) && cur_func) {
                 // Calling one member function from another.
                 if (cur_func->is_constant) {
-                    err_line("Cannot call non-const function from const function");
+                    err_line(nullptr, "Cannot call non-const function from const function");
                     return;
                 }
             } else {
 
-                auto report_error = [&logger = this->logger, indent](DotOperator* dot) {
-                    err_line("Calling non-const function with const memory of type '%s'", dot->site->type);
+                auto report_error = [&logger = this->logger, indent, should_show_invidual_underlines]
+                    (DotOperator* dot) {
+                    err_line(nullptr, "Calling non-const function with const memory of type '%s'", dot->site->type);
                 };
 
                 auto dot = static_cast<DotOperator*>(call->site);
@@ -4191,7 +4211,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
 
         if (candidate->has_modifier(Modifier::Private) && candidate->structn) {
             if (!cur_func || (cur_func->structn != candidate->structn)) {
-                err_line("It is private");
+                err_line(nullptr, "It is private");
                 return;
             }
         }
@@ -4216,6 +4236,8 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         last_index = candidate->params.size() - 1;;
     }
 
+    // Pre checking some of the errors because these errors may cause conflict
+    // and poor error reporting when trying to checking assignability.
     bool forwards_varargs = false;
     bool named_args_out_of_order = false;
     uint32_t named_arg_high_idx = 0;
@@ -4228,12 +4250,14 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
             if (candidate->uses_native_varargs && i >= last_index) {
 
                 if (arg_value->type->is_aggregate()) {
-                    err_line("Arg %s of type '%s' cannot be used in a native varargs list",
+                    err_line(arg_value,
+                             "Arg %s of type '%s' cannot be used in a native varargs list",
                              i + 1, arg_value->type);
                 }
 
                 if (is_incomplete_type(arg_value->type)) {
-                    err_line("Arg %s of type '%s' is incomplete",
+                    err_line(arg_value,
+                             "Arg %s of type '%s' is incomplete",
                              i + 1, arg_value->type);
                 }
 
@@ -4251,12 +4275,12 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                 param = candidate->find_parameter(named_arg->name);
 
                 if (!param) {
-                    err_line("Could not find param '%s' for named arg", named_arg->name);
+                    err_line(arg_value, "Could not find param '%s' for named arg", named_arg->name);
                     return;
                 }
 
                 if (candidate->uses_varargs && i >= candidate->params.size() - 1) {
-                    err_line("Cannot use the parameter name of a variadic parameter");
+                    err_line(arg_value, "Cannot use the parameter name of a variadic parameter");
                     return;
                 }
 
@@ -4265,7 +4289,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                     named_args_out_of_order = true;
                 }
             } else {
-                err_line("Cannot use named arguments when calling based on type");
+                err_line(arg_value, "Cannot use named arguments when calling based on type");
                 return;
             }
         } else {
@@ -4275,7 +4299,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                     auto slice_type = static_cast<SliceType*>(param->type);
 
                     if (forwards_varargs) {
-                        err_line("Cannot pass arguments after forwarding variadic to variadic parameter");
+                        err_line(arg_value, "Cannot pass arguments after forwarding variadic to variadic parameter");
                         return;
                     }
 
@@ -4283,7 +4307,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                     // to another function that takes variadic arguments.
                     if (cur_func && cur_func->forwards_varargs(arg_value)) {
                         if (i > last_index) {
-                            err_line("Cannot forward variadic to variadic parameter after passing other");
+                            err_line(arg_value, "Cannot forward variadic to variadic parameter after passing other");
                             logger.remove_period();
                             logger.add_line("  arguments to variadic parameter");
                             return;
@@ -4303,9 +4327,51 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                     // Do not continue reporting errors because the arguments
                     // being disordered would mean the error messages would not
                     // make any sense.
-                    err_line("Arg %s causes the arguments to be out of order", i + 1);
+                    err_line(arg_value, "Arg %s causes the arguments to be out of order", i + 1);
                     logger.add_line("  Order named arguments or place before named arguments");
                     return;
+                }
+            }
+        }
+    }
+
+    // Proceed to check assignablity of arguments.
+    forwards_varargs = false;
+    named_args_out_of_order = false;
+    named_arg_high_idx = 0;
+    for (size_t i = 0; i < args.size(); i++) {
+
+        Expr* arg_value = args[i];
+        Var* param = nullptr;
+
+        if (arg_value->is(NodeKind::NamedValue)) {
+            if constexpr (is_func_decl) {
+                auto named_arg = static_cast<NamedValue*>(arg_value);
+                arg_value = named_arg->assignment;
+                param = candidate->find_parameter(named_arg->name);
+
+                named_arg_high_idx = std::max(param->param_idx, named_arg_high_idx);
+                if (param->param_idx != i) {
+                    named_args_out_of_order = true;
+                }
+            }
+        } else {
+            if constexpr (is_func_decl) {
+                if (candidate->uses_varargs && i >= last_index) {
+                    param = candidate->params[last_index];
+                    auto slice_type = static_cast<SliceType*>(param->type);
+
+                    // Checking for special condition in which a function passes its own variadic arguments
+                    // to another function that takes variadic arguments.
+                    if (cur_func && cur_func->forwards_varargs(arg_value)) {
+                        // Do not proceed to check the argument because it forwards
+                        // the variadic parameters.
+                        forwards_varargs = true;
+                        continue;
+                    }
+
+                } else {
+                    param = candidate->params[i];
                 }
             }
         }
@@ -4318,7 +4384,8 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                 if (may_implicitly_convert_ptr(ptr_type, arg_value)) {
                     is_assignable = true;
                     if (arg_value->is(NodeKind::MoveObj)) {
-                        err_line("Cannot implicitly convert arg %s using moveobj to pointer type '%s'",
+                        err_line(arg_value,
+                                 "Cannot implicitly convert arg %s using moveobj to pointer type '%s'",
                                  i + 1, param_type);
                     }
                 }
@@ -4332,7 +4399,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
             }
 
             if (!is_assignable) {
-                err_line("Arg %s %s", i + 1, get_type_mismatch_error(param_type, arg_value));
+                err_line(arg_value, "Arg %s %s", i + 1, get_type_mismatch_error(param_type, arg_value));
             }
         }
     }

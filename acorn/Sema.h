@@ -197,6 +197,7 @@ namespace acorn {
         void display_call_mismatch_info(const F* candidate,
                                         const llvm::SmallVector<Expr*>& args,
                                         bool indent,
+                                        bool should_show_invidual_underlines,
                                         Node* call_node) const;
         void display_call_ambiguous_info(PointSourceLoc error_loc,
                                          FuncList& candidates,

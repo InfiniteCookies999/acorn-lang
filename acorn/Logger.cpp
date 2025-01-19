@@ -271,8 +271,8 @@ namespace acorn {
         return lines;
     }
 
-    static size_t count_leading_spaces(const std::string& s) {
-        auto count = s.find_first_not_of(' ');
+    static size_t count_leading_whitespace(const std::string& s) {
+        auto count = s.find_first_not_of(" \t\n\r\v\f");
         return count == std::string::npos ? 0 : count;
     }
 
@@ -650,10 +650,13 @@ namespace acorn {
 
         // Convert tabs to spaces for all ours lines.
         lines = lines
-              | std::views::transform([](auto& line_info) {
-                   return std::pair<std::string, const char*>{
-                       trim_trailing(std::get<0>(line_info)),
-                       std::get<1>(line_info)
+              | std::views::transform([&lines, &start_info](auto& line_info) {
+                   return Logger::LineInfo {
+                       .unprocessed_text = trim_trailing(line_info.unprocessed_text),
+                       .line_start_ptr   = line_info.line_start_ptr,
+                       .is_first         = &line_info == &lines.front(),
+                       .is_last          = &line_info == &lines.back(),
+                       .dots_width       = static_cast<size_t>(start_info.exceeded ? 4 : 0)
                    };
                 })
               | std::ranges::to<Logger::InfoLines>();
@@ -764,178 +767,324 @@ void acorn::Logger::print_header(ErrCode error_code, const std::string& line_num
 }
 
 void acorn::Logger::print_error_location(const ErrorInfo& info) {
-    auto print_bar = [this, pad = info.line_number_pad](bool include_new_line = true){
-        fmt_print(" %s %s|%s ", pad, BrightWhite, White);
-        if (include_new_line) print("\n");
-    };
 
-    print_bar();
+    print_line_bar(info);
 
     size_t line_number = info.start_line_number;
 
     bool has_arrow_msg = !arrow_msg.msg.empty();
-    bool arrow_after            = has_arrow_msg && arrow_msg.position == ArrowPosition::After;
+    bool is_arrow_after         = has_arrow_msg && arrow_msg.position == ArrowPosition::After;
     bool is_at_arrow_msg        = has_arrow_msg && arrow_msg.position == ArrowPosition::At;
     bool is_alongside_arrow_msg = has_arrow_msg && arrow_msg.position == ArrowPosition::Alongside;
 
+    {
+        // Later calculations require this to be ordered linearly by where it appears in
+        // the buffer.
+        std::ranges::sort(individual_underlines, [](const auto& lhs, const auto& rhs) {
+            return lhs.ptr < rhs.ptr;
+        });
+        // Must make this unique because otherwise it will try and display the underline for the
+        // same expression multiple times.
+        auto new_end = std::unique(individual_underlines.begin(), individual_underlines.end(),
+                                   [](const auto& lhs, const auto& rhs) {
+            return lhs.ptr == rhs.ptr;
+        });
+        individual_underlines.erase(new_end, individual_underlines.end());
+    }
+
     size_t primary_line_leading_trim = static_cast<size_t>(info.prim_line_cutoff_lead_trim);
     for (const auto& line_info : info.lines) {
-        bool is_first = &line_info == &info.lines.front();
-        bool is_last  = &line_info == &info.lines.back();
 
-        std::string line = tabs_to_spaces(std::get<0>(line_info));
-        line = line.substr(primary_line_leading_trim, line.length());
-
-        // Displaying the line number and bar.
-        auto line_number_pad_width = count_digits(info.last_line_number) - count_digits(line_number);
-        auto line_number_pad = std::string(line_number_pad_width, ' ');
-        fmt_print(" %s%s%s %s|%s ",
-                  line_number == info.primary_line_number ? BrightYellow : DarkGray,
-                  line_number,
-                  line_number_pad,
-                  BrightWhite,
-                  White);
+        print_error_location_line(info,
+                                  line_info,
+                                  primary_line_leading_trim,
+                                  has_arrow_msg,
+                                  is_alongside_arrow_msg,
+                                  is_at_arrow_msg,
+                                  is_arrow_after,
+                                  line_number);
         ++line_number;
+    }
+}
 
-        // Printing the line.
-        if (is_first && info.exceeded_start)
-            fmt_print("%s...%s ", Green, White);
-        else if (info.exceeded_start)
-            print("    "); // Want to make sure the lines are still aligned as seen in the file.
+void acorn::Logger::print_error_location_line(const ErrorInfo& info,
+                                              const LineInfo& line_info,
+                                              size_t primary_line_leading_trim,
+                                              bool has_arrow_msg,
+                                              bool is_alongside_arrow_msg,
+                                              bool is_at_arrow_msg,
+                                              bool is_arrow_after,
+                                              const size_t line_number) {
 
-        if (line.empty()) {
-            print("\n");
-            continue;
+    std::string line = tabs_to_spaces(line_info.unprocessed_text);
+    line = line.substr(primary_line_leading_trim, line.length());
+
+    print_line_number_bar(info, line_number);
+
+    // Printing the line.
+    //
+    if (line_info.is_first && info.exceeded_start)
+        fmt_print("%s...%s ", Green, White);
+    else if (info.exceeded_start)
+        print("    "); // Want to make sure the lines are still aligned as seen in the file.
+
+    if (line.empty()) {
+        print("\n");
+        return;
+    }
+
+    print(line);
+
+    if (line_info.is_last && info.exceeded_end)
+        fmt_print(" %s...%s", Green, White);
+
+    bool alongside_arrow_msg_on_line = false, alongside_arrow_msg_after_dots = false;
+    if (line_info.is_last && is_alongside_arrow_msg) {
+        calc_alongwith_arrow_msg_info_and_print_location(line_info,
+                                                         line_number,
+                                                         alongside_arrow_msg_on_line,
+                                                         alongside_arrow_msg_after_dots);
+    }
+
+    print("\n");
+
+    // Print the characters that indicate which part of what is being printed needs to be
+    // paid attention to such as underlining the error location.
+    //
+    size_t total_printed_characters_for_line = 0;
+    if (is_arrow_after) {
+        print_arrow_after_msg(info, line_info, line, total_printed_characters_for_line);
+    } else {
+        print_line_bar(info, false);
+
+        if (individual_underlines.empty()) {
+            print_underline(info, line_info, is_at_arrow_msg, line, total_printed_characters_for_line);
+        } else {
+            print_individual_underlines(line_info, primary_line_leading_trim, total_printed_characters_for_line);
         }
+    }
+    total_printed_characters_for_line -= line_info.dots_width;
 
+    // Printing out the arrow message.
+    //
+    if (!is_alongside_arrow_msg) {
+        if (has_arrow_msg && line_info.is_last) {
+            fmt_print(" %s", arrow_msg.msg);
+        }
+    } else if (line_info.is_last && alongside_arrow_msg_on_line) {
+        print_alongwith_arrow_msg_on_last_line(line_info, total_printed_characters_for_line);
+    } else if (alongside_arrow_msg_after_dots) {
+        print_alongwith_arrow_msg_after_dots(line_info, total_printed_characters_for_line);
+    }
 
-        print(line);
+    fmt_print("%s\n", White);
 
-        if (is_last && info.exceeded_end)
-            fmt_print(" %s...%s", Green, White);
+}
 
-        bool alongside_arrow_msg_on_line = false, alongside_arrow_msg_after_dots = false;
-        if (is_last && is_alongside_arrow_msg) {
+void acorn::Logger::print_line_number_bar(const ErrorInfo& info, size_t line_number) {
+    auto line_number_pad_width = count_digits(info.last_line_number) - count_digits(line_number);
+    auto line_number_pad = std::string(line_number_pad_width, ' ');
+    fmt_print(" %s%s%s %s|%s ",
+              line_number == info.primary_line_number ? BrightYellow : DarkGray,
+              line_number,
+              line_number_pad,
+              BrightWhite,
+              White);
+}
 
-            auto line_length = std::get<0>(line_info).length();
-            const char* line_start_ptr = std::get<1>(line_info);
-            const char* line_end_ptr = line_start_ptr + line_length;
-            const char* msg_start_ptr = arrow_msg.location.ptr;
-            alongside_arrow_msg_on_line = msg_start_ptr >= line_start_ptr && msg_start_ptr <= line_end_ptr;
-            if (!alongside_arrow_msg_on_line) {
-                // Still want to print the alongside message. It may be on a seperate non-included
-                // line or it may be on the same line but cutoff due to line printing constraints.
-                size_t last_line_number = line_number - 1;
+void acorn::Logger::print_arrow_after_msg(const ErrorInfo& info,
+                                          const LineInfo& line_info,
+                                          const std::string& line,
+                                          size_t& total_printed_characters_for_line) {
+    if (!line_info.is_last) return;
 
-                const char* msg_start_ptr = arrow_msg.location.ptr;
-                auto [line_number, _] = file.line_table.get_line_and_column_number(msg_start_ptr);
+    size_t offset = line.length() + line_info.dots_width;
+    // This can happen sometimes when at the end of the buffer or within a new line.
+    if (offset == 0) offset = 1;
+    offset -= info.end_width;
 
-                alongside_arrow_msg_after_dots = line_number == last_line_number;
-                if (alongside_arrow_msg_after_dots) {
-                    if (msg_start_ptr != file.buffer.content) {
-                        char previous_char = *(msg_start_ptr - 1);
-                        char next_char     = *(msg_start_ptr + 1);
-                        fmt_print(" %s", BrightWhite);
-                        if (!is_whitespace(previous_char)) {
-                            print(previous_char);
-                        }
-                        print(*msg_start_ptr);
-                        if (!is_whitespace(next_char)) {
-                            print(next_char);
-                        }
-                    }
+    print_line_bar(info, false);
+    total_printed_characters_for_line += offset + 1; // +1 for the caret ^
+    print(std::string(offset, ' '));
+    fmt_print("%s%s", BrightRed, '^');
+
+}
+
+void acorn::Logger::print_underline(const ErrorInfo& info,
+                                    const LineInfo& line_info,
+                                    bool is_at_arrow_msg,
+                                    const std::string& line,
+                                    size_t& total_printed_characters_for_line) {
+
+    size_t underscore_offset = line_info.dots_width;
+    if (line_info.is_first)
+        underscore_offset += info.start_width;
+    else underscore_offset += count_leading_whitespace(line);
+
+    total_printed_characters_for_line += underscore_offset;
+    print(std::string(underscore_offset, ' '));
+
+    size_t underscore_width = (line.length() + line_info.dots_width) - underscore_offset;
+    // This can happen sometimes when at the end of the buffer or within a new line.
+    if (underscore_width == 0) underscore_width = 1;
+    if (line_info.is_last) underscore_width -= info.end_width;
+
+    total_printed_characters_for_line += underscore_width;
+    std::string underscore = std::string(underscore_width, '~');
+    if (is_at_arrow_msg && line_info.is_last) {
+        underscore.back() = '^';
+        total_printed_characters_for_line += 1;
+    }
+
+    fmt_print("%s%s", BrightRed, underscore);
+
+}
+
+void acorn::Logger::print_individual_underlines(const LineInfo& line_info,
+                                                size_t primary_line_leading_trim,
+                                                size_t& total_printed_characters_for_line) {
+
+    total_printed_characters_for_line += line_info.dots_width;
+    print(std::string(line_info.dots_width, ' '));
+    print(BrightRed);
+
+    const char* print_ptr = line_info.line_start_ptr;
+
+    // Move the pointer beyond the characters that were trimmed.
+    size_t compare_leading_count = 0;
+    while (compare_leading_count < primary_line_leading_trim) {
+        if (*print_ptr == '\t') compare_leading_count += 4;
+        else                    compare_leading_count += 1;
+        ++print_ptr;
+    }
+
+    // Print underlines for the given locations if they
+    // lay on the given line.
+    for (const PointSourceLoc& loc : individual_underlines) {
+
+        const char* line_start_ptr = line_info.line_start_ptr;
+
+        // We can use the line length here because the line has not yet been converted
+        // to remove the tabs and leading whitespace out yet.
+        size_t line_length = line_info.unprocessed_text.length();
+        const char* line_end_ptr = line_start_ptr + line_length + 1;
+
+        bool is_within_line = line_start_ptr >= loc.ptr        && loc.end()    > line_start_ptr ||
+                              loc.ptr        >= line_start_ptr && line_end_ptr > loc.ptr;
+
+        if (is_within_line) {
+            size_t print_length = 0;
+            if (print_ptr < loc.ptr) {
+                while (print_ptr < loc.ptr) {
+                    print(' ');
+                    ++print_ptr;
+                    ++total_printed_characters_for_line;
+                }
+
+                print_length = loc.length;
+                if (line_end_ptr < loc.end()) {
+                    // Remove off the extra characters not on this line.
+                    print_length -= static_cast<size_t>(loc.end() - line_end_ptr);
+                }
+            } else {
+                // The expression is split between lines
+                // so have to traverse over any leading
+                // whitespace.
+                while (is_whitespace(*print_ptr) && !is_newline(*print_ptr)) {
+                    print(' ');
+                    ++print_ptr;
+                    ++total_printed_characters_for_line;
+                }
+
+                print_length = static_cast<size_t>(loc.end() - print_ptr);
+                if (line_end_ptr < loc.end()) {
+                    // Remove off the extra characters not on this line.
+                    print_length -= static_cast<size_t>((loc.end() + 1) - line_end_ptr);
+                }
+            }
+
+            print(std::string(print_length, '~'));
+            total_printed_characters_for_line += print_length;
+            print_ptr += print_length;
+        }
+    }
+}
+
+void acorn::Logger::calc_alongwith_arrow_msg_info_and_print_location(const LineInfo& line_info,
+                                                                     size_t line_number,
+                                                                     bool& alongside_arrow_msg_on_line,
+                                                                     bool& alongside_arrow_msg_after_dots) {
+    const char* line_start_ptr = line_info.line_start_ptr;
+    // We can use the line length here because the line has not yet been converted
+    // to remove the tabs and leading whitespace out yet.
+    size_t line_length = line_info.unprocessed_text.length();
+    const char* line_end_ptr = line_start_ptr + line_length + 1;
+
+    alongside_arrow_msg_on_line = arrow_msg.location.ptr >= line_start_ptr &&
+                                  arrow_msg.location.ptr < line_end_ptr;
+    if (!alongside_arrow_msg_on_line) {
+
+        const char* msg_start_ptr = arrow_msg.location.ptr;
+        auto [msg_line_number, _] = file.line_table.get_line_and_column_number(msg_start_ptr);
+
+        // Print the characters around where the along with message resides.
+        alongside_arrow_msg_after_dots = msg_line_number == line_number;
+        if (alongside_arrow_msg_after_dots) {
+            if (msg_start_ptr != file.buffer.content) {
+                char previous_char = *(msg_start_ptr - 1);
+                char next_char     = *(msg_start_ptr + 1);
+                fmt_print(" %s", BrightWhite);
+                if (!is_whitespace(previous_char)) {
+                    print(previous_char);
+                }
+                print(*msg_start_ptr);
+                if (!is_whitespace(next_char)) {
+                    print(next_char);
                 }
             }
         }
-
-        print("\n");
-
-        // Displaying the underline/arrow and bar.
-        size_t dots_width = info.exceeded_start ? 4 : 0;
-
-        size_t total_printed_characters_for_line = 0;
-        if (arrow_after) {
-            if (is_last) {
-                // This can happen sometimes when at the end of the buffer or within a new line.
-                size_t offset = line.length() + dots_width;
-                if (offset == 0) offset = 1;
-                offset -= info.end_width;
-
-                print_bar(false);
-                total_printed_characters_for_line += offset + 1; // +1 for the caret ^
-                print(std::string(offset, ' '));
-                fmt_print("%s%s", BrightRed, '^');
-            }
-        } else {
-
-            size_t underscore_offset = dots_width;
-            if (is_first)
-                underscore_offset += info.start_width;
-            // TODO: shouldn't this be count leading whitespace?
-            //       because this gets used to calculate underscore_width
-            //       this messing up for \v or other odd characters could
-            //       potentially break.
-            else underscore_offset += count_leading_spaces(line);
-
-            print_bar(false);
-            total_printed_characters_for_line += underscore_offset;
-            print(std::string(underscore_offset, ' '));
-
-            size_t underscore_width = (line.length() + dots_width) - underscore_offset;
-            // This can happen sometimes when at the end of the buffer or within a new line.
-            if (underscore_width == 0) underscore_width = 1;
-            if (is_last) underscore_width -= info.end_width;
-
-            total_printed_characters_for_line += underscore_width;
-            std::string underscore = std::string(underscore_width, '~');
-            if (is_at_arrow_msg && is_last) {
-                underscore.back() = '^';
-                total_printed_characters_for_line += 1;
-            }
-
-            fmt_print("%s%s", BrightRed, underscore);
-        }
-
-        total_printed_characters_for_line -= dots_width;
-
-        if (!is_alongside_arrow_msg) {
-            if (has_arrow_msg && is_last) {
-                fmt_print(" %s", arrow_msg.msg);
-            }
-        } else if (is_last && alongside_arrow_msg_on_line) {
-            const char* line_start_ptr = std::get<1>(line_info);
-            const char* msg_start_ptr = arrow_msg.location.ptr;
-
-            std::string up_to_msg_str = std::string(line_start_ptr, msg_start_ptr - line_start_ptr);
-            up_to_msg_str = tabs_to_spaces(up_to_msg_str);
-
-            size_t remaining_spaces = up_to_msg_str.size() - total_printed_characters_for_line;
-            fmt_print("%s%s%s%s", BrightRed, std::string(remaining_spaces, ' '), "^ ",
-                      arrow_msg.msg);
-
-        } else if (alongside_arrow_msg_after_dots) {
-            auto line_length = std::get<0>(line_info).length();
-            const char* line_start_ptr = std::get<1>(line_info);
-            const char* line_end_ptr   = line_start_ptr + line_length;
-            const char* msg_start_ptr = arrow_msg.location.ptr;
-
-            std::string up_to_msg_str = std::string(line_start_ptr, line_end_ptr - line_start_ptr);
-            up_to_msg_str = tabs_to_spaces(up_to_msg_str);
-
-            size_t remaining_spaces = up_to_msg_str.size() - total_printed_characters_for_line;
-            remaining_spaces += 5; // For dots and dot spaces
-
-            char previous_char = *(msg_start_ptr - 1);
-            if (!is_whitespace(previous_char)) {
-                remaining_spaces += 1;
-            }
-
-            fmt_print("%s%s%s%s", BrightRed, std::string(remaining_spaces, ' '), "^ ",
-                      arrow_msg.msg);
-        }
-        fmt_print("%s\n", White);
-
     }
+}
+
+void acorn::Logger::print_alongwith_arrow_msg_on_last_line(const LineInfo& line_info,
+                                                           size_t total_printed_characters_for_line) {
+    const char* line_start_ptr = line_info.line_start_ptr;
+    const char* msg_start_ptr = arrow_msg.location.ptr;
+
+    std::string up_to_msg_str = std::string(line_start_ptr, msg_start_ptr - line_start_ptr);
+    up_to_msg_str = tabs_to_spaces(up_to_msg_str);
+
+    size_t remaining_spaces = up_to_msg_str.size() - total_printed_characters_for_line;
+    fmt_print("%s%s%s%s", BrightRed, std::string(remaining_spaces, ' '), "^ ",
+                arrow_msg.msg);
+}
+
+void acorn::Logger::print_alongwith_arrow_msg_after_dots(const LineInfo& line_info,
+                                                         size_t total_printed_characters_for_line) {
+
+    auto line_length = line_info.unprocessed_text.length();
+    const char* line_start_ptr = line_info.line_start_ptr;
+    const char* line_end_ptr   = line_start_ptr + line_length;
+    const char* msg_start_ptr = arrow_msg.location.ptr;
+
+    std::string up_to_msg_str = std::string(line_start_ptr, line_end_ptr - line_start_ptr);
+    up_to_msg_str = tabs_to_spaces(up_to_msg_str);
+
+    size_t remaining_spaces = up_to_msg_str.size() - total_printed_characters_for_line;
+    remaining_spaces += 5; // For dots and dot spaces
+
+    char previous_char = *(msg_start_ptr - 1);
+    if (!is_whitespace(previous_char)) {
+        remaining_spaces += 1;
+    }
+
+    fmt_print("%s%s%s%s", BrightRed, std::string(remaining_spaces, ' '), "^ ",
+                arrow_msg.msg);
+}
+
+void acorn::Logger::print_line_bar(const ErrorInfo& info, bool include_new_line) {
+    fmt_print(" %s %s|%s ", info.line_number_pad, BrightWhite, White);
+    if (include_new_line) print("\n");
 }
 
 void acorn::Logger::end_error(ErrCode error_code) {
@@ -994,5 +1143,6 @@ void acorn::Logger::end_error(ErrCode error_code) {
     primary_print_cb = {};
     line_printers.clear();
     primary_has_period = true;
+    individual_underlines.clear();
 
 }
