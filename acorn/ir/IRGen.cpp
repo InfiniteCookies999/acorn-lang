@@ -2309,8 +2309,8 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
 
 llvm::Value* acorn::IRGenerator::gen_function_call_arg_for_implicit_ptr(Expr* arg) {
     if (arg->cast_type) {
-        // The cast type was not needed anyway since this function effectively handles
-        // the "casting".
+        // Prevent casting when the value is generated.
+        arg->cast_type = nullptr;
 
         // Read comment under gen_unary_op for the & operator for an explaination.
         if ((arg->is(NodeKind::DotOperator) || arg->is(NodeKind::IdentRef)) && arg->is_foldable) {

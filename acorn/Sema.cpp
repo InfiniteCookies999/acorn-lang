@@ -5328,8 +5328,8 @@ llvm::Constant* acorn::Sema::gen_constant(Expr* expr) {
     IRGenerator generator(context);
     auto ll_value = generator.gen_rvalue(expr);
     if (ll_value->getValueID() == llvm::Value::ValueTy::PoisonValueVal) {
-        error(expand(expr), "Signed overflow")
-            .end_error(ErrCode::NumericOverflow);
+        error(expand(expr), "While trying to compile a constant value encountered a value with undefined behavior")
+            .end_error(ErrCode::SemaPoisonWhenLLVMConstGen);
         return nullptr;
     }
 

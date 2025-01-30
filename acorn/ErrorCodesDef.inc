@@ -187,6 +187,7 @@ X(SemaArrayIncompleteElmType                , 20137)
 X(SemaCannotAccessFuncIsPrivate             , 20138)
 X(SemaCannotAccessFuncsRefFromObj           , 20139)
 X(SemaAmbiguousFuncCall                     , 20140)
+X(SemaPoisonWhenLLVMConstGen                , 20141)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)
