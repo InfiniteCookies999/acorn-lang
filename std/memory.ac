@@ -1,19 +1,6 @@
 #file(access=public)
 
 /*
- * Counts the number of characters until
- * it finds a null terminator in the c-string.
- *
- * @return  length of the null terminated
- *          c-string.
- */
-int strlen(const char* s) {
-    if !s  return 0;
-    return as(int) _strlen(s);
-}
-private native("strlen") isize _strlen(const char* s);
-
-/*
  * Copies `count` amount of bytes from the `src`
  * to the `dest`.
  *

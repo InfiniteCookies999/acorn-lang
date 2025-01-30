@@ -7,6 +7,10 @@ import .unix;
 import .unix.Timespec;
 #endif
 
+/*
+ * Stops the application from running and returns
+ * the `exit_code` to the system.
+ */
 void exit(int exit_code) {
 #if OS_GROUP_WINDOWS
     win32.ExitProcess(as(uint32) exit_code);
@@ -18,6 +22,15 @@ void exit(int exit_code) {
 // Used to keep track of time.
 private int64 performance_freq;
 
+/*
+ * Gets the current time in nanoseconds with high-resolution.
+ * This function is designed for measuring elapsed time or intervals,
+ * making it suitable for consistent timing mechanisms like profiling
+ * or benchmarking.
+ *
+ * However, it is not appropriate for generating timestamps as it does
+ * not return absolute time.
+ */
 int64 time_in_nanosecs() {
 #if OS_GROUP_WINDOWS
     if performance_freq == 0 {
@@ -38,6 +51,43 @@ int64 time_in_nanosecs() {
 #endif
 }
 
+/*
+ * Gets the current time in milliseconds with high-resolution.
+ * This function is designed for measuring elapsed time or intervals,
+ * making it suitable for consistent timing mechanisms like profiling
+ * or benchmarking.
+ *
+ * However, it is not appropriate for generating timestamps as it does
+ * not return absolute time.
+ */
 int64 time_in_millisecs() {
     return time_in_nanosecs() / as(int64) 1e+6;
+}
+
+/*
+ * Gets the system time since January 1, 1970, 00:00:00 (UTC).
+ */
+int64 sys_time_in_millisecs() {
+#if OS_GROUP_WINDOWS
+
+    // This represents the difference in the amount of 100-nanosecond intervals
+    // between January 1, 1701 (UTC) and January 1, 1970 (UTC).
+    const int64 WINDOWS_UNIX_TIME_DIFFERENCE = 116444736000000000;
+
+    int64 time;
+    win32.GetSystemTimeAsFileTime(&time);
+    // Gives us time in 100-nanosecond intervals since January 1, 1701 (UTC)
+    // but most languages and unix use seconds since January 1, 1970, 00:00:00 (UTC).
+    //
+    // So converting the timestamp for compatibility.
+    // We subtract because it is the time since the given date so by removing the difference
+    // it moves the time forward.
+    //
+    // Dividing by 10_000 instead of 1_000_000 because it is in 100-nanosecond intervals.
+    //
+    return (time - WINDOWS_UNIX_TIME_DIFFERENCE) / 10_000;
+#elif OS_GROUP_UNIX
+    // TODO: implement
+    return 0;
+#endif
 }

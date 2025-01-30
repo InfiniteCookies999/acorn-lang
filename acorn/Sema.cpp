@@ -61,8 +61,8 @@ bool acorn::Sema::find_main_function(Context& context) {
             context.set_main_function(canidate);
         }
 
-        if (canidate->return_type->is_not(context.int_type) &&
-            canidate->return_type->is_not(context.void_type)) {
+        if (canidate->parsed_return_type->is_not(context.int_type) &&
+            canidate->parsed_return_type->is_not(context.void_type)) {
             logger.begin_error(canidate->loc, "main function must have return type of 'int' or 'void'")
                   .end_error(ErrCode::SemaMainBadReturnType);
         }
@@ -781,23 +781,23 @@ bool acorn::Sema::check_function_decl(Func* func) {
             .end_error(ErrCode::SemaFuncsCannotHaveReadonlyModifier);
     }
 
-    if (func->return_type == context.auto_type ||
-        func->return_type == context.auto_ptr_type ||
-        func->return_type == context.const_auto_type) {
+    if (func->parsed_return_type == context.auto_type ||
+        func->parsed_return_type == context.auto_ptr_type ||
+        func->parsed_return_type == context.const_auto_type) {
         error(func, "Functions cannot have a return type of '%s'",
-              func->return_type)
+              func->parsed_return_type)
             .end_error(ErrCode::SemaFuncsCannotReturnAuto);
         return false;
     }
 
-    if (func->return_type->get_kind() == TypeKind::AssignDeterminedArray) {
-        error(func, "Functions cannot have return type '%s'", func->return_type)
+    if (func->parsed_return_type->get_kind() == TypeKind::AssignDeterminedArray) {
+        error(func, "Functions cannot have return type '%s'", func->parsed_return_type)
             .end_error(ErrCode::SemaFuncsCannotHaveAssignDetArrType);
         func->is_checking_declaration = false;
         return false;
     }
 
-    func->return_type = fixup_type(func->return_type);
+    func->return_type = fixup_type(func->parsed_return_type);
     if (!func->return_type) {
         // Failed to fixup return type so returning early.
         func->is_checking_declaration = false;
@@ -2449,6 +2449,11 @@ void acorn::Sema::check_this(This* thisn) {
 
 void acorn::Sema::check_sizeof(SizeOf* sof) {
 
+    sof->type_with_size = fixup_type(sof->parsed_type_with_size);
+    if (!sof->type_with_size) {
+        return;
+    }
+
     if (is_incomplete_type(sof->type_with_size)) {
         error(expand(sof), "Cannot get size of unsized type '%s'", sof->type_with_size)
                 .end_error(ErrCode::SemaCannotGetSizeOfUnsizedType);
@@ -2718,6 +2723,10 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         return;
     }
 
+    if (lhs->trivially_reassignable && rhs->trivially_reassignable) {
+        bin_op->trivially_reassignable = true;
+    }
+
     Type* lhs_type = lhs->type;
     Type* rhs_type = rhs->type;
 
@@ -2806,7 +2815,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         break;
     }
     case '+': case '-': case '*': {
-        auto result_type = get_add_sub_mul_type(true, lhs_type, rhs_type);
+        auto result_type = get_add_sub_mul_type(false, lhs_type, rhs_type);
         if (!result_type) return;
 
         // Create needed casts if not pointer arithmetic.
@@ -2821,7 +2830,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         break;
     }
     case '/': case '%': {
-        auto result_type = get_div_mod_type(true, lhs_type, rhs_type);
+        auto result_type = get_div_mod_type(false, lhs_type, rhs_type);
         if (!result_type) return;
         bin_op->type = result_type;
         create_cast(lhs, result_type);
@@ -2829,7 +2838,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         break;
     }
     case '^': case '&': case '|': {
-        auto result_type = get_logical_bitwise_type(true, lhs_type, rhs_type);
+        auto result_type = get_logical_bitwise_type(false, lhs_type, rhs_type);
         if (!result_type) return;
         bin_op->type = result_type;
         create_cast(lhs, result_type);
@@ -2837,7 +2846,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         break;
     }
     case Token::LtLt: case Token::GtGt: {
-        auto result_type = get_shifts_type(true, lhs_type, rhs_type);
+        auto result_type = get_shifts_type(false, lhs_type, rhs_type);
         if (!result_type) return;
         bin_op->type = result_type;
         create_cast(lhs, result_type);
@@ -2896,12 +2905,16 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             return;
         }
 
-        if (!lhs_type->is_ignore_const(rhs_type)) {
+        auto result_type = get_integer_type_for_binary_op(false, bin_op, lhs_type, rhs_type);
+
+        if (!result_type) {
             report_binary_op_mistmatch_types(bin_op);
             return;
         }
 
-        bin_op->type = type_table.get_range_type(lhs_type);
+        create_cast(lhs, result_type);
+        create_cast(rhs, result_type);
+        bin_op->type = type_table.get_range_type(result_type);
         break;
     }
     default:
@@ -3069,17 +3082,11 @@ acorn::Type* acorn::Sema::get_integer_type_for_binary_op(bool enforce_lhs,
     // an integer literal but without an explicit type.
 
     if (lhs_type->is_integer() && rhs_type->is_integer()) {
-        if (bin_op->rhs->is(NodeKind::Number)) {
-            auto number = static_cast<Number*>(bin_op->rhs);
-            if (!number->uses_strict_type) {
-                return lhs_type->remove_all_const();
-            }
+        if (bin_op->rhs->trivially_reassignable) {
+            return lhs_type->remove_all_const();
         }
-        if (!enforce_lhs && bin_op->lhs->is(NodeKind::Number)) {
-            auto number = static_cast<Number*>(bin_op->lhs);
-            if (!number->uses_strict_type) {
-                return rhs_type->remove_all_const();
-            }
+        if (!enforce_lhs && bin_op->lhs->trivially_reassignable) {
+            return rhs_type->remove_all_const();
         }
     }
 
@@ -3095,6 +3102,10 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
               token_kind_to_string(context, unary_op->op), expr->type)
             .end_error(ErrCode::SemaUnaryOpTypeCannotApply);
     };
+
+    if (expr->trivially_reassignable) {
+        unary_op->trivially_reassignable = true;
+    }
 
     switch (unary_op->op) {
     case '-': case '+': {
@@ -3494,6 +3505,8 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         (dot->site->type->is_array() || dot->site->type->is_slice())) {
         dot->is_array_length = true;
         dot->type = context.int_type;
+        dot->trivially_reassignable = true;
+        dot->is_foldable = true;
     } else if (dot->ident == context.ptr_identifier && dot->site->type->is_slice()) {
         auto slice_type = static_cast<SliceType*>(dot->site->type);
         dot->is_slice_ptr = true;
@@ -3832,7 +3845,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
 
 uint32_t acorn::Sema::get_function_call_score(const Func* candidate,
                                               const llvm::SmallVector<Expr*>& args,
-                                              bool is_const_object) const {
+                                              bool is_const_object) {
 
     uint32_t score = 0;
     bool implicitly_converts_ptr_arg = 0;
@@ -3892,7 +3905,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                                                                       const llvm::SmallVector<Expr*>& args,
                                                                       const bool is_const_object,
                                                                       uint32_t& score,
-                                                                      bool& implicitly_converts_ptr_arg) const {
+                                                                      bool& implicitly_converts_ptr_arg) {
 
     bool encountered_mismatched_types = false;
     bool forwards_varargs = false;
@@ -3925,8 +3938,12 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         Type* param_type;
         Var* param;
 
-        if (candidate->uses_native_varargs && last_index) {
+        if (candidate->uses_native_varargs && i >= last_index) {
 
+            // Still have to check for aggregates or incomplete types so that
+            // types which are not able to be passed to native functions are
+            // not passed.
+            //
             if (arg_value->type->is_aggregate()) {
                 return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
             }
@@ -4074,7 +4091,7 @@ bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const
 void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
                                              Node* call_node,
                                              const FuncList& candidates,
-                                             const llvm::SmallVector<Expr*>& args) const {
+                                             const llvm::SmallVector<Expr*>& args) {
 
     const char* func_type_str = candidates[0]->is_constructor ? "constructor" : "function";
 
@@ -4119,7 +4136,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                                              const llvm::SmallVector<Expr*>& args,
                                              bool indent,
                                              bool should_show_invidual_underlines,
-                                             Node* call_node) const {
+                                             Node* call_node) {
 
 #define err_line(n, fmt, ...)                                         \
 {                                                                     \
@@ -4344,6 +4361,27 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         Expr* arg_value = args[i];
         Var* param = nullptr;
 
+        if constexpr (is_func_decl) {
+            if (candidate->uses_native_varargs && i >= last_index) {
+
+                if (arg_value->type->is_aggregate()) {
+                    err_line(arg_value,
+                             "Arg %s cannot pass aggregate types to native variadic parameters",
+                             i + 1);
+                }
+
+                if (is_incomplete_type(arg_value->type)) {
+                    err_line(arg_value,
+                             "Arg %s cannot pass incomplete types to native variadic parameters",
+                             i + 1);
+                }
+
+                // No reason to check native variadic type information because
+                // there is no parameter which they are compared to.
+                continue;
+            }
+        }
+
         if (arg_value->is(NodeKind::NamedValue)) {
             if constexpr (is_func_decl) {
                 auto named_arg = static_cast<NamedValue*>(arg_value);
@@ -4410,7 +4448,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
 void acorn::Sema::display_call_ambiguous_info(PointSourceLoc error_loc,
                                               FuncList& candidates,
                                               llvm::SmallVector<Expr*>& args,
-                                              bool is_const_object) const {
+                                              bool is_const_object) {
 
     llvm::SmallVector<Func*, 16> ambiguous_funcs;
     Func* selected = nullptr;
@@ -4567,7 +4605,7 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
         }
 
         mem_access->type = context.expr_type;
-        mem_access->resolved_expr_type = fixed_expr_type;
+        mem_access->expr_type = fixed_expr_type;
         mem_access->kind = NodeKind::TypeExpr;
         mem_access->prev_node_kind = NodeKind::MemoryAccess;
 
@@ -4637,8 +4675,8 @@ void acorn::Sema::check_type_expr(TypeExpr* type_expr) {
         check_memory_access(memory_access);
         return;
     }
-    if (Type* fixed_type = fixup_type(type_expr->expr_type)) {
-        type_expr->resolved_expr_type = fixed_type;
+    if (Type* fixed_type = fixup_type(type_expr->parsed_expr_type)) {
+        type_expr->expr_type = fixed_type;
         type_expr->type = context.expr_type;
     }
 }
@@ -4727,7 +4765,7 @@ void acorn::Sema::ensure_enum_checked(SourceLoc error_loc, Enum* enumn) {
 // Utility functions
 //--------------------------------------
 
-bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
+bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
 
     if (auto to_enum_type = to_type->get_container_enum_type()) {
         if (expr->type->is_enum()) {
@@ -4773,12 +4811,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
             return true;
         }
 
-        if (expr->is_foldable && expr->is(NodeKind::Number)) {
-
-            Number* number = static_cast<Number*>(expr);
-            if (number->uses_strict_type) {
-                return false;
-            }
+        if (expr->trivially_reassignable) {
 
             // TODO: We want to allow for certain floats to be assignable such
             //       as 1e+9 because those are integers.
@@ -4811,32 +4844,48 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
                 }
             };
 
+            auto get_constant_value = [this](Expr* expr) finline {
+                if (expr->kind == NodeKind::Number) {
+                    // Quick pass for common cases.
+                    auto number = static_cast<const Number*>(expr);
+                    return number->value_u64;
+                } else {
+                    if (auto ll_value = gen_constant(expr)) {
+                        auto ll_integer = llvm::cast<llvm::ConstantInt>(ll_value);
+                        return ll_integer->getZExtValue();
+                    } else {
+                        return 0ull;
+                    }
+                }
+            };
+
             if (from_type->is_signed()) {
-                return does_fit_range(number->value_s64);
+                return does_fit_range((int64_t) get_constant_value(expr));
             } else {
-                return does_fit_range(number->value_u64);
+                return does_fit_range(get_constant_value(expr));
             }
         }
 
         return to_type->is(from_type);
     }
     case TypeKind::Float32: case TypeKind::Float64: {
-        if (expr->is(NodeKind::Number) && expr->type->get_kind() == TypeKind::Int) {
-            auto number = static_cast<Number*>(expr);
-            if (number->uses_strict_type) {
-                return false;
-            }
+        if (from_type->is_float()) {
+            return to_type->is(from_type);
+        }
+
+        if (expr->trivially_reassignable) {
             return true;
         }
-        return to_type->is(from_type);
+
+        return false;
     }
     case TypeKind::Pointer: {
         if (expr->is(NodeKind::String)) {
             if (expr->type->is(context.const_char_ptr_type) &&
-                (to_type->is(context.const_char16_ptr_type) || to_type->is(context.const_char32_ptr_type))) {
+                (to_type->is(context.char16_ptr_type) || to_type->is(context.char32_ptr_type))) {
                 return true;
             } else if (expr->type->is(context.const_char16_ptr_type) &&
-                       to_type->is(context.const_char32_ptr_type)) {
+                       to_type->is(context.char32_ptr_type)) {
                 return true;
             }
 
@@ -4928,7 +4977,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) const {
     }
 }
 
-bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) const {
+bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) {
     if ((to_type->is_real_pointer() || to_type->is_integer() || to_type->is_bool()) &&
         (expr->type->is_real_pointer() || expr->type->is_integer() || expr->type->is_bool())) {
         Type* from_type = expr->type;
@@ -5249,7 +5298,7 @@ acorn::Type* acorn::Sema::get_type_of_type_expr(Expr* expr) {
         }
     } else {
         auto type_expr = static_cast<TypeExpr*>(expr);
-        return type_expr->resolved_expr_type;
+        return type_expr->expr_type;
     }
 }
 
@@ -5303,11 +5352,7 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
         }
     }
 
-    if (to_type->is_integer() &&
-        expr->is(NodeKind::Number) &&
-        !static_cast<Number*>(expr)->uses_strict_type &&
-        expr->is_foldable &&
-        expr->type->is_integer()) {
+    if (to_type->is_integer() && expr->trivially_reassignable && expr->type->is_integer()) {
 
         return get_error_msg_for_value_not_fit_type(to_type);
     } else if (to_type->is_pointer() && expr->type->is_array()) {

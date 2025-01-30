@@ -487,7 +487,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     }
 
     Func* func = new_declaration<Func, true>(modifiers, name, prev_token);
-    func->return_type = type;
+    func->parsed_return_type = type;
     func->has_implicit_return_ptr = has_implicit_return_ptr;
     func->is_copy_constructor = is_copy_constructor;
     func->is_move_constructor = is_move_constructor;
@@ -1709,6 +1709,8 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
             op.loc.ptr,
             op.loc.length
         };
+
+        lhs->trivially_reassignable = true;
         return lhs;
     };
 
@@ -2110,7 +2112,7 @@ acorn::Expr* acorn::Parser::parse_memory_access(Expr* site) {
             type = parse_optional_type_trailing_info(type);
 
             TypeExpr* type_expr = new_node<TypeExpr>(cur_token);
-            type_expr->expr_type = type;
+            type_expr->parsed_expr_type = type;
 
             SourceLoc start_loc = ref->loc;
             SourceLoc end_loc   = prev_token.loc;
@@ -2179,7 +2181,7 @@ acorn::Expr* acorn::Parser::parse_term() {
             type = parse_optional_type_trailing_info(type);
 
             TypeExpr* type_expr = new_node<TypeExpr>(ident_token);
-            type_expr->expr_type = type;
+            type_expr->parsed_expr_type = type;
 
             SourceLoc start_loc = ident_token.loc;
             SourceLoc end_loc   = prev_token.loc;
@@ -2199,7 +2201,7 @@ acorn::Expr* acorn::Parser::parse_term() {
             type = parse_optional_type_trailing_info(type);
 
             TypeExpr* type_expr = new_node<TypeExpr>(ident_token);
-            type_expr->expr_type = type;
+            type_expr->parsed_expr_type = type;
 
             SourceLoc start_loc = ident_token.loc;
             SourceLoc end_loc   = prev_token.loc;
@@ -2328,10 +2330,11 @@ acorn::Expr* acorn::Parser::parse_term() {
     }
     case Token::KwSizeof: {
         SizeOf* sof = new_node<SizeOf>(cur_token);
+        sof->trivially_reassignable = true;
         next_token();
         ++paran_count;
         expect('(');
-        sof->type_with_size = parse_type();
+        sof->parsed_type_with_size = parse_type();
         expect(')');
         --paran_count;
         return sof;
@@ -2349,7 +2352,7 @@ acorn::Expr* acorn::Parser::parse_term() {
     case TypeTokens: {
         Token start_token = cur_token;
         TypeExpr* type_expr = new_node<TypeExpr>(cur_token);
-        type_expr->expr_type = parse_type();
+        type_expr->parsed_expr_type = parse_type();
 
         SourceLoc start_loc = start_token.loc;
         SourceLoc end_loc   = prev_token.loc;
@@ -2603,6 +2606,7 @@ acorn::Expr* acorn::Parser::parse_char_literal() {
         character->type = context.char_type;
     }
 
+    character->trivially_reassignable = true;
     next_token();
     return character;
 }
@@ -2731,6 +2735,7 @@ acorn::Number* acorn::Parser::parse_number_literal(const char* start, const char
         }
     }
 
+    number->trivially_reassignable = true;
     next_token();
     return number;
 }

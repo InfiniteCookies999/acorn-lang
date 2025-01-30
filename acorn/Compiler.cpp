@@ -275,12 +275,16 @@ void acorn::Compiler::sema_and_irgen() {
     //
     for (auto& entry : context.get_modules()) {
         for (auto source_file : entry.second->get_source_files()) {
+            // This must go before checking if the nspace the file belongs to
+            // has been checked because otherwise it will not check private
+            // functions that are not common to the namespace.
+            Sema::check_for_duplicate_functions(source_file, context);
+
             auto nspace = source_file->get_namespace();
             if (nspace->have_duplicates_been_checked()) {
                 continue;
             }
             Sema::check_for_duplicate_functions(nspace, context);
-            Sema::check_for_duplicate_functions(source_file, context);
         }
         Sema::check_all_other_duplicates(*entry.second, context);
     }
@@ -460,10 +464,9 @@ void acorn::Compiler::link() {
     auto get_libs = [this] {
         // ucrt.lib     -- dynamic standard C lib.
         // libucrt.lib  -- static standard C lib
-
         // libcmt.lib  -- static CRT.
         // msvcrt.lib  -- dynamic CRT.
-        std::wstring libs = L"msvcrt.lib ucrt.lib kernel32.lib user32.lib shell32.lib gdi32.lib ";
+        std::wstring libs = L"msvcrt.lib ucrt.lib kernel32.lib user32.lib shell32.lib gdi32.lib Advapi32.lib ";
         for (const std::wstring& lib : libraries) {
             libs += lib.ends_with(L".lib") ? lib : lib + L".lib ";
         }

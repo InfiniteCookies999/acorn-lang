@@ -286,31 +286,31 @@ namespace acorn {
     }
 
     static bool compare_leading_whitespace(int* count,
-                                           int leading_count,
-                                           int pline_leading_count,
-                                           int pline_leading_cutoff_count) {
-        int cutoff_whitespace = leading_count - pline_leading_count;
-        if (cutoff_whitespace < 0) {
-            // It is possible the characters are behind the cut off so checking
-            // that and discardinging the whole line if so.
-
-            // Characters cut off due to them being behind the cutoff.
+                                           int leading_ws_count,
+                                           int pline_leading_cutoff_count,
+                                           int pline_total_backwards_characters) {
+        int remaining_whitespace = leading_ws_count - pline_leading_cutoff_count;
+        if (remaining_whitespace < 0) {
+            // There was not enough whitespace after cutting character off so
+            // the text falls behind the buffer and must be removed from the display.
             //
-            // (66 + 33
-            //       ...            44) + 66;
+            //          |-- this text is behind the display buffer and must be discarded.
+            //          v
+            // (66 + 33 +
+            //             ...        44 + 66;
             //
-            int is_behind = (leading_count - pline_leading_cutoff_count) < 0;
-            if (is_behind) {
-                return false;
-            }
-            // else there is nothing to add to the count the characters are behind
-            // the primary line but not to the point that they are cut off.
+            return false;
         } else {
-            // the whitespace goes past the shared whitespace with the primary
-            // line so this must be considered part of the count.
-            *count += cutoff_whitespace;
+            // While it might seem as though we can just go ahead and add these characters
+            // to the count this leads to a less than ideal situation. Adding the whitespace
+            // characters to the count when these characters do not even exceed the backwards
+            // traversal count would mean arbitrarily displaying less characters because
+            // the whole window was shifted over.
+            int chars_past_backwards_chars_count = remaining_whitespace - pline_total_backwards_characters;
+            if (chars_past_backwards_chars_count > 0) {
+                *count += chars_past_backwards_chars_count;
+            }
         }
-
         return true;
     }
 
@@ -340,9 +340,10 @@ namespace acorn {
     static PtrCalcInfo traverse_backwards(const char* ptr,
                                           const char* low_point,
                                           const char* buffer_start,
-                                          int& pline_leading_count,
-                                          int& pline_leading_cutoff_count,
-                                          int& total_backwards_line_characters) {
+                                          int& pline_leading_ws_count,
+                                          int& pline_leading_ws_cutoff_count,
+                                          int& pline_leading_non_ws_cutoff_count,
+                                          int& pline_total_backwards_characters) {
 
         int count = 0;
 
@@ -368,23 +369,33 @@ namespace acorn {
         // Handling the primary line first since it has extra rules
         // that must be handled very carefully.
 
-        pline_leading_count = eat_line_characters(ptr);
+        pline_leading_ws_count = eat_line_characters(ptr);
 
-        total_backwards_line_characters = count + pline_leading_count;
+        pline_total_backwards_characters = count + pline_leading_ws_count;
 
         // Try and take `CUTOFF_LIMIT` characters and the remainder are cut off.
-        pline_leading_cutoff_count = total_backwards_line_characters - CUTOFF_LIMIT;
-        if (pline_leading_cutoff_count < 0) pline_leading_cutoff_count = 0;
+        pline_leading_ws_cutoff_count = pline_total_backwards_characters - CUTOFF_LIMIT;
+        if (pline_leading_ws_cutoff_count < 0) pline_leading_ws_cutoff_count = 0;
 
         // Checking if the primary line has too many characters and ending early.
         if (count >= CUTOFF_LIMIT) {
+
+            if (!is_newline(*ptr) && ptr > buffer_start) {
+                const char* count_ptr = ptr - 1;
+                while (!is_newline(*count_ptr) && count_ptr > buffer_start) {
+                    ++pline_leading_non_ws_cutoff_count;
+                    --count_ptr;
+                }
+            }
+
             return { ptr, true };
         }
 
         // Should not be possible that the non cut off leading count is larger than
         // the entire leading whitespace amount.
-        assert(pline_leading_cutoff_count >= 0 && "");
+        assert(pline_leading_ws_cutoff_count >= 0 && "");
 
+        int total_pline_leading_cutoff = pline_leading_ws_cutoff_count + pline_leading_non_ws_cutoff_count;
         int line_count = 0;
         const char* prev_line_start = ptr;
         while (ptr > buffer_start) {
@@ -412,7 +423,7 @@ namespace acorn {
 
             int leading_count = eat_line_characters(ptr);
 
-            if (!compare_leading_whitespace(&count, leading_count, pline_leading_count, pline_leading_cutoff_count)) {
+            if (!compare_leading_whitespace(&count, leading_count, total_pline_leading_cutoff, pline_total_backwards_characters)) {
                 // Well the characters were cut off so discarding this line entirely.
                 ptr = prev_line_start;
                 break;
@@ -432,7 +443,7 @@ namespace acorn {
         // forward over whitespace to prevent empty lines but that also traverses forward
         // over trailing whitespace which means the `ptr` may have reached the `low_point`
         // but then once the pointer is moved forward it no longer has that information.
-        bool exceeded = count >= CUTOFF_LIMIT || pline_leading_cutoff_count > 0 || ptr > low_point;
+        bool exceeded = count >= CUTOFF_LIMIT || pline_leading_ws_cutoff_count > 0 || ptr > low_point;
 
         // Traversing forward again to see if the lines are only made
         // up of whitespace. This can happen since it is possible that
@@ -461,6 +472,7 @@ namespace acorn {
         if (ptr != buffer_start) {
             ++ptr;
         }
+
         return { ptr, exceeded };
     }
 
@@ -484,15 +496,17 @@ namespace acorn {
     static PtrCalcInfo traverse_forward(const char* ptr,
                                         const char* high_point,
                                         const char* buffer_end,
-                                        int pline_leading_count,
-                                        int pline_leading_cutoff_count,
-                                        int total_backwards_line_characters) {
+                                        int pline_leading_ws_count,
+                                        int pline_leading_ws_cutoff_count,
+                                        int pline_leading_non_ws_cutoff_count,
+                                        int pline_total_backwards_characters) {
 
         const char* ptr_line_start = nullptr;
 
         int count      = 0;
         int line_count = 0;
 
+        int total_pline_leading_cutoff = pline_leading_ws_cutoff_count + pline_leading_non_ws_cutoff_count;
         int possible_trailing_whitespace = 0;
         const char* prev_line_start = ptr;
         while (ptr < buffer_end) {
@@ -536,7 +550,7 @@ namespace acorn {
                 //         *--------*
                 //         |
                 //         whitespae needing ignored
-                if (!compare_leading_whitespace(&count, leading_count, total_backwards_line_characters, pline_leading_cutoff_count)) {
+                if (!compare_leading_whitespace(&count, leading_count, total_pline_leading_cutoff, pline_total_backwards_characters)) {
                     // Well the characters were cut off so discarding this line entirely.
                     ptr = prev_line_start;
                     break;
@@ -597,7 +611,8 @@ namespace acorn {
     static std::pair<PtrCalcInfo, PtrCalcInfo> get_range_pointers(PointSourceLoc location,
                                                                   Buffer buffer,
                                                                   Logger::ArrowPosition arrow_position,
-                                                                  int& pline_leading_cutoff_count) {
+                                                                  int& pline_leading_ws_cutoff_count,
+                                                                  int& pline_leading_non_ws_cutoff_count) {
 
         auto point_begin  = location.point;
         auto point_end    = location.point + location.point_length;
@@ -618,21 +633,23 @@ namespace acorn {
             }
         }
 
-        int pline_leading_count        = 0;
-        int total_backwards_line_characters = 0;
+        int pline_leading_ws_count = 0;
+        int pline_total_backwards_characters = 0;
 
         auto start_info = traverse_backwards(point_begin,
                                              low_point,
                                              buffer_begin,
-                                             pline_leading_count,
-                                             pline_leading_cutoff_count,
-                                             total_backwards_line_characters);
+                                             pline_leading_ws_count,
+                                             pline_leading_ws_cutoff_count,
+                                             pline_leading_non_ws_cutoff_count,
+                                             pline_total_backwards_characters);
         auto end_info   = traverse_forward(point_end,
                                            high_point,
                                            buffer_end,
-                                           pline_leading_count,
-                                           pline_leading_cutoff_count,
-                                           total_backwards_line_characters);
+                                           pline_leading_ws_count,
+                                           pline_leading_ws_cutoff_count,
+                                           pline_leading_non_ws_cutoff_count,
+                                           pline_total_backwards_characters);
 
         return { start_info, end_info };
     }
@@ -641,11 +658,13 @@ namespace acorn {
                                                        SourceFile& file,
                                                        Logger::ArrowPosition arrow_position) {
 
-        int prim_line_cutoff_lead_trim = 0;
+        int pline_leading_ws_cutoff_count = 0;
+        int pline_leading_non_ws_cutoff_count = 0;
         auto [start_info, end_info] = get_range_pointers(location,
                                                          file.buffer,
                                                          arrow_position,
-                                                         prim_line_cutoff_lead_trim);
+                                                         pline_leading_ws_cutoff_count,
+                                                         pline_leading_non_ws_cutoff_count);
         Logger::InfoLines lines = convert_to_lines(start_info.ptr, end_info.ptr + 1);
 
         // Convert tabs to spaces for all ours lines.
@@ -661,9 +680,9 @@ namespace acorn {
                 })
               | std::ranges::to<Logger::InfoLines>();
 
-        auto [start_line_number    , _1] = file.line_table.get_line_and_column_number(start_info.ptr);
-        auto [primary_line_number  , _2] = file.line_table.get_line_and_column_number(location.point);
-        auto [location_start_number, _3] = file.line_table.get_line_and_column_number(location.ptr);
+        size_t start_line_number          = file.line_table.get_line_number(start_info.ptr);
+        size_t primary_line_number        = file.line_table.get_line_number(location.point);
+        size_t location_start_line_number = file.line_table.get_line_number(location.ptr);
 
         auto last_line_number = start_line_number + lines.size() - 1;
         const auto line_number_pad = std::string(count_digits(last_line_number), ' ');
@@ -677,7 +696,7 @@ namespace acorn {
             { // Calculate the start width
                 const char* ptr = start_info.ptr;
 
-                bool traverse_to_loc = location_start_number == primary_line_number;
+                bool traverse_to_loc = location_start_line_number == primary_line_number;
 
                 while ((!traverse_to_loc && is_whitespace(*ptr)) ||
                        (traverse_to_loc && ptr < location.ptr)) {
@@ -686,7 +705,7 @@ namespace acorn {
                     ++ptr;
                 }
 
-                start_width -= prim_line_cutoff_lead_trim;
+                start_width -= pline_leading_ws_cutoff_count;
             }
 
             // Calculate the end width
@@ -717,7 +736,8 @@ namespace acorn {
             start_info.exceeded, end_info.exceeded,
             start_width,
             end_width,
-            prim_line_cutoff_lead_trim,
+            pline_leading_ws_cutoff_count,
+            pline_leading_non_ws_cutoff_count,
             primary_line_number
         };
     }
@@ -792,12 +812,10 @@ void acorn::Logger::print_error_location(const ErrorInfo& info) {
         individual_underlines.erase(new_end, individual_underlines.end());
     }
 
-    size_t primary_line_leading_trim = static_cast<size_t>(info.prim_line_cutoff_lead_trim);
     for (const auto& line_info : info.lines) {
 
         print_error_location_line(info,
                                   line_info,
-                                  primary_line_leading_trim,
                                   has_arrow_msg,
                                   is_alongside_arrow_msg,
                                   is_at_arrow_msg,
@@ -809,15 +827,19 @@ void acorn::Logger::print_error_location(const ErrorInfo& info) {
 
 void acorn::Logger::print_error_location_line(const ErrorInfo& info,
                                               const LineInfo& line_info,
-                                              size_t primary_line_leading_trim,
                                               bool has_arrow_msg,
                                               bool is_alongside_arrow_msg,
                                               bool is_at_arrow_msg,
                                               bool is_arrow_after,
                                               const size_t line_number) {
 
+    size_t cutoff = static_cast<size_t>(info.pline_leading_ws_cutoff_count);
+    if (line_number != info.primary_line_number) {
+        cutoff += static_cast<size_t>(info.pline_leading_non_ws_cutoff_count);
+    }
+
     std::string line = tabs_to_spaces(line_info.unprocessed_text);
-    line = line.substr(primary_line_leading_trim, line.length());
+    line = line.substr(cutoff, line.length());
 
     print_line_number_bar(info, line_number);
 
@@ -852,15 +874,16 @@ void acorn::Logger::print_error_location_line(const ErrorInfo& info,
     // paid attention to such as underlining the error location.
     //
     size_t total_printed_characters_for_line = 0;
+    bool printed_marker = true;
     if (is_arrow_after) {
         print_arrow_after_msg(info, line_info, line, total_printed_characters_for_line);
     } else {
-        print_line_bar(info, false);
-
         if (individual_underlines.empty()) {
             print_underline(info, line_info, is_at_arrow_msg, line, total_printed_characters_for_line);
         } else {
-            print_individual_underlines(line_info, primary_line_leading_trim, total_printed_characters_for_line);
+            if (!print_individual_underlines(info, line_info, cutoff, total_printed_characters_for_line)) {
+                printed_marker = false;
+            }
         }
     }
     total_printed_characters_for_line -= line_info.dots_width;
@@ -877,7 +900,11 @@ void acorn::Logger::print_error_location_line(const ErrorInfo& info,
         print_alongwith_arrow_msg_after_dots(line_info, total_printed_characters_for_line);
     }
 
-    fmt_print("%s\n", White);
+    if (printed_marker) {
+        print("\n");
+    }
+
+    print(White);
 
 }
 
@@ -916,6 +943,8 @@ void acorn::Logger::print_underline(const ErrorInfo& info,
                                     const std::string& line,
                                     size_t& total_printed_characters_for_line) {
 
+    print_line_bar(info, false);
+
     size_t underscore_offset = line_info.dots_width;
     if (line_info.is_first)
         underscore_offset += info.start_width;
@@ -940,13 +969,10 @@ void acorn::Logger::print_underline(const ErrorInfo& info,
 
 }
 
-void acorn::Logger::print_individual_underlines(const LineInfo& line_info,
+bool acorn::Logger::print_individual_underlines(const ErrorInfo& info,
+                                                const LineInfo& line_info,
                                                 size_t primary_line_leading_trim,
                                                 size_t& total_printed_characters_for_line) {
-
-    total_printed_characters_for_line += line_info.dots_width;
-    print(std::string(line_info.dots_width, ' '));
-    print(BrightRed);
 
     const char* print_ptr = line_info.line_start_ptr;
 
@@ -957,6 +983,8 @@ void acorn::Logger::print_individual_underlines(const LineInfo& line_info,
         else                    compare_leading_count += 1;
         ++print_ptr;
     }
+
+    bool printed_underline = false;
 
     // Print underlines for the given locations if they
     // lay on the given line.
@@ -973,6 +1001,13 @@ void acorn::Logger::print_individual_underlines(const LineInfo& line_info,
                               loc.ptr        >= line_start_ptr && line_end_ptr > loc.ptr;
 
         if (is_within_line) {
+            if (!printed_underline) {
+                total_printed_characters_for_line += line_info.dots_width;
+                print_line_bar(info, false);
+                print(std::string(line_info.dots_width, ' '));
+                print(BrightRed);
+            }
+
             size_t print_length = 0;
             if (print_ptr < loc.ptr) {
                 while (print_ptr < loc.ptr) {
@@ -1003,11 +1038,14 @@ void acorn::Logger::print_individual_underlines(const LineInfo& line_info,
                 }
             }
 
+            printed_underline = true;
             print(std::string(print_length, '~'));
             total_printed_characters_for_line += print_length;
             print_ptr += print_length;
         }
     }
+
+    return printed_underline;
 }
 
 void acorn::Logger::calc_alongwith_arrow_msg_info_and_print_location(const LineInfo& line_info,

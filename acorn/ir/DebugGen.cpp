@@ -128,7 +128,9 @@ void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction, S
 }
 
 void acorn::DebugInfoEmitter::emit_location_at_last_statement(llvm::IRBuilder<>& ir_builder) {
-	emit_location(ir_builder, last_stmt->loc);
+	if (last_stmt) {
+		emit_location(ir_builder, last_stmt->loc);
+	}
 }
 
 void acorn::DebugInfoEmitter::emit_function_variable(Var* var, llvm::IRBuilder<>& ir_builder) {

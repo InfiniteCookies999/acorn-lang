@@ -162,7 +162,7 @@ namespace acorn {
                                        bool is_const_object);
         uint32_t get_function_call_score(const Func* candidate,
                                          const llvm::SmallVector<Expr*>& args,
-                                         bool is_const_object) const;
+                                         bool is_const_object);
         enum class CallCompareStatus {
             INCORRECT_ARGS,
             INCORRECT_PARAM_BY_NAME_NOT_FOUND,
@@ -185,24 +185,24 @@ namespace acorn {
                                                     const llvm::SmallVector<Expr*>& args,
                                                     const bool is_const_object,
                                                     uint32_t& score,
-                                                    bool& implicitly_converts_ptr_arg) const;
+                                                    bool& implicitly_converts_ptr_arg);
         bool has_correct_number_of_args(const Func* candidate,
                                         const llvm::SmallVector<Expr*>& args) const;
         void display_call_mismatch_info(PointSourceLoc error_loc,
                                         Node* call_node,
                                         const FuncList& candidates,
-                                        const llvm::SmallVector<Expr*>& args) const;
+                                        const llvm::SmallVector<Expr*>& args);
         // Displays information for why trying to call a function failed.
         template<typename F>
         void display_call_mismatch_info(const F* candidate,
                                         const llvm::SmallVector<Expr*>& args,
                                         bool indent,
                                         bool should_show_invidual_underlines,
-                                        Node* call_node) const;
+                                        Node* call_node);
         void display_call_ambiguous_info(PointSourceLoc error_loc,
                                          FuncList& candidates,
                                          llvm::SmallVector<Expr*>& args,
-                                         bool is_const_object) const;
+                                         bool is_const_object);
 
         void check_cast(Cast* cast);
         void check_named_value(NamedValue* named_value);
@@ -219,8 +219,8 @@ namespace acorn {
         // Utility functions
         //--------------------------------------
 
-        bool is_assignable_to(Type* to_type, Expr* expr) const;
-        bool is_castable_to(Type* to_type, Expr* expr) const;
+        bool is_assignable_to(Type* to_type, Expr* expr);
+        bool is_castable_to(Type* to_type, Expr* expr);
         bool check_modifiable(Expr* expr, Expr* error_node, bool is_assignment = true);
         bool is_lvalue(Expr* expr) const;
         bool is_readonly_field_without_access(Expr* expr) const;

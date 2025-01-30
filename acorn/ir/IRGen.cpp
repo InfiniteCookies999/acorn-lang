@@ -180,8 +180,6 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
 
     if (node->cast_type) {
         ll_value = gen_cast(node->cast_type, node, ll_value);
-
-        node->cast_type = nullptr;
     }
 
     return ll_value;
@@ -979,8 +977,7 @@ void acorn::IRGenerator::gen_call_destructors(Type* type, llvm::Value* ll_addres
             if (structn->destructor) {
                 structn->destructor->ll_func = structn->ll_destructor;
                 context.queue_gen(structn->destructor);
-            } else if (!structn->has_requested_gen_implicits) {
-                structn->has_requested_gen_implicits = true;
+            } else {
                 auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::Destructor, structn);
                 context.queue_gen_implicit_function(implicit_func);
             }
@@ -989,8 +986,9 @@ void acorn::IRGenerator::gen_call_destructors(Type* type, llvm::Value* ll_addres
 
     auto create_call = [this, ll_address](Struct* structn) finline {
         builder.CreateCall(structn->ll_destructor, ll_address);
-        // TODO: Is this really what we want?
-        emit_dbg(di_emitter->emit_location_at_last_statement(builder));
+        if (context.should_emit_debug_info()) {
+            di_emitter->emit_location_at_last_statement(builder);
+        }
     };
 
     if (type->is_struct()) {
@@ -2313,7 +2311,6 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg_for_implicit_ptr(Expr* ar
     if (arg->cast_type) {
         // The cast type was not needed anyway since this function effectively handles
         // the "casting".
-        arg->cast_type = nullptr;
 
         // Read comment under gen_unary_op for the & operator for an explaination.
         if ((arg->is(NodeKind::DotOperator) || arg->is(NodeKind::IdentRef)) && arg->is_foldable) {
@@ -2885,6 +2882,7 @@ llvm::Value* acorn::IRGenerator::gen_bool(Bool* b) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_string(String* string) {
+
     auto text_to_const_array = [](const auto& text, llvm::Type* ll_elm_type) {
         llvm::ArrayType* ll_arr_type = llvm::ArrayType::get(ll_elm_type, text.size() + 1);
 
@@ -2912,15 +2910,15 @@ llvm::Value* acorn::IRGenerator::gen_string(String* string) {
 
     if (string->bit_type == String::Str8Bit) {
         if (string->cast_type->is(context.const_char16_ptr_type)) {
-            return text_to_global_array(string->text16bit, llvm::Type::getInt16Ty(ll_context), 2);
+            return text_to_global_array(string->text8bit, llvm::Type::getInt16Ty(ll_context), 2);
         } else if (string->cast_type->is(context.const_char32_ptr_type)) {
-            return text_to_global_array(string->text32bit, llvm::Type::getInt32Ty(ll_context), 4);
+            return text_to_global_array(string->text8bit, llvm::Type::getInt32Ty(ll_context), 4);
         } else {
             return text_to_global_array(string->text8bit, llvm::Type::getInt8Ty(ll_context), 1);
         }
     } else if (string->bit_type == String::Str16Bit) {
         if (string->cast_type->is(context.const_char32_ptr_type)) {
-            return text_to_global_array(string->text32bit, llvm::Type::getInt32Ty(ll_context), 4);
+            return text_to_global_array(string->text16bit, llvm::Type::getInt32Ty(ll_context), 4);
         } else {
             return text_to_global_array(string->text16bit, llvm::Type::getInt16Ty(ll_context), 2);
         }
@@ -3282,7 +3280,6 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
     };
 
     if (value->cast_type && context.is_std_any_type(value->cast_type)) {
-        value->cast_type = nullptr;
         gen_store_value_to_any(ll_address, value, gen_node(value));
         return;
     }
@@ -3787,8 +3784,7 @@ void acorn::IRGenerator::gen_call_default_constructor(llvm::Value* ll_address, S
         if (structn->default_constructor) {
             structn->default_constructor->ll_func = structn->ll_default_constructor;
             context.queue_gen(structn->default_constructor);
-        } else if (!structn->has_requested_gen_implicits) {
-            structn->has_requested_gen_implicits = true;
+        } else {
             auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::DefaultConstructor, structn);
             context.queue_gen_implicit_function(implicit_func);
         }
@@ -4247,8 +4243,7 @@ void acorn::IRGenerator::gen_call_copy_constructor(llvm::Value* ll_to_address,
         if (structn->copy_constructor) {
             structn->copy_constructor->ll_func = ll_func;
             context.queue_gen(structn->copy_constructor);
-        } else if (!structn->has_requested_gen_implicits) {
-            structn->has_requested_gen_implicits = true;
+        } else {
             auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::CopyConstructor, structn);
             context.queue_gen_implicit_function(implicit_func);
         }
@@ -4299,8 +4294,7 @@ void acorn::IRGenerator::gen_call_move_constructor(llvm::Value* ll_to_address,
         if (structn->move_constructor) {
             structn->move_constructor->ll_func = ll_func;
             context.queue_gen(structn->move_constructor);
-        } else if (!structn->has_requested_gen_implicits) {
-            structn->has_requested_gen_implicits = true;
+        } else {
             auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::MoveConstructor, structn);
             context.queue_gen_implicit_function(implicit_func);
         }

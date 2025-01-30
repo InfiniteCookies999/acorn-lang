@@ -269,7 +269,8 @@ namespace acorn {
             bool        exceeded_start, exceeded_end;
             size_t      start_width;
             size_t      end_width;
-            int         prim_line_cutoff_lead_trim;
+            int         pline_leading_ws_cutoff_count;
+            int         pline_leading_non_ws_cutoff_count;
             size_t      primary_line_number;
         };
 
@@ -393,7 +394,6 @@ namespace acorn {
 
         void print_error_location_line(const ErrorInfo& info,
                                        const LineInfo& line_info,
-                                       size_t primary_line_leading_trim,
                                        bool has_arrow_msg,
                                        bool is_alongside_arrow_msg,
                                        bool is_at_arrow_msg,
@@ -411,7 +411,8 @@ namespace acorn {
                              bool is_at_arrow_msg,
                              const std::string& line,
                              size_t& total_printed_characters_for_line);
-        void print_individual_underlines(const LineInfo& line_info,
+        bool print_individual_underlines(const ErrorInfo& info,
+                                         const LineInfo& line_info,
                                          size_t primary_line_leading_trim,
                                          size_t& total_printed_characters_for_line);
 

@@ -59,6 +59,8 @@ namespace acorn {
         Type* char16_type;
         Type* char32_type;
         Type* const_char_ptr_type;
+        Type* char16_ptr_type;
+        Type* char32_ptr_type;
         Type* const_char16_ptr_type;
         Type* const_char32_ptr_type;
         Type* const_char_ptr_ptr_type;

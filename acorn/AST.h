@@ -183,6 +183,7 @@ namespace acorn {
 
         llvm::StringRef linkname;
 
+        Type* parsed_return_type;
         Type* return_type;
         llvm::SmallVector<Var*, 8> params;
 
@@ -321,17 +322,16 @@ namespace acorn {
         llvm::Function* ll_copy_constructor    = nullptr;
         llvm::Function* ll_move_constructor    = nullptr;
 
-        bool has_been_checked               = false;
-        bool fields_have_errors             = false;
-        bool fields_have_assignments        = false;
-        bool needs_default_call             = false;
-        bool needs_destruction              = false;
-        bool needs_copy_call                = false;
-        bool needs_move_call                = false;
-        bool fields_need_destruction        = false;
-        bool fields_need_copy_call          = false;
-        bool fields_need_move_call          = false;
-        bool has_requested_gen_implicits    = false;
+        bool has_been_checked        = false;
+        bool fields_have_errors      = false;
+        bool fields_have_assignments = false;
+        bool needs_default_call      = false;
+        bool needs_destruction       = false;
+        bool needs_copy_call         = false;
+        bool needs_move_call         = false;
+        bool fields_need_destruction = false;
+        bool fields_need_copy_call   = false;
+        bool fields_need_move_call   = false;
 
         Var* find_field(Identifier name) const;
     };
@@ -489,6 +489,14 @@ namespace acorn {
         }
 
         bool  is_foldable = true;
+        // The expression is a basic unit that may be interpreted as one of
+        // several types depending on context. For example take:
+        //
+        // int64 a = 5223;
+        //
+        // The number `5223` is trivially reassignable to numeric types as long
+        // as the number can fit into the respective integer size.
+        bool  trivially_reassignable = false;
         Type* type = nullptr;
 
         // When this is non-null it indicates that the expression
@@ -658,8 +666,8 @@ namespace acorn {
         }
 
         NodeKind prev_node_kind = NodeKind::InvalidExpr;
+        Type* parsed_expr_type;
         Type* expr_type;
-        Type* resolved_expr_type;
     };
 
     struct MemoryAccess : TypeExpr {
@@ -747,6 +755,7 @@ namespace acorn {
         SizeOf() : Expr(NodeKind::SizeOf) {
         }
 
+        Type* parsed_type_with_size;
         Type* type_with_size;
     };
 

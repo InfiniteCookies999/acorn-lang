@@ -97,6 +97,7 @@ bool acorn::Type::is_comparable() const {
     case TypeKind::Pointer:
     case TypeKind::Enum:
     case TypeKind::Null:
+    case TypeKind::Bool:
         return true;
     default:
         return false;
