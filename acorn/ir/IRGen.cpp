@@ -3069,12 +3069,13 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
         ll_memory = gen_handle_returned_aggregate_obj(call->type, ll_memory, "tmp.arr");
     }
 
+    llvm::Value* ll_value;
     if (mem_access_ptr) {
         auto ctr_type = static_cast<ContainerType*>(type);
         auto ll_load_type = gen_type(ctr_type->get_elm_type());
-        return builder.CreateInBoundsGEP(ll_load_type, ll_memory, {gen_rvalue(mem_access->index)});
+        ll_value = builder.CreateInBoundsGEP(ll_load_type, ll_memory, {gen_rvalue(mem_access->index)});
     } else if (type->is_array()) {
-        return gen_array_memory_access(ll_memory, type, mem_access->index);
+        ll_value = gen_array_memory_access(ll_memory, type, mem_access->index);
     } else {
         // Should be a slice type otherwise.
         auto ll_slice_type = gen_type(type);
@@ -3084,8 +3085,13 @@ llvm::Value* acorn::IRGenerator::gen_memory_access(MemoryAccess* mem_access) {
 
         auto ctr_type = static_cast<ContainerType*>(type);
         auto ll_load_type = gen_type(ctr_type->get_elm_type());
-        return builder.CreateInBoundsGEP(ll_load_type, ll_elements_ptr, {gen_rvalue(mem_access->index)});
+        ll_value = builder.CreateInBoundsGEP(ll_load_type, ll_elements_ptr, {gen_rvalue(mem_access->index)});
     }
+
+    // Memory access can cause an exception so it is ness. to output debug location
+    // information so that it stops at the expression before it is executed.
+    emit_dbg(di_emitter->emit_location_at_last_statement(builder));
+    return ll_value;
 }
 
 llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
@@ -3903,12 +3909,13 @@ void acorn::IRGenerator::gen_branch_on_condition(Expr* cond, llvm::BasicBlock* l
             }
 
             // Create the true block that will be taken if the lhs is true.
-            auto ll_lhs_true_bb = gen_bblock("and.lhs.true", ll_cur_func);
+            auto ll_lhs_true_bb = gen_bblock("and.lhs.true");
             // Generate the code for branching to the true block if the lhs is
             // true.
             gen_branch_on_condition(bin_op->lhs, ll_lhs_true_bb, ll_false_bb);
 
             // Continue by determining if the rhs is true when the lhs is true.
+            insert_bblock_at_end(ll_lhs_true_bb);
             builder.SetInsertPoint(ll_lhs_true_bb);
             gen_branch_on_condition(bin_op->rhs, ll_true_bb, ll_false_bb);
             return;
@@ -3929,13 +3936,14 @@ void acorn::IRGenerator::gen_branch_on_condition(Expr* cond, llvm::BasicBlock* l
             }
 
             // Create the false block that will be taken if the lhs is false.
-            auto ll_lhs_false_bb = gen_bblock("or.lhs.false", ll_cur_func);
+            auto ll_lhs_false_bb = gen_bblock("or.lhs.false");
             // Generate the code for branching to the false block if the lhs is
             // false.
             gen_branch_on_condition(bin_op->lhs, ll_true_bb, ll_lhs_false_bb);
 
             // Continue by determining if the statement still might be true even
             // though the lhs was false.
+            insert_bblock_at_end(ll_lhs_false_bb);
             builder.SetInsertPoint(ll_lhs_false_bb);
             gen_branch_on_condition(bin_op->rhs, ll_true_bb, ll_false_bb);
             return;

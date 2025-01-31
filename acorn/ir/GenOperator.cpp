@@ -50,8 +50,8 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
         // See: https://github.com/llvm/llvm-project/blob/839ac62c5085d895d3165bc5024db623a7a78813/clang/lib/CodeGen/CGExprScalar.cpp
         // VisitBinLAnd
 
-        auto ll_end_bb      = gen_bblock("and.end", ll_cur_func);
-        auto ll_lhs_true_bb = gen_bblock("and.lhs.true", ll_cur_func);
+        auto ll_end_bb      = gen_bblock("and.end");
+        auto ll_lhs_true_bb = gen_bblock("and.lhs.true");
 
         // Generate children
         gen_branch_on_condition(bin_op->lhs, ll_lhs_true_bb, ll_end_bb);
@@ -71,6 +71,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
         }
 
         // Have to deal with the final block.
+        insert_bblock_at_end(ll_lhs_true_bb);
         builder.SetInsertPoint(ll_lhs_true_bb);
         auto ll_cond = gen_condition(bin_op->rhs);
         // Add the final condition that will determine if the entire
@@ -78,6 +79,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
         ll_result->addIncoming(ll_cond, ll_lhs_true_bb);
 
         // Continuing generating code in the end block after all the blocks.
+        insert_bblock_at_end(ll_end_bb);
         builder.CreateBr(ll_end_bb);
         builder.SetInsertPoint(ll_end_bb);
 
@@ -94,8 +96,8 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
             }
         }
 
-        auto ll_end_bb = gen_bblock("or.end", ll_cur_func);
-        auto ll_lhs_false_bb = gen_bblock("or.lhs.false", ll_cur_func);
+        auto ll_end_bb = gen_bblock("or.end");
+        auto ll_lhs_false_bb = gen_bblock("or.lhs.false");
 
         // Generate children
         gen_branch_on_condition(bin_op->lhs, ll_end_bb, ll_lhs_false_bb);
@@ -115,6 +117,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
         }
 
         // Have to deal with the final block.
+        insert_bblock_at_end(ll_lhs_false_bb);
         builder.SetInsertPoint(ll_lhs_false_bb);
         auto ll_cond = gen_condition(bin_op->rhs);
         // Add the final condition as a last chance at the expression
@@ -122,6 +125,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
         ll_result->addIncoming(ll_cond, ll_lhs_false_bb);
 
         // Continuing generating code in the end block after all the blocks.
+        insert_bblock_at_end(ll_end_bb);
         builder.CreateBr(ll_end_bb);
         builder.SetInsertPoint(ll_end_bb);
 
