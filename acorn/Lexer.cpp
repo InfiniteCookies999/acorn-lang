@@ -521,8 +521,6 @@ FinishedStringLexLab:
     } else {
         invalid = true;
 
-
-
         // Underlining the entire string so that there is not just a weird hanging messing
         // at the end of the line with the whitespace.
         SourceLoc loc = SourceLoc{

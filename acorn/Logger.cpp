@@ -612,7 +612,8 @@ namespace acorn {
                                                                   Buffer buffer,
                                                                   Logger::ArrowPosition arrow_position,
                                                                   int& pline_leading_ws_cutoff_count,
-                                                                  int& pline_leading_non_ws_cutoff_count) {
+                                                                  int& pline_leading_non_ws_cutoff_count,
+                                                                  const llvm::SmallVector<PointSourceLoc>& individual_underlines) {
 
         auto point_begin  = location.point;
         auto point_end    = location.point + location.point_length;
@@ -623,13 +624,25 @@ namespace acorn {
         auto buffer_begin = buffer.content;
         auto buffer_end   = buffer.content + buffer.length;
 
+        if (!individual_underlines.empty()) {
+
+            for (const auto& underline_loc : individual_underlines) {
+                auto underline_loc_end = underline_loc.point + underline_loc.point_length;
+                if (underline_loc.point < point_begin) point_begin = underline_loc.point;
+                if (underline_loc_end > point_end)     point_end = underline_loc_end;
+            }
+
+        }
+
         // Check for case in which a single token is really long such as a very
         // long string.
-        if (location.point_length > 30) {
-            if (arrow_position == Logger::ArrowPosition::After) {
-                point_begin = point_end - 20;
-            } else {
-                point_end = point_begin + 20;
+        if (individual_underlines.empty()) {
+            if (location.point_length > 30) {
+                if (arrow_position == Logger::ArrowPosition::After) {
+                    point_begin = point_end - 20;
+                } else {
+                    point_end = point_begin + 20;
+                }
             }
         }
 
@@ -656,7 +669,8 @@ namespace acorn {
 
     static Logger::ErrorInfo collect_error_information(PointSourceLoc location,
                                                        SourceFile& file,
-                                                       Logger::ArrowPosition arrow_position) {
+                                                       Logger::ArrowPosition arrow_position,
+                                                       const llvm::SmallVector<PointSourceLoc>& individual_underlines) {
 
         int pline_leading_ws_cutoff_count = 0;
         int pline_leading_non_ws_cutoff_count = 0;
@@ -664,7 +678,8 @@ namespace acorn {
                                                          file.buffer,
                                                          arrow_position,
                                                          pline_leading_ws_cutoff_count,
-                                                         pline_leading_non_ws_cutoff_count);
+                                                         pline_leading_non_ws_cutoff_count,
+                                                         individual_underlines);
         Logger::InfoLines lines = convert_to_lines(start_info.ptr, end_info.ptr + 1);
 
         // Convert tabs to spaces for all ours lines.
@@ -1153,7 +1168,8 @@ void acorn::Logger::end_error(ErrCode error_code) {
 
     ErrorInfo info = collect_error_information(main_location,
                                                file,
-                                               arrow_msg.msg.empty() ? ArrowPosition::None : arrow_msg.position);
+                                               arrow_msg.msg.empty() ? ArrowPosition::None : arrow_msg.position,
+                                               individual_underlines);
 
     // Placed after collecting information to reduce the time locked.
     mtx.lock();
