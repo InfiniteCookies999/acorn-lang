@@ -12,8 +12,8 @@ static std::vector<char> valid_string_characters;
 static std::string create_int_literal(int64_t base, std::string prefix = "") {
     std::string lexeme = "";
 
-    static std::uniform_int<int32_t> number_dist(INT32_MIN, INT32_MAX);
-    static std::uniform_int<int>     underscore_dist(0, 20);
+    static std::uniform_int_distribution<int32_t> number_dist(INT32_MIN, INT32_MAX);
+    static std::uniform_int_distribution<int>     underscore_dist(0, 20);
 
     int64_t value = static_cast<int64_t>(number_dist(generator));
 
@@ -56,9 +56,9 @@ static std::string create_identifier() {
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
     };
 
-    static std::uniform_int<int> identifier_length_dist(1, 50);
-    static std::uniform_int<int> character_dist1(0, valid_characters.size() - 1 - 10);
-    static std::uniform_int<int> character_dist2(0, valid_characters.size() - 1);
+    static std::uniform_int_distribution<int> identifier_length_dist(1, 50);
+    static std::uniform_int_distribution<int> character_dist1(0, valid_characters.size() - 1 - 10);
+    static std::uniform_int_distribution<int> character_dist2(0, valid_characters.size() - 1);
 
     int length = identifier_length_dist(generator);
     for (int i = 0; i < length; i++) {

@@ -4874,7 +4874,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
                 }
             };
 
-            auto get_constant_value = [this](Expr* expr) finline {
+            auto get_constant_value = [this](Expr* expr) finline -> uint64_t {
                 if (expr->kind == NodeKind::Number) {
                     // Quick pass for common cases.
                     auto number = static_cast<const Number*>(expr);
