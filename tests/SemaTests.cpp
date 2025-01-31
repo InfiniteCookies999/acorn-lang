@@ -128,7 +128,7 @@ void test_sema() {
         });
         test("Assign det arr wrong dimensions 2", [&] {
             mock_sema(R"(int[] a = [[4]];)");
-            expect_none().to_produce_error(ErrCode::SemaAssignDetArrWrongDimensions);
+            expect_none().to_produce_error(ErrCode::SemaIncompatibleArrayElmTypes);
         });
         test("Duplicate parameter", [&] {
             mock_sema(R"(void foo(int a, int b, int a) {})");

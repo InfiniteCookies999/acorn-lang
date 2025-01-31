@@ -4,8 +4,8 @@ const int SECONDS_PER_DAY = 86400;
 
 // A cache of the amount of days from epoch up until Jan 1st
 // of years starting from 1970 and going till 2050.
-private const int64[81] DAYS_JAN1_OF_YEAR_TABLE = [
-    719528'u64, // year 1970
+private const int64[] DAYS_JAN1_OF_YEAR_TABLE = [
+    719528, // year 1970
     719893,
     720258,
     720624,

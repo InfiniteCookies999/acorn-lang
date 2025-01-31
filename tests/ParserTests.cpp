@@ -299,8 +299,6 @@ void test_parser() {
 
             expect(funcs.size(), to_string<size_t>).to_be(4);
 
-            auto rt = funcs[0]->parsed_return_type;
-
             expect(funcs[0]->parsed_return_type, type_to_string).to_be(context->void_type);
             expect(funcs[0]->params.empty(), to_string<bool>).to_be(true);
             expect(funcs[0]->name, identifier_to_string).to_be(Identifier::get("foo"));

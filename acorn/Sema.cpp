@@ -1180,21 +1180,40 @@ void acorn::Sema::check_variable(Var* var) {
     var->has_been_checked = true; // Set early to prevent circular checking.
 
     if (var->assignment) {
-        if (var->assignment->is(NodeKind::Array) && var->parsed_type->is_array()) {
-            auto arr_type = static_cast<ArrayType*>(var->parsed_type);
-            // TODO: We fix up the element twice since we need to fix the element
-            //       type up first in order to resolve the assignment and then
-            //       again below when calling fixup_assign_det_arr_type.
-            //
-            //       But it is nessessary to do this first since fixup_assign_det_arr_type
-            //       assumes that the assignment has already been checked.
-            //
-            auto fixed_up_elm_type = fixup_type(arr_type->get_elm_type());
-            if (!fixed_up_elm_type) {
+        TypeKind type_kind = var->parsed_type->get_kind();
+        if (var->assignment->is(NodeKind::Array) &&
+            type_kind == TypeKind::Array ||
+            type_kind == TypeKind::UnresolvedBracket
+            ) {
+
+            // TODO: Optimization: The type is being fixed here and below.
+            var->type = fixup_type(var->parsed_type);
+            if (!var->type) {
                 return cleanup();
             }
 
-            check_array(static_cast<Array*>(var->assignment), fixed_up_elm_type);
+            // Still have to check for an array because it is possible the type is
+            // an enum container type or a class type with generic arguments.
+            if (var->type->is_array()) {
+                auto arr_type = static_cast<ArrayType*>(var->type);
+                check_array(static_cast<Array*>(var->assignment), arr_type->get_elm_type());
+            } else {
+                check_node(var->assignment);
+            }
+        } else if (var->assignment->is(NodeKind::Array) &&
+                   type_kind == TypeKind::AssignDeterminedArray) {
+
+            auto assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(var->parsed_type);
+
+            // TODO: Optimization: The type is being fixed here and below.
+            auto fixed_elm_type = fixup_type(assign_det_arr_type->get_elm_type());
+            if (!fixed_elm_type) {
+                return cleanup();
+            }
+
+            auto arr_type = static_cast<ArrayType*>(var->type);
+            check_array(static_cast<Array*>(var->assignment), fixed_elm_type);
+
         } else if (var->assignment->is(NodeKind::MoveObj)) {
             check_moveobj(static_cast<MoveObj*>(var->assignment), true);
         } else {
@@ -4525,8 +4544,9 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
     for (Expr* elm : arr->elms) {
         if (!elm) continue;
 
-        if (elm->is(NodeKind::Array) && dest_elm_type && dest_elm_type->is_array()) {
-            auto next_dest_elm_type = static_cast<ArrayType*>(dest_elm_type)->get_elm_type();
+        if (elm->is(NodeKind::Array) && dest_elm_type &&
+            (dest_elm_type->get_kind() == TypeKind::Array || dest_elm_type->get_kind() == TypeKind::AssignDeterminedArray)) {
+            auto next_dest_elm_type = static_cast<ContainerType*>(dest_elm_type)->get_elm_type();
             check_array(static_cast<Array*>(elm), next_dest_elm_type);
         } else {
             check_node(elm);
@@ -4538,10 +4558,17 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
         }
 
         if (dest_elm_type) {
-            if (!is_assignable_to(dest_elm_type, elm)) {
-                error(expand(elm), "%s", get_type_mismatch_error(dest_elm_type, elm))
-                    .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
-                values_have_errors = true;
+            // Checking that the type is not an `AssignDeterminedArray` because it
+            // is possible elements of arrays to be assigned to the assign determined
+            // arrays. The checks for dimensional compatibility are checked later when
+            // the type is fixed up.
+            //
+            if (dest_elm_type->get_kind() != TypeKind::AssignDeterminedArray) {
+                if (!is_assignable_to(dest_elm_type, elm)) {
+                    error(expand(elm), "%s", get_type_mismatch_error(dest_elm_type, elm))
+                        .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
+                    values_have_errors = true;
+                }
             }
         } else if (!elm_type) {
             elm_type = elm->type;
@@ -4567,10 +4594,13 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
     }
 
     if (!elm_type) {
-        elm_type = dest_elm_type;
+        if (dest_elm_type->get_kind() != TypeKind::AssignDeterminedArray) {
+            elm_type = dest_elm_type;
+        } else {
+            elm_type = arr->elms[0]->type;
+        }
     }
 
-    // TODO: could allow for function references here and convert the types.
     if (is_incomplete_type(elm_type)) {
         error(expand(arr), "Array has incomplete element type '%s'", elm_type)
             .end_error(ErrCode::SemaArrayIncompleteElmType);
