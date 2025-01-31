@@ -186,6 +186,13 @@ int main(int argc, char* argv[]) {
         }
     }
 
+#if UNIX_OS
+    // Checking for redirection and if so not showing colors.
+    if (isatty(STDERR_FILENO) == 0) {
+        compiler.set_dont_show_colors();
+    }
+#endif
+
     if (compiler.has_errors()) {
         return 1;
     }
