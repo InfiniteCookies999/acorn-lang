@@ -78,18 +78,18 @@ bool acorn::Sema::find_main_function(Context& context) {
     return false;
 }
 
-acorn::Type* acorn::Sema::fixup_type(Type* type) {
+acorn::Type* acorn::Sema::fixup_type(Type* type, bool is_ptr_elm_type) {
     if (type->get_kind() == TypeKind::UnresolvedBracket) {
         return fixup_unresolved_bracket_type(type);
     } else if (type->get_kind() == TypeKind::UnresolvedComposite) {
-        return fixup_unresolved_composite_type(type);
+        return fixup_unresolved_composite_type(type, is_ptr_elm_type);
     } else if (type->get_kind() == TypeKind::Function) {
         return fixup_function_type(type);
     } else if (type->is_pointer()) {
 
         auto ptr_type = static_cast<PointerType*>(type);
         auto elm_type = ptr_type->get_elm_type();
-        auto fixed_elm_type = fixup_type(elm_type);
+        auto fixed_elm_type = fixup_type(elm_type, true);
         if (!fixed_elm_type) {
             return nullptr;
         }
@@ -289,7 +289,7 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
     return fixed_type;
 }
 
-acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
+acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_ptr_elm_type) {
 
     auto unresolved_composite_type = static_cast<UnresolvedCompositeType*>(type);
 
@@ -355,7 +355,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
             }
         }
 
-        logger.begin_error(error_loc, "Could not find struct or enum type '%s'", name);
+        logger.begin_error(error_loc, "Could not find struct, enum, or interface type '%s'", name);
         spell_checker.search(logger, name);
         logger.end_error(ErrCode::SemaCouldNotFindStructType);
         return nullptr;
@@ -387,6 +387,25 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type) {
         }
 
         return enum_type;
+    }
+    case NodeKind::Interface: {
+        auto found_interface = static_cast<Interface*>(found_composite);
+
+        ensure_interface_checked(unresolved_composite_type->get_error_location(), found_interface);
+
+        Type* intr_type = found_interface->interface_type;
+        if (unresolved_composite_type->is_const()) {
+            intr_type = type_table.get_const_type(intr_type);
+        }
+
+        if (!is_ptr_elm_type) {
+            error(unresolved_composite_type->get_error_location(), "Interface types must be declared as a pointer")
+                .add_line("Ex. use '%s*'", unresolved_composite_type->get_composite_name())
+                .end_error(ErrCode::SemaInterfaceMustBeDeclAsPtr);
+            return nullptr;
+        }
+
+        return intr_type;
     }
     default:
         acorn_fatal("Unknown composite kind");
@@ -432,19 +451,31 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
     }
 
     for (const auto& [_, composite] : nspace->get_composites()) {
-        if (composite->is_not(NodeKind::Struct)) {
-            continue;
-        }
-        auto structn = static_cast<Struct*>(composite);
+        if (composite->is(NodeKind::Struct)) {
+            auto structn = static_cast<Struct*>(composite);
 
-        check_for_duplicate_functions(structn->nspace, context);
-        check_for_duplicate_functions(structn->constructors, context);
+            check_for_duplicate_functions(structn->nspace, context);
+            check_for_duplicate_functions(structn->constructors, context);
 
-        for (auto& duplicate_info : structn->duplicate_struct_func_infos) {
-            report_redeclaration(duplicate_info.duplicate_function,
-                                 duplicate_info.prior_function,
-                                 duplicate_info.duplicate_function->is_constructor ? "constructor" : "destructor",
-                                 ErrCode::SemaDuplicateFunc);
+            for (auto& duplicate_info : structn->duplicate_struct_func_infos) {
+                report_redeclaration(duplicate_info.duplicate_function,
+                                     duplicate_info.prior_function,
+                                     duplicate_info.duplicate_function->is_constructor ? "constructor" : "destructor",
+                                     ErrCode::SemaDuplicateFunc);
+            }
+        } else if (composite->is(NodeKind::Interface)) {
+            auto interfacen = static_cast<Interface*>(composite);
+            auto& funcs = interfacen->functions;
+            for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
+                for (auto itr2 = itr + 1; itr2 != funcs.end(); ++itr2) {
+                    if ((*itr)->name != (*itr2)->name) {
+                        continue;
+                    }
+                    if (check_for_duplicate_match(*itr, *itr2)) {
+                        break;
+                    }
+                }
+            }
         }
     }
 }
@@ -504,32 +535,11 @@ void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
 }
 
 bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2) {
-    auto get_param_count = [](const Func* func) finline {
-        if (func->default_params_offset == -1) {
-            return func->params.size();
-        }
-        return func->default_params_offset;
-    };
-
-    size_t param_count = get_param_count(func1);
-    if (param_count != get_param_count(func2)) {
-        return false;
+    if (do_functions_match(func1, func2)) {
+        report_redeclaration(func1, func2, func1->is_constructor ? "constructor" : "function", ErrCode::SemaDuplicateFunc);
+        return true;
     }
-
-    for (size_t i = 0; i < param_count; i++) {
-        Var* param1 = func1->params[i];
-        Var* param2 = func2->params[i];
-        if (param1->type->is_not(param2->type)) {
-            return false;
-        }
-    }
-
-    if (func1->is_constant != func2->is_constant) {
-        return false;
-    }
-
-    report_redeclaration(func1, func2, func1->is_constructor ? "constructor" : "function", ErrCode::SemaDuplicateFunc);
-    return true;
+    return false;
 }
 
 void acorn::Sema::report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code) {
@@ -553,6 +563,8 @@ void acorn::Sema::check_nodes_wrong_scopes(Module& modl) {
             scope_str = "global";
         } else if (location == ScopeLocation::Struct) {
             scope_str = "struct";
+        } else if (location == ScopeLocation::Interface) {
+            scope_str = "interface";
         } else {
             acorn_fatal("unreachable");
         }
@@ -767,6 +779,11 @@ bool acorn::Sema::check_function_decl(Func* func) {
     func->has_checked_declaration = true;
     func->is_checking_declaration = true;
 
+    auto error_cleanup = [](Func* func) finline{
+        func->has_errors = true;
+        func->is_checking_declaration = false;
+    };
+
     // -- debug
     // Logger::debug("checking function declaration: %s", func->name);
 
@@ -787,20 +804,21 @@ bool acorn::Sema::check_function_decl(Func* func) {
         error(func, "Functions cannot have a return type of '%s'",
               func->parsed_return_type)
             .end_error(ErrCode::SemaFuncsCannotReturnAuto);
+        error_cleanup(func);
         return false;
     }
 
     if (func->parsed_return_type->get_kind() == TypeKind::AssignDeterminedArray) {
         error(func, "Functions cannot have return type '%s'", func->parsed_return_type)
             .end_error(ErrCode::SemaFuncsCannotHaveAssignDetArrType);
-        func->is_checking_declaration = false;
+        error_cleanup(func);
         return false;
     }
 
     func->return_type = fixup_type(func->parsed_return_type);
     if (!func->return_type) {
         // Failed to fixup return type so returning early.
-        func->is_checking_declaration = false;
+        error_cleanup(func);
         return false;
     }
 
@@ -808,6 +826,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
         error(func->get_function_const_location(), "%s cannot be marked 'const'",
               func->is_constructor ? "Constructors" : "Destructors")
             .end_error(ErrCode::SemaOnlyMemberFuncsMarkedConst);
+        error_cleanup(func);
         return false;
     }
 
@@ -846,21 +865,21 @@ bool acorn::Sema::check_function_decl(Func* func) {
             if (param->name == func->params[i]->name) {
                 error(param, "Duplicate declaration of parameter '%s'", param->name)
                     .end_error(ErrCode::SemaDuplicateParamVariableDecl);
-                func->is_checking_declaration = false;
+                error_cleanup(func);
                 return false;
             }
         }
 
         check_variable(param);
         if (!param->type) {
-            func->is_checking_declaration = false;
+            error_cleanup(func);
             return false;
         }
 
         if (encountered_param_default_value && !param->assignment) {
             error(expand(last_default_param), "Parameters with default values must come last")
                 .end_error(ErrCode::SemaDefaultParamValueMustComeLast);
-            func->is_checking_declaration = false;
+            error_cleanup(func);
             return false;
         }
 
@@ -875,13 +894,16 @@ bool acorn::Sema::check_function_decl(Func* func) {
                 if (param->type->is_struct()) {
                     error(param, "Parameters of functions with modifier 'native' cannot have a struct type")
                         .end_error(ErrCode::SemaNativeFuncParamsCannotBeAggregate);
+                    func->has_errors = true;
                 } else {
                     error(param, "Parameters of functions with modifier 'native' cannot have an array type")
                         .end_error(ErrCode::SemaNativeFuncParamsCannotBeAggregate);
+                    func->has_errors = true;
                 }
             } else if (param->has_implicit_ptr) {
                 error(param, "Parameters of functions with modifier 'native' cannot have implicit pointers")
                     .end_error(ErrCode::SemaNativeFuncParamCannotHaveImplicitPtr);
+                func->has_errors = true;
             }
         }
 
@@ -905,6 +927,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
                 if (param->assignment) {
                     error(expand(param), "Parameters of intrinsic functions cannot have a default value")
                         .end_error(ErrCode::SemaIntrinsicFuncParamDefValue);
+                    func->has_errors = true;
                 }
             }
 
@@ -962,6 +985,8 @@ bool acorn::Sema::check_function_decl(Func* func) {
                     logger.add_line("    - '%s'", func_decl);
                 }
                 logger.end_error(ErrCode::SemaInvalidIntrinsicDecl);
+
+                func->has_errors = true;
             }
         }
     }
@@ -971,11 +996,12 @@ bool acorn::Sema::check_function_decl(Func* func) {
             if (!param->assignment) continue;
             error(param, "Functions with variadic parameters cannot have parameters with default values")
                 .end_error(ErrCode::SemaFuncWithVarArgNoParamDefaultVal);
+            func->has_errors = true;
         }
     }
 
     func->is_checking_declaration = false;
-    return true;
+    return !func->has_errors;
 }
 
 void acorn::Sema::check_node(Node* node) {
@@ -1100,6 +1126,10 @@ void acorn::Sema::check_function(Func* func) {
         return;
     }
 
+    if (func->interfacen) {
+        return;
+    }
+
     Struct* prev_struct;
     if (func->structn) {
         prev_struct = cur_struct;
@@ -1164,10 +1194,9 @@ void acorn::Sema::check_variable(Var* var) {
     // Reporting errors if the variable is local to a function and has
     // modifiers.
     if (!var->is_global && !var->is_field() && var->modifiers) {
-        for (uint32_t modifier = Modifier::Start;
-                      modifier != Modifier::End; modifier *= 2) {
-            if (var->modifiers & modifier) {
-                error(var->get_modifier_location(modifier), "Modifier cannot apply to local variable")
+        for (uint32_t mod = Modifier::Start; mod != Modifier::End; mod *= 2) {
+            if (var->modifiers & mod) {
+                error(var->get_modifier_location(mod), "Modifier cannot apply to local variable")
                     .end_error(ErrCode::SemaLocalVarHasModifiers);
             }
         }
@@ -1396,6 +1425,28 @@ void acorn::Sema::check_struct(Struct* structn) {
     structn->is_being_checked = true;
     structn->has_been_checked = true; // Set early to prevent circular checking.
 
+    for (auto& extension : structn->unresolved_extensions) {
+        if (auto composite = find_composite(extension.name)) {
+            if (composite->is_not(NodeKind::Interface)) {
+                error(structn, "Cannot extend from type '%s'", composite->name)
+                    .end_error(ErrCode::SemaCannotExtendFromType);
+                continue;
+            }
+
+            if (extension.is_dynamic) {
+                structn->uses_vtable = true;
+            }
+
+            auto interfacen = static_cast<Interface*>(composite);
+            structn->interface_extensions.push_back({ interfacen, extension.is_dynamic });
+            check_struct_interface_extension(structn, interfacen, extension.is_dynamic);
+
+        } else {
+            error(structn->get_extension_location(extension.name), "Could not find extension '%s'", extension.name)
+                .end_error(ErrCode::SemaCouldNotFindExtension);
+        }
+    }
+
     auto process_field_struct_type_state = [this, structn](SourceLoc field_loc, StructType* field_struct_type) finline {
         auto field_struct = field_struct_type->get_struct();
 
@@ -1415,10 +1466,19 @@ void acorn::Sema::check_struct(Struct* structn) {
                                        cur_struct,
                                        "Circular struct dependency results in infinite storage requirement for struct",
                                        ErrCode::SemaCircularStructDeclDependency);
+            structn->has_errors = true;
         }
     };
 
     uint32_t field_count = 0;
+
+    if (structn->uses_vtable) {
+        for (auto& extension : structn->interface_extensions) {
+            if (!extension.is_dynamic) continue;
+            ++field_count;
+        }
+    }
+
     for (Var* field : structn->fields) {
 
         field->field_idx = field_count++;
@@ -1435,7 +1495,7 @@ void acorn::Sema::check_struct(Struct* structn) {
         check_variable(field);
 
         if (!field->type) {
-            structn->fields_have_errors = true;
+            structn->has_errors = true;
         } else {
             if (field->type->is_struct()) {
                 process_field_struct_type_state(field->loc, static_cast<StructType*>(field->type));
@@ -1496,6 +1556,169 @@ void acorn::Sema::check_struct(Struct* structn) {
 
     cur_struct = prev_struct;
 
+}
+
+bool acorn::Sema::do_functions_match(const Func* func1, const Func* func2) {
+    auto get_param_count = [](const Func* func) finline {
+        if (func->default_params_offset == -1) {
+            return func->params.size();
+        }
+        return func->default_params_offset;
+    };
+
+    size_t param_count = get_param_count(func1);
+    if (param_count != get_param_count(func2)) {
+        return false;
+    }
+
+    for (size_t i = 0; i < param_count; i++) {
+        Var* param1 = func1->params[i];
+        Var* param2 = func2->params[i];
+        if (param1->type->is_not(param2->type)) {
+            return false;
+        }
+    }
+
+    if (func1->is_constant != func2->is_constant) {
+        return false;
+    }
+
+    return true;
+}
+
+void acorn::Sema::check_struct_interface_extension(Struct* structn, Interface* interfacen, bool is_dynamic) {
+
+    if (!interfacen->has_been_checked) {
+        check_interface(interfacen);
+    }
+
+    for (auto interface_func : interfacen->functions) {
+        if (interface_func->has_errors) {
+            structn->has_errors = true;
+            continue;
+        }
+
+        auto funcs = structn->nspace->find_functions(interface_func->name);
+        if (!funcs) {
+            error(structn, "Struct missing interface function '%s'", interface_func->get_decl_string())
+                .end_error(ErrCode::SemaStructMissingInterfaceFunc);
+            structn->has_errors = true;
+            continue;
+        }
+
+        // Making sure all the functions declarations have been checked.
+        for (auto func : *funcs) {
+            if (!func->has_checked_declaration) {
+                if (!check_function_decl(func)) {
+                    structn->has_errors = true;
+                    return;
+                }
+            } else if (func->has_errors) {
+                structn->has_errors = true;
+                return;
+            }
+        }
+
+        bool found_match = false;
+        for (auto func : *funcs) {
+            found_match = do_interface_functions_matches(interface_func, func);
+            if (found_match) {
+                func->mapped_interface_func = interface_func;
+                func->is_dynamic = is_dynamic;
+                break;
+            }
+        }
+
+        if (!found_match) {
+            structn->has_errors = true;
+            if (funcs->size() == 1) {
+                auto func = (*funcs)[0];
+                logger.begin_error(func->loc,
+                                   "Function does not match interface function: '%s'",
+                                   interface_func->get_decl_string());
+                logger.add_empty_line();
+                display_interface_func_mismatch_info(interface_func, func, false, true);
+                logger.end_error(ErrCode::SemaInterfaceFuncNotMatch);
+            } else {
+                logger.begin_error(structn->loc,
+                                   "No overloaded function matches interface function: '%s'",
+                                   interface_func->get_decl_string());
+                for (auto func : *funcs) {
+                    logger.add_empty_line();
+                    logger.add_line("Could not match: '%s'", func->get_decl_string());
+                    display_interface_func_mismatch_info(interface_func, func, true, false);
+                }
+                logger.end_error(ErrCode::SemaInterfaceFuncNotMatch);
+            }
+        }
+    }
+}
+
+bool acorn::Sema::do_interface_functions_matches(Func* interface_func, Func* func) {
+
+    if (interface_func->return_type->is_not(func->return_type)) {
+        return false;
+    }
+
+    if (!do_functions_match(interface_func, func)) {
+        return false;
+    }
+
+    return true;
+}
+
+void acorn::Sema::display_interface_func_mismatch_info(Func* interface_func,
+                                                       Func* func,
+                                                       bool indent,
+                                                       bool should_show_invidual_underlines) {
+
+    auto get_param_count = [](const Func* func) finline{
+        if (func->default_params_offset == -1) {
+            return func->params.size();
+        }
+        return func->default_params_offset;
+    };
+
+#define err_line(n, fmt, ...)                                         \
+{                                                                     \
+    if (n && should_show_invidual_underlines) {                       \
+        logger.add_individual_underline(expand(n));                   \
+    }                                                                 \
+    logger.add_line(("%s- " fmt), indent ? "  " : "", ##__VA_ARGS__); \
+}
+
+    size_t param_count = get_param_count(interface_func);
+    if (param_count != get_param_count(func)) {
+        err_line(nullptr,
+                 "Incorrect number of parameters. Expected %s but found %s",
+                 param_count,
+                 get_param_count(func));
+        return;
+    }
+
+    if (interface_func->is_constant && !func->is_constant) {
+        err_line(nullptr, "Expected function to be const");
+        return;
+    }
+
+    if (!interface_func->is_constant && func->is_constant) {
+        err_line(nullptr, "Expected function to not be const");
+        return;
+    }
+
+    if (interface_func->return_type->is_not(func->return_type)) {
+        err_line(nullptr, "Expected return type '%s' but found '%s'",
+                 interface_func->return_type,
+                 func->return_type);
+    }
+
+    for (size_t i = 0; i < param_count; i++) {
+        Var* param1 = interface_func->params[i];
+        Var* param2 = func->params[i];
+        if (param1->type->is_not(param2->type)) {
+            err_line(param2, "Expected parameter type '%s' but found '%s'", param1->type, param2->type);
+        }
+    }
 }
 
 void acorn::Sema::check_enum(Enum* enumn) {
@@ -1610,6 +1833,29 @@ void acorn::Sema::check_enum(Enum* enumn) {
     enumn->enum_type->set_values_type(!values_type ? context.int_type : values_type);
     enumn->is_being_checked = false;
 
+}
+
+void acorn::Sema::check_interface(Interface* interfacen) {
+
+    interfacen->has_been_checked = true;
+    interfacen->is_being_checked = true;
+
+    check_modifiers_for_composite(interfacen, "interface");
+
+    for (auto func : interfacen->functions) {
+        if (func->modifiers != 0) {
+            for (uint32_t mod = Modifier::Start; mod != Modifier::End; mod *= 2) {
+                if (func->has_modifier(mod)) {
+                    error(func->get_modifier_location(mod), "Interface functions cannot have modifiers")
+                        .end_error(ErrCode::SemaInterfaceFuncNoHaveModifier);
+                }
+            }
+        }
+
+        check_function_decl(func);
+    }
+
+    interfacen->is_being_checked = false;
 }
 
 void acorn::Sema::check_return(ReturnStmt* ret) {
@@ -3179,7 +3425,14 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
             return;
         }
 
-        unary_op->type = static_cast<PointerType*>(expr->type)->get_elm_type();
+        auto ptr_type = static_cast<PointerType*>(expr->type);
+        if (ptr_type->get_elm_type()->is_interface()) {
+            error(expand(unary_op), "Cannot dereference pointer to interface")
+                .end_error(ErrCode::SemaCannotDereferencePtrToInterface);
+            return;
+        }
+
+        unary_op->type = ptr_type->get_elm_type();
         unary_op->is_foldable = false;
         break;
     }
@@ -3546,6 +3799,27 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         if (elm_type->is_struct()) {
             auto struct_type = static_cast<StructType*>(elm_type);
             check_struct_ident_ref(struct_type);
+        } else if (elm_type->is_interface() && is_for_call) {
+            auto intr_type = static_cast<InterfaceType*>(elm_type);
+            auto interfacen = intr_type->get_interface();
+
+            interface_functions.clear();
+
+            for (auto func : interfacen->functions) {
+                if (func->name == dot->ident) {
+                    interface_functions.push_back(func);
+                }
+            }
+
+            if (interface_functions.empty()) {
+                error(expand(dot), "Could not find function '%s'", dot->ident)
+                    .end_error(ErrCode::SemaNoFindFuncIdentRef);
+                return;
+            }
+
+            dot->set_funcs_ref(&interface_functions);
+            dot->type = context.funcs_ref_type;
+
         } else {
             report_error_cannot_access_field();
         }
@@ -3766,6 +4040,8 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
             if (!check_function_decl(canidate)) {
                 return nullptr;
             }
+        } else if (canidate->has_errors) {
+            return nullptr;
         }
     }
 
@@ -4118,7 +4394,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
 
         Func* canidate = candidates[0];
 
-        logger.begin_error(error_loc, "Invalid call to %s: %s", func_type_str, canidate->get_decl_string());
+        logger.begin_error(error_loc, "Invalid call to '%s': '%s'", func_type_str, canidate->get_decl_string());
         logger.add_empty_line();
         display_call_mismatch_info(canidate, args, false, true, call_node);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
@@ -4137,7 +4413,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
         logger.begin_error(error_loc, "Could not find a valid overloaded %s to call", func_type_str);
         for (auto [_, candidate] : candidates_and_scores | std::views::take(context.get_max_call_err_funcs())) {
             logger.add_empty_line();
-            logger.add_line("Could not match: %s", candidate->get_decl_string());
+            logger.add_line("Could not match: '%s'", candidate->get_decl_string());
             display_call_mismatch_info(candidate, args, true, false, call_node);
         }
         int64_t remaining = static_cast<int64_t>(candidates.size()) - static_cast<int64_t>(context.get_max_call_err_funcs());
@@ -4771,7 +5047,7 @@ bool acorn::Sema::ensure_struct_checked(SourceLoc error_loc, Struct* structn) {
         Sema sema(context, structn->file, structn->get_logger());
         sema.check_struct(structn);
     }
-    return !structn->fields_have_errors;
+    return !structn->has_errors;
 }
 
 void acorn::Sema::ensure_enum_checked(SourceLoc error_loc, Enum* enumn) {
@@ -4789,6 +5065,24 @@ void acorn::Sema::ensure_enum_checked(SourceLoc error_loc, Enum* enumn) {
     if (!enumn->has_been_checked) {
         Sema sema(context, enumn->file, enumn->get_logger());
         sema.check_enum(enumn);
+    }
+}
+
+void acorn::Sema::ensure_interface_checked(SourceLoc error_loc, Interface* interfacen) {
+    if (cur_interface) {
+        cur_interface->dependency = interfacen;
+
+        if (cur_interface->is_being_checked) {
+            display_circular_dep_error(error_loc,
+                                       cur_interface,
+                                       "Interface forms a circular dependency",
+                                       ErrCode::SemaGlobalCircularDependency);
+        }
+    }
+
+    if (!interfacen->has_been_checked) {
+        Sema sema(context, interfacen->file, interfacen->get_logger());
+        sema.check_interface(interfacen);
     }
 }
 
@@ -4937,7 +5231,31 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
 
             return true;
         } else if (from_type->is_pointer()) {
-            return to_type->is(from_type) || to_type->is(context.void_ptr_type);
+            auto to_ptr_type = static_cast<PointerType*>(to_type);
+            auto to_elm_type = to_ptr_type->get_elm_type();
+            if (to_elm_type->is_interface()) {
+                if (to_type->is(from_type)) {
+                    return true;
+                }
+
+                auto from_ptr_type = static_cast<PointerType*>(from_type);
+                auto from_elm_type = from_ptr_type->get_elm_type();
+                if (from_elm_type->is_struct()) {
+                    auto struct_type = static_cast<StructType*>(from_elm_type);
+                    auto intr_type = static_cast<InterfaceType*>(to_elm_type);
+
+                    auto structn = struct_type->get_struct();
+                    auto interfacen = intr_type->get_interface();
+
+                    if (auto extension = structn->find_interface_extension(interfacen->name)) {
+                        return extension->is_dynamic;
+                    }
+                }
+
+                return false;
+            } else {
+                return to_type->is(from_type) || to_type->is(context.void_ptr_type);
+            }
         } else if (expr->is(NodeKind::Null)) {
             return true;
         } else {
@@ -5383,7 +5701,6 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
     }
 
     if (to_type->is_integer() && expr->trivially_reassignable && expr->type->is_integer()) {
-
         return get_error_msg_for_value_not_fit_type(to_type);
     } else if (to_type->is_pointer() && expr->type->is_array()) {
 
@@ -5406,16 +5723,13 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr) cons
         }
 
         return get_type_mismatch_error(to_type, expr->type);
-    } else {
-
+    } else if (expr->is(NodeKind::Array)) {
         // Recreating the array because when assigning to variables it is possible
         // they end up with different dimensions.
-        if (expr->is(NodeKind::Array)) {
-            auto arr = static_cast<Array*>(expr);
-            Type* expr_type = get_array_type_for_mismatch_error(arr);
-            return get_type_mismatch_error(to_type, expr_type);
-        }
-
+        auto arr = static_cast<Array*>(expr);
+        Type* expr_type = get_array_type_for_mismatch_error(arr);
+        return get_type_mismatch_error(to_type, expr_type);
+    } else {
         return get_type_mismatch_error(to_type, expr->type);
     }
 }
@@ -5454,11 +5768,33 @@ acorn::Type* acorn::Sema::get_array_type_for_mismatch_error(Array* arr,
 }
 
 std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Type* from_type) const {
+
     if (from_type->is(context.funcs_ref_type)) {
         return std::format("Cannot assign a reference to a function to type '{}'", to_type->to_string());
-    } else {
-        return std::format("Cannot assign type '{}' to '{}'", from_type->to_string(), to_type->to_string());
+    } else if (to_type->is_pointer() && from_type->is_pointer()) {
+        auto to_ptr_type = static_cast<PointerType*>(to_type);
+        auto to_elm_type = to_ptr_type->get_elm_type();
+        if (to_elm_type->is_interface()) {
+            auto from_ptr_type = static_cast<PointerType*>(from_type);
+            auto from_elm_type = from_ptr_type->get_elm_type();
+            if (from_elm_type->is_struct()) {
+                auto struct_type = static_cast<StructType*>(from_elm_type);
+                auto intr_type = static_cast<InterfaceType*>(to_elm_type);
+
+                auto structn = struct_type->get_struct();
+                auto interfacen = intr_type->get_interface();
+
+                if (auto extension = structn->find_interface_extension(interfacen->name)) {
+                    if (!extension->is_dynamic) {
+                        return std::format("Cannot assign type '{}' to '{}' (Interface extension not dynamic)",
+                                           from_type->to_string(), to_type->to_string());
+                    }
+                }
+            }
+        }
     }
+
+    return std::format("Cannot assign type '{}' to '{}'", from_type->to_string(), to_type->to_string());
 }
 
 acorn::Var* acorn::Sema::SemScope::find_variable(Identifier name) const {

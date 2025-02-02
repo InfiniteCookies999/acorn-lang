@@ -29,9 +29,11 @@ namespace acorn {
     class Logger;
     class StructType;
     class EnumType;
+    class InterfaceType;
     struct ComptimeIfStmt;
     struct Struct;
     struct BinOp;
+    struct Interface;
 
     const size_t MAX_FUNC_PARAMS = 64;
 
@@ -45,6 +47,7 @@ namespace acorn {
         VarList,
         Struct,
         Enum,
+        Interface,
 
         ReturnStmt,
         IfStmt,
@@ -175,6 +178,11 @@ namespace acorn {
 
         // If not null then the function is a member function.
         Struct* structn = nullptr;
+        // If not null then the function is a function is an
+        // interface. Note, this is different than a function that
+        // implements an interface function, this function is the
+        // declaration within the interface.
+        Interface* interfacen = nullptr;
 
         llvm::Function* ll_func = nullptr;
         // If the function is a native intrinsic function then this
@@ -192,7 +200,16 @@ namespace acorn {
 
         size_t default_params_offset = static_cast<size_t>(-1);
 
+        // If this function belongs to an interface then this
+        // is the n-th function of the interface.
+        size_t interface_idx;
+
         ScopeStmt* scope = nullptr;
+
+        // If this function is the implementation of an interface function
+        // then the `mapped_interface_func` is the function of the interface
+        // that is implemented.
+        Func* mapped_interface_func = nullptr;
 
         // when the function returns an aggregate type such
         // as an array then if the aggregate type can fit into
@@ -214,6 +231,8 @@ namespace acorn {
         bool uses_native_varargs     = false;
         bool uses_varargs            = false;
         bool is_constant             = false;
+        bool has_errors              = false;
+        bool is_dynamic              = false;
         Var* aggr_ret_var = nullptr;
 
         Var* find_parameter(Identifier name) const;
@@ -236,7 +255,8 @@ namespace acorn {
             DefaultConstructor,
             CopyConstructor,
             MoveConstructor,
-            Destructor
+            Destructor,
+            VTableInit
         } implicit_kind;
 
         Struct* structn;
@@ -309,7 +329,22 @@ namespace acorn {
             Func* duplicate_function;
             Func* prior_function;
         };
+        // These functions are specifically for functions such as copy constructors
+        // which are not placed in the normal functions list.
         llvm::SmallVector<DuplicateStructFuncInfo> duplicate_struct_func_infos;
+
+        struct UnresolvedExtension {
+            Identifier name;
+            bool       is_dynamic;
+        };
+
+        struct InterfaceExtension {
+            Interface* interfacen;
+            bool       is_dynamic;
+        };
+
+        llvm::SmallVector<UnresolvedExtension> unresolved_extensions;
+        llvm::SmallVector<InterfaceExtension>  interface_extensions;
 
         Func*                    default_constructor = nullptr;
         Func*                    copy_constructor    = nullptr;
@@ -321,9 +356,10 @@ namespace acorn {
         llvm::Function* ll_destructor          = nullptr;
         llvm::Function* ll_copy_constructor    = nullptr;
         llvm::Function* ll_move_constructor    = nullptr;
+        llvm::Function* ll_init_vtable_func    = nullptr;
 
         bool has_been_checked        = false;
-        bool fields_have_errors      = false;
+        bool has_errors              = false;
         bool fields_have_assignments = false;
         bool needs_default_call      = false;
         bool needs_destruction       = false;
@@ -332,8 +368,13 @@ namespace acorn {
         bool fields_need_destruction = false;
         bool fields_need_copy_call   = false;
         bool fields_need_move_call   = false;
+        bool uses_vtable             = false;
 
         Var* find_field(Identifier name) const;
+        const InterfaceExtension* find_interface_extension(Identifier name) const;
+
+        SourceLoc get_extension_location(Identifier name) const;
+
     };
 
     struct Enum : Decl {
@@ -356,6 +397,16 @@ namespace acorn {
         llvm::Value* ll_array = nullptr;
         bool has_been_checked = false;
 
+    };
+
+    struct Interface : Decl {
+        Interface() : Decl(NodeKind::Interface) {
+        }
+
+        bool has_been_checked = false;
+        InterfaceType* interface_type;
+
+        llvm::SmallVector<Func*> functions;
     };
 
     struct ImportStmt : Node {

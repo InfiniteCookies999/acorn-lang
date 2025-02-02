@@ -132,6 +132,35 @@ acorn::Var* acorn::Struct::find_field(Identifier name) const {
     return nspace->find_variable(name);
 }
 
+const acorn::Struct::InterfaceExtension* acorn::Struct::find_interface_extension(Identifier name) const {
+    auto itr = std::ranges::find_if(interface_extensions, [name](auto& extension) {
+        return extension.interfacen->name == name;;
+    });
+    return itr != interface_extensions.end() ? itr : nullptr;
+}
+
+acorn::SourceLoc acorn::Struct::get_extension_location(Identifier name) const {
+    // We have to manually implement rfind because otherwise we would have to
+    // create a std::string for the file contents which could potentially be
+    // slow.
+    const char* ptr = loc.ptr;
+
+    auto str = name.to_string().data();
+    auto str_len = name.to_string().size();
+
+    const char* buf_end = file->buffer.content + file->buffer.length;
+    while (ptr - str_len + 1 < buf_end) {
+        if (std::memcmp(ptr, str, str_len) == 0) {
+            // Found the source location!
+            return SourceLoc{ ptr, static_cast<uint16_t>(str_len) };
+        }
+        ++ptr;
+    }
+
+    acorn_fatal("unreachable");
+    return SourceLoc{};
+}
+
 namespace acorn {
     template<typename T>
     void iterate_over_range_values(BinOp* range, T start, T end,

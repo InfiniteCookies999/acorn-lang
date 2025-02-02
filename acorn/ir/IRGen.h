@@ -114,6 +114,11 @@ namespace acorn {
         void gen_implicit_destructor(Struct* structn);
         void gen_implicit_copy_constructor(Struct* structn);
         void gen_implicit_move_constructor(Struct* structn);
+        void gen_implicit_vtable_init_function(Struct* structn);
+        llvm::Value* gen_global_vtable(Struct* structn, llvm::ArrayType*& ll_arr_type);
+        size_t get_vtable_offset(Struct* structn, Interface* interfacen);
+        size_t get_interface_offset(Struct* structn, Interface* interfacen);
+        Func* get_mapped_interface_func(Func* interface_func, const FuncList& funcs);
 
         void gen_function_decl(Func* func);
         llvm::Type* gen_function_return_type(Func* func, bool is_main);
@@ -228,6 +233,7 @@ namespace acorn {
 
         llvm::Function* gen_no_param_member_function_decl(Struct* structn, llvm::Twine name);
         void gen_call_default_constructor(llvm::Value* ll_address, Struct* structn);
+        void gen_call_to_init_vtable(llvm::Value* ll_address, Struct* structn);
 
         void gen_abstract_array_loop(Type* base_type,
                                      llvm::Value* ll_arr_start_ptr,
@@ -292,6 +298,8 @@ namespace acorn {
         llvm::AllocaInst* gen_unseen_alloca(llvm::Type* ll_type, llvm::Twine ll_name);
 
         bool is_pointer_lvalue(Expr* expr);
+
+        llvm::Type* try_get_optimized_int_type(Type* type) const;
 
         ImplicitFunc* create_implicit_function(ImplicitFunc::ImplicitKind implicit_kind, Struct* structn);
 

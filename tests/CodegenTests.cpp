@@ -932,6 +932,18 @@ static void function_type_calls_tests() {
 
         expect(result, std::identity()).to_be("ABCD");
     });
+    test("Call function type with struct (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Call function type with struct (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls10.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@");
+    });
 }
 
 static void struct_tests() {
@@ -1975,6 +1987,69 @@ static void varargs_tests() {
     });
 }
 
+static void interface_tests() {
+    test("Call virtual interface func no arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test1.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual interface func no arguments two funcs", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test2.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual interface func pass arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test3.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual interface func no arguments implement two interfaces", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test4.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual interface func overloaded", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test5.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual function two interfaces and two v. functions each", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test6.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Call virtual functions for array", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABABABABAB");
+    });
+    test("Call virtual function struct initialize", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test8.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual function struct called constructors", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual function but non-dynamically", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test10.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+}
+
 void test_codegen() {
 
     executable_path = get_executable_path();
@@ -2023,5 +2098,6 @@ void test_codegen() {
         enums_tests();
         slices_tests();
         varargs_tests();
+        interface_tests();
     }, true);
 }

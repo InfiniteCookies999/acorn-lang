@@ -331,6 +331,11 @@ void acorn::Compiler::sema_and_irgen() {
             if (!enumn->has_been_checked) {
                 sema.check_enum(enumn);
             }
+        } else if (decl->is(NodeKind::Interface)) {
+            auto interfacen = static_cast<Interface*>(decl);
+            if (!interfacen->has_been_checked) {
+                sema.check_interface(interfacen);
+            }
         } else {
             acorn_fatal("Unreachable: Missing check case");
         }

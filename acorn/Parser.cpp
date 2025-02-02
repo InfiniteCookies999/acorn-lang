@@ -111,7 +111,7 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
         vlist->list.clear();
     } else if (node->is(NodeKind::Var)) {
         process_variable(static_cast<Var*>(node));
-    } else if (node->is(NodeKind::Struct) || node->is(NodeKind::Enum)) {
+    } else if (node->is(NodeKind::Struct) || node->is(NodeKind::Enum) || node->is(NodeKind::Interface)) {
 
         auto structn = static_cast<Decl*>(node);
         if (structn->name != Identifier::Invalid) {
@@ -236,6 +236,8 @@ acorn::Node* acorn::Parser::parse_statement() {
                 next_token(); // Consuming the identifier token.
                 return parse_function(modifiers, context.void_type, false, cur_struct->name);
             }
+        } else if (cur_token.is(Token::KwInterface)) {
+            return parse_interface(modifiers);
         } else if (cur_token.is('~') && peek_token(0).is(Token::Identifier)) {
             auto peek0 = peek_token(0);
             auto ident = Identifier::get(peek0.text());
@@ -277,6 +279,9 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
     case Token::KwEnum: {
         return parse_enum(0);
+    }
+    case Token::KwInterface: {
+        return parse_interface(0);
     }
     case Token::KwCopyobj: {
         auto peek0 = peek_token(0);
@@ -559,10 +564,14 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     }
 
     // Parsing the scope of the function.
-    if (!func->has_modifier(Modifier::Native) || cur_token.is('{')) {
+    bool expects_body = !(func->has_modifier(Modifier::Native) || cur_interface);
+    if (expects_body || cur_token.is('{')) {
         if (func->has_modifier(Modifier::Native)) {
             error(cur_token, "Native functions do not have bodies")
                 .end_error(ErrCode::ParseNativeFuncNoHaveBodies);
+        } else if (cur_interface) {
+            error(cur_token, "Interface functions do not have bodies")
+                .end_error(ErrCode::ParseInterfaceFuncNoHaveBodies);
         }
         func->scope = new_node<ScopeStmt>(cur_token);
         expect('{');
@@ -571,7 +580,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
         }
         expect('}', "for function body");
         func->scope->end_loc = prev_token.loc;
-    } else if (func->has_modifier(Modifier::Native)) {
+    } else if (!expects_body) {
         expect(';');
     }
 
@@ -663,6 +672,29 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
     auto prev_struct = cur_struct;
     cur_struct = structn;
 
+    if (cur_token.is(Token::ColCol)) {
+        next_token();
+        bool more_extensions = false;
+        do {
+
+            bool is_dynamic = cur_token.is('*');
+            if (is_dynamic) {
+                next_token();
+            }
+
+            auto extension_name = expect_identifier("for interface extension");
+            structn->unresolved_extensions.push_back({
+                extension_name,
+                is_dynamic
+            });
+
+            more_extensions = cur_token.is(',');
+            if (more_extensions) {
+                next_token();
+            }
+        } while (more_extensions);
+    }
+
     expect('{');
     while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
         Node* node = parse_statement();
@@ -718,6 +750,31 @@ acorn::Enum* acorn::Parser::parse_enum(uint32_t modifiers) {
     expect('}', "for enum");
 
     return enumn;
+}
+
+acorn::Interface* acorn::Parser::parse_interface(uint32_t modifiers) {
+
+    next_token(); // Consuming 'enum' token.
+
+
+    Token name_token = cur_token;
+    auto name = expect_identifier();
+    Interface* interfacen = new_declaration<Interface, false>(modifiers, name, name_token);
+    interfacen->interface_type = InterfaceType::create(allocator, interfacen);
+
+    auto prev_interface = cur_interface;
+    cur_interface = interfacen;
+
+    expect('{');
+    while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
+        auto stmt = parse_statement();
+        add_node_to_interface(interfacen, stmt);
+    }
+    expect('}', "for interface");
+
+    cur_interface = prev_interface;
+
+    return interfacen;
 }
 
 void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
@@ -785,6 +842,17 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
         }
     } else {
         modl.mark_bad_scope(ScopeLocation::Struct, node, logger);
+    }
+}
+
+void acorn::Parser::add_node_to_interface(Interface* interfacen, Node* node) {
+    if (node->is(NodeKind::Func)) {
+        auto func = static_cast<Func*>(node);
+        func->interfacen = interfacen;
+        func->interface_idx = cur_interface->functions.size();
+        cur_interface->functions.push_back(func);
+    } else {
+        modl.mark_bad_scope(ScopeLocation::Interface, node, logger);
     }
 }
 
@@ -961,6 +1029,8 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
             }
         } else if (cur_struct) {
             add_node_to_struct(cur_struct, stmt);
+        } else if (cur_interface) {
+            add_node_to_interface(cur_interface, stmt);
         } else {
             add_node_to_global_scope(stmt);
         }

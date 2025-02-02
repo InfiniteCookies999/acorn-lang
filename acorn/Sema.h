@@ -42,6 +42,7 @@ namespace acorn {
         void check_variable(Var* var);
         void check_struct(Struct* structn);
         void check_enum(Enum* enumn);
+        void check_interface(Interface* interfacen);
 
     private:
         Context&    context;
@@ -51,10 +52,13 @@ namespace acorn {
         SourceFile* file;
         TypeTable&  type_table;
 
-        Func*   cur_func       = nullptr;
-        Var*    cur_global_var = nullptr;
-        Struct* cur_struct     = nullptr;
-        Enum*   cur_enum       = nullptr;
+        Func*      cur_func       = nullptr;
+        Var*       cur_global_var = nullptr;
+        Struct*    cur_struct     = nullptr;
+        Enum*      cur_enum       = nullptr;
+        Interface* cur_interface  = nullptr;
+
+        FuncList interface_functions;
 
         // Limits to calculate comparison scores for which function to call.
         //
@@ -99,14 +103,23 @@ namespace acorn {
 
         } * cur_scope = nullptr;
 
+        static bool do_functions_match(const Func* func1, const Func* func2);
+
+        void check_struct_interface_extension(Struct* structn, Interface* interfacen, bool is_dynamic);
+        bool do_interface_functions_matches(Func* interface_func, Func* func);
+        void display_interface_func_mismatch_info(Func* interface_func,
+                                                  Func* func,
+                                                  bool indent,
+                                                  bool should_show_invidual_underlines);
+
         bool check_function_decl(Func* func);
 
         void check_node(Node* node);
 
-        Type* fixup_type(Type* type);
+        Type* fixup_type(Type* type, bool is_ptr_elm_type = false);
         Type* fixup_unresolved_bracket_type(Type* type);
         Type* fixup_assign_det_arr_type(Type* type, Var* var);
-        Type* fixup_unresolved_composite_type(Type* type);
+        Type* fixup_unresolved_composite_type(Type* type, bool is_ptr_elm_type);
         Type* fixup_function_type(Type* type);
 
         // Statement checking
@@ -215,6 +228,7 @@ namespace acorn {
         void ensure_global_variable_checked(SourceLoc error_loc, Var* var);
         bool ensure_struct_checked(SourceLoc error_loc, Struct* structn);
         void ensure_enum_checked(SourceLoc error_loc, Enum* enumn);
+        void ensure_interface_checked(SourceLoc error_loc, Interface* interfacen);
 
         // Utility functions
         //--------------------------------------

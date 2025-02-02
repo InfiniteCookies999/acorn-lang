@@ -41,8 +41,9 @@ namespace acorn {
 
         Logger& logger;
 
-        Func*   cur_func   = nullptr;
-        Struct* cur_struct = nullptr;
+        Func*      cur_func   = nullptr;
+        Struct*    cur_struct = nullptr;
+        Interface* cur_interface = nullptr;
 
         Lexer lex;
         Token cur_token;
@@ -97,8 +98,10 @@ namespace acorn {
         Struct* parse_struct();
         Struct* parse_struct(uint32_t modifiers, Identifier name);
         void add_node_to_struct(Struct* structn, Node* node);
+        void add_node_to_interface(Interface* interfacen, Node* node);
 
         Enum* parse_enum(uint32_t modifiers);
+        Interface* parse_interface(uint32_t modifiers);
 
         uint32_t parse_modifiers();
 

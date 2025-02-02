@@ -53,6 +53,7 @@ namespace acorn {
             KwCase,
             KwStatic,
             KwStruct,
+            KwInterface,
             KwEnum,
             KwThis,
             KwSizeof,
