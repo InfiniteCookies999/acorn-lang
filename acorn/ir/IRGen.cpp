@@ -120,6 +120,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_loop_control(static_cast<LoopControlStmt*>(node));
     case NodeKind::SwitchStmt:
         return gen_switch(static_cast<SwitchStmt*>(node));
+    case NodeKind::RaiseStmt:
+        return gen_raise(static_cast<RaiseStmt*>(node));
     case NodeKind::StructInitializer:
         return gen_struct_initializer(static_cast<StructInitializer*>(node), nullptr);
     case NodeKind::This:
@@ -553,6 +555,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     llvm::Instruction* ll_return;
     if (func->return_type->is(context.void_type) && !is_main) {
         ll_return = builder.CreateRetVoid();
+    } else if (func->num_returns == 0) {
+        // Special case for when there is a raised error at the end of a function with non-void type.
+        ll_return = builder.CreateRet(gen_zero(func->return_type));
     } else if (is_main &&
                ((!func->scope->empty() && func->scope->back()->is_not(NodeKind::ReturnStmt))
                || func->scope->empty())) {
@@ -2117,6 +2122,17 @@ llvm::Value* acorn::IRGenerator::gen_switch_foldable(SwitchStmt* switchn) {
     return nullptr;
 }
 
+llvm::Value* acorn::IRGenerator::gen_raise(RaiseStmt* raise) {
+
+    auto initializer = static_cast<StructInitializer*>(raise->expr);
+    auto ll_initializer = gen_struct_initializer(initializer, nullptr);
+
+    gen_function_decl(context.std_abort_function);
+    builder.CreateCall(context.std_abort_function->ll_func, ll_initializer);
+
+    return nullptr;
+}
+
 llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr, Node* lvalue) {
 
     auto ll_struct_type = gen_type(initializer->type);
@@ -2129,13 +2145,14 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
 
         Func* called_func = initializer->called_constructor;
         gen_function_decl(called_func);
-        return gen_function_decl_call(called_func,
-                                      initializer->loc,
-                                      initializer->values,
-                                      nullptr,
-                                      ll_dest_addr,
-                                      false,
-                                      lvalue);
+        gen_function_decl_call(called_func,
+                               initializer->loc,
+                               initializer->values,
+                               nullptr,
+                               ll_dest_addr,
+                               false,
+                               lvalue);
+        return ll_dest_addr;
     }
 
     if (initializer->values.empty()) {
@@ -3805,6 +3822,10 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
     case TypeKind::Pointer:
     case TypeKind::Function:
         return llvm::Constant::getNullValue(builder.getPtrTy());
+    case TypeKind::Enum: {
+        auto enum_type = static_cast<EnumType*>(type);
+        return gen_zero(enum_type->get_index_type());
+    }
     case TypeKind::Array:
     case TypeKind::Struct:
     case TypeKind::Slice:

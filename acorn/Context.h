@@ -107,6 +107,8 @@ namespace acorn {
         Identifier enum_type_info_struct_identifier;
         Identifier any_struct_identifier;
         Identifier value_identifier;
+        Identifier error_interface_identifier;
+        Identifier get_name_function_identifier;
 
         ImportStmt* std_string_struct_import;
         Enum*       std_type_id_enum;
@@ -117,6 +119,9 @@ namespace acorn {
         Struct*     std_any_struct;
         StructType* std_any_struct_type;
         Type*       const_std_type_ptr;
+        Interface*  std_error_interface;
+        Func*       std_abort_function;
+        Func*       std_error_get_name_func;
 
         llvm::DenseMap<Type*, llvm::GlobalVariable*> ll_type_info_global_addresses;
 

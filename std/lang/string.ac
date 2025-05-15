@@ -108,7 +108,11 @@ struct String {
      * of `begin_idx` and goes until `end_idx - 1`.
      */
     String substr(int begin_idx, int end_idx) const {
-        // TODO: error handling.
+        if (begin_idx < 0)
+            raise OutOfBoundsError{ "begin_idx < 0" };
+
+        if (end_idx > length)
+            raise OutOfBoundsError{ "end_idx > length" };
 
         int sublength = end_idx - begin_idx;
         if sublength == 0 {

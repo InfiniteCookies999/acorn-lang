@@ -59,6 +59,7 @@ namespace acorn {
         ContinueStmt,
         BreakStmt,
         SwitchStmt,
+        RaiseStmt,
 
         ExprStart,
         InvalidExpr,
@@ -518,6 +519,13 @@ namespace acorn {
         Expr*      on = nullptr;
         ScopeStmt* default_scope = nullptr;
         llvm::SmallVector<SwitchCase, 16> cases;
+    };
+
+    struct RaiseStmt : Node {
+        RaiseStmt() : Node(NodeKind::RaiseStmt) {
+        }
+
+        Expr* expr;
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {

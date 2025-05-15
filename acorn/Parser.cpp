@@ -222,6 +222,11 @@ acorn::Node* acorn::Parser::parse_statement() {
 
         return parse_ident_decl_or_expr(false);
     }
+    case Token::KwRaise: {
+        auto stmt = parse_raise();
+        expect(';');
+        return stmt;
+    }
     case ModifierTokens:
         modifiers = parse_modifiers();
         if (cur_token.is(Token::KwStruct)) {
@@ -1249,6 +1254,16 @@ acorn::SwitchStmt* acorn::Parser::parse_switch() {
     expect('}', "for switch");
 
     return switchn;
+}
+
+acorn::RaiseStmt* acorn::Parser::parse_raise() {
+
+    RaiseStmt* raise = new_node<RaiseStmt>(cur_token);
+
+    next_token(); // Consuming the 'raise' token.
+
+    raise->expr = parse_expr();
+    return raise;
 }
 
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
@@ -3060,6 +3075,8 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
         case Token::KwCTIf:
         case Token::KwStruct:
         case Token::KwEnum:
+        case Token::KwSwitch:
+        case Token::KwRaise:
             return;
         case Token::KwElIf: {
             // Replace current token with if/#if statement so that it thinks

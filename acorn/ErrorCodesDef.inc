@@ -196,6 +196,8 @@ X(SemaCouldNotFindExtension                 , 20145)
 X(SemaStructMissingInterfaceFunc            , 20146)
 X(SemaInterfaceFuncNotMatch                 , 20147)
 X(SemaCannotDereferencePtrToInterface       , 20148)
+X(SemaWrongRaiseExpr                        , 20149)
+X(SemaRaiseStructNoErrorInterface           , 20150)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

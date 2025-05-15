@@ -1050,6 +1050,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_loop_control(static_cast<LoopControlStmt*>(node));
     case NodeKind::SwitchStmt:
         return check_switch(static_cast<SwitchStmt*>(node));
+    case NodeKind::RaiseStmt:
+        return check_raise(static_cast<RaiseStmt*>(node));
     case NodeKind::StructInitializer:
         return check_struct_initializer(static_cast<StructInitializer*>(node));
     case NodeKind::This:
@@ -2556,6 +2558,30 @@ if (prior_value.value_s64 == value.value_s64) {     \
     cur_scope->found_terminal   = all_paths_return;
 }
 
+void acorn::Sema::check_raise(RaiseStmt* raise) {
+    cur_scope->all_paths_return = true;
+    cur_scope->found_terminal = true;
+
+    if (raise->expr->is_not(NodeKind::StructInitializer)) {
+        error(raise->expr, "Expected error struct initializer")
+            .end_error(ErrCode::SemaWrongRaiseExpr);
+        return;
+    }
+
+    auto initializer = static_cast<StructInitializer*>(raise->expr);
+    check_struct_initializer(initializer);
+
+    yield_if(initializer);
+
+    const Struct::InterfaceExtension* extension =
+        initializer->structn->find_interface_extension(context.error_interface_identifier);
+
+    if (!extension || extension->interfacen != context.std_error_interface) {
+        error(raise->expr, "Expected raised struct '%s' to extend 'std.Error' interface", initializer->structn->name)
+            .end_error(ErrCode::SemaRaiseStructNoErrorInterface);
+    }
+}
+
 void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
 
     auto name = initializer->ref->ident;
@@ -2599,6 +2625,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
             return;
         }
 
+        initializer->structn = structn;
         initializer->is_foldable = false;
         initializer->called_constructor = found_constructor;
         initializer->type = structn->struct_type;
@@ -5446,6 +5473,7 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
     case NodeKind::BreakStmt:
     case NodeKind::ContinueStmt:
     case NodeKind::SwitchStmt:
+    case NodeKind::RaiseStmt:
         return false;
     case NodeKind::BinOp: {
         auto bin_op = static_cast<const BinOp*>(stmt);

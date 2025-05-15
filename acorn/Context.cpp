@@ -89,6 +89,8 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       any_struct_identifier(Identifier::get("Any")),
       enum_type_info_struct_identifier(Identifier::get("EnumTypeInfo")),
       value_identifier(Identifier::get("value")),
+      error_interface_identifier(Identifier::get("Error")),
+      get_name_function_identifier(Identifier::get("get_name")),
 
       reflect_identifiers({
           { "#type_info", ReflectKind::TypeInfo }
@@ -135,6 +137,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "sizeof"       , Token::KwSizeof      },
           { "copyobj"      , Token::KwCopyobj     },
           { "moveobj"      , Token::KwMoveobj     },
+          { "raise"        , Token::KwRaise       },
 
           { "native"       , Token::KwNative      },
           { "dllimport"    , Token::KwDllimport   },

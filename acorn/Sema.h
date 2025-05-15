@@ -133,6 +133,7 @@ namespace acorn {
         void check_loop_control(LoopControlStmt* loop_control);
         void check_loop_scope(ScopeStmt* scope, SemScope* sem_scope);
         void check_switch(SwitchStmt* switchn);
+        void check_raise(RaiseStmt* raise);
         void check_struct_initializer(StructInitializer* initializer);
         void check_this(This* thisn);
         void check_sizeof(SizeOf* sof);

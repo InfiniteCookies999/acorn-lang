@@ -114,6 +114,7 @@ namespace acorn {
         IteratorLoopStmt*  parse_iterator_loop(Token loop_token, Var* var);
         LoopControlStmt*   parse_loop_control();
         SwitchStmt*        parse_switch();
+        RaiseStmt*         parse_raise();
 
         ScopeStmt* parse_scope(const char* closing_for = nullptr);
         static void add_node_to_scope(ScopeStmt* scope, Node* node);

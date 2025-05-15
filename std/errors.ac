@@ -1,0 +1,76 @@
+#file(access=public)
+
+import .. module;
+
+interface Error {
+
+    /*
+     * The name of the struct which implement's the Error.
+     */
+    const char* get_name();
+
+    /*
+     * An informational message to explain why the error happened.
+     */
+    const char* get_message();
+
+}
+
+struct UnreachableError :: *Error {
+    const char* get_name() {
+        return "UnreachableError";
+    }
+
+    const char* get_message() {
+        return "unreachable code";
+    }
+}
+
+struct OutOfBoundsError :: *Error {
+
+    String msg;
+
+    OutOfBoundsError(const char* msg) {
+        this.msg = String{ msg };
+    }
+
+    OutOfBoundsError(String msg) {
+        this.msg = moveobj(msg);
+    }
+
+    const char* get_name() {
+        return "OutOfBoundsError";
+    }
+
+    const char* get_message() {
+        return msg.buffer;
+    }
+}
+
+struct StateError :: *Error {
+
+    String msg;
+
+    StateError(const char* msg) {
+        this.msg = String{ msg };
+    }
+
+    StateError(String msg) {
+        this.msg = moveobj(msg);
+    }
+
+    const char* get_name() {
+        return "StateError";
+    }
+
+    const char* get_message() {
+        return msg.buffer;
+    }
+}
+
+void abort(Error* error) {
+    const char* error_name = error.get_name();
+    const char* message = error.get_message();
+    module.println("%s: %s.", error_name, message);
+    module.exit(1);
+}

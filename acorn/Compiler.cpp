@@ -720,6 +720,9 @@ void acorn::Compiler::find_std_lib_declarations() {
         } else if constexpr (std::is_same_v<Enum, T>) {
             decl_kind = NodeKind::Enum;
             decl_type_str = "enum";
+        } else if constexpr (std::is_same_v<Interface, T>) {
+            decl_kind = NodeKind::Interface;
+            decl_type_str = "interface";
         } else {
             acorn_fatal("unknown composite type");
         }
@@ -749,6 +752,47 @@ void acorn::Compiler::find_std_lib_declarations() {
         new (struct_import) ImportStmt();
         struct_import->key.push_back({ context.string_struct_identifier });
         struct_import->set_imported_composite(structn);
+    }
+
+    if (Interface* interfacen = find_composite_of_kind((Interface*)0, modl, context.error_interface_identifier)) {
+        context.std_error_interface = interfacen;
+        auto& funcs = interfacen->functions;
+        for (Func* func : funcs) {
+            if (func->name == context.get_name_function_identifier) {
+                context.std_error_get_name_func = func;
+                break;
+            }
+        }
+    }
+
+    bool found_abort_func = false;
+    if (FuncList* abort_funcs = modl->find_functions(Identifier::get("abort"))) {
+        auto error_interface_type = context.std_error_interface->interface_type;
+
+        for (Func* func : *abort_funcs) {
+            if (func->params.size() != 1) continue;
+            Var* param = func->params[0];
+
+            Type* parsed_type = param->parsed_type;
+            if (!parsed_type->is_pointer()) continue;
+
+            auto ptr_type = static_cast<PointerType*>(parsed_type);
+            Type* elm_type = ptr_type->get_elm_type();
+
+            if (elm_type->get_kind() != TypeKind::UnresolvedComposite) continue;
+
+            auto composite_type = static_cast<UnresolvedCompositeType*>(elm_type);
+            if (composite_type->get_composite_name() == context.error_interface_identifier) {
+                found_abort_func = true;
+                context.std_abort_function = func;
+                break;
+            }
+        }
+    }
+
+    if (!found_abort_func) {
+        Logger::global_error(context, "Failed to find standard library 'abort' function")
+            .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
     }
 
     if (Namespace* nspace = modl->find_namespace(context.reflect_identifier)) {

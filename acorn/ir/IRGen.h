@@ -153,6 +153,7 @@ namespace acorn {
         llvm::Value* gen_switch(SwitchStmt* switchn);
         llvm::Value* gen_switch_non_foldable(SwitchStmt* switchn);
         llvm::Value* gen_switch_foldable(SwitchStmt* switchn);
+        llvm::Value* gen_raise(RaiseStmt* raise);
         llvm::Value* gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr, Node* lvalue = nullptr);
         llvm::Value* gen_this(This* thisn);
         llvm::Value* gen_sizeof(SizeOf* sof);
