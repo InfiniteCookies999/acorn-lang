@@ -116,6 +116,16 @@ if (e1 > e) { e = e1; }           \
             go_until(e, '(', ')');
             break;
         }
+        case NodeKind::RaiseStmt: {
+            RaiseStmt* raise = static_cast<RaiseStmt*>(node);
+            get(raise->expr);
+            break;
+        }
+        case NodeKind::Try: {
+            Try* tryn = static_cast<Try*>(node);
+            get(tryn->caught_expr);
+            break;
+        }
         case NodeKind::Number:
         case NodeKind::IdentRef:
         case NodeKind::String:

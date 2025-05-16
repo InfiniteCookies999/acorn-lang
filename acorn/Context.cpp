@@ -138,6 +138,8 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "copyobj"      , Token::KwCopyobj     },
           { "moveobj"      , Token::KwMoveobj     },
           { "raise"        , Token::KwRaise       },
+          { "raises"       , Token::KwRaises      },
+          { "try"          , Token::KwTry         },
 
           { "native"       , Token::KwNative      },
           { "dllimport"    , Token::KwDllimport   },
@@ -153,6 +155,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "#endif"       , Token::KwCTEndIf     },
           { "#file"        , Token::KwCTFile      },
           { "#type_info"   , Token::KwCTReflect   },
+          { "#aborts"      , Token::KwCTAborts    },
       }),
 
       ll_intrinsics_table({

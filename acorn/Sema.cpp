@@ -784,6 +784,50 @@ bool acorn::Sema::check_function_decl(Func* func) {
         func->is_checking_declaration = false;
     };
 
+
+    bool raised_errors_have_errors = false;
+    for (auto& raised_error : func->raised_errors) {
+        if (auto composite = find_composite(raised_error.name)) {
+            if (composite->is_not(NodeKind::Struct)) {
+                error(raised_error.error_loc, "Raised error '%s' must be an error struct", raised_error.name)
+                    .end_error(ErrCode::SemaRaisedErrorNotStruct);
+                continue;
+            }
+
+            auto structn = static_cast<Struct*>(composite);
+            if (!ensure_struct_checked(raised_error.error_loc, structn)) {
+                raised_errors_have_errors = true;
+                continue;
+            }
+
+            bool extends_error_interface = false;
+            for (auto& extension : structn->interface_extensions) {
+                if (extension.interfacen == context.std_error_interface) {
+                    extends_error_interface = true;
+                    break;
+                }
+            }
+
+            if (!extends_error_interface) {
+                error(raised_error.error_loc, "Cannot raise '%s' because it does not extend 'std.Error' interface",
+                      raised_error.name)
+                    .end_error(ErrCode::SemaRaisedErrorNotExtendErrorInterface);
+                continue;
+            }
+
+            raised_error.structn = structn;
+
+        } else {
+            error(raised_error.error_loc, "Raised error '%s' not found", raised_error.name)
+                .end_error(ErrCode::SemaRaisedErrorNotFound);
+            raised_errors_have_errors = true;
+        }
+    }
+    if (raised_errors_have_errors) {
+        error_cleanup(func);
+        return false;
+    }
+
     // -- debug
     // Logger::debug("checking function declaration: %s", func->name);
 
@@ -1052,6 +1096,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_switch(static_cast<SwitchStmt*>(node));
     case NodeKind::RaiseStmt:
         return check_raise(static_cast<RaiseStmt*>(node));
+    case NodeKind::Try:
+        return check_try(static_cast<Try*>(node));
     case NodeKind::StructInitializer:
         return check_struct_initializer(static_cast<StructInitializer*>(node));
     case NodeKind::This:
@@ -1592,6 +1638,13 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn, Interface* i
 
     if (!interfacen->has_been_checked) {
         check_interface(interfacen);
+    }
+
+    if (interfacen == context.std_error_interface) {
+        if (!is_dynamic) {
+            error(structn, "Extension of 'std.Error' interface must be dynamic. Use '*Error' instead")
+                .end_error(ErrCode::SemaErrorExtensionNotDynamic);
+        }
     }
 
     for (auto interface_func : interfacen->functions) {
@@ -2577,8 +2630,50 @@ void acorn::Sema::check_raise(RaiseStmt* raise) {
         initializer->structn->find_interface_extension(context.error_interface_identifier);
 
     if (!extension || extension->interfacen != context.std_error_interface) {
-        error(raise->expr, "Expected raised struct '%s' to extend 'std.Error' interface", initializer->structn->name)
+        error(expand(raise), "Expected raised struct '%s' to extend 'std.Error' interface", initializer->structn->name)
             .end_error(ErrCode::SemaRaiseStructNoErrorInterface);
+        return;
+    }
+
+    if (!initializer->structn->aborts_error) {
+        bool found_raised_error = false;
+        for (auto& raised_error : cur_func->raised_errors) {
+            if (raised_error.structn == initializer->structn) {
+                found_raised_error = true;
+                break;
+            }
+        }
+        if (!found_raised_error) {
+            error(expand(raise), "Function '%s' must specify that it raises '%s' in its definition",
+                  cur_func->name, initializer->structn->name)
+                .end_error(ErrCode::SemaFuncDoesNotRaiseErrorInDef);
+        }
+    } else {
+        // Otherwise, it behaves like a return statement.
+        ++cur_func->num_returns;
+    }
+
+    raise->raised_error = initializer->structn;
+}
+
+void acorn::Sema::check_try(Try* tryn) {
+
+    if (!cur_scope) {
+        error(tryn, "Cannot catch errors at global scope")
+            .end_error(ErrCode::SemaCannotCatchErrorsAtGlobalScope);
+        return;
+    }
+
+    cur_scope->cur_try = tryn;
+
+    check_node(tryn->caught_expr);
+    yield_if(tryn->caught_expr);
+
+    cur_scope->cur_try = nullptr;
+
+    if (tryn->caught_errors.empty()) {
+        error(expand(tryn), "Expression does not raise errors")
+            .end_error(ErrCode::SemaExprDoesNotRaiseErrors);
     }
 }
 
@@ -3990,6 +4085,17 @@ void acorn::Sema::check_function_call(FuncCall* call) {
                                                 is_const_object);
     if (!called_func) {
         return;
+    }
+
+    if (!called_func->raised_errors.empty()) {
+        if (!cur_scope || !cur_scope->cur_try) {
+            error(expand(call), "Call has uncaught errors")
+                .end_error(ErrCode::SemaUncaughtErrors);
+        } else if (cur_scope) {
+            for (auto& raised_error : called_func->raised_errors) {
+                cur_scope->cur_try->caught_errors.insert(raised_error.structn);
+            }
+        }
     }
 
     call->is_foldable = false;
@@ -5475,6 +5581,10 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
     case NodeKind::SwitchStmt:
     case NodeKind::RaiseStmt:
         return false;
+    case NodeKind::Try: {
+        Try* tryn = static_cast<Try*>(stmt);
+        return is_incomplete_statement(tryn->caught_expr);
+    }
     case NodeKind::BinOp: {
         auto bin_op = static_cast<const BinOp*>(stmt);
 

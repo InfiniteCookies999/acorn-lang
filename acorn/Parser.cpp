@@ -227,6 +227,19 @@ acorn::Node* acorn::Parser::parse_statement() {
         expect(';');
         return stmt;
     }
+    case Token::KwTry: {
+        auto stmt = parse_try();
+        expect(';');
+        return stmt;
+    }
+    case Token::KwCTAborts: {
+        next_token(); // Consuming '#aborts' token.
+        expect(Token::KwStruct);
+        auto name = expect_identifier("for struct");
+        auto structn = parse_struct(modifiers, name);
+        structn->aborts_error = true;
+        return structn;
+    }
     case ModifierTokens:
         modifiers = parse_modifiers();
         if (cur_token.is(Token::KwStruct)) {
@@ -566,6 +579,26 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     if (cur_token.is(Token::KwConst)) {
         func->is_constant = true;
         next_token();
+    }
+
+    if (cur_token.is(Token::KwRaises)) {
+        next_token();
+        bool more_raised_errors = false;
+        do {
+
+            Token name_token = cur_token;
+            Identifier raised_error_name = expect_identifier("for raised error");
+            func->raised_errors.push_back(Func::RaisedError{
+                                            raised_error_name,
+                                            name_token.loc,
+                                            nullptr
+                                          });
+
+            if (cur_token.is(',')) {
+                next_token();
+                more_raised_errors = cur_token.is(',');
+            }
+        } while (more_raised_errors);
     }
 
     // Parsing the scope of the function.
@@ -1266,6 +1299,16 @@ acorn::RaiseStmt* acorn::Parser::parse_raise() {
     return raise;
 }
 
+acorn::Try* acorn::Parser::parse_try() {
+
+    Try* tryn = new_node<Try>(cur_token);
+
+    next_token(); // Consuming 'try' token.
+
+    tryn->caught_expr = parse_expr();
+    return tryn;
+}
+
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
 
     ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
@@ -1649,7 +1692,11 @@ acorn::Expr* acorn::Parser::parse_assignment_and_expr(Expr* lhs) {
         bin_op->op = cur_token.kind;
         next_token();
         bin_op->lhs = lhs;
-        bin_op->rhs = parse_expr();
+        if (cur_token.is(Token::KwTry)) {
+            bin_op->rhs = parse_try();
+        } else {
+            bin_op->rhs = parse_expr();
+        }
         return bin_op;
     }
     }
@@ -3077,6 +3124,7 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
         case Token::KwEnum:
         case Token::KwSwitch:
         case Token::KwRaise:
+        case Token::KwCTAborts:
             return;
         case Token::KwElIf: {
             // Replace current token with if/#if statement so that it thinks

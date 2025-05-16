@@ -95,6 +95,8 @@ namespace acorn {
             // branches.
             bool found_terminal = false;
 
+            Try* cur_try = nullptr;
+
             llvm::SmallVector<Var*> variables;
 
             // Recursively ascends the current function stack to
@@ -134,6 +136,7 @@ namespace acorn {
         void check_loop_scope(ScopeStmt* scope, SemScope* sem_scope);
         void check_switch(SwitchStmt* switchn);
         void check_raise(RaiseStmt* raise);
+        void check_try(Try* tryn);
         void check_struct_initializer(StructInitializer* initializer);
         void check_this(This* thisn);
         void check_sizeof(SizeOf* sof);

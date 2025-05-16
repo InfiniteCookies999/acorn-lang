@@ -7,27 +7,28 @@ interface Error {
     /*
      * The name of the struct which implement's the Error.
      */
-    const char* get_name();
+    const char* get_name() const;
 
     /*
      * An informational message to explain why the error happened.
      */
-    const char* get_message();
+    const char* get_message() const;
 
 }
 
+#aborts
 struct UnreachableError :: *Error {
-    const char* get_name() {
+    const char* get_name() const {
         return "UnreachableError";
     }
 
-    const char* get_message() {
+    const char* get_message() const {
         return "unreachable code";
     }
 }
 
+#aborts
 struct OutOfBoundsError :: *Error {
-
     String msg;
 
     OutOfBoundsError(const char* msg) {
@@ -38,17 +39,12 @@ struct OutOfBoundsError :: *Error {
         this.msg = moveobj(msg);
     }
 
-    const char* get_name() {
-        return "OutOfBoundsError";
-    }
-
-    const char* get_message() {
-        return msg.buffer;
-    }
+    const char* get_name()    const { return "OutOfBoundsError"; }
+    const char* get_message() const { return msg.buffer; }
 }
 
+#aborts
 struct StateError :: *Error {
-
     String msg;
 
     StateError(const char* msg) {
@@ -59,13 +55,23 @@ struct StateError :: *Error {
         this.msg = moveobj(msg);
     }
 
-    const char* get_name() {
-        return "StateError";
+    const char* get_name()    const { return "StateError"; }
+    const char* get_message() const { return msg.buffer; }
+}
+
+struct IOError :: *Error {
+    String msg;
+
+    IOError(const char* msg) {
+        this.msg = String{ msg };
     }
 
-    const char* get_message() {
-        return msg.buffer;
+    IOError(String msg) {
+        this.msg = moveobj(msg);
     }
+
+    const char* get_name()    const { return "IOError"; }
+    const char* get_message() const { return msg.buffer; }
 }
 
 void abort(Error* error) {

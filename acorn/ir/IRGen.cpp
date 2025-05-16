@@ -122,6 +122,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_switch(static_cast<SwitchStmt*>(node));
     case NodeKind::RaiseStmt:
         return gen_raise(static_cast<RaiseStmt*>(node));
+    case NodeKind::Try:
+        return gen_try(static_cast<Try*>(node));
     case NodeKind::StructInitializer:
         return gen_struct_initializer(static_cast<StructInitializer*>(node), nullptr);
     case NodeKind::This:
@@ -226,6 +228,11 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         ll_param_types.push_back(builder.getPtrTy());
     }
 
+    bool passes_raised_error = !func->raised_errors.empty() && func != context.get_main_function();
+    if (passes_raised_error) {
+        ll_param_types.push_back(builder.getPtrTy());
+    }
+
     for (Var* param : func->params) {
         ll_param_types.push_back(gen_function_param_type(param));
     }
@@ -291,7 +298,10 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         ++param_idx;
     }
     if (func->structn) {
-        auto ll_param = assign_param_info(param_idx++, "in.this");
+        assign_param_info(param_idx++, "in.this");
+    }
+    if (passes_raised_error) {
+        assign_param_info(param_idx++, "raised.err");
     }
 
     for (Var* param : func->params) {
@@ -2125,12 +2135,98 @@ llvm::Value* acorn::IRGenerator::gen_switch_foldable(SwitchStmt* switchn) {
 llvm::Value* acorn::IRGenerator::gen_raise(RaiseStmt* raise) {
 
     auto initializer = static_cast<StructInitializer*>(raise->expr);
-    auto ll_initializer = gen_struct_initializer(initializer, nullptr);
 
-    gen_function_decl(context.std_abort_function);
-    builder.CreateCall(context.std_abort_function->ll_func, ll_initializer);
+    bool not_void = cur_func->return_type->is_not(context.void_type);
+
+    if (raise->raised_error->aborts_error || cur_func == context.get_main_function()) {
+        auto ll_initializer = gen_struct_initializer(initializer, nullptr);
+        gen_function_decl(context.std_abort_function);
+        builder.CreateCall(context.std_abort_function->ll_func, ll_initializer);
+    } else {
+
+        encountered_return = true;
+
+        unsigned error_union_index = 0;
+        if (cur_func->uses_aggr_param) {
+            ++error_union_index;
+        }
+        if (cur_func->structn) {
+            ++error_union_index;
+        }
+        auto ll_error_union = ll_cur_func->getArg(error_union_index);
+        auto ll_initializer = gen_struct_initializer(initializer, ll_error_union);
+
+
+
+        // Return a zeroed value since the user cannot access the value.
+        //
+        if (cur_func->num_returns > 1) {
+
+            if (not_void) {
+                builder.CreateStore(gen_zero(cur_func->return_type), ll_ret_addr);
+            }
+
+            // Returning so need to destroy all the objects encountered up until this point.
+            auto ir_scope_itr = ir_scope;
+            while (ir_scope_itr) {
+                gen_call_destructors(ir_scope_itr->objects_needing_destroyed);
+                ir_scope_itr = ir_scope_itr->parent;
+            }
+
+            // Jumping to the return block.
+            builder.CreateBr(ll_ret_block);
+            emit_dbg(di_emitter->emit_location(builder, raise->loc));
+            return nullptr;
+        } else if (not_void) {
+            ll_ret_value = gen_zero(cur_func->return_type);
+        }
+    }
 
     return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_try(Try* tryn) {
+
+    // Determine the minimum size needed to create a union like type.
+    size_t ll_alloc_size = 0;
+    for (auto raised_error : tryn->caught_errors) {
+        auto ll_struct_type = gen_struct_type(raised_error->struct_type);
+
+        auto ll_struct_size = sizeof_type_in_bytes(ll_struct_type);
+        if (ll_struct_size > ll_alloc_size) {
+            ll_alloc_size = ll_struct_size;
+        }
+    }
+
+    auto ll_union_error_type = llvm::ArrayType::get(builder.getInt8Ty(), ll_alloc_size);
+    ir_scope->ll_error_union = gen_alloca(ll_union_error_type, "error.union");
+
+
+    // TODO (maddie): handle the case that gen_try is an expression so may be called as part of
+    // a gen_rvalue in which case it won't properly handle it here.
+    auto ll_value = gen_node(tryn->caught_expr);
+
+    // TODO (maddie): can probably safely remove this bitcast.
+    auto ll_vtable_ptr = builder.CreateBitCast(ir_scope->ll_error_union, builder.getPtrTy(), "error.vtable");
+
+    auto ll_then_bb = gen_bblock("try.then");
+    auto ll_end_bb  = gen_bblock("try.end");
+
+    auto ll_has_err_cond = builder.CreateIsNotNull(ll_vtable_ptr);
+    builder.CreateCondBr(ll_has_err_cond, ll_then_bb, ll_end_bb);
+
+    insert_bblock_at_end(ll_then_bb);
+    builder.SetInsertPoint(ll_then_bb);
+    {
+        gen_function_decl(context.std_abort_function);
+        builder.CreateCall(context.std_abort_function->ll_func, ir_scope->ll_error_union);
+    }
+    gen_branch_if_not_term(ll_end_bb);
+
+    insert_bblock_at_end(ll_end_bb);
+    builder.SetInsertPoint(ll_end_bb);
+
+    return ll_value;
 }
 
 llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr, Node* lvalue) {
@@ -2537,10 +2633,15 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     }
     size_t arg_offset = 0;
 
+    bool passes_raised_error = !called_func->raised_errors.empty() && called_func != context.get_main_function();
+
     if (uses_aggr_param) {
         ++ll_num_args;
     }
     if (ll_in_this) {
+        ++ll_num_args;
+    }
+    if (passes_raised_error) {
         ++ll_num_args;
     }
     ll_args.resize(ll_num_args);
@@ -2579,6 +2680,10 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
 
         ll_args[arg_offset++] = ll_in_this;
 
+    }
+
+    if (passes_raised_error) {
+        ll_args[arg_offset++] = ir_scope->ll_error_union;
     }
 
     if (uses_default_param_values) {

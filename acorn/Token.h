@@ -60,6 +60,8 @@ namespace acorn {
             KwCopyobj,
             KwMoveobj,
             KwRaise,
+            KwRaises,
+            KwTry,
 
             KwNull,
             KwTrue,
@@ -83,6 +85,7 @@ namespace acorn {
             KwCTEndIf,
             KwCTFile,
             KwCTReflect,
+            KwCTAborts,
             ComptimeKeywordEnd,
 
             KeywordEnd,

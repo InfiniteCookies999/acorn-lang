@@ -90,6 +90,7 @@ namespace acorn {
             llvm::SmallVector<DestructorObject> objects_needing_destroyed;
             // Is the current scope the scope of a loop.
             bool is_loop_scope = false;
+            llvm::Value* ll_error_union;
         }* ir_scope = nullptr;
 
         // Objects which have destructors and need to be destroyed
@@ -154,6 +155,7 @@ namespace acorn {
         llvm::Value* gen_switch_non_foldable(SwitchStmt* switchn);
         llvm::Value* gen_switch_foldable(SwitchStmt* switchn);
         llvm::Value* gen_raise(RaiseStmt* raise);
+        llvm::Value* gen_try(Try* tryn);
         llvm::Value* gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr, Node* lvalue = nullptr);
         llvm::Value* gen_this(This* thisn);
         llvm::Value* gen_sizeof(SizeOf* sof);

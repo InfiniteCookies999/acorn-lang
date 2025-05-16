@@ -4,6 +4,7 @@
 #include "Identifier.h"
 #include "Token.h"
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/DenseSet.h>
 
 namespace llvm {
     class Function;
@@ -83,6 +84,7 @@ namespace acorn {
         MoveObj,
         TypeExpr,
         Reflect,
+        Try,
         ExprEnd
 
     };
@@ -198,6 +200,13 @@ namespace acorn {
 
         uint32_t num_returns = 0;
         llvm::SmallVector<Var*, 16> vars_to_alloc;
+
+        struct RaisedError {
+            Identifier name;
+            SourceLoc  error_loc;
+            Struct*    structn;
+        };
+        llvm::SmallVector<RaisedError> raised_errors;
 
         size_t default_params_offset = static_cast<size_t>(-1);
 
@@ -370,6 +379,7 @@ namespace acorn {
         bool fields_need_copy_call   = false;
         bool fields_need_move_call   = false;
         bool uses_vtable             = false;
+        bool aborts_error            = false;
 
         Var* find_field(Identifier name) const;
         const InterfaceExtension* find_interface_extension(Identifier name) const;
@@ -525,7 +535,8 @@ namespace acorn {
         RaiseStmt() : Node(NodeKind::RaiseStmt) {
         }
 
-        Expr* expr;
+        Expr*   expr;
+        Struct* raised_error;
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {
@@ -841,6 +852,14 @@ namespace acorn {
         ReflectKind reflect_kind;
         Expr* expr;
         Type* type_info_type;
+    };
+
+    struct Try : Expr {
+        Try() : Expr(NodeKind::Try) {
+        }
+
+        Expr*                   caught_expr;
+        llvm::DenseSet<Struct*> caught_errors;
     };
 }
 
