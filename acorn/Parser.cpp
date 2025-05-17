@@ -646,6 +646,8 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
         if (cur_token.is(Token::SubSubSub)) {
             next_token();
             var->should_default_initialize = false;
+        } else if (cur_token.is(Token::KwTry)) {
+            var->assignment = parse_try();
         } else {
             var->assignment = parse_expr();
         }
@@ -1339,6 +1341,10 @@ void acorn::Parser::add_node_to_scope(ScopeStmt* scope, Node* node) {
             scope->push_back(var);
         }
         vlist->list.clear();
+    } else if (node->is(NodeKind::Try)) {
+        auto tryn = static_cast<Try*>(node);
+        scope->push_back(tryn);
+        scope->push_back(tryn->caught_expr);
     } else {
         scope->push_back(node);
     }
@@ -1693,7 +1699,10 @@ acorn::Expr* acorn::Parser::parse_assignment_and_expr(Expr* lhs) {
         next_token();
         bin_op->lhs = lhs;
         if (cur_token.is(Token::KwTry)) {
-            bin_op->rhs = parse_try();
+            auto tryn = parse_try();
+            bin_op->rhs = tryn->caught_expr;
+            tryn->caught_expr = bin_op;
+            return tryn;
         } else {
             bin_op->rhs = parse_expr();
         }

@@ -1,0 +1,22 @@
+#file(access=public, namespace=reflect)
+
+enum TypeId {
+    Int
+}
+
+struct Type {
+}
+
+struct StructTypeInfo {
+}
+
+struct FieldTypeInfo {
+}
+
+struct EnumTypeInfo {
+}
+
+struct Any {
+    const Type* type;
+    const void* ptr;
+}

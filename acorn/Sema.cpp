@@ -815,6 +815,12 @@ bool acorn::Sema::check_function_decl(Func* func) {
                 continue;
             }
 
+            if (structn->aborts_error) {
+                error(raised_error.error_loc, "A function cannot specify that it raises an '#aborts' error")
+                    .end_error(ErrCode::SemaFuncCannotRaiseAbortsError);
+                continue;
+            }
+
             raised_error.structn = structn;
 
         } else {
@@ -2615,6 +2621,8 @@ void acorn::Sema::check_raise(RaiseStmt* raise) {
     cur_scope->all_paths_return = true;
     cur_scope->found_terminal = true;
 
+    ++cur_func->num_returns;
+
     if (raise->expr->is_not(NodeKind::StructInitializer)) {
         error(raise->expr, "Expected error struct initializer")
             .end_error(ErrCode::SemaWrongRaiseExpr);
@@ -2648,9 +2656,6 @@ void acorn::Sema::check_raise(RaiseStmt* raise) {
                   cur_func->name, initializer->structn->name)
                 .end_error(ErrCode::SemaFuncDoesNotRaiseErrorInDef);
         }
-    } else {
-        // Otherwise, it behaves like a return statement.
-        ++cur_func->num_returns;
     }
 
     raise->raised_error = initializer->structn;
@@ -2675,6 +2680,8 @@ void acorn::Sema::check_try(Try* tryn) {
         error(expand(tryn), "Expression does not raise errors")
             .end_error(ErrCode::SemaExprDoesNotRaiseErrors);
     }
+
+    tryn->type = tryn->caught_expr->type;
 }
 
 void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
@@ -2887,7 +2894,13 @@ void acorn::Sema::check_scope(ScopeStmt* scope) {
 
 void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
 
+    bool skip_next_stmt = false;
     for (Node* stmt : *scope) {
+        if (skip_next_stmt) {
+            skip_next_stmt = false;
+            continue;
+        }
+
         if (sem_scope && sem_scope->found_terminal) {
             error(stmt, "Unreachable code")
                 .end_error(ErrCode::SemaUnreachableStmt);
@@ -2910,6 +2923,9 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
         } else if (stmt->is(NodeKind::Struct)) {
             error(stmt, "Structs cannot be declared within a function")
                 .end_error(ErrCode::SemaNoLocalStructs);
+        } else if (stmt->is(NodeKind::Try)) {
+            check_try(static_cast<Try*>(stmt));
+            skip_next_stmt = true;
         } else {
             check_node(stmt);
         }

@@ -421,6 +421,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
             di_emitter->emit_struct_this_variable(ll_this_address, func, builder);
         }
     }
+    if (!func->raised_errors.empty()) {
+        ++param_idx;
+    }
 
     for (Var* param : func->params) {
         if (!param->is_aggr_param) {
@@ -565,9 +568,6 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     llvm::Instruction* ll_return;
     if (func->return_type->is(context.void_type) && !is_main) {
         ll_return = builder.CreateRetVoid();
-    } else if (func->num_returns == 0) {
-        // Special case for when there is a raised error at the end of a function with non-void type.
-        ll_return = builder.CreateRet(gen_zero(func->return_type));
     } else if (is_main &&
                ((!func->scope->empty() && func->scope->back()->is_not(NodeKind::ReturnStmt))
                || func->scope->empty())) {
@@ -2136,12 +2136,18 @@ llvm::Value* acorn::IRGenerator::gen_raise(RaiseStmt* raise) {
 
     auto initializer = static_cast<StructInitializer*>(raise->expr);
 
-    bool not_void = cur_func->return_type->is_not(context.void_type);
+    // Have to check that the function's return type is not void as well because the main
+    // function can be specified as void but it's llvm type will still be an i32.
+    bool not_void = !ll_cur_func->getReturnType()->isVoidTy() &&
+                     cur_func->return_type->is_not(context.void_type);
 
     if (raise->raised_error->aborts_error || cur_func == context.get_main_function()) {
         auto ll_initializer = gen_struct_initializer(initializer, nullptr);
         gen_function_decl(context.std_abort_function);
         builder.CreateCall(context.std_abort_function->ll_func, ll_initializer);
+        if (not_void) {
+            ll_ret_value = gen_zero(cur_func->return_type);
+        }
     } else {
 
         encountered_return = true;
@@ -2156,15 +2162,9 @@ llvm::Value* acorn::IRGenerator::gen_raise(RaiseStmt* raise) {
         auto ll_error_union = ll_cur_func->getArg(error_union_index);
         auto ll_initializer = gen_struct_initializer(initializer, ll_error_union);
 
-
-
         // Return a zeroed value since the user cannot access the value.
         //
         if (cur_func->num_returns > 1) {
-
-            if (not_void) {
-                builder.CreateStore(gen_zero(cur_func->return_type), ll_ret_addr);
-            }
 
             // Returning so need to destroy all the objects encountered up until this point.
             auto ir_scope_itr = ir_scope;
@@ -2201,32 +2201,16 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn) {
     auto ll_union_error_type = llvm::ArrayType::get(builder.getInt8Ty(), ll_alloc_size);
     ir_scope->ll_error_union = gen_alloca(ll_union_error_type, "error.union");
 
+    // Memsetting to zero in order to be able to check if the vtable has been set.
+    auto ll_alignment = get_alignment(builder.getInt8Ty());
+    builder.CreateMemSet(
+        ir_scope->ll_error_union,
+        builder.getInt8(0),
+        ll_alloc_size,
+        ll_alignment
+    );
 
-    // TODO (maddie): handle the case that gen_try is an expression so may be called as part of
-    // a gen_rvalue in which case it won't properly handle it here.
-    auto ll_value = gen_node(tryn->caught_expr);
-
-    // TODO (maddie): can probably safely remove this bitcast.
-    auto ll_vtable_ptr = builder.CreateBitCast(ir_scope->ll_error_union, builder.getPtrTy(), "error.vtable");
-
-    auto ll_then_bb = gen_bblock("try.then");
-    auto ll_end_bb  = gen_bblock("try.end");
-
-    auto ll_has_err_cond = builder.CreateIsNotNull(ll_vtable_ptr);
-    builder.CreateCondBr(ll_has_err_cond, ll_then_bb, ll_end_bb);
-
-    insert_bblock_at_end(ll_then_bb);
-    builder.SetInsertPoint(ll_then_bb);
-    {
-        gen_function_decl(context.std_abort_function);
-        builder.CreateCall(context.std_abort_function->ll_func, ir_scope->ll_error_union);
-    }
-    gen_branch_if_not_term(ll_end_bb);
-
-    insert_bblock_at_end(ll_end_bb);
-    builder.SetInsertPoint(ll_end_bb);
-
-    return ll_value;
+    return nullptr;
 }
 
 llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr, Node* lvalue) {
@@ -2311,11 +2295,18 @@ llvm::Value* acorn::IRGenerator::gen_sizeof(SizeOf* sof) {
 }
 
 void acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
+    bool encountered_try = false;
     for (Node* stmt : *scope) {
         if (should_emit_debug_info) {
             di_emitter->set_last_statement(stmt);
         }
         gen_node(stmt);
+        if (stmt->is(NodeKind::Try)) {
+            encountered_try = true;
+        } else if (encountered_try) {
+            ir_scope->ll_error_union = nullptr;
+            encountered_try = false;
+        }
     }
 }
 
@@ -2339,10 +2330,22 @@ llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
         di_emitter->emit_function_variable(var, builder);
     }
 
-    if (var->assignment) {
-        gen_assignment(var->ll_address, var->type, var->assignment, var);
+    Expr* assignment = var->assignment;
+    bool is_try_assignment = assignment && assignment->is(NodeKind::Try);
+    if (is_try_assignment) {
+        auto tryn = static_cast<Try*>(assignment);
+        gen_try(tryn);
+        assignment = tryn->caught_expr;
+    }
+
+    if (assignment) {
+        gen_assignment(var->ll_address, var->type, assignment, var);
     } else if (var->should_default_initialize) {
         gen_default_value(var->ll_address, var->type);
+    }
+
+    if (is_try_assignment) {
+        ir_scope->ll_error_union = nullptr;
     }
 
     return nullptr;
@@ -2925,6 +2928,28 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
 
     if (!ll_ret->getType()->isVoidTy()) {
         ll_ret->setName("call.ret");
+    }
+
+    if (ir_scope->ll_error_union) {
+        auto ll_t = builder.CreateBitCast(ir_scope->ll_error_union, builder.getPtrTy());
+        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), ll_t);
+
+        auto ll_then_bb = gen_bblock("try.then");
+        auto ll_end_bb = gen_bblock("try.end");
+
+        auto ll_has_err_cond = builder.CreateIsNotNull(ll_vtable_ptr);
+        builder.CreateCondBr(ll_has_err_cond, ll_then_bb, ll_end_bb);
+
+        insert_bblock_at_end(ll_then_bb);
+        builder.SetInsertPoint(ll_then_bb);
+        {
+            gen_function_decl(context.std_abort_function);
+            builder.CreateCall(context.std_abort_function->ll_func, ir_scope->ll_error_union);
+        }
+        gen_branch_if_not_term(ll_end_bb);
+
+        insert_bblock_at_end(ll_end_bb);
+        builder.SetInsertPoint(ll_end_bb);
     }
 
     // If the function returns an implicit dereferencable pointer then
@@ -3689,6 +3714,10 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
             auto initializer = static_cast<StructInitializer*>(value);
             gen_struct_initializer(initializer, ll_address, lvalue);
         }
+    } else if (value->is(NodeKind::Try)) {
+        auto tryn = static_cast<Try*>(value);
+
+        gen_assignment(ll_address, to_type, tryn->caught_expr, lvalue, is_assign_op, try_move);
     } else if (value->is(NodeKind::Ternary)) {
         auto ll_value = gen_ternary(static_cast<Ternary*>(value), ll_address, lvalue, is_assign_op, try_move);
         if (!value->type->is_aggregate()) { // If it is an aggregate it calls gen_assignment for the passed ll_address.

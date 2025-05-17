@@ -206,6 +206,7 @@ X(SemaErrorExtensionNotDynamic              , 20155)
 X(SemaUncaughtErrors                        , 20156)
 X(SemaExprDoesNotRaiseErrors                , 20157)
 X(SemaCannotCatchErrorsAtGlobalScope        , 20159)
+X(SemaFuncCannotRaiseAbortsError            , 20160)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

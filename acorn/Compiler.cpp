@@ -26,10 +26,6 @@ static const char* StdLibEnvironmentVariable = "acorn_std_lib";
 
 llvm::TargetMachine* acorn::Compiler::ll_target_machine = nullptr;
 
-static const char* get_std_lib_path() {
-    return std::getenv(StdLibEnvironmentVariable);
-}
-
 acorn::Compiler::~Compiler() {
     delete ll_module;
 }
@@ -600,11 +596,10 @@ void acorn::Compiler::parse_files(SourceVector& sources) {
 
     // Trying to find the standard library.
     if (!context.should_stand_alone()) {
-        if (const char* lib_path = get_std_lib_path()) {
-            std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-            auto wpath = converter.from_bytes(lib_path);
+        auto lib_path = get_std_lib_path();
+        if (!lib_path.empty()) {
             sources.push_back(Source{
-                              .path     = std::move(wpath),
+                              .path     = std::move(lib_path),
                               .mod_name = "std"
                               });
         } else {
@@ -816,5 +811,20 @@ void acorn::Compiler::find_std_lib_declarations() {
             context.std_any_struct = structn;
             context.std_any_struct_type = structn->struct_type;
         }
+    } else {
+        Logger::global_error(context, "Failed to find standard library namespace 'reflect'")
+            .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
     }
+}
+
+std::wstring acorn::Compiler::get_std_lib_path() const {
+    if (std_lib_path.empty()) {
+        auto lib_path = std::getenv(StdLibEnvironmentVariable);
+        if (!lib_path) {
+            return L"";
+        }
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+        return converter.from_bytes(lib_path);
+    }
+    return std_lib_path;
 }

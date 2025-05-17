@@ -60,11 +60,15 @@ namespace acorn {
         void set_output_directory(std::wstring output_directory);
 
         void add_library_path(std::wstring library_path) {
-            library_paths.push_back(library_path);
+            library_paths.push_back(std::move(library_path));
         }
 
         void add_library(std::wstring library) {
-            libraries.push_back(library);
+            libraries.push_back(std::move(library));
+        }
+
+        void set_standard_library_path(std::wstring std_lib_path) {
+            this->std_lib_path = std_lib_path;
         }
 
         Context* get_context() const { return &context; }
@@ -88,6 +92,7 @@ namespace acorn {
         std::wstring absolute_output_directory;
         std::wstring absolute_exe_path;
         std::wstring absolute_obj_path;
+        std::wstring std_lib_path;
 
         llvm::SmallVector<std::wstring> library_paths;
         llvm::SmallVector<std::wstring> libraries;
@@ -140,6 +145,8 @@ namespace acorn {
         void parse_file(Module& modl,
                         const std::filesystem::path& path,
                         const std::filesystem::path& root_path);
+
+        std::wstring get_std_lib_path() const;
 
         void find_std_lib_declarations();
 

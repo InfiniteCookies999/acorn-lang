@@ -75,7 +75,7 @@ static std::wstring get_executable_path() {
 #endif
 }
 
-static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file) {
+static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file, bool use_mock_lib = false) {
 
     Compiler::SourceVector sources;
     sources.push_back(Source{ file, "" });
@@ -104,7 +104,12 @@ static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file
     compiler->set_output_directory(test_executable_directory);
 
     compiler->set_dont_show_wrote_to_msg();
-    compiler->set_stand_alone();
+    if (!use_mock_lib) {
+        compiler->set_stand_alone();
+    } else {
+        const wchar_t* lib_path = src(L"mock_std_lib");
+        compiler->set_standard_library_path(lib_path);
+    }
 
     compiler->run(sources);
     context = compiler->get_context();
@@ -119,9 +124,9 @@ static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file
     //       memory seperately.
     // allocator.dealloc_all();
 
-    if (has_errors) {
-        return { "", "" };
-    }
+    //if (has_errors) {
+    //    return { "has errors", "" };
+    //}
 
     std::string result;
     int exit_code;
@@ -2050,6 +2055,51 @@ static void interface_tests() {
     });
 }
 
+static void error_tests() {
+    test("Raise #abort error", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors1.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("error raised!");
+    });
+    test("Raise uncaught error", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors2.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("error raised!");
+    });
+    test("Raise conditionally raises error or returns value", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors3.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error raised!");
+    });
+    test("Raise conditionally raises error or returns sm struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors4.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error raised!");
+    });
+    test("Raise conditionally raises error or returns bg struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors5.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCDerror raised!");
+    });
+    test("Raise #abort error function returns int", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors6.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("error raised!");
+    });
+    test("Raise #abort error function returns void", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors7.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("error raised!");
+    });
+}
+
 void test_codegen() {
 
     executable_path = get_executable_path();
@@ -2099,5 +2149,6 @@ void test_codegen() {
         slices_tests();
         varargs_tests();
         interface_tests();
+        error_tests();
     }, true);
 }
