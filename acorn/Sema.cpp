@@ -1065,8 +1065,8 @@ void acorn::Sema::check_node(Node* node) {
     case NodeKind::ReturnStmt:
         return check_return(static_cast<ReturnStmt*>(node));
     case NodeKind::IfStmt: {
-        bool _;
-        return check_if(static_cast<IfStmt*>(node), _);
+        bool ignore1, ignore2;
+        return check_if(static_cast<IfStmt*>(node), ignore1, ignore2);
     }
     case NodeKind::BinOp:
         return check_binary_op(static_cast<BinOp*>(node));
@@ -1102,8 +1102,6 @@ void acorn::Sema::check_node(Node* node) {
         return check_switch(static_cast<SwitchStmt*>(node));
     case NodeKind::RaiseStmt:
         return check_raise(static_cast<RaiseStmt*>(node));
-    case NodeKind::Try:
-        return check_try(static_cast<Try*>(node));
     case NodeKind::StructInitializer:
         return check_struct_initializer(static_cast<StructInitializer*>(node));
     case NodeKind::This:
@@ -1229,6 +1227,9 @@ void acorn::Sema::check_variable(Var* var) {
     auto cleanup = [this, var]() finline {
         var->is_being_checked = false;
         cur_global_var = nullptr;
+        if (cur_scope) {
+            cur_scope->cur_try = nullptr;
+        }
     };
 
     check_modifier_incompatibilities(var);
@@ -1263,6 +1264,10 @@ void acorn::Sema::check_variable(Var* var) {
     var->has_been_checked = true; // Set early to prevent circular checking.
 
     if (var->assignment) {
+        if (var->assignment->tryn) {
+            cur_scope->cur_try = var->assignment->tryn;
+        }
+
         TypeKind type_kind = var->parsed_type->get_kind();
         if (var->assignment->is(NodeKind::Array) &&
             type_kind == TypeKind::Array ||
@@ -1304,6 +1309,9 @@ void acorn::Sema::check_variable(Var* var) {
         }
         if (!var->assignment->type) {
             return cleanup();
+        }
+        if (var->assignment->tryn) {
+            check_try(var->assignment->tryn, true);
         }
     }
 
@@ -1921,6 +1929,7 @@ void acorn::Sema::check_interface(Interface* interfacen) {
 
 void acorn::Sema::check_return(ReturnStmt* ret) {
     cur_scope->all_paths_return = true;
+    cur_scope->all_paths_branch = true;
     cur_scope->found_terminal = true;
 
     ++cur_func->num_returns;
@@ -1995,7 +2004,7 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
     }
 }
 
-void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
+void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return, bool& all_paths_branch) {
 
     // Must create the scope early so that the scope of
     // the variable is the body of the if statement.
@@ -2032,20 +2041,24 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return) {
 
     check_scope(ifs->scope, &sem_scope);
     all_paths_return = sem_scope.all_paths_return;
+    all_paths_branch = sem_scope.all_paths_branch;
     pop_scope();
 
     if (ifs->elseif && ifs->elseif->is(NodeKind::IfStmt)) {
-        bool all_paths_return2;
-        check_if(static_cast<IfStmt*>(ifs->elseif), all_paths_return2);
+        bool all_paths_return2, all_paths_branch2;
+        check_if(static_cast<IfStmt*>(ifs->elseif), all_paths_return2, all_paths_branch2);
         all_paths_return &= all_paths_return2;
+        all_paths_branch &= all_paths_branch2;
     } else if (ifs->elseif) {
         check_scope(static_cast<ScopeStmt*>(ifs->elseif));
     } else {
-        // If an else does not exist then not all paths return.
+        // If an else does not exist then not all paths return/branch.
         all_paths_return = false;
+        all_paths_branch = false;
     }
 
     cur_scope->all_paths_return = all_paths_return;
+
     cur_scope->found_terminal = all_paths_return;
 }
 
@@ -2159,6 +2172,7 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
 
 void acorn::Sema::check_loop_control(LoopControlStmt* loop_control) {
     cur_scope->found_terminal = true;
+    cur_scope->all_paths_branch = true;
 
     if (loop_depth == 0) {
         if (loop_control->is(NodeKind::BreakStmt)) {
@@ -2193,16 +2207,20 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
             .end_error(ErrCode::SemaSwitchOnExpectedLValue);
     }
 
-    bool all_paths_return = true;
-    auto check_case_scope = [this, switchn, &all_paths_return](ScopeStmt* scope) finline {
+    bool all_paths_return = true, all_paths_branch = true;
+    auto check_case_scope = [this, switchn, &all_paths_return, &all_paths_branch](ScopeStmt* scope) finline {
         SemScope sem_scope = push_scope();
         check_scope(scope, &sem_scope);
         all_paths_return &= sem_scope.all_paths_return;
+        all_paths_branch &= sem_scope.all_paths_branch;
         pop_scope();
     };
 
+    // TODO (maddie): This should probably not be so strict and as long as all cases are
+    // handled such as when dealing with enums it should be able to determine it returns/branches.
     if (!switchn->default_scope) {
         all_paths_return = false;
+        all_paths_branch = false;
     }
 
     struct CmpNumber {
@@ -2614,14 +2632,22 @@ if (prior_value.value_s64 == value.value_s64) {     \
     }
 
     cur_scope->all_paths_return = all_paths_return;
+    cur_scope->all_paths_branch = all_paths_branch;
     cur_scope->found_terminal   = all_paths_return;
 }
 
 void acorn::Sema::check_raise(RaiseStmt* raise) {
     cur_scope->all_paths_return = true;
+    cur_scope->all_paths_branch = true;
     cur_scope->found_terminal = true;
 
     ++cur_func->num_returns;
+
+    if (context.should_stand_alone()) {
+        error(raise, "Cannot use raise when stand alone is enabled")
+            .end_error(ErrCode::SemaCannotRaiseWhenStandAlone);
+        return;
+    }
 
     if (raise->expr->is_not(NodeKind::StructInitializer)) {
         error(raise->expr, "Expected error struct initializer")
@@ -2661,7 +2687,9 @@ void acorn::Sema::check_raise(RaiseStmt* raise) {
     raise->raised_error = initializer->structn;
 }
 
-void acorn::Sema::check_try(Try* tryn) {
+void acorn::Sema::check_try(Try* tryn, bool assigns) {
+
+    yield_if(tryn->caught_expr);
 
     if (!cur_scope) {
         error(tryn, "Cannot catch errors at global scope")
@@ -2669,19 +2697,40 @@ void acorn::Sema::check_try(Try* tryn) {
         return;
     }
 
-    cur_scope->cur_try = tryn;
-
-    check_node(tryn->caught_expr);
-    yield_if(tryn->caught_expr);
-
-    cur_scope->cur_try = nullptr;
+    if (context.should_stand_alone()) {
+        error(tryn, "Cannot use try when stand alone is enabled")
+            .end_error(ErrCode::SemaCannotTryWhenStandAlone);
+        return;
+    }
 
     if (tryn->caught_errors.empty()) {
         error(expand(tryn), "Expression does not raise errors")
             .end_error(ErrCode::SemaExprDoesNotRaiseErrors);
     }
 
+    if (tryn->catch_block) {
+        SemScope sem_scope = push_scope();
+
+        if (tryn->caught_var) {
+            add_variable_to_local_scope(tryn->caught_var);
+
+            tryn->caught_var->parsed_type = type_table.get_ptr_type(context.std_error_interface->interface_type);
+            tryn->caught_var->type = type_table.get_ptr_type(context.std_error_interface->interface_type);
+        }
+
+        check_scope(tryn->catch_block, &sem_scope);
+
+        if (assigns && !cur_scope->all_paths_branch) {
+            error(expand(tryn), "Assignment lacks value when error is caught")
+                .add_line("Note: Either all paths must branch or you must use 'recover' with a value")
+                .end_error(ErrCode::SemaTryCatchAssignValueNotAssigned);
+        }
+
+        pop_scope();
+    }
+
     tryn->type = tryn->caught_expr->type;
+
 }
 
 void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
@@ -2894,12 +2943,7 @@ void acorn::Sema::check_scope(ScopeStmt* scope) {
 
 void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
 
-    bool skip_next_stmt = false;
     for (Node* stmt : *scope) {
-        if (skip_next_stmt) {
-            skip_next_stmt = false;
-            continue;
-        }
 
         if (sem_scope && sem_scope->found_terminal) {
             error(stmt, "Unreachable code")
@@ -2923,10 +2967,17 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
         } else if (stmt->is(NodeKind::Struct)) {
             error(stmt, "Structs cannot be declared within a function")
                 .end_error(ErrCode::SemaNoLocalStructs);
-        } else if (stmt->is(NodeKind::Try)) {
-            check_try(static_cast<Try*>(stmt));
-            skip_next_stmt = true;
         } else {
+            if (stmt->is_expression()) {
+                Expr* expr = static_cast<Expr*>(stmt);
+                if (expr->tryn) {
+                    cur_scope->cur_try = expr->tryn;
+                    check_node(expr);
+                    check_try(expr->tryn, false);
+                    cur_scope->cur_try = nullptr;
+                    continue;
+                }
+            }
             check_node(stmt);
         }
     }
@@ -3093,14 +3144,29 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         return nullptr;
     };
 
-    check_and_verify_type(lhs);
+    auto cleanup_try = [this]() finline {
+        if (cur_scope)
+            cur_scope->cur_try = nullptr;
+    };
+
+    if (bin_op->rhs->tryn) {
+        cur_scope->cur_try = bin_op->rhs->tryn;
+    }
+
+    check_node(lhs);
+    if (!lhs->type) {
+        return cleanup_try();
+    }
     if (bin_op->op == '=' && rhs->is(NodeKind::MoveObj)) {
         check_moveobj(static_cast<MoveObj*>(rhs), true);
         if (!rhs->type) {
-            return;
+            return cleanup_try();
         }
     } else {
-        check_and_verify_type(rhs);
+        check_node(rhs);
+        if (!rhs->type) {
+            return cleanup_try();
+        }
     }
 
     if (!lhs->is_foldable || !rhs->is_foldable) {
@@ -3123,7 +3189,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
 
     if (lhs_enum_type || rhs_enum_type) {
         check_binary_op_for_enums(bin_op, lhs_enum_type, rhs_enum_type);
-        return;
+        return cleanup_try();
     }
 
     if (lhs->trivially_reassignable && rhs->trivially_reassignable) {
@@ -3148,7 +3214,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     case Token::GtGtEq: {
 
         if (!check_modifiable(bin_op->lhs, bin_op)) {
-            return;
+            return cleanup_try();
         }
 
         switch (bin_op->op) {
@@ -3167,7 +3233,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
                 if (!is_assignable_to) {
                     error(expand(bin_op), get_type_mismatch_error(bin_op->lhs->type, bin_op->rhs).c_str())
                         .end_error(ErrCode::SemaVariableTypeMismatch);
-                    return;
+                    return cleanup_try();
                 }
             }
 
@@ -3193,19 +3259,21 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         case Token::TildeEq: {
             if (!lhs_type->is_integer()) {
                 report_binary_op_cannot_apply(bin_op, lhs);
-                return;
+                return cleanup_try();
             }
             if (!rhs_type->is_integer()) {
                 report_binary_op_cannot_apply(bin_op, rhs);
-                return;
+                return cleanup_try();
             }
             if (!get_integer_type_for_binary_op(true, bin_op, lhs_type, rhs_type)) {
                 report_binary_op_mistmatch_types(bin_op);
-                return;
+                return cleanup_try();
             }
             break;
         case Token::LtLtEq: case Token::GtGtEq: {
-            if (!get_shifts_type(true, lhs_type, rhs_type)) return;
+            if (!get_shifts_type(true, lhs_type, rhs_type)) {
+                return cleanup_try();
+            }
             break;
         }
         }
@@ -3215,6 +3283,12 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             create_cast(bin_op->rhs, lhs_type);
         }
         bin_op->type = lhs_type;
+
+        if (bin_op->rhs->tryn) {
+            check_try(bin_op->rhs->tryn, true);
+            cleanup_try();
+        }
+
         break;
     }
     case '+': case '-': case '*': {
@@ -5597,10 +5671,6 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
     case NodeKind::SwitchStmt:
     case NodeKind::RaiseStmt:
         return false;
-    case NodeKind::Try: {
-        Try* tryn = static_cast<Try*>(stmt);
-        return is_incomplete_statement(tryn->caught_expr);
-    }
     case NodeKind::BinOp: {
         auto bin_op = static_cast<const BinOp*>(stmt);
 

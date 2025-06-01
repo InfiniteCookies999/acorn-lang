@@ -91,6 +91,10 @@ namespace acorn {
             // If true then on every possible branch
             // path there exists a return statement.
             bool all_paths_return = false;
+            // If true then on every possible branch
+            // path there exists a branch statement
+            // such as 'break', 'return', ect...
+            bool all_paths_branch = false;
             // True when encountering a statement that
             // branches.
             bool found_terminal = false;
@@ -128,7 +132,7 @@ namespace acorn {
         //--------------------------------------
 
         void check_return(ReturnStmt* ret);
-        void check_if(IfStmt* ifs, bool& all_paths_return);
+        void check_if(IfStmt* ifs, bool& all_paths_return, bool& all_paths_branch);
         void check_predicate_loop(PredicateLoopStmt* loop);
         void check_range_loop(RangeLoopStmt* loop);
         void check_iterator_loop(IteratorLoopStmt* loop);
@@ -136,7 +140,7 @@ namespace acorn {
         void check_loop_scope(ScopeStmt* scope, SemScope* sem_scope);
         void check_switch(SwitchStmt* switchn);
         void check_raise(RaiseStmt* raise);
-        void check_try(Try* tryn);
+        void check_try(Try* tryn, bool assigns);
         void check_struct_initializer(StructInitializer* initializer);
         void check_this(This* thisn);
         void check_sizeof(SizeOf* sof);

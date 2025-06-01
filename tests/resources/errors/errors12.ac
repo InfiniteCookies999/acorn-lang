@@ -1,0 +1,53 @@
+import std;
+import std.Error;
+
+struct TestError :: *Error {
+    const char* get_name() const {
+        return "TestError";
+    }
+    const char* get_message() const {
+        return "error raised!";
+    }
+}
+
+void write_val(int8 val) {
+
+#if OS_GROUP_WINDOWS
+    void* handle = std.GetStdHandle(-11);
+    uint32 written;
+    char c = as(char) val;
+    std.WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    char c = as(char) val;
+    std.write(1, &c, 1);
+#endif
+
+}
+
+struct A {
+    int8 v;
+}
+
+A foo(bool b) raises TestError {
+    if b {
+        raise TestError{};
+    } else {
+        return A{ 64 };
+    }
+}
+
+void main() {
+    A a1 = try foo(false) {
+        std.print("I am not called");
+        return;
+    };
+
+    write_val(a1.v);
+
+    A a2 = try foo(true) {
+        std.print("error caught!");
+        return;
+    };
+
+    std.print("I am not reached");
+}

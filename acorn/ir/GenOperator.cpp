@@ -9,6 +9,10 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     Expr* lhs = bin_op->lhs, *rhs = bin_op->rhs;
 
     auto apply_op_eq = [this, bin_op, lhs, rhs](tokkind op) finline {
+        if (rhs->tryn) {
+            ir_scope->cur_try = rhs->tryn;
+            gen_try(rhs->tryn);
+        }
         auto ll_address = gen_node(lhs);
         auto ll_value = gen_numeric_binary_op(op,
                                               bin_op,
@@ -16,13 +20,19 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
                                               gen_rvalue(rhs));
         builder.CreateStore(ll_value, ll_address);
         emit_dbg(di_emitter->emit_location(builder, bin_op->loc));
+        ir_scope->cur_try = nullptr;
         return nullptr;
     };
 
     switch (bin_op->op) {
     case '=': {
+        if (rhs->tryn) {
+            ir_scope->cur_try = rhs->tryn;
+            gen_try(rhs->tryn);
+        }
         auto ll_address = gen_node(lhs);
         gen_assignment(ll_address, lhs->type, rhs, lhs, true);
+        ir_scope->cur_try = nullptr;
         return ll_address;
     }
     case Token::AddEq:   return apply_op_eq('+');

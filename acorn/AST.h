@@ -35,6 +35,7 @@ namespace acorn {
     struct Struct;
     struct BinOp;
     struct Interface;
+    struct Try;
 
     const size_t MAX_FUNC_PARAMS = 64;
 
@@ -586,6 +587,9 @@ namespace acorn {
         //
         Type* cast_type = nullptr;
 
+        // The expression is wrapped inside a try expression.
+        Try* tryn = nullptr;
+
         Type* get_final_type() const {
             return cast_type ? cast_type : type;
         }
@@ -858,8 +862,12 @@ namespace acorn {
         Try() : Expr(NodeKind::Try) {
         }
 
-        Expr*                   caught_expr;
         llvm::DenseSet<Struct*> caught_errors;
+        Var*                    caught_var = nullptr;
+        ScopeStmt*              catch_block = nullptr;
+        Expr*                   caught_expr;
+
+        llvm::Value* ll_error;
     };
 }
 

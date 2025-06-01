@@ -77,6 +77,9 @@ struct IOError :: *Error {
 void abort(Error* error) {
     const char* error_name = error.get_name();
     const char* message = error.get_message();
-    module.println("%s: %s.", error_name, message);
+    module.print(error_name);
+    module.print(": ");
+    module.print(message);
+    module.print(".");
     module.exit(1);
 }

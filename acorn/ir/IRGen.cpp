@@ -122,8 +122,6 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_switch(static_cast<SwitchStmt*>(node));
     case NodeKind::RaiseStmt:
         return gen_raise(static_cast<RaiseStmt*>(node));
-    case NodeKind::Try:
-        return gen_try(static_cast<Try*>(node));
     case NodeKind::StructInitializer:
         return gen_struct_initializer(static_cast<StructInitializer*>(node), nullptr);
     case NodeKind::This:
@@ -2152,15 +2150,15 @@ llvm::Value* acorn::IRGenerator::gen_raise(RaiseStmt* raise) {
 
         encountered_return = true;
 
-        unsigned error_union_index = 0;
+        unsigned error_index = 0;
         if (cur_func->uses_aggr_param) {
-            ++error_union_index;
+            ++error_index;
         }
         if (cur_func->structn) {
-            ++error_union_index;
+            ++error_index;
         }
-        auto ll_error_union = ll_cur_func->getArg(error_union_index);
-        auto ll_initializer = gen_struct_initializer(initializer, ll_error_union);
+        llvm::Value* ll_error = ll_cur_func->getArg(error_index);
+        auto ll_initializer = gen_struct_initializer(initializer, ll_error);
 
         // Return a zeroed value since the user cannot access the value.
         //
@@ -2189,26 +2187,40 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn) {
 
     // Determine the minimum size needed to create a union like type.
     size_t ll_alloc_size = 0;
+    llvm::StructType* ll_largest_struct_type = nullptr;
     for (auto raised_error : tryn->caught_errors) {
         auto ll_struct_type = gen_struct_type(raised_error->struct_type);
 
         auto ll_struct_size = sizeof_type_in_bytes(ll_struct_type);
         if (ll_struct_size > ll_alloc_size) {
             ll_alloc_size = ll_struct_size;
+            ll_largest_struct_type = ll_struct_type;
         }
     }
 
-    auto ll_union_error_type = llvm::ArrayType::get(builder.getInt8Ty(), ll_alloc_size);
-    ir_scope->ll_error_union = gen_alloca(ll_union_error_type, "error.union");
+    auto ll_error_union = gen_unseen_alloca(ll_largest_struct_type, "error.union");
+    tryn->ll_error = ll_error_union;
+
+    ir_scope->cur_try = tryn;
 
     // Memsetting to zero in order to be able to check if the vtable has been set.
-    auto ll_alignment = get_alignment(builder.getInt8Ty());
+    auto ll_alignment = get_alignment(ll_largest_struct_type);
     builder.CreateMemSet(
-        ir_scope->ll_error_union,
+        ll_error_union,
         builder.getInt8(0),
-        ll_alloc_size,
+        sizeof_type_in_bytes(ll_largest_struct_type),
         ll_alignment
     );
+
+    if (tryn->catch_block) {
+        auto ll_error = gen_unseen_alloca(builder.getPtrTy(), "err");
+        auto ll_error_ptr = builder.CreateBitCast(ll_error_union, builder.getPtrTy());
+        builder.CreateStore(ll_error_ptr, ll_error);
+
+        if (tryn->caught_var) {
+            tryn->caught_var->ll_address = ll_error;
+        }
+    }
 
     return nullptr;
 }
@@ -2295,17 +2307,22 @@ llvm::Value* acorn::IRGenerator::gen_sizeof(SizeOf* sof) {
 }
 
 void acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
-    bool encountered_try = false;
     for (Node* stmt : *scope) {
         if (should_emit_debug_info) {
             di_emitter->set_last_statement(stmt);
         }
+        bool has_try = stmt->is_expression();
+        if (has_try) {
+            Expr* expr = static_cast<Expr*>(stmt);
+            has_try &= expr->tryn != nullptr;
+            if (has_try) {
+                ir_scope->cur_try = expr->tryn;
+                gen_try(expr->tryn);
+            }
+        }
         gen_node(stmt);
-        if (stmt->is(NodeKind::Try)) {
-            encountered_try = true;
-        } else if (encountered_try) {
-            ir_scope->ll_error_union = nullptr;
-            encountered_try = false;
+        if (has_try) {
+            ir_scope->cur_try = nullptr;
         }
     }
 }
@@ -2330,22 +2347,15 @@ llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
         di_emitter->emit_function_variable(var, builder);
     }
 
-    Expr* assignment = var->assignment;
-    bool is_try_assignment = assignment && assignment->is(NodeKind::Try);
-    if (is_try_assignment) {
-        auto tryn = static_cast<Try*>(assignment);
-        gen_try(tryn);
-        assignment = tryn->caught_expr;
-    }
 
-    if (assignment) {
-        gen_assignment(var->ll_address, var->type, assignment, var);
+    if (var->assignment) {
+        if (var->assignment->tryn) {
+            gen_try(var->assignment->tryn);
+        }
+        gen_assignment(var->ll_address, var->type, var->assignment, var);
+        ir_scope->cur_try = nullptr;
     } else if (var->should_default_initialize) {
         gen_default_value(var->ll_address, var->type);
-    }
-
-    if (is_try_assignment) {
-        ir_scope->ll_error_union = nullptr;
     }
 
     return nullptr;
@@ -2686,7 +2696,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     }
 
     if (passes_raised_error) {
-        ll_args[arg_offset++] = ir_scope->ll_error_union;
+        ll_args[arg_offset++] = ir_scope->cur_try->ll_error;
     }
 
     if (uses_default_param_values) {
@@ -2930,9 +2940,8 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         ll_ret->setName("call.ret");
     }
 
-    if (ir_scope->ll_error_union) {
-        auto ll_t = builder.CreateBitCast(ir_scope->ll_error_union, builder.getPtrTy());
-        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), ll_t);
+    if (ir_scope->cur_try) {
+        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), ir_scope->cur_try->ll_error);
 
         auto ll_then_bb = gen_bblock("try.then");
         auto ll_end_bb = gen_bblock("try.end");
@@ -2940,11 +2949,16 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         auto ll_has_err_cond = builder.CreateIsNotNull(ll_vtable_ptr);
         builder.CreateCondBr(ll_has_err_cond, ll_then_bb, ll_end_bb);
 
+        // TODO (maddie): this should not be generated here since more than one function may
+        // use the try expression meaning they should jump to a common block but as it is, it
+        // is generating multiple of the same block.
         insert_bblock_at_end(ll_then_bb);
         builder.SetInsertPoint(ll_then_bb);
-        {
+        if (ir_scope->cur_try->catch_block) {
+            gen_scope_with_dbg_scope(ir_scope->cur_try->catch_block);
+        } else {
             gen_function_decl(context.std_abort_function);
-            builder.CreateCall(context.std_abort_function->ll_func, ir_scope->ll_error_union);
+            builder.CreateCall(context.std_abort_function->ll_func, ir_scope->cur_try->ll_error);
         }
         gen_branch_if_not_term(ll_end_bb);
 

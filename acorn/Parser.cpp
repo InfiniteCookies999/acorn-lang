@@ -594,9 +594,9 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
                                             nullptr
                                           });
 
-            if (cur_token.is(',')) {
+            more_raised_errors = cur_token.is(',');
+            if (more_raised_errors) {
                 next_token();
-                more_raised_errors = cur_token.is(',');
             }
         } while (more_raised_errors);
     }
@@ -1301,14 +1301,31 @@ acorn::RaiseStmt* acorn::Parser::parse_raise() {
     return raise;
 }
 
-acorn::Try* acorn::Parser::parse_try() {
+acorn::Expr* acorn::Parser::parse_try() {
 
     Try* tryn = new_node<Try>(cur_token);
 
     next_token(); // Consuming 'try' token.
 
-    tryn->caught_expr = parse_expr();
-    return tryn;
+    bool catches_error = cur_token.is(Token::Identifier) && peek_token(0).is(':');
+    if (catches_error) {
+        auto error_name = Identifier::get(cur_token.text());
+
+        tryn->caught_var = new_declaration<Var, true>(0, error_name, cur_token);
+
+        next_token();
+        next_token();
+    }
+
+    Expr* caught_expr = parse_expr();
+    tryn->caught_expr = caught_expr;
+    caught_expr->tryn = tryn;
+
+    if (catches_error || cur_token.is('{')) {
+        tryn->catch_block = parse_scope("for catch block");
+    }
+
+    return caught_expr;
 }
 
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
@@ -1341,10 +1358,6 @@ void acorn::Parser::add_node_to_scope(ScopeStmt* scope, Node* node) {
             scope->push_back(var);
         }
         vlist->list.clear();
-    } else if (node->is(NodeKind::Try)) {
-        auto tryn = static_cast<Try*>(node);
-        scope->push_back(tryn);
-        scope->push_back(tryn->caught_expr);
     } else {
         scope->push_back(node);
     }
@@ -1699,10 +1712,7 @@ acorn::Expr* acorn::Parser::parse_assignment_and_expr(Expr* lhs) {
         next_token();
         bin_op->lhs = lhs;
         if (cur_token.is(Token::KwTry)) {
-            auto tryn = parse_try();
-            bin_op->rhs = tryn->caught_expr;
-            tryn->caught_expr = bin_op;
-            return tryn;
+            bin_op->rhs = parse_try();
         } else {
             bin_op->rhs = parse_expr();
         }

@@ -102,6 +102,7 @@ static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file
     // directory than the tests directory it makes sense that the executable
     // still ends up in the tests directory.
     compiler->set_output_directory(test_executable_directory);
+    //compiler->set_should_show_llvm_ir();
 
     compiler->set_dont_show_wrote_to_msg();
     if (!use_mock_lib) {
@@ -2097,6 +2098,42 @@ static void error_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("error raised!");
+    });
+    test("Raise error and catch it", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors8.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("foo called!caught error!test error msg");
+    });
+    test("Raise errors of different struct sizes", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors9.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("foo called!caught error!test error msg 1foo called!caught error!test error msg 2ABCD");
+    });
+    test("Raise error assign to variable", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors10.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error caught!");
+    });
+    test("Raise error assign to variable by assign op", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors11.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error caught!");
+    });
+    test("Raise error assign to struct variable (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors12.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error caught!");
+    });
+    test("Raise error assign to struct variable (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors13.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCDerror caught!");
     });
 }
 
