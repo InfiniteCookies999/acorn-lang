@@ -116,6 +116,7 @@ namespace acorn {
         SwitchStmt*        parse_switch();
         RaiseStmt*         parse_raise();
         Expr*              parse_try();
+        RecoverStmt*       parse_recover();
 
         ScopeStmt* parse_scope(const char* closing_for = nullptr);
         static void add_node_to_scope(ScopeStmt* scope, Node* node);

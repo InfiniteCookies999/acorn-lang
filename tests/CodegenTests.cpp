@@ -2135,6 +2135,18 @@ static void error_tests() {
 
         expect(result, std::identity()).to_be("ABCDerror caught!");
     });
+    test("Raise error assign to variable and recover", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors14.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@caught!#");
+    });
+    test("Raise error assign op to variable and recover", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors15.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("caught 1@caught 2^");
+    });
 }
 
 void test_codegen() {

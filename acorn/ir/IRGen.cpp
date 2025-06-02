@@ -122,6 +122,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_switch(static_cast<SwitchStmt*>(node));
     case NodeKind::RaiseStmt:
         return gen_raise(static_cast<RaiseStmt*>(node));
+    case NodeKind::RecoverStmt:
+        return gen_recover(static_cast<RecoverStmt*>(node));
     case NodeKind::StructInitializer:
         return gen_struct_initializer(static_cast<StructInitializer*>(node), nullptr);
     case NodeKind::This:
@@ -2183,7 +2185,7 @@ llvm::Value* acorn::IRGenerator::gen_raise(RaiseStmt* raise) {
     return nullptr;
 }
 
-llvm::Value* acorn::IRGenerator::gen_try(Try* tryn) {
+llvm::Value* acorn::IRGenerator::gen_try(Try* tryn, Try*& prev_try) {
 
     // Determine the minimum size needed to create a union like type.
     size_t ll_alloc_size = 0;
@@ -2198,10 +2200,14 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn) {
         }
     }
 
+    prev_try = cur_try;
+    cur_try = tryn;
+
     auto ll_error_union = gen_unseen_alloca(ll_largest_struct_type, "error.union");
     tryn->ll_error = ll_error_union;
 
-    ir_scope->cur_try = tryn;
+    tryn->ll_end_bb = gen_bblock("try.end");
+    tryn->ll_catch_bb = gen_bblock("try.catch");
 
     // Memsetting to zero in order to be able to check if the vtable has been set.
     auto ll_alignment = get_alignment(ll_largest_struct_type);
@@ -2221,6 +2227,65 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn) {
             tryn->caught_var->ll_address = ll_error;
         }
     }
+
+    return nullptr;
+}
+
+void acorn::IRGenerator::finish_try(Try* prev_try) {
+
+    // Branch the current block to the end of the try/catch.
+    gen_branch_if_not_term(cur_try->ll_end_bb);
+
+    // Generating the catch block.
+    insert_bblock_at_end(cur_try->ll_catch_bb);
+    builder.SetInsertPoint(cur_try->ll_catch_bb);
+    if (cur_try->catch_block) {
+        gen_scope_with_dbg_scope(cur_try->catch_block);
+    } else {
+        gen_function_decl(context.std_abort_function);
+        builder.CreateCall(context.std_abort_function->ll_func, cur_try->ll_error);
+    }
+
+    gen_branch_if_not_term(cur_try->ll_end_bb);
+
+    // Continue after the try/catch.
+    insert_bblock_at_end(cur_try->ll_end_bb);
+    builder.SetInsertPoint(cur_try->ll_end_bb);
+
+    cur_try = prev_try;
+}
+
+llvm::Value* acorn::IRGenerator::gen_recover(RecoverStmt* recover) {
+
+    if (cur_try->catch_recoveree->is(NodeKind::Var)) {
+        Var* var = static_cast<Var*>(cur_try->catch_recoveree);
+        gen_assignment(var->ll_address, var->type, recover->value, var, true);
+    } else {
+        BinOp* bin_op = static_cast<BinOp*>(cur_try->catch_recoveree);
+        Expr* lhs = bin_op->lhs;
+
+        switch (bin_op->op) {
+        case '=':
+            gen_assignment_op(lhs, recover->value);
+            break;
+        case Token::AddEq:   return gen_apply_and_assign_op('+', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::SubEq:   return gen_apply_and_assign_op('-', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::MulEq:   return gen_apply_and_assign_op('*', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::DivEq:   return gen_apply_and_assign_op('/', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::ModEq:   return gen_apply_and_assign_op('%', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::AndEq:   return gen_apply_and_assign_op('&', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::OrEq:    return gen_apply_and_assign_op('|', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::CaretEq: return gen_apply_and_assign_op('^', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::TildeEq: return gen_apply_and_assign_op('~', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::LtLtEq:  return gen_apply_and_assign_op(Token::LtLt, bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::GtGtEq:  return gen_apply_and_assign_op(Token::GtGt, bin_op->loc, bin_op->type, lhs, recover->value);
+        default:
+            acorn_fatal("unreachable");
+            break;
+        }
+    }
+
+    builder.CreateBr(cur_try->ll_end_bb);
 
     return nullptr;
 }
@@ -2312,17 +2377,17 @@ void acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
             di_emitter->set_last_statement(stmt);
         }
         bool has_try = stmt->is_expression();
+        Try* prev_try = nullptr;
         if (has_try) {
             Expr* expr = static_cast<Expr*>(stmt);
             has_try &= expr->tryn != nullptr;
             if (has_try) {
-                ir_scope->cur_try = expr->tryn;
-                gen_try(expr->tryn);
+                gen_try(expr->tryn, prev_try);
             }
         }
         gen_node(stmt);
         if (has_try) {
-            ir_scope->cur_try = nullptr;
+            finish_try(prev_try);
         }
     }
 }
@@ -2349,11 +2414,14 @@ llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
 
 
     if (var->assignment) {
+        Try* prev_try = nullptr;
         if (var->assignment->tryn) {
-            gen_try(var->assignment->tryn);
+            gen_try(var->assignment->tryn, prev_try);
         }
         gen_assignment(var->ll_address, var->type, var->assignment, var);
-        ir_scope->cur_try = nullptr;
+        if (var->assignment->tryn) {
+            finish_try(prev_try);
+        }
     } else if (var->should_default_initialize) {
         gen_default_value(var->ll_address, var->type);
     }
@@ -2696,7 +2764,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     }
 
     if (passes_raised_error) {
-        ll_args[arg_offset++] = ir_scope->cur_try->ll_error;
+        ll_args[arg_offset++] = cur_try->ll_error;
     }
 
     if (uses_default_param_values) {
@@ -2940,27 +3008,14 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         ll_ret->setName("call.ret");
     }
 
-    if (ir_scope->cur_try) {
-        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), ir_scope->cur_try->ll_error);
+    if (cur_try && passes_raised_error) {
+        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), cur_try->ll_error);
 
-        auto ll_then_bb = gen_bblock("try.then");
-        auto ll_end_bb = gen_bblock("try.end");
+        auto ll_then_bb = cur_try->ll_catch_bb;
+        auto ll_end_bb = gen_bblock("try.else");
 
         auto ll_has_err_cond = builder.CreateIsNotNull(ll_vtable_ptr);
         builder.CreateCondBr(ll_has_err_cond, ll_then_bb, ll_end_bb);
-
-        // TODO (maddie): this should not be generated here since more than one function may
-        // use the try expression meaning they should jump to a common block but as it is, it
-        // is generating multiple of the same block.
-        insert_bblock_at_end(ll_then_bb);
-        builder.SetInsertPoint(ll_then_bb);
-        if (ir_scope->cur_try->catch_block) {
-            gen_scope_with_dbg_scope(ir_scope->cur_try->catch_block);
-        } else {
-            gen_function_decl(context.std_abort_function);
-            builder.CreateCall(context.std_abort_function->ll_func, ir_scope->cur_try->ll_error);
-        }
-        gen_branch_if_not_term(ll_end_bb);
 
         insert_bblock_at_end(ll_end_bb);
         builder.SetInsertPoint(ll_end_bb);
@@ -3728,10 +3783,6 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
             auto initializer = static_cast<StructInitializer*>(value);
             gen_struct_initializer(initializer, ll_address, lvalue);
         }
-    } else if (value->is(NodeKind::Try)) {
-        auto tryn = static_cast<Try*>(value);
-
-        gen_assignment(ll_address, to_type, tryn->caught_expr, lvalue, is_assign_op, try_move);
     } else if (value->is(NodeKind::Ternary)) {
         auto ll_value = gen_ternary(static_cast<Ternary*>(value), ll_address, lvalue, is_assign_op, try_move);
         if (!value->type->is_aggregate()) { // If it is an aggregate it calls gen_assignment for the passed ll_address.

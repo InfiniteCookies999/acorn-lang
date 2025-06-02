@@ -210,6 +210,11 @@ acorn::Node* acorn::Parser::parse_statement() {
         expect(';');
         return stmt;
     }
+    case Token::KwRecover: {
+        auto stmt = parse_recover();
+        expect(';');
+        return stmt;
+    }
     case Token::KwSwitch: return parse_switch();
     case Token::Identifier: {
         if (cur_struct) {
@@ -648,6 +653,7 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
             var->should_default_initialize = false;
         } else if (cur_token.is(Token::KwTry)) {
             var->assignment = parse_try();
+            var->assignment->tryn->catch_recoveree = var;
         } else {
             var->assignment = parse_expr();
         }
@@ -1328,6 +1334,13 @@ acorn::Expr* acorn::Parser::parse_try() {
     return caught_expr;
 }
 
+acorn::RecoverStmt* acorn::Parser::parse_recover() {
+    auto recover = new_node<RecoverStmt>(cur_token);
+    next_token();
+    recover->value = parse_expr();
+    return recover;
+}
+
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
 
     ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
@@ -1713,6 +1726,7 @@ acorn::Expr* acorn::Parser::parse_assignment_and_expr(Expr* lhs) {
         bin_op->lhs = lhs;
         if (cur_token.is(Token::KwTry)) {
             bin_op->rhs = parse_try();
+            bin_op->rhs->tryn->catch_recoveree = bin_op;
         } else {
             bin_op->rhs = parse_expr();
         }
@@ -3144,6 +3158,7 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
         case Token::KwSwitch:
         case Token::KwRaise:
         case Token::KwCTAborts:
+        case Token::Token::KwRecover:
             return;
         case Token::KwElIf: {
             // Replace current token with if/#if statement so that it thinks

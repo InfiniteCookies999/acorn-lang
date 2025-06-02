@@ -81,7 +81,9 @@ namespace acorn {
         bool should_request_gen_queue;
 
         // How many nested loops currently within.
-        int loop_depth   = 0;
+        int loop_depth = 0;
+
+        Try* catch_block_try = nullptr;
 
         // A structure to keep track of current scope information
         // to help report errors.
@@ -97,6 +99,9 @@ namespace acorn {
             bool all_paths_branch = false;
             // True when encountering a statement that
             // branches.
+            //
+            // TODO (maddie): is this needed now that there
+            // is `all_paths_branch`?
             bool found_terminal = false;
 
             Try* cur_try = nullptr;
@@ -141,6 +146,7 @@ namespace acorn {
         void check_switch(SwitchStmt* switchn);
         void check_raise(RaiseStmt* raise);
         void check_try(Try* tryn, bool assigns);
+        void check_recover(RecoverStmt* recover);
         void check_struct_initializer(StructInitializer* initializer);
         void check_this(This* thisn);
         void check_sizeof(SizeOf* sof);

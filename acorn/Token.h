@@ -62,6 +62,7 @@ namespace acorn {
             KwRaise,
             KwRaises,
             KwTry,
+            KwRecover,
 
             KwNull,
             KwTrue,

@@ -10,6 +10,7 @@ namespace llvm {
     class Function;
     class Value;
     class Type;
+    class BasicBlock;
 
     namespace Intrinsic {
         typedef unsigned ID;
@@ -62,6 +63,7 @@ namespace acorn {
         BreakStmt,
         SwitchStmt,
         RaiseStmt,
+        RecoverStmt,
 
         ExprStart,
         InvalidExpr,
@@ -517,6 +519,13 @@ namespace acorn {
         }
     };
 
+    struct RecoverStmt : Node {
+        RecoverStmt() : Node(NodeKind::RecoverStmt) {
+        }
+
+        Expr* value;
+    };
+
     struct SwitchCase {
         Expr*      cond;
         ScopeStmt* scope;
@@ -866,8 +875,11 @@ namespace acorn {
         Var*                    caught_var = nullptr;
         ScopeStmt*              catch_block = nullptr;
         Expr*                   caught_expr;
+        Node*                   catch_recoveree = nullptr;
 
         llvm::Value* ll_error;
+        llvm::BasicBlock* ll_catch_bb;
+        llvm::BasicBlock* ll_end_bb;
     };
 }
 

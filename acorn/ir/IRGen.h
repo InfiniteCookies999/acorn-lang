@@ -90,10 +90,9 @@ namespace acorn {
             llvm::SmallVector<DestructorObject> objects_needing_destroyed;
             // Is the current scope the scope of a loop.
             bool is_loop_scope = false;
-            Try* cur_try = nullptr;
-            //llvm::Value* ll_error_union = nullptr;
-            //llvm::Value* ll_caught_var  = nullptr;
         }* ir_scope = nullptr;
+
+        Try* cur_try = nullptr;
 
         // Objects which have destructors and need to be destroyed
         // and are encountered before any returns or branching is
@@ -157,7 +156,9 @@ namespace acorn {
         llvm::Value* gen_switch_non_foldable(SwitchStmt* switchn);
         llvm::Value* gen_switch_foldable(SwitchStmt* switchn);
         llvm::Value* gen_raise(RaiseStmt* raise);
-        llvm::Value* gen_try(Try* tryn);
+        llvm::Value* gen_try(Try* tryn, Try*& prev_try);
+        void finish_try(Try* prev_try);
+        llvm::Value* gen_recover(RecoverStmt* recover);
         llvm::Value* gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr, Node* lvalue = nullptr);
         llvm::Value* gen_this(This* thisn);
         llvm::Value* gen_sizeof(SizeOf* sof);
@@ -168,7 +169,10 @@ namespace acorn {
         llvm::Value* gen_number(Number* number);
         llvm::Value* gen_ident_reference(IdentRef* ref);
         llvm::Value* gen_binary_op(BinOp* bin_op);
-        llvm::Value* gen_numeric_binary_op(tokkind op, BinOp* bin_op,
+        llvm::Value* gen_assignment_op(Expr* lhs, Expr* rhs);
+        llvm::Value* gen_apply_and_assign_op(tokkind op, SourceLoc loc, Type* rtype, Expr* lhs, Expr* rhs);
+        llvm::Value* gen_numeric_binary_op(tokkind op, Type* rtype,
+                                           Expr* lhs, Expr* rhs,
                                            llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_ternary(Ternary* ternary,

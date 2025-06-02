@@ -140,6 +140,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "raise"        , Token::KwRaise       },
           { "raises"       , Token::KwRaises      },
           { "try"          , Token::KwTry         },
+          { "recover"      , Token::KwRecover     },
 
           { "native"       , Token::KwNative      },
           { "dllimport"    , Token::KwDllimport   },

@@ -1102,6 +1102,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_switch(static_cast<SwitchStmt*>(node));
     case NodeKind::RaiseStmt:
         return check_raise(static_cast<RaiseStmt*>(node));
+    case NodeKind::RecoverStmt:
+        return check_recover(static_cast<RecoverStmt*>(node));
     case NodeKind::StructInitializer:
         return check_struct_initializer(static_cast<StructInitializer*>(node));
     case NodeKind::This:
@@ -2710,6 +2712,8 @@ void acorn::Sema::check_try(Try* tryn, bool assigns) {
 
     if (tryn->catch_block) {
         SemScope sem_scope = push_scope();
+        Try* prev_catch_block_try = catch_block_try;
+        catch_block_try = tryn;
 
         if (tryn->caught_var) {
             add_variable_to_local_scope(tryn->caught_var);
@@ -2727,10 +2731,31 @@ void acorn::Sema::check_try(Try* tryn, bool assigns) {
         }
 
         pop_scope();
+        catch_block_try = prev_catch_block_try;
     }
 
     tryn->type = tryn->caught_expr->type;
 
+}
+
+void acorn::Sema::check_recover(RecoverStmt* recover) {
+
+    check_and_verify_type(recover->value);
+
+    if (!catch_block_try) {
+        error(recover, "Can only use 'recover' in catch blocks")
+            .end_error(ErrCode::SemaRecoverStmtNotInCatchBlock);
+        return;
+    }
+
+    if (!catch_block_try->catch_recoveree) {
+        error(recover, "The try expression does not assign in order to recover")
+            .end_error(ErrCode::SemaRecoverStmtNoRecoveree);
+        return;
+    }
+
+    cur_scope->all_paths_branch = true;
+    cur_scope->found_terminal = true;
 }
 
 void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
@@ -5670,6 +5695,7 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
     case NodeKind::ContinueStmt:
     case NodeKind::SwitchStmt:
     case NodeKind::RaiseStmt:
+    case NodeKind::RecoverStmt:
         return false;
     case NodeKind::BinOp: {
         auto bin_op = static_cast<const BinOp*>(stmt);

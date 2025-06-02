@@ -210,6 +210,8 @@ X(SemaFuncCannotRaiseAbortsError            , 20160)
 X(SemaCannotTryWhenStandAlone               , 20161)
 X(SemaCannotRaiseWhenStandAlone             , 20162)
 X(SemaTryCatchAssignValueNotAssigned        , 20163)
+X(SemaRecoverStmtNotInCatchBlock            , 20164)
+X(SemaRecoverStmtNoRecoveree                , 20165)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)
