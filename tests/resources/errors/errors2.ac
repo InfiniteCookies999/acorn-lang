@@ -1,0 +1,19 @@
+import std;
+import std.Error;
+
+struct TestError :: *Error {
+    const char* get_name() const {
+        return "TestError";
+    }
+    const char* get_message() const {
+        return "error raised!";
+    }
+}
+
+void foo() raises TestError {
+    raise TestError{};
+}
+
+void main() {
+    try foo();
+}

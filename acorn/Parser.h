@@ -41,8 +41,9 @@ namespace acorn {
 
         Logger& logger;
 
-        Func*   cur_func   = nullptr;
-        Struct* cur_struct = nullptr;
+        Func*      cur_func   = nullptr;
+        Struct*    cur_struct = nullptr;
+        Interface* cur_interface = nullptr;
 
         Lexer lex;
         Token cur_token;
@@ -97,8 +98,10 @@ namespace acorn {
         Struct* parse_struct();
         Struct* parse_struct(uint32_t modifiers, Identifier name);
         void add_node_to_struct(Struct* structn, Node* node);
+        void add_node_to_interface(Interface* interfacen, Node* node);
 
         Enum* parse_enum(uint32_t modifiers);
+        Interface* parse_interface(uint32_t modifiers);
 
         uint32_t parse_modifiers();
 
@@ -111,6 +114,9 @@ namespace acorn {
         IteratorLoopStmt*  parse_iterator_loop(Token loop_token, Var* var);
         LoopControlStmt*   parse_loop_control();
         SwitchStmt*        parse_switch();
+        RaiseStmt*         parse_raise();
+        Expr*              parse_try();
+        RecoverStmt*       parse_recover();
 
         ScopeStmt* parse_scope(const char* closing_for = nullptr);
         static void add_node_to_scope(ScopeStmt* scope, Node* node);

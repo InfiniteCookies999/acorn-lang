@@ -26,10 +26,6 @@ static const char* StdLibEnvironmentVariable = "acorn_std_lib";
 
 llvm::TargetMachine* acorn::Compiler::ll_target_machine = nullptr;
 
-static const char* get_std_lib_path() {
-    return std::getenv(StdLibEnvironmentVariable);
-}
-
 acorn::Compiler::~Compiler() {
     delete ll_module;
 }
@@ -331,6 +327,11 @@ void acorn::Compiler::sema_and_irgen() {
             if (!enumn->has_been_checked) {
                 sema.check_enum(enumn);
             }
+        } else if (decl->is(NodeKind::Interface)) {
+            auto interfacen = static_cast<Interface*>(decl);
+            if (!interfacen->has_been_checked) {
+                sema.check_interface(interfacen);
+            }
         } else {
             acorn_fatal("Unreachable: Missing check case");
         }
@@ -595,11 +596,10 @@ void acorn::Compiler::parse_files(SourceVector& sources) {
 
     // Trying to find the standard library.
     if (!context.should_stand_alone()) {
-        if (const char* lib_path = get_std_lib_path()) {
-            std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-            auto wpath = converter.from_bytes(lib_path);
+        auto lib_path = get_std_lib_path();
+        if (!lib_path.empty()) {
             sources.push_back(Source{
-                              .path     = std::move(wpath),
+                              .path     = std::move(lib_path),
                               .mod_name = "std"
                               });
         } else {
@@ -715,6 +715,9 @@ void acorn::Compiler::find_std_lib_declarations() {
         } else if constexpr (std::is_same_v<Enum, T>) {
             decl_kind = NodeKind::Enum;
             decl_type_str = "enum";
+        } else if constexpr (std::is_same_v<Interface, T>) {
+            decl_kind = NodeKind::Interface;
+            decl_type_str = "interface";
         } else {
             acorn_fatal("unknown composite type");
         }
@@ -746,6 +749,47 @@ void acorn::Compiler::find_std_lib_declarations() {
         struct_import->set_imported_composite(structn);
     }
 
+    if (Interface* interfacen = find_composite_of_kind((Interface*)0, modl, context.error_interface_identifier)) {
+        context.std_error_interface = interfacen;
+        auto& funcs = interfacen->functions;
+        for (Func* func : funcs) {
+            if (func->name == context.get_name_function_identifier) {
+                context.std_error_get_name_func = func;
+                break;
+            }
+        }
+    }
+
+    bool found_abort_func = false;
+    if (FuncList* abort_funcs = modl->find_functions(Identifier::get("abort"))) {
+        auto error_interface_type = context.std_error_interface->interface_type;
+
+        for (Func* func : *abort_funcs) {
+            if (func->params.size() != 1) continue;
+            Var* param = func->params[0];
+
+            Type* parsed_type = param->parsed_type;
+            if (!parsed_type->is_pointer()) continue;
+
+            auto ptr_type = static_cast<PointerType*>(parsed_type);
+            Type* elm_type = ptr_type->get_elm_type();
+
+            if (elm_type->get_kind() != TypeKind::UnresolvedComposite) continue;
+
+            auto composite_type = static_cast<UnresolvedCompositeType*>(elm_type);
+            if (composite_type->get_composite_name() == context.error_interface_identifier) {
+                found_abort_func = true;
+                context.std_abort_function = func;
+                break;
+            }
+        }
+    }
+
+    if (!found_abort_func) {
+        Logger::global_error(context, "Failed to find standard library 'abort' function")
+            .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+    }
+
     if (Namespace* nspace = modl->find_namespace(context.reflect_identifier)) {
         if (Enum* enumn = find_composite_of_kind((Enum*)0, nspace, context.type_id_enum_identifier)) {
             context.std_type_id_enum = enumn;
@@ -767,5 +811,20 @@ void acorn::Compiler::find_std_lib_declarations() {
             context.std_any_struct = structn;
             context.std_any_struct_type = structn->struct_type;
         }
+    } else {
+        Logger::global_error(context, "Failed to find standard library namespace 'reflect'")
+            .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
     }
+}
+
+std::wstring acorn::Compiler::get_std_lib_path() const {
+    if (std_lib_path.empty()) {
+        auto lib_path = std::getenv(StdLibEnvironmentVariable);
+        if (!lib_path) {
+            return L"";
+        }
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+        return converter.from_bytes(lib_path);
+    }
+    return std_lib_path;
 }

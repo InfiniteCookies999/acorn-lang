@@ -42,6 +42,7 @@ namespace acorn {
         void check_variable(Var* var);
         void check_struct(Struct* structn);
         void check_enum(Enum* enumn);
+        void check_interface(Interface* interfacen);
 
     private:
         Context&    context;
@@ -51,10 +52,13 @@ namespace acorn {
         SourceFile* file;
         TypeTable&  type_table;
 
-        Func*   cur_func       = nullptr;
-        Var*    cur_global_var = nullptr;
-        Struct* cur_struct     = nullptr;
-        Enum*   cur_enum       = nullptr;
+        Func*      cur_func       = nullptr;
+        Var*       cur_global_var = nullptr;
+        Struct*    cur_struct     = nullptr;
+        Enum*      cur_enum       = nullptr;
+        Interface* cur_interface  = nullptr;
+
+        FuncList interface_functions;
 
         // Limits to calculate comparison scores for which function to call.
         //
@@ -77,7 +81,9 @@ namespace acorn {
         bool should_request_gen_queue;
 
         // How many nested loops currently within.
-        int loop_depth   = 0;
+        int loop_depth = 0;
+
+        Try* catch_block_try = nullptr;
 
         // A structure to keep track of current scope information
         // to help report errors.
@@ -87,9 +93,18 @@ namespace acorn {
             // If true then on every possible branch
             // path there exists a return statement.
             bool all_paths_return = false;
+            // If true then on every possible branch
+            // path there exists a branch statement
+            // such as 'break', 'return', ect...
+            bool all_paths_branch = false;
             // True when encountering a statement that
             // branches.
+            //
+            // TODO (maddie): is this needed now that there
+            // is `all_paths_branch`?
             bool found_terminal = false;
+
+            Try* cur_try = nullptr;
 
             llvm::SmallVector<Var*> variables;
 
@@ -99,27 +114,39 @@ namespace acorn {
 
         } * cur_scope = nullptr;
 
+        static bool do_functions_match(const Func* func1, const Func* func2);
+
+        void check_struct_interface_extension(Struct* structn, Interface* interfacen, bool is_dynamic);
+        bool do_interface_functions_matches(Func* interface_func, Func* func);
+        void display_interface_func_mismatch_info(Func* interface_func,
+                                                  Func* func,
+                                                  bool indent,
+                                                  bool should_show_invidual_underlines);
+
         bool check_function_decl(Func* func);
 
         void check_node(Node* node);
 
-        Type* fixup_type(Type* type);
+        Type* fixup_type(Type* type, bool is_ptr_elm_type = false);
         Type* fixup_unresolved_bracket_type(Type* type);
         Type* fixup_assign_det_arr_type(Type* type, Var* var);
-        Type* fixup_unresolved_composite_type(Type* type);
+        Type* fixup_unresolved_composite_type(Type* type, bool is_ptr_elm_type);
         Type* fixup_function_type(Type* type);
 
         // Statement checking
         //--------------------------------------
 
         void check_return(ReturnStmt* ret);
-        void check_if(IfStmt* ifs, bool& all_paths_return);
+        void check_if(IfStmt* ifs, bool& all_paths_return, bool& all_paths_branch);
         void check_predicate_loop(PredicateLoopStmt* loop);
         void check_range_loop(RangeLoopStmt* loop);
         void check_iterator_loop(IteratorLoopStmt* loop);
         void check_loop_control(LoopControlStmt* loop_control);
         void check_loop_scope(ScopeStmt* scope, SemScope* sem_scope);
         void check_switch(SwitchStmt* switchn);
+        void check_raise(RaiseStmt* raise);
+        void check_try(Try* tryn, bool assigns);
+        void check_recover(RecoverStmt* recover);
         void check_struct_initializer(StructInitializer* initializer);
         void check_this(This* thisn);
         void check_sizeof(SizeOf* sof);
@@ -215,6 +242,7 @@ namespace acorn {
         void ensure_global_variable_checked(SourceLoc error_loc, Var* var);
         bool ensure_struct_checked(SourceLoc error_loc, Struct* structn);
         void ensure_enum_checked(SourceLoc error_loc, Enum* enumn);
+        void ensure_interface_checked(SourceLoc error_loc, Interface* interfacen);
 
         // Utility functions
         //--------------------------------------

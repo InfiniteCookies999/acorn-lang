@@ -1,0 +1,13 @@
+#file(access=public)
+
+interface Error {
+
+    const char* get_name() const;
+
+    const char* get_message() const;
+
+}
+
+void abort(Error* error) {
+    print(error.get_message());
+}

@@ -228,6 +228,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Enum:      return str(static_cast<const EnumType*>(this)->to_string());
     case TypeKind::AssignDeterminedArray:
                               return str2(static_cast<const AssignDeterminedArrayType*>(this)->to_string());
+    case TypeKind::Interface: return str(static_cast<const InterfaceType*>(this)->to_string());
     default:
         acorn_fatal_fmt("Type::to_string() missing to_string case. Kind=%s", static_cast<int>(kind));
         return "";
@@ -443,4 +444,20 @@ acorn::EnumType* acorn::EnumType::create(PageAllocator& allocator,
 
 std::string acorn::EnumType::to_string() const {
     return enumn->name.to_string().str();
+}
+
+acorn::InterfaceType* acorn::InterfaceType::create(PageAllocator& allocator,
+                                                   Interface* interfacen,
+                                                   bool is_const) {
+    auto intr_type = allocator.alloc_type<InterfaceType>();
+    new (intr_type) InterfaceType(is_const, interfacen);
+    intr_type->contains_const = is_const;
+    if (!is_const) {
+        intr_type->non_const_version = intr_type;
+    }
+    return intr_type;
+}
+
+std::string acorn::InterfaceType::to_string() const {
+    return interfacen->name.to_string().str();
 }

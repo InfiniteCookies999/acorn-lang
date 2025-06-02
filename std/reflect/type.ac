@@ -34,13 +34,14 @@ enum TypeId {
     Array,
     Slice,
     EmptyArray,
-    UnresolvedArrayType, // Length could not be resolved during parsing.
+    UnresolvedBracket, // Length could not be resolved during parsing.
     Null,
     AssignDeterminedArray,
     Function,
-    UnresolvedCompositeType,
+    UnresolvedComposite,
     Struct,
     Enum,
+    Interface,
     EnumContainer,
     Range,
     Auto,

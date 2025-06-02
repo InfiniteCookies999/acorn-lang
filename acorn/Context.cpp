@@ -89,6 +89,8 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       any_struct_identifier(Identifier::get("Any")),
       enum_type_info_struct_identifier(Identifier::get("EnumTypeInfo")),
       value_identifier(Identifier::get("value")),
+      error_interface_identifier(Identifier::get("Error")),
+      get_name_function_identifier(Identifier::get("get_name")),
 
       reflect_identifiers({
           { "#type_info", ReflectKind::TypeInfo }
@@ -129,11 +131,16 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "case"         , Token::KwCase        },
           { "static"       , Token::KwStatic      },
           { "struct"       , Token::KwStruct      },
+          { "interface"    , Token::KwInterface   },
           { "enum"         , Token::KwEnum        },
           { "this"         , Token::KwThis        },
           { "sizeof"       , Token::KwSizeof      },
           { "copyobj"      , Token::KwCopyobj     },
           { "moveobj"      , Token::KwMoveobj     },
+          { "raise"        , Token::KwRaise       },
+          { "raises"       , Token::KwRaises      },
+          { "try"          , Token::KwTry         },
+          { "recover"      , Token::KwRecover     },
 
           { "native"       , Token::KwNative      },
           { "dllimport"    , Token::KwDllimport   },
@@ -149,6 +156,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "#endif"       , Token::KwCTEndIf     },
           { "#file"        , Token::KwCTFile      },
           { "#type_info"   , Token::KwCTReflect   },
+          { "#aborts"      , Token::KwCTAborts    },
       }),
 
       ll_intrinsics_table({

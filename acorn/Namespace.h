@@ -11,7 +11,8 @@ namespace acorn {
 
     enum class ScopeLocation {
         Global,
-        Struct
+        Struct,
+        Interface
     };
 
     class Namespace {
@@ -35,6 +36,10 @@ namespace acorn {
 
         const llvm::DenseMap<Identifier, FuncList>& get_functions() const {
             return functions;
+        }
+
+        const FuncList& get_functions(Identifier name) const {
+            return functions.find(name)->second;
         }
 
         const llvm::DenseMap<Identifier, Decl*>& get_composites() const {

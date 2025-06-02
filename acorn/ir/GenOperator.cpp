@@ -6,36 +6,23 @@
 #include "Context.h"
 
 llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
-    Expr* lhs = bin_op->lhs, *rhs = bin_op->rhs;
-
-    auto apply_op_eq = [this, bin_op, lhs, rhs](tokkind op) finline {
-        auto ll_address = gen_node(lhs);
-        auto ll_value = gen_numeric_binary_op(op,
-                                              bin_op,
-                                              builder.CreateLoad(gen_type(lhs->type), ll_address),
-                                              gen_rvalue(rhs));
-        builder.CreateStore(ll_value, ll_address);
-        emit_dbg(di_emitter->emit_location(builder, bin_op->loc));
-        return nullptr;
-    };
+    Expr* lhs = bin_op->lhs;
+    Expr *rhs = bin_op->rhs;
 
     switch (bin_op->op) {
-    case '=': {
-        auto ll_address = gen_node(lhs);
-        gen_assignment(ll_address, lhs->type, rhs, lhs, true);
-        return ll_address;
-    }
-    case Token::AddEq:   return apply_op_eq('+');
-    case Token::SubEq:   return apply_op_eq('-');
-    case Token::MulEq:   return apply_op_eq('*');
-    case Token::DivEq:   return apply_op_eq('/');
-    case Token::ModEq:   return apply_op_eq('%');
-    case Token::AndEq:   return apply_op_eq('&');
-    case Token::OrEq:    return apply_op_eq('|');
-    case Token::CaretEq: return apply_op_eq('^');
-    case Token::TildeEq: return apply_op_eq('~');
-    case Token::LtLtEq:  return apply_op_eq(Token::LtLt);
-    case Token::GtGtEq:  return apply_op_eq(Token::GtGt);
+    case '=':
+        return gen_assignment_op(bin_op->lhs, bin_op->rhs);
+    case Token::AddEq:   return gen_apply_and_assign_op('+', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::SubEq:   return gen_apply_and_assign_op('-', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::MulEq:   return gen_apply_and_assign_op('*', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::DivEq:   return gen_apply_and_assign_op('/', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::ModEq:   return gen_apply_and_assign_op('%', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::AndEq:   return gen_apply_and_assign_op('&', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::OrEq:    return gen_apply_and_assign_op('|', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::CaretEq: return gen_apply_and_assign_op('^', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::TildeEq: return gen_apply_and_assign_op('~', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::LtLtEq:  return gen_apply_and_assign_op(Token::LtLt, bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::GtGtEq:  return gen_apply_and_assign_op(Token::GtGt, bin_op->loc, bin_op->type, lhs, rhs);
     case Token::AndAnd: {
         if (bin_op->is_foldable) {
             auto ll_lhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->lhs));
@@ -132,9 +119,41 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
         return ll_result;
     }
     default:
-        return gen_numeric_binary_op(bin_op->op, bin_op,
+        return gen_numeric_binary_op(bin_op->op, bin_op->type,
+                                     lhs, rhs,
                                      gen_rvalue(lhs), gen_rvalue(rhs));
     }
+}
+
+llvm::Value* acorn::IRGenerator::gen_assignment_op(Expr* lhs, Expr* rhs) {
+    Try* prev_try = nullptr;
+    if (rhs->tryn) {
+        gen_try(rhs->tryn, prev_try);
+    }
+    auto ll_address = gen_node(lhs);
+    gen_assignment(ll_address, lhs->type, rhs, lhs, true);
+    if (rhs->tryn) {
+        finish_try(prev_try);
+    }
+    return ll_address;
+}
+
+llvm::Value* acorn::IRGenerator::gen_apply_and_assign_op(tokkind op, SourceLoc loc, Type* rtype, Expr* lhs, Expr* rhs) {
+    Try* prev_try = nullptr;
+    if (rhs->tryn) {
+        gen_try(rhs->tryn, prev_try);
+    }
+    auto ll_address = gen_node(lhs);
+    auto ll_value = gen_numeric_binary_op(op, rtype,
+                                          lhs, rhs,
+                                          builder.CreateLoad(gen_type(lhs->type), ll_address),
+                                          gen_rvalue(rhs));
+    builder.CreateStore(ll_value, ll_address);
+    emit_dbg(di_emitter->emit_location(builder, loc));
+    if (rhs->tryn) {
+        finish_try(prev_try);
+    }
+    return nullptr;
 }
 
 // We use CreateInBoundsGEP because accessing memory beyond the bounds of
@@ -146,7 +165,8 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 // defined behavior for arithmetic. NSW does not guarantee defined behavior
 // but it does provide better performance which is the trade-off.
 //
-llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op,
+llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, Type* rtype,
+                                                       Expr* lhs, Expr* rhs,
                                                        llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
 
     auto is_ptr_or_arr = [](Type* type) finline {
@@ -157,12 +177,12 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
     // Arithmetic Operators
     // -------------------------------------------
     case '+': {
-        if (bin_op->type->is_pointer()) {
+        if (rtype->is_pointer()) {
             // Pointer arithmetic
-            auto lhs_mem = is_ptr_or_arr(bin_op->lhs->type);
+            auto lhs_mem = is_ptr_or_arr(lhs->type);
             auto ll_mem = lhs_mem ? ll_lhs : ll_rhs;
             auto ll_off = lhs_mem ? ll_rhs : ll_lhs;
-            auto mem_type = lhs_mem ? bin_op->lhs->type : bin_op->rhs->type;
+            auto mem_type = lhs_mem ? lhs->type : rhs->type;
 
             ll_off = builder.CreateIntCast(ll_off, gen_ptrsize_int_type(), true);
             if (mem_type->is_pointer()) {
@@ -175,25 +195,25 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
 
             return builder.CreateInBoundsGEP(gen_type(mem_type), ll_mem, { gen_isize(0), ll_off }, "arr.add");
         } else {
-            if (bin_op->type->is_integer())
+            if (rtype->is_integer())
                 return builder.CreateAdd(ll_lhs, ll_rhs, "add");
             return builder.CreateFAdd(ll_lhs, ll_rhs, "add");
         }
     }
     case '-': {
-        if (bin_op->rhs->type->is_pointer()) {
+        if (rhs->type->is_pointer()) {
             // Subtracting a pointer from a pointer
-            auto ptr_type = static_cast<PointerType*>(bin_op->rhs->type);
+            auto ptr_type = static_cast<PointerType*>(rhs->type);
             auto ll_elm_type = gen_type(ptr_type->get_elm_type());
             return builder.CreatePtrDiff(ll_elm_type, ll_lhs, ll_rhs, "ptrs.sub");
-        } else if (bin_op->type->is_pointer()) {
+        } else if (rtype->is_pointer()) {
             // Subtracting an integer from a pointer.
 
-            auto lhs_mem = is_ptr_or_arr(bin_op->lhs->type);
+            auto lhs_mem = is_ptr_or_arr(lhs->type);
             auto ll_mem = lhs_mem ? ll_lhs : ll_rhs;
             auto ll_off = lhs_mem ? ll_rhs : ll_lhs;
-            auto mem_type = lhs_mem ? bin_op->lhs->type : bin_op->rhs->type;
-            auto val_type = lhs_mem ? bin_op->rhs->type : bin_op->lhs->type;
+            auto mem_type = lhs_mem ? lhs->type : rhs->type;
+            auto val_type = lhs_mem ? rhs->type : lhs->type;
 
             auto ll_zero = gen_zero(val_type);
             auto ll_neg  = builder.CreateSub(ll_zero, ll_off, "neg");
@@ -206,23 +226,23 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
 
             return builder.CreateInBoundsGEP(gen_type(mem_type), ll_mem, { gen_isize(0), ll_neg }, "arr.sub");
         } else {
-            if (bin_op->type->is_integer())
+            if (rtype->is_integer())
                 return builder.CreateSub(ll_lhs, ll_rhs, "sub");
             return builder.CreateFSub(ll_lhs, ll_rhs, "sub");
         }
     }
     case '*':
-        if (bin_op->type->is_integer())
+        if (rtype->is_integer())
             return builder.CreateMul(ll_lhs, ll_rhs, "mul");
         else return builder.CreateFMul(ll_lhs, ll_rhs, "mul");
     case '/':
-        if (bin_op->type->is_integer())
-            if (bin_op->type->is_signed())
+        if (rtype->is_integer())
+            if (rtype->is_signed())
                 return builder.CreateSDiv(ll_lhs, ll_rhs, "div");
             else return builder.CreateUDiv(ll_lhs, ll_rhs, "div");
         else return builder.CreateFDiv(ll_lhs, ll_rhs, "div");
     case '%': {
-        if (bin_op->type->is_signed())
+        if (rtype->is_signed())
             return builder.CreateSRem(ll_lhs, ll_rhs, "rem");
         else return builder.CreateURem(ll_lhs, ll_rhs, "rem");
     }
@@ -235,7 +255,7 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
     case '^':
         return builder.CreateXor(ll_lhs, ll_rhs, "xor");
     case Token::GtGt: // >>
-        if (bin_op->lhs->type->is_signed())
+        if (lhs->type->is_signed())
             return builder.CreateAShr(ll_lhs, ll_rhs, "shr");
         else return builder.CreateLShr(ll_lhs, ll_rhs, "shr");
     case Token::LtLt: // <<
@@ -245,25 +265,25 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, BinOp* bin_op
     case '>':
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOGT(ll_lhs, ll_rhs, "gt");
-        if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
+        if (lhs->type->is_signed() || rhs->type->is_signed())
             return builder.CreateICmpSGT(ll_lhs, ll_rhs, "gt");
         else return builder.CreateICmpUGT(ll_lhs, ll_rhs, "gt");
     case '<':
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOLT(ll_lhs, ll_rhs, "gt");
-        if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
+        if (lhs->type->is_signed() || rhs->type->is_signed())
             return builder.CreateICmpSLT(ll_lhs, ll_rhs, "lt");
         else return builder.CreateICmpULT(ll_lhs, ll_rhs, "lt");
     case Token::GtEq:
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOGE(ll_lhs, ll_rhs, "gt");
-        if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
+        if (lhs->type->is_signed() || rhs->type->is_signed())
             return builder.CreateICmpSGE(ll_lhs, ll_rhs, "gte");
         else return builder.CreateICmpUGE(ll_lhs, ll_rhs, "gte");
     case Token::LtEq:
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOLE(ll_lhs, ll_rhs, "gt");
-        if (bin_op->lhs->type->is_signed() || bin_op->rhs->type->is_signed())
+        if (lhs->type->is_signed() || rhs->type->is_signed())
             return builder.CreateICmpSLE(ll_lhs, ll_rhs, "lte");
         else return builder.CreateICmpULE(ll_lhs, ll_rhs, "lte");
     case Token::EqEq:

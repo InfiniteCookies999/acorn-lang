@@ -77,6 +77,12 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = new_enum_type;
         break;
     }
+    case TypeKind::Interface: {
+        auto intr_type = static_cast<InterfaceType*>(type);
+        auto new_intr_type = InterfaceType::create(allocator, intr_type->get_interface(), is_const);
+        new_type = new_intr_type;
+        break;
+    }
     case TypeKind::Array: {
         auto arr_type = static_cast<ArrayType*>(type);
         new_type = ArrayType::create(allocator, arr_type->get_elm_type(), arr_type->get_length(), is_const);

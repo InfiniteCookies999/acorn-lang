@@ -85,6 +85,27 @@ llvm::StructType* acorn::gen_struct_type(StructType* struct_type, llvm::LLVMCont
     ll_struct_type = llvm::StructType::create(ll_context);
 
     llvm::SmallVector<llvm::Type*> ll_field_types;
+    size_t ll_num_fields = structn->fields.size();
+
+    if (structn->uses_vtable) {
+        for (auto& extension : structn->interface_extensions) {
+            if (extension.is_dynamic) {
+                ++ll_num_fields;
+            }
+        }
+    }
+    ll_field_types.reserve(ll_num_fields);
+
+    // Add pointer fields that will point to each vtable for each dynamic
+    // interface implemented.
+    //
+    if (structn->uses_vtable) {
+        for (auto& extension : structn->interface_extensions) {
+            if (extension.is_dynamic) {
+                ll_field_types.push_back(llvm::PointerType::get(ll_context, 0));
+            }
+        }
+    }
 
     for (Var* field : structn->fields) {
         auto ll_field_type = gen_type(field->type, ll_context, ll_module);

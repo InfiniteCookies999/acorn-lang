@@ -111,7 +111,7 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
         vlist->list.clear();
     } else if (node->is(NodeKind::Var)) {
         process_variable(static_cast<Var*>(node));
-    } else if (node->is(NodeKind::Struct) || node->is(NodeKind::Enum)) {
+    } else if (node->is(NodeKind::Struct) || node->is(NodeKind::Enum) || node->is(NodeKind::Interface)) {
 
         auto structn = static_cast<Decl*>(node);
         if (structn->name != Identifier::Invalid) {
@@ -210,6 +210,11 @@ acorn::Node* acorn::Parser::parse_statement() {
         expect(';');
         return stmt;
     }
+    case Token::KwRecover: {
+        auto stmt = parse_recover();
+        expect(';');
+        return stmt;
+    }
     case Token::KwSwitch: return parse_switch();
     case Token::Identifier: {
         if (cur_struct) {
@@ -221,6 +226,24 @@ acorn::Node* acorn::Parser::parse_statement() {
         }
 
         return parse_ident_decl_or_expr(false);
+    }
+    case Token::KwRaise: {
+        auto stmt = parse_raise();
+        expect(';');
+        return stmt;
+    }
+    case Token::KwTry: {
+        auto stmt = parse_try();
+        expect(';');
+        return stmt;
+    }
+    case Token::KwCTAborts: {
+        next_token(); // Consuming '#aborts' token.
+        expect(Token::KwStruct);
+        auto name = expect_identifier("for struct");
+        auto structn = parse_struct(modifiers, name);
+        structn->aborts_error = true;
+        return structn;
     }
     case ModifierTokens:
         modifiers = parse_modifiers();
@@ -236,6 +259,8 @@ acorn::Node* acorn::Parser::parse_statement() {
                 next_token(); // Consuming the identifier token.
                 return parse_function(modifiers, context.void_type, false, cur_struct->name);
             }
+        } else if (cur_token.is(Token::KwInterface)) {
+            return parse_interface(modifiers);
         } else if (cur_token.is('~') && peek_token(0).is(Token::Identifier)) {
             auto peek0 = peek_token(0);
             auto ident = Identifier::get(peek0.text());
@@ -277,6 +302,9 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
     case Token::KwEnum: {
         return parse_enum(0);
+    }
+    case Token::KwInterface: {
+        return parse_interface(0);
     }
     case Token::KwCopyobj: {
         auto peek0 = peek_token(0);
@@ -558,11 +586,35 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
         next_token();
     }
 
+    if (cur_token.is(Token::KwRaises)) {
+        next_token();
+        bool more_raised_errors = false;
+        do {
+
+            Token name_token = cur_token;
+            Identifier raised_error_name = expect_identifier("for raised error");
+            func->raised_errors.push_back(Func::RaisedError{
+                                            raised_error_name,
+                                            name_token.loc,
+                                            nullptr
+                                          });
+
+            more_raised_errors = cur_token.is(',');
+            if (more_raised_errors) {
+                next_token();
+            }
+        } while (more_raised_errors);
+    }
+
     // Parsing the scope of the function.
-    if (!func->has_modifier(Modifier::Native) || cur_token.is('{')) {
+    bool expects_body = !(func->has_modifier(Modifier::Native) || cur_interface);
+    if (expects_body || cur_token.is('{')) {
         if (func->has_modifier(Modifier::Native)) {
             error(cur_token, "Native functions do not have bodies")
                 .end_error(ErrCode::ParseNativeFuncNoHaveBodies);
+        } else if (cur_interface) {
+            error(cur_token, "Interface functions do not have bodies")
+                .end_error(ErrCode::ParseInterfaceFuncNoHaveBodies);
         }
         func->scope = new_node<ScopeStmt>(cur_token);
         expect('{');
@@ -571,7 +623,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
         }
         expect('}', "for function body");
         func->scope->end_loc = prev_token.loc;
-    } else if (func->has_modifier(Modifier::Native)) {
+    } else if (!expects_body) {
         expect(';');
     }
 
@@ -599,6 +651,9 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
         if (cur_token.is(Token::SubSubSub)) {
             next_token();
             var->should_default_initialize = false;
+        } else if (cur_token.is(Token::KwTry)) {
+            var->assignment = parse_try();
+            var->assignment->tryn->catch_recoveree = var;
         } else {
             var->assignment = parse_expr();
         }
@@ -663,6 +718,29 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
     auto prev_struct = cur_struct;
     cur_struct = structn;
 
+    if (cur_token.is(Token::ColCol)) {
+        next_token();
+        bool more_extensions = false;
+        do {
+
+            bool is_dynamic = cur_token.is('*');
+            if (is_dynamic) {
+                next_token();
+            }
+
+            auto extension_name = expect_identifier("for interface extension");
+            structn->unresolved_extensions.push_back({
+                extension_name,
+                is_dynamic
+            });
+
+            more_extensions = cur_token.is(',');
+            if (more_extensions) {
+                next_token();
+            }
+        } while (more_extensions);
+    }
+
     expect('{');
     while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
         Node* node = parse_statement();
@@ -718,6 +796,31 @@ acorn::Enum* acorn::Parser::parse_enum(uint32_t modifiers) {
     expect('}', "for enum");
 
     return enumn;
+}
+
+acorn::Interface* acorn::Parser::parse_interface(uint32_t modifiers) {
+
+    next_token(); // Consuming 'enum' token.
+
+
+    Token name_token = cur_token;
+    auto name = expect_identifier();
+    Interface* interfacen = new_declaration<Interface, false>(modifiers, name, name_token);
+    interfacen->interface_type = InterfaceType::create(allocator, interfacen);
+
+    auto prev_interface = cur_interface;
+    cur_interface = interfacen;
+
+    expect('{');
+    while (cur_token.is_not('}') && cur_token.is_not(Token::EOB)) {
+        auto stmt = parse_statement();
+        add_node_to_interface(interfacen, stmt);
+    }
+    expect('}', "for interface");
+
+    cur_interface = prev_interface;
+
+    return interfacen;
 }
 
 void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
@@ -785,6 +888,17 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
         }
     } else {
         modl.mark_bad_scope(ScopeLocation::Struct, node, logger);
+    }
+}
+
+void acorn::Parser::add_node_to_interface(Interface* interfacen, Node* node) {
+    if (node->is(NodeKind::Func)) {
+        auto func = static_cast<Func*>(node);
+        func->interfacen = interfacen;
+        func->interface_idx = cur_interface->functions.size();
+        cur_interface->functions.push_back(func);
+    } else {
+        modl.mark_bad_scope(ScopeLocation::Interface, node, logger);
     }
 }
 
@@ -961,6 +1075,8 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
             }
         } else if (cur_struct) {
             add_node_to_struct(cur_struct, stmt);
+        } else if (cur_interface) {
+            add_node_to_interface(cur_interface, stmt);
         } else {
             add_node_to_global_scope(stmt);
         }
@@ -1179,6 +1295,50 @@ acorn::SwitchStmt* acorn::Parser::parse_switch() {
     expect('}', "for switch");
 
     return switchn;
+}
+
+acorn::RaiseStmt* acorn::Parser::parse_raise() {
+
+    RaiseStmt* raise = new_node<RaiseStmt>(cur_token);
+
+    next_token(); // Consuming the 'raise' token.
+
+    raise->expr = parse_expr();
+    return raise;
+}
+
+acorn::Expr* acorn::Parser::parse_try() {
+
+    Try* tryn = new_node<Try>(cur_token);
+
+    next_token(); // Consuming 'try' token.
+
+    bool catches_error = cur_token.is(Token::Identifier) && peek_token(0).is(':');
+    if (catches_error) {
+        auto error_name = Identifier::get(cur_token.text());
+
+        tryn->caught_var = new_declaration<Var, true>(0, error_name, cur_token);
+
+        next_token();
+        next_token();
+    }
+
+    Expr* caught_expr = parse_expr();
+    tryn->caught_expr = caught_expr;
+    caught_expr->tryn = tryn;
+
+    if (catches_error || cur_token.is('{')) {
+        tryn->catch_block = parse_scope("for catch block");
+    }
+
+    return caught_expr;
+}
+
+acorn::RecoverStmt* acorn::Parser::parse_recover() {
+    auto recover = new_node<RecoverStmt>(cur_token);
+    next_token();
+    recover->value = parse_expr();
+    return recover;
 }
 
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
@@ -1564,7 +1724,12 @@ acorn::Expr* acorn::Parser::parse_assignment_and_expr(Expr* lhs) {
         bin_op->op = cur_token.kind;
         next_token();
         bin_op->lhs = lhs;
-        bin_op->rhs = parse_expr();
+        if (cur_token.is(Token::KwTry)) {
+            bin_op->rhs = parse_try();
+            bin_op->rhs->tryn->catch_recoveree = bin_op;
+        } else {
+            bin_op->rhs = parse_expr();
+        }
         return bin_op;
     }
     }
@@ -2990,6 +3155,10 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
         case Token::KwCTIf:
         case Token::KwStruct:
         case Token::KwEnum:
+        case Token::KwSwitch:
+        case Token::KwRaise:
+        case Token::KwCTAborts:
+        case Token::Token::KwRecover:
             return;
         case Token::KwElIf: {
             // Replace current token with if/#if statement so that it thinks

@@ -24,6 +24,7 @@ namespace acorn {
     class Context;
     struct Struct;
     struct Enum;
+    struct Interface;
     class ContainerType;
     class PointerType;
     class ArrayType;
@@ -70,6 +71,7 @@ namespace acorn {
         UnresolvedComposite,
         Struct,
         Enum,
+        Interface,
         EnumContainer,
         Range,
         Auto,
@@ -138,6 +140,7 @@ namespace acorn {
         bool is_struct() const    { return kind == TypeKind::Struct;    }
         bool is_enum() const      { return kind == TypeKind::Enum;      }
         bool is_slice() const     { return kind == TypeKind::Slice;     }
+        bool is_interface() const { return kind == TypeKind::Interface; }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
@@ -450,6 +453,27 @@ namespace acorn {
         Type* index_type;
         Type* values_type = nullptr;
         Enum* enumn;
+    };
+
+    class InterfaceType : public Type {
+    public:
+
+        static InterfaceType* create(PageAllocator& allocator,
+                                     Interface* interfacen,
+                                     bool is_const = false);
+
+        std::string to_string() const;
+
+        Interface* get_interface() const {
+            return interfacen;
+        }
+
+    protected:
+        InterfaceType(bool is_const, Interface* interfacen)
+            : Type(TypeKind::Interface, is_const), interfacen(interfacen) {
+        }
+
+        Interface* interfacen;
     };
 }
 

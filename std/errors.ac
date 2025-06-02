@@ -1,0 +1,85 @@
+#file(access=public)
+
+import .. module;
+
+interface Error {
+
+    /*
+     * The name of the struct which implement's the Error.
+     */
+    const char* get_name() const;
+
+    /*
+     * An informational message to explain why the error happened.
+     */
+    const char* get_message() const;
+
+}
+
+#aborts
+struct UnreachableError :: *Error {
+    const char* get_name() const {
+        return "UnreachableError";
+    }
+
+    const char* get_message() const {
+        return "unreachable code";
+    }
+}
+
+#aborts
+struct OutOfBoundsError :: *Error {
+    String msg;
+
+    OutOfBoundsError(const char* msg) {
+        this.msg = String{ msg };
+    }
+
+    OutOfBoundsError(String msg) {
+        this.msg = moveobj(msg);
+    }
+
+    const char* get_name()    const { return "OutOfBoundsError"; }
+    const char* get_message() const { return msg.buffer; }
+}
+
+#aborts
+struct StateError :: *Error {
+    String msg;
+
+    StateError(const char* msg) {
+        this.msg = String{ msg };
+    }
+
+    StateError(String msg) {
+        this.msg = moveobj(msg);
+    }
+
+    const char* get_name()    const { return "StateError"; }
+    const char* get_message() const { return msg.buffer; }
+}
+
+struct IOError :: *Error {
+    String msg;
+
+    IOError(const char* msg) {
+        this.msg = String{ msg };
+    }
+
+    IOError(String msg) {
+        this.msg = moveobj(msg);
+    }
+
+    const char* get_name()    const { return "IOError"; }
+    const char* get_message() const { return msg.buffer; }
+}
+
+void abort(Error* error) {
+    const char* error_name = error.get_name();
+    const char* message = error.get_message();
+    module.print(error_name);
+    module.print(": ");
+    module.print(message);
+    module.print(".");
+    module.exit(1);
+}

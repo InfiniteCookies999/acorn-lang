@@ -42,16 +42,25 @@ void acorn::IRGenerator::gen_global_variable(Var* var) {
 
 void acorn::IRGenerator::gen_implicit_function(ImplicitFunc* implicit_func) {
     di_emitter = implicit_func->structn->file->di_emitter;
-    if (implicit_func->implicit_kind == ImplicitFunc::ImplicitKind::DefaultConstructor) {
+    switch (implicit_func->implicit_kind) {
+    case ImplicitFunc::ImplicitKind::DefaultConstructor:
         gen_implicit_default_constructor(implicit_func->structn);
-    } else if (implicit_func->implicit_kind == ImplicitFunc::ImplicitKind::Destructor) {
+        break;
+    case ImplicitFunc::ImplicitKind::Destructor:
         gen_implicit_destructor(implicit_func->structn);
-    } else if (implicit_func->implicit_kind == ImplicitFunc::ImplicitKind::CopyConstructor) {
+        break;
+    case ImplicitFunc::ImplicitKind::CopyConstructor:
         gen_implicit_copy_constructor(implicit_func->structn);
-    } else if (implicit_func->implicit_kind == ImplicitFunc::ImplicitKind::MoveConstructor) {
+        break;
+    case ImplicitFunc::ImplicitKind::MoveConstructor:
         gen_implicit_move_constructor(implicit_func->structn);
-    } else {
+        break;
+    case ImplicitFunc::ImplicitKind::VTableInit:
+        gen_implicit_vtable_init_function(implicit_func->structn);
+        break;
+    default:
         acorn_fatal("Unreachable. Uknown implicit function");
+        break;
     }
 }
 
@@ -111,6 +120,10 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_loop_control(static_cast<LoopControlStmt*>(node));
     case NodeKind::SwitchStmt:
         return gen_switch(static_cast<SwitchStmt*>(node));
+    case NodeKind::RaiseStmt:
+        return gen_raise(static_cast<RaiseStmt*>(node));
+    case NodeKind::RecoverStmt:
+        return gen_recover(static_cast<RecoverStmt*>(node));
     case NodeKind::StructInitializer:
         return gen_struct_initializer(static_cast<StructInitializer*>(node), nullptr);
     case NodeKind::This:
@@ -215,6 +228,11 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         ll_param_types.push_back(builder.getPtrTy());
     }
 
+    bool passes_raised_error = !func->raised_errors.empty() && func != context.get_main_function();
+    if (passes_raised_error) {
+        ll_param_types.push_back(builder.getPtrTy());
+    }
+
     for (Var* param : func->params) {
         ll_param_types.push_back(gen_function_param_type(param));
     }
@@ -280,7 +298,10 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         ++param_idx;
     }
     if (func->structn) {
-        auto ll_param = assign_param_info(param_idx++, "in.this");
+        assign_param_info(param_idx++, "in.this");
+    }
+    if (passes_raised_error) {
+        assign_param_info(param_idx++, "raised.err");
     }
 
     for (Var* param : func->params) {
@@ -302,14 +323,11 @@ llvm::Type* acorn::IRGenerator::gen_function_return_type(Func* func, bool is_mai
     if (is_main) {
         return llvm::Type::getInt32Ty(ll_context);
     } else if (func->return_type->is_aggregate()) {
-        auto ll_aggr_type = gen_type(func->return_type);
-        uint64_t aggr_mem_size = sizeof_type_in_bytes(ll_aggr_type) * 8;
-        if (aggr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
-            // The aggregate can fit into an integer.
-            auto ll_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size)));
+        if (auto ll_type = try_get_optimized_int_type(func->return_type)) {
             func->ll_aggr_int_ret_type = ll_type;
             return ll_type;
         }
+
         func->uses_aggr_param = true;
 
         // Return void because the aggregate is passed in as a parameter.
@@ -319,7 +337,7 @@ llvm::Type* acorn::IRGenerator::gen_function_return_type(Func* func, bool is_mai
 }
 
 void acorn::IRGenerator::gen_function_body(Func* func) {
-    if (func->has_modifier(Modifier::Native)) return;
+    if (!func->scope) return;
 
     cur_func    = func;
     cur_struct  = func->structn;
@@ -369,6 +387,30 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     if (func->structn) {
         ll_this = ll_cur_func->getArg(param_idx++);
 
+        // If the function is dynamic then have to adjust the vtable offset because
+        // when the address of the variable is assigned to the interface pointer the
+        // base of the pointer of the interface pointer will point to the first function
+        // in the vtable. But then when the pointer to the interface calls one of its
+        // dynamic functions the passed in base address will be in reference the interface's
+        // functions not the base address of the original variable. So to get around this
+        // the pointer subtracts off the offset into vtable to get back to the base address.
+        //
+        if (func->is_dynamic) {
+            auto interfacen = func->mapped_interface_func->interfacen;
+
+            size_t interface_offset = get_interface_offset(func->structn, interfacen);
+            if (interface_offset != 0) {
+
+                auto ll_struct_type = gen_struct_type(func->structn->struct_type);
+                auto ll_struct_layout = context.get_ll_module().getDataLayout().getStructLayout(ll_struct_type);
+
+                int64_t offset = static_cast<int64_t>(ll_struct_layout->getElementOffset(interface_offset));
+                auto ll_offset = builder.getInt64(-offset);
+                ll_this = builder.CreateInBoundsGEP(builder.getInt8Ty(), ll_this, {ll_offset});
+
+            }
+        }
+
         if (should_emit_debug_info) {
             // In debug mode the 'this' pointer needs an address for the debugger
             // to read it's memory.
@@ -378,6 +420,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
             ll_this->setName("this");
             di_emitter->emit_struct_this_variable(ll_this_address, func, builder);
         }
+    }
+    if (!func->raised_errors.empty()) {
+        ++param_idx;
     }
 
     for (Var* param : func->params) {
@@ -417,14 +462,16 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
         auto structn = func->structn;
         auto ll_struct_type = gen_type(structn->struct_type);
 
+        if (structn->uses_vtable) {
+            gen_call_to_init_vtable(ll_this, structn);
+        }
+
         // TODO: once there are initializer lists this will need
         //       to only initialize the values not in the initializer
         //       list.
 
-        unsigned field_idx = 0;
-        for (; field_idx < structn->fields.size(); field_idx++) {
-            Var* field = structn->fields[field_idx];
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field_idx);
+        for (Var* field : structn->fields) {
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->field_idx);
             if (field->assignment) {
                 gen_assignment(ll_field_addr, field->type, field->assignment);
             } else {
@@ -581,12 +628,8 @@ llvm::Type* acorn::IRGenerator::gen_function_param_type(Var* param) const {
     } else if (param->type->is_struct()) {
         auto struct_type = static_cast<StructType*>(param->type);
 
-        auto ll_aggr_type = gen_type(struct_type);
-        uint64_t aggr_mem_size = sizeof_type_in_bytes(ll_aggr_type) * 8;
-        if (aggr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
-            // The struct can fit into an integer.
-            auto ll_param_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size)));
-            return ll_param_type;
+        if (auto ll_type = try_get_optimized_int_type(struct_type)) {
+            return ll_type;
         }
 
         // Will pass a pointer and memcpy over at the call site.
@@ -808,18 +851,16 @@ void acorn::IRGenerator::finish_incomplete_struct_type_global(llvm::Value* ll_ad
         return ll_address;
     };
 
-    unsigned field_idx = 0;
     for (Var* field : structn->fields) {
         if (field->type->is_struct()) {
             auto field_struct_type = static_cast<StructType*>(field->type);
             finish_incomplete_struct_type_global(nullptr, field_struct_type, [=, this]() -> llvm::Value* {
-                return builder.CreateStructGEP(ll_struct_type, get_struct_address(), field_idx);
+                return builder.CreateStructGEP(ll_struct_type, get_struct_address(), field->field_idx);
             });
         } else if (field->assignment && !field->assignment->is_foldable) {
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, get_struct_address(), field_idx);
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, get_struct_address(), field->field_idx);
             gen_assignment(ll_field_addr, field->type, field->assignment);
         }
-        ++field_idx;
     }
 }
 
@@ -867,10 +908,12 @@ void acorn::IRGenerator::gen_implicit_default_constructor(Struct* structn) {
 
     auto ll_this = ll_cur_func->getArg(0);
 
-    unsigned field_idx = 0;
-    for (; field_idx < structn->fields.size(); field_idx++) {
-        Var* field = structn->fields[field_idx];
-        auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field_idx);
+    if (structn->uses_vtable) {
+        gen_call_to_init_vtable(ll_this, structn);
+    }
+
+    for (Var* field : structn->fields) {
+        auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->field_idx);
         if (field->assignment) {
             gen_assignment(ll_field_addr, field->type, field->assignment);
         } else {
@@ -949,6 +992,127 @@ void acorn::IRGenerator::gen_implicit_move_constructor(Struct* structn) {
     }
 
     builder.CreateRetVoid();
+}
+
+void acorn::IRGenerator::gen_implicit_vtable_init_function(Struct* structn) {
+
+    auto ll_struct_type = gen_struct_type(structn->struct_type);
+
+    auto ll_entry = gen_bblock("entry", structn->ll_init_vtable_func);
+    builder.SetInsertPoint(ll_entry);
+
+    auto ll_this = structn->ll_init_vtable_func->getArg(0);
+
+    llvm::Value* ll_vtable = nullptr;
+    llvm::ArrayType* ll_arr_type = nullptr;
+
+    unsigned extension_count = 0;
+    for (auto& extension : structn->interface_extensions) {
+        if (!extension.is_dynamic) continue;
+
+        auto ll_vtable_address = builder.CreateStructGEP(ll_struct_type, ll_this, extension_count);
+
+        auto interfacen = extension.interfacen;
+        if (interfacen->functions.size() == 1) {
+
+            auto interface_func = interfacen->functions[0];
+
+            auto& funcs = structn->nspace->get_functions(interface_func->name);
+            auto func = get_mapped_interface_func(interface_func, funcs);
+
+            // No need to point to the VTable we can just store the function address immediately since there is only
+            // one function.
+            builder.CreateStore(func->ll_func, ll_vtable_address);
+
+        } else {
+
+            if (!ll_vtable) {
+                ll_vtable = gen_global_vtable(structn, ll_arr_type);
+            }
+
+            size_t offset_into_vtable = get_vtable_offset(structn, interfacen);
+            auto ll_ptr_into_vtable = gen_array_memory_access(ll_vtable,
+                                                              ll_arr_type,
+                                                              gen_isize(offset_into_vtable));
+
+            builder.CreateStore(ll_ptr_into_vtable, ll_vtable_address);
+        }
+
+        ++extension_count;
+    }
+
+    builder.CreateRetVoid();
+}
+
+llvm::Value* acorn::IRGenerator::gen_global_vtable(Struct* structn, llvm::ArrayType*& ll_arr_type) {
+
+    llvm::SmallVector<llvm::Constant*> ll_func_ptrs;
+    size_t ll_num_funcs = 0;
+    for (auto& extension : structn->interface_extensions) {
+        if (!extension.is_dynamic || extension.interfacen->functions.size() == 1) {
+            continue;
+        }
+        ll_num_funcs += extension.interfacen->functions.size();
+    }
+
+    ll_func_ptrs.reserve(ll_num_funcs);
+
+    for (auto& extension : structn->interface_extensions) {
+        auto interfacen = extension.interfacen;
+        if (!extension.is_dynamic || interfacen->functions.size() == 1) {
+            continue;
+        }
+
+        for (auto interface_func : interfacen->functions) {
+            auto& funcs = structn->nspace->get_functions(interface_func->name);
+            auto func = get_mapped_interface_func(interface_func, funcs);
+            ll_func_ptrs.push_back(func->ll_func);
+        }
+    }
+
+    ll_arr_type = llvm::ArrayType::get(builder.getPtrTy(), ll_num_funcs);
+    auto ll_array = llvm::ConstantArray::get(ll_arr_type, ll_func_ptrs);
+
+    return gen_const_global_variable(get_global_name("global.vtable"), ll_arr_type, ll_array);
+}
+
+size_t acorn::IRGenerator::get_vtable_offset(Struct* structn, Interface* interfacen) {
+    size_t offset_into_vtable = 0;
+    for (auto other_extension : structn->interface_extensions) {
+        if (!other_extension.is_dynamic || other_extension.interfacen->functions.size() == 1) {
+            continue;
+        }
+        if (other_extension.interfacen == interfacen) {
+            break;
+        } else {
+            offset_into_vtable += other_extension.interfacen->functions.size();
+        }
+    }
+    return offset_into_vtable;
+}
+
+size_t acorn::IRGenerator::get_interface_offset(Struct* structn, Interface* interfacen) {
+    size_t interface_offset = 0;
+    for (auto extension : structn->interface_extensions) {
+        if (!extension.is_dynamic) continue;
+        if (extension.interfacen == interfacen) {
+            break;
+        } else {
+            ++interface_offset;
+        }
+    }
+    return interface_offset;
+}
+
+acorn::Func* acorn::IRGenerator::get_mapped_interface_func(Func* interface_func, const FuncList& funcs) {
+    for (Func* func : funcs) {
+        if (func->mapped_interface_func == interface_func) {
+            gen_function_decl(func);
+            return func;
+        }
+    }
+    acorn_fatal("unreachable: could not find mapped interface function");
+    return nullptr;
 }
 
 void acorn::IRGenerator::add_object_with_destructor(Type* type, llvm::Value* ll_address) {
@@ -1281,6 +1445,8 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
                     }
                 }
 
+                // If returning an integer as an aggregate integer but the value references
+                // the address of an aggregate then need to load it.
                 if (!ll_value->getType()->isIntegerTy()) {
                     ll_value = builder.CreateLoad(cur_func->ll_aggr_int_ret_type, ll_value);
                 }
@@ -1966,6 +2132,164 @@ llvm::Value* acorn::IRGenerator::gen_switch_foldable(SwitchStmt* switchn) {
     return nullptr;
 }
 
+llvm::Value* acorn::IRGenerator::gen_raise(RaiseStmt* raise) {
+
+    auto initializer = static_cast<StructInitializer*>(raise->expr);
+
+    // Have to check that the function's return type is not void as well because the main
+    // function can be specified as void but it's llvm type will still be an i32.
+    bool not_void = !ll_cur_func->getReturnType()->isVoidTy() &&
+                     cur_func->return_type->is_not(context.void_type);
+
+    if (raise->raised_error->aborts_error || cur_func == context.get_main_function()) {
+        auto ll_initializer = gen_struct_initializer(initializer, nullptr);
+        gen_function_decl(context.std_abort_function);
+        builder.CreateCall(context.std_abort_function->ll_func, ll_initializer);
+        if (not_void) {
+            ll_ret_value = gen_zero(cur_func->return_type);
+        }
+    } else {
+
+        encountered_return = true;
+
+        unsigned error_index = 0;
+        if (cur_func->uses_aggr_param) {
+            ++error_index;
+        }
+        if (cur_func->structn) {
+            ++error_index;
+        }
+        llvm::Value* ll_error = ll_cur_func->getArg(error_index);
+        auto ll_initializer = gen_struct_initializer(initializer, ll_error);
+
+        // Return a zeroed value since the user cannot access the value.
+        //
+        if (cur_func->num_returns > 1) {
+
+            // Returning so need to destroy all the objects encountered up until this point.
+            auto ir_scope_itr = ir_scope;
+            while (ir_scope_itr) {
+                gen_call_destructors(ir_scope_itr->objects_needing_destroyed);
+                ir_scope_itr = ir_scope_itr->parent;
+            }
+
+            // Jumping to the return block.
+            builder.CreateBr(ll_ret_block);
+            emit_dbg(di_emitter->emit_location(builder, raise->loc));
+            return nullptr;
+        } else if (not_void) {
+            ll_ret_value = gen_zero(cur_func->return_type);
+        }
+    }
+
+    return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_try(Try* tryn, Try*& prev_try) {
+
+    // Determine the minimum size needed to create a union like type.
+    size_t ll_alloc_size = 0;
+    llvm::StructType* ll_largest_struct_type = nullptr;
+    for (auto raised_error : tryn->caught_errors) {
+        auto ll_struct_type = gen_struct_type(raised_error->struct_type);
+
+        auto ll_struct_size = sizeof_type_in_bytes(ll_struct_type);
+        if (ll_struct_size > ll_alloc_size) {
+            ll_alloc_size = ll_struct_size;
+            ll_largest_struct_type = ll_struct_type;
+        }
+    }
+
+    prev_try = cur_try;
+    cur_try = tryn;
+
+    auto ll_error_union = gen_unseen_alloca(ll_largest_struct_type, "error.union");
+    tryn->ll_error = ll_error_union;
+
+    tryn->ll_end_bb = gen_bblock("try.end");
+    tryn->ll_catch_bb = gen_bblock("try.catch");
+
+    // Memsetting to zero in order to be able to check if the vtable has been set.
+    auto ll_alignment = get_alignment(ll_largest_struct_type);
+    builder.CreateMemSet(
+        ll_error_union,
+        builder.getInt8(0),
+        sizeof_type_in_bytes(ll_largest_struct_type),
+        ll_alignment
+    );
+
+    if (tryn->catch_block) {
+        auto ll_error = gen_unseen_alloca(builder.getPtrTy(), "err");
+        auto ll_error_ptr = builder.CreateBitCast(ll_error_union, builder.getPtrTy());
+        builder.CreateStore(ll_error_ptr, ll_error);
+
+        if (tryn->caught_var) {
+            tryn->caught_var->ll_address = ll_error;
+        }
+    }
+
+    return nullptr;
+}
+
+void acorn::IRGenerator::finish_try(Try* prev_try) {
+
+    // Branch the current block to the end of the try/catch.
+    gen_branch_if_not_term(cur_try->ll_end_bb);
+
+    // Generating the catch block.
+    insert_bblock_at_end(cur_try->ll_catch_bb);
+    builder.SetInsertPoint(cur_try->ll_catch_bb);
+    if (cur_try->catch_block) {
+        gen_scope_with_dbg_scope(cur_try->catch_block);
+    } else {
+        gen_function_decl(context.std_abort_function);
+        builder.CreateCall(context.std_abort_function->ll_func, cur_try->ll_error);
+    }
+
+    gen_branch_if_not_term(cur_try->ll_end_bb);
+
+    // Continue after the try/catch.
+    insert_bblock_at_end(cur_try->ll_end_bb);
+    builder.SetInsertPoint(cur_try->ll_end_bb);
+
+    cur_try = prev_try;
+}
+
+llvm::Value* acorn::IRGenerator::gen_recover(RecoverStmt* recover) {
+
+    if (cur_try->catch_recoveree->is(NodeKind::Var)) {
+        Var* var = static_cast<Var*>(cur_try->catch_recoveree);
+        gen_assignment(var->ll_address, var->type, recover->value, var, true);
+    } else {
+        BinOp* bin_op = static_cast<BinOp*>(cur_try->catch_recoveree);
+        Expr* lhs = bin_op->lhs;
+
+        switch (bin_op->op) {
+        case '=':
+            gen_assignment_op(lhs, recover->value);
+            break;
+        case Token::AddEq:   return gen_apply_and_assign_op('+', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::SubEq:   return gen_apply_and_assign_op('-', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::MulEq:   return gen_apply_and_assign_op('*', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::DivEq:   return gen_apply_and_assign_op('/', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::ModEq:   return gen_apply_and_assign_op('%', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::AndEq:   return gen_apply_and_assign_op('&', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::OrEq:    return gen_apply_and_assign_op('|', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::CaretEq: return gen_apply_and_assign_op('^', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::TildeEq: return gen_apply_and_assign_op('~', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::LtLtEq:  return gen_apply_and_assign_op(Token::LtLt, bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::GtGtEq:  return gen_apply_and_assign_op(Token::GtGt, bin_op->loc, bin_op->type, lhs, recover->value);
+        default:
+            acorn_fatal("unreachable");
+            break;
+        }
+    }
+
+    builder.CreateBr(cur_try->ll_end_bb);
+
+    return nullptr;
+}
+
 llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initializer, llvm::Value* ll_dest_addr, Node* lvalue) {
 
     auto ll_struct_type = gen_type(initializer->type);
@@ -1978,14 +2302,14 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
 
         Func* called_func = initializer->called_constructor;
         gen_function_decl(called_func);
-
-        return gen_function_decl_call(called_func,
-                                      initializer->loc,
-                                      initializer->values,
-                                      nullptr,
-                                      ll_dest_addr,
-                                      false,
-                                      lvalue);
+        gen_function_decl_call(called_func,
+                               initializer->loc,
+                               initializer->values,
+                               nullptr,
+                               ll_dest_addr,
+                               false,
+                               lvalue);
+        return ll_dest_addr;
     }
 
     if (initializer->values.empty()) {
@@ -1994,6 +2318,10 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
     }
 
     auto structn = initializer->structn;
+
+    if (structn->uses_vtable) {
+        gen_call_to_init_vtable(ll_dest_addr, structn);
+    }
 
     llvm::SmallVector<bool, 32> fields_set_list(structn->fields.size(), false);
 
@@ -2008,7 +2336,7 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
             fields_set_list[named_val->mapped_idx] = true;
         } else {
             Var* field = structn->fields[field_idx];
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field_idx);
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field->field_idx);
             gen_assignment(ll_field_addr, field->type, value, lvalue);
 
             fields_set_list[field_idx] = true;
@@ -2023,7 +2351,7 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
     for (field_idx = initializer->non_named_vals_offset; field_idx < structn->fields.size(); field_idx++) {
         if (!fields_set_list[field_idx]) {
             Var* field = structn->fields[field_idx];
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field_idx);
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field->field_idx);
             if (field->assignment) {
                 gen_assignment(ll_field_addr, field->type, field->assignment, lvalue);
             } else {
@@ -2048,7 +2376,19 @@ void acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
         if (should_emit_debug_info) {
             di_emitter->set_last_statement(stmt);
         }
+        bool has_try = stmt->is_expression();
+        Try* prev_try = nullptr;
+        if (has_try) {
+            Expr* expr = static_cast<Expr*>(stmt);
+            has_try &= expr->tryn != nullptr;
+            if (has_try) {
+                gen_try(expr->tryn, prev_try);
+            }
+        }
         gen_node(stmt);
+        if (has_try) {
+            finish_try(prev_try);
+        }
     }
 }
 
@@ -2072,8 +2412,16 @@ llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
         di_emitter->emit_function_variable(var, builder);
     }
 
+
     if (var->assignment) {
+        Try* prev_try = nullptr;
+        if (var->assignment->tryn) {
+            gen_try(var->assignment->tryn, prev_try);
+        }
         gen_assignment(var->ll_address, var->type, var->assignment, var);
+        if (var->assignment->tryn) {
+            finish_try(prev_try);
+        }
     } else if (var->should_default_initialize) {
         gen_default_value(var->ll_address, var->type);
     }
@@ -2144,7 +2492,9 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         return gen_function_type_call(call, ll_dest_addr, lvalue);
     } else {
         Func* called_func = call->called_func;
-        gen_function_decl(called_func);
+        if (!called_func->interfacen) {
+            gen_function_decl(called_func);
+        }
 
         if (called_func->ll_intrinsic_id != llvm::Intrinsic::not_intrinsic) {
             auto ll_ret = gen_intrinsic_call(call);
@@ -2169,7 +2519,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         // struct.
         //
         llvm::Value* ll_in_this = nullptr;
-        if (call->called_func->structn) {
+        if (call->called_func->structn || call->called_func->interfacen) {
             if (call->site->is(NodeKind::DotOperator)) {
                 auto dot_operator = static_cast<DotOperator*>(call->site);
                 ll_in_this = gen_node(dot_operator->site);
@@ -2356,7 +2706,6 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     bool uses_default_param_values = called_func->default_params_offset != -1;
 
     llvm::SmallVector<llvm::Value*> ll_args;
-    bool is_member_func = called_func->structn;
     size_t ll_num_args = uses_default_param_values ? called_func->params.size()
                                                    : args.size();
     if (called_func->uses_varargs) {
@@ -2365,10 +2714,15 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     }
     size_t arg_offset = 0;
 
-    if (is_member_func) {
+    bool passes_raised_error = !called_func->raised_errors.empty() && called_func != context.get_main_function();
+
+    if (uses_aggr_param) {
         ++ll_num_args;
     }
-    if (uses_aggr_param) {
+    if (ll_in_this) {
+        ++ll_num_args;
+    }
+    if (passes_raised_error) {
         ++ll_num_args;
     }
     ll_args.resize(ll_num_args);
@@ -2383,8 +2737,34 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     }
 
     // Pass the address of the struct for the member function.
-    if (is_member_func) {
+    if (ll_in_this) {
+        if (called_func->mapped_interface_func && called_func->structn->uses_vtable && !called_func->interfacen) {
+            // Because the function will offset the "this" pointer to adjust for the fact
+            // that different interfaces will have different base addresses when calling
+            // the function have to add the offset to the "this" pointer before calling
+            // the function to ensure the "this" pointer points to the base of the object.
+            //
+            size_t interface_offset = get_interface_offset(called_func->structn,
+                                                           called_func->mapped_interface_func->interfacen);
+
+            if (interface_offset != 0) {
+
+                auto ll_struct_type = gen_struct_type(called_func->structn->struct_type);
+                auto ll_struct_layout = context.get_ll_module().getDataLayout().getStructLayout(ll_struct_type);
+
+                uint64_t offset = ll_struct_layout->getElementOffset(interface_offset);
+                auto ll_offset = builder.getInt64(offset);
+
+                ll_in_this = builder.CreateInBoundsGEP(builder.getInt8Ty(), ll_in_this, { ll_offset });
+            }
+        }
+
         ll_args[arg_offset++] = ll_in_this;
+
+    }
+
+    if (passes_raised_error) {
+        ll_args[arg_offset++] = cur_try->ll_error;
     }
 
     if (uses_default_param_values) {
@@ -2528,7 +2908,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         if (uses_aggr_param) {
             ++start;
         }
-        if (is_member_func) {
+        if (ll_in_this) {
             ++start;
         }
 
@@ -2542,32 +2922,103 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         }
     }
 
-    // -- Debug
-    // std::string debug_info = "Calling function with name: " + called_func->name.to_string().str() + "\n";
-    // debug_info += "         LLVM Types passed to function:  [";
-    // for (auto ll_arg : ll_args) {
-    //     debug_info += to_string(ll_arg->getType());
-    //     if (ll_arg != ll_args.back()) {
-    //         debug_info += ", ";
-    //     }
-    // }
-    // debug_info += "]\n";
-    // debug_info += "         Types expected by the function: [";
-    // for (size_t count = 0; llvm::Argument & ll_param : called_func->ll_func->args()) {
-    //     debug_info += to_string(ll_param.getType());
-    //     if (count + 1 != called_func->ll_func->arg_size()) {
-    //         debug_info += ", ";
-    //     }
-    //     ++count;
-    // }
-    // debug_info += "]\n";
-    // Logger::debug(debug_info.c_str());
+    llvm::Value* ll_ret;
+    if (!called_func->interfacen) {
 
-    llvm::Value* ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
+        // -- Debug
+        // std::string debug_info = "Calling function with name: " + called_func->name.to_string().str() + "\n";
+        // debug_info += "         LLVM Types passed to function:  [";
+        // for (auto ll_arg : ll_args) {
+        //     debug_info += to_string(ll_arg->getType());
+        //     if (ll_arg != ll_args.back()) {
+        //         debug_info += ", ";
+        //     }
+        // }
+        // debug_info += "]\n";
+        // debug_info += "         Types expected by the function: [";
+        // for (size_t count = 0; llvm::Argument & ll_param : called_func->ll_func->args()) {
+        //     debug_info += to_string(ll_param.getType());
+        //     if (count + 1 != called_func->ll_func->arg_size()) {
+        //         debug_info += ", ";
+        //     }
+        //     ++count;
+        // }
+        // debug_info += "]\n";
+        // Logger::debug(debug_info.c_str());
+
+        ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
+    } else {
+        auto interfacen = called_func->interfacen;
+
+        llvm::Value* ll_interface_func = ll_in_this;
+        // Load v-table pointer.
+        ll_interface_func = builder.CreateLoad(builder.getPtrTy(), ll_interface_func);
+
+        if (called_func->interface_idx != 0) {
+
+            // The pointer already points to the start of the vtable now just have to offset
+            // the function into the vtable.
+            auto ll_offset = builder.getInt64(called_func->interface_idx);
+            ll_interface_func = builder.CreateInBoundsGEP(builder.getPtrTy(), ll_interface_func, { ll_offset });
+
+        }
+
+        if (interfacen->functions.size() > 1) {
+            // Points to a v-table instead of a single function so have to load the address of the
+            // function.
+            ll_interface_func = builder.CreateLoad(builder.getPtrTy(), ll_interface_func);
+        }
+
+        llvm::Type* ll_ret_type;
+        if (called_func->return_type->is_aggregate()) {
+            if (uses_aggr_param) {
+                ll_ret_type = builder.getVoidTy();
+            } else {
+                // The aggregate can fit into an integer.
+                ll_ret_type = try_get_optimized_int_type(called_func->return_type);
+            }
+        } else {
+            ll_ret_type = gen_type(called_func->return_type);
+        }
+
+        llvm::SmallVector<llvm::Type*> ll_param_types;
+        ll_param_types.reserve(ll_num_args + 1);
+
+        // Pointer for "this" pointer.
+        ll_param_types.push_back(builder.getPtrTy());
+
+        if (uses_aggr_param) {
+            ll_param_types.push_back(builder.getPtrTy());
+        }
+        for (Var* param : called_func->params) {
+            if (param->type->is_array()) {
+                ll_param_types.push_back(builder.getPtrTy());
+            } else {
+                ll_param_types.push_back(gen_type(param->type));
+            }
+        }
+
+        auto ll_func_type = llvm::FunctionType::get(ll_ret_type, ll_param_types, false);
+        ll_ret = builder.CreateCall(ll_func_type, ll_interface_func, ll_args);
+    }
+
     emit_dbg(di_emitter->emit_location(builder, call_loc));
 
     if (!ll_ret->getType()->isVoidTy()) {
         ll_ret->setName("call.ret");
+    }
+
+    if (cur_try && passes_raised_error) {
+        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), cur_try->ll_error);
+
+        auto ll_then_bb = cur_try->ll_catch_bb;
+        auto ll_end_bb = gen_bblock("try.else");
+
+        auto ll_has_err_cond = builder.CreateIsNotNull(ll_vtable_ptr);
+        builder.CreateCondBr(ll_has_err_cond, ll_then_bb, ll_end_bb);
+
+        insert_bblock_at_end(ll_end_bb);
+        builder.SetInsertPoint(ll_end_bb);
     }
 
     // If the function returns an implicit dereferencable pointer then
@@ -2610,11 +3061,7 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
     bool uses_aggr_param = false;
     llvm::Type* ll_ret_type;
     if (return_type->is_aggregate()) {
-        auto ll_aggr_type = gen_type(return_type);
-        uint64_t aggr_mem_size = sizeof_type_in_bytes(ll_aggr_type) * 8;
-        if (aggr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
-            // The aggregate can fit into an integer.
-            auto ll_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size)));
+        if (auto ll_type = try_get_optimized_int_type(return_type)) {
             ll_ret_type = ll_type;
         } else {
             uses_aggr_param = true;
@@ -2657,6 +3104,12 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
     for (Type* type : param_types) {
         if (type->is_array()) { // Array types need to be decayed.
             ll_param_types.push_back(builder.getPtrTy());
+        } else if (type->is_aggregate()) {
+            if (auto ll_type = try_get_optimized_int_type(type)) {
+                ll_param_types.push_back(ll_type);
+            } else {
+                ll_param_types.push_back(builder.getPtrTy());
+            }
         } else {
             ll_param_types.push_back(gen_type(type));
         }
@@ -3482,6 +3935,28 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type, 
             total_linear_length * sizeof_type_in_bytes(ll_base_type),
             ll_alignment
         );
+
+        // Initializing the v-tables if needed.
+        if (base_type->get_kind() == TypeKind::Struct) {
+            auto struct_type = static_cast<StructType*>(base_type);
+            auto structn = struct_type->get_struct();
+
+            if (structn->uses_vtable) {
+
+                auto ll_arr_type = gen_type(type);
+
+                llvm::SmallVector<llvm::Value*> ll_indexes(arr_type->get_depth() + 1, gen_isize(0));
+                auto ll_arr_start_ptr    = builder.CreateInBoundsGEP(ll_arr_type, ll_address, ll_indexes);
+                auto ll_total_arr_length = gen_isize(total_linear_length);
+                gen_abstract_array_loop(base_type,
+                                        ll_arr_start_ptr,
+                                        ll_total_arr_length,
+                                        [this, structn](auto ll_elm) {
+                    gen_call_to_init_vtable(ll_elm, structn);
+                });
+            }
+        }
+
     } else if (type_kind == TypeKind::Struct) {
 
         auto struct_type = static_cast<StructType*>(type);
@@ -3497,6 +3972,10 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type, 
                 sizeof_type_in_bytes(ll_struct_type),
                 ll_alignment
             );
+
+            if (structn->uses_vtable) {
+                gen_call_to_init_vtable(ll_address, structn);
+            }
         } else {
             gen_call_default_constructor(ll_address, structn);
         }
@@ -3542,6 +4021,10 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
     case TypeKind::Pointer:
     case TypeKind::Function:
         return llvm::Constant::getNullValue(builder.getPtrTy());
+    case TypeKind::Enum: {
+        auto enum_type = static_cast<EnumType*>(type);
+        return gen_zero(enum_type->get_index_type());
+    }
     case TypeKind::Array:
     case TypeKind::Struct:
     case TypeKind::Slice:
@@ -3587,6 +4070,32 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
         if (from_type->is_integer() || from_type->is_bool()) {
             return builder.CreateIntToPtr(ll_value, builder.getPtrTy(), "cast");
         } else if (from_type->is_real_pointer() || from_type->is(context.null_type)) {
+
+            if (from_type->is_pointer()) {
+                auto to_ptr_type = static_cast<PointerType*>(to_type);
+
+                if (to_ptr_type->get_elm_type()->is_interface() && to_type->is_not(from_type)) {
+                    auto from_ptr_type = static_cast<PointerType*>(from_type);
+
+                    if (from_ptr_type->get_elm_type()->is_struct()) {
+                        auto struct_type = static_cast<StructType*>(from_ptr_type->get_elm_type());
+                        auto structn = struct_type->get_struct();
+
+                        auto intr_type = static_cast<InterfaceType*>(to_ptr_type->get_elm_type());
+                        auto interfacen = intr_type->get_interface();
+
+                        size_t interface_offset = get_interface_offset(structn, interfacen);
+
+                        if (interface_offset == 0) {
+                            return ll_value;
+                        }
+
+                        auto ll_struct_type = gen_struct_type(struct_type);
+                        return builder.CreateStructGEP(ll_struct_type, ll_value, interface_offset);
+                    }
+                }
+            }
+
             // Pointer to pointer doesn't need casting because of opaque pointers.
             return ll_value;
         } else if (from_type->is_array()) {
@@ -3648,7 +4157,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
         // NOTE: FuncsRef is not the same as is_function()!
         if (from_type->get_kind() == TypeKind::FuncsRef) {
             return ll_value;
-        } else if (from_type->is_pointer()) {
+        } else if (from_type->is_real_pointer()) {
             return ll_value;
         }
 
@@ -3797,6 +4306,16 @@ void acorn::IRGenerator::gen_call_default_constructor(llvm::Value* ll_address, S
     }
     builder.CreateCall(structn->ll_default_constructor, ll_address);
     emit_dbg(di_emitter->emit_location_at_last_statement(builder));
+}
+
+void acorn::IRGenerator::gen_call_to_init_vtable(llvm::Value* ll_address, Struct* structn) {
+    if (!structn->ll_init_vtable_func) {
+        llvm::Twine ll_name = structn->name.to_string() + ".vtable.init.acorn";
+        structn->ll_init_vtable_func = gen_no_param_member_function_decl(structn, ll_name);
+        auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::VTableInit, structn);
+        context.queue_gen_implicit_function(implicit_func);
+    }
+    builder.CreateCall(structn->ll_init_vtable_func, ll_address);
 }
 
 void acorn::IRGenerator::gen_abstract_array_loop(Type* base_type,
@@ -4110,12 +4629,21 @@ bool acorn::IRGenerator::is_pointer_lvalue(Expr* expr) {
            expr->is_not(NodeKind::This);       // The 'this' pointer has no address.
 }
 
+llvm::Type* acorn::IRGenerator::try_get_optimized_int_type(Type* type) const {
+    auto ll_aggr_type = gen_type(type);
+    uint64_t aggr_mem_size = sizeof_type_in_bytes(ll_aggr_type) * 8;
+    if (aggr_mem_size <= ll_module.getDataLayout().getPointerSizeInBits()) {
+        auto ll_type = llvm::Type::getIntNTy(ll_context, static_cast<unsigned int>(next_pow2(aggr_mem_size)));
+        return ll_type;
+    }
+    return nullptr;
+}
+
 acorn::ImplicitFunc* acorn::IRGenerator::create_implicit_function(ImplicitFunc::ImplicitKind implicit_kind, Struct* structn) {
     auto implicit_func = context.get_allocator().alloc_type<ImplicitFunc>();
     new (implicit_func) ImplicitFunc();
     implicit_func->implicit_kind = implicit_kind;
     implicit_func->structn = structn;
-    context.queue_gen_implicit_function(implicit_func);
     return implicit_func;
 }
 

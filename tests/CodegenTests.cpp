@@ -75,7 +75,7 @@ static std::wstring get_executable_path() {
 #endif
 }
 
-static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file) {
+static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file, bool use_mock_lib = false) {
 
     Compiler::SourceVector sources;
     sources.push_back(Source{ file, "" });
@@ -102,9 +102,15 @@ static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file
     // directory than the tests directory it makes sense that the executable
     // still ends up in the tests directory.
     compiler->set_output_directory(test_executable_directory);
+    //compiler->set_should_show_llvm_ir();
 
     compiler->set_dont_show_wrote_to_msg();
-    compiler->set_stand_alone();
+    if (!use_mock_lib) {
+        compiler->set_stand_alone();
+    } else {
+        const wchar_t* lib_path = src(L"mock_std_lib");
+        compiler->set_standard_library_path(lib_path);
+    }
 
     compiler->run(sources);
     context = compiler->get_context();
@@ -119,9 +125,9 @@ static std::tuple<std::string, std::string> run_codegen_test(const wchar_t* file
     //       memory seperately.
     // allocator.dealloc_all();
 
-    if (has_errors) {
-        return { "", "" };
-    }
+    //if (has_errors) {
+    //    return { "has errors", "" };
+    //}
 
     std::string result;
     int exit_code;
@@ -931,6 +937,18 @@ static void function_type_calls_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Call function type with struct (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Call function type with struct (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"func_type_calls/func_type_calls10.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@");
     });
 }
 
@@ -1975,6 +1993,162 @@ static void varargs_tests() {
     });
 }
 
+static void interface_tests() {
+    test("Call virtual interface func no arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test1.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual interface func no arguments two funcs", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test2.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual interface func pass arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test3.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual interface func no arguments implement two interfaces", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test4.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual interface func overloaded", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test5.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual function two interfaces and two v. functions each", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test6.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCD");
+    });
+    test("Call virtual functions for array", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test7.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABABABABAB");
+    });
+    test("Call virtual function struct initialize", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test8.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual function struct called constructors", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+    test("Call virtual function but non-dynamically", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"interfaces/interfaces_test10.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("AB");
+    });
+}
+
+static void error_tests() {
+    test("Raise #abort error", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors1.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("error raised!");
+    });
+    test("Raise uncaught error", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors2.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("error raised!");
+    });
+    test("Raise conditionally raises error or returns value", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors3.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error raised!");
+    });
+    test("Raise conditionally raises error or returns sm struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors4.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error raised!");
+    });
+    test("Raise conditionally raises error or returns bg struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors5.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCDerror raised!");
+    });
+    test("Raise #abort error function returns int", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors6.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("error raised!");
+    });
+    test("Raise #abort error function returns void", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors7.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("error raised!");
+    });
+    test("Raise error and catch it", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors8.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("foo called!caught error!test error msg");
+    });
+    test("Raise errors of different struct sizes", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors9.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("foo called!caught error!test error msg 1foo called!caught error!test error msg 2ABCD");
+    });
+    test("Raise error assign to variable", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors10.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error caught!");
+    });
+    test("Raise error assign to variable by assign op", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors11.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error caught!");
+    });
+    test("Raise error assign to struct variable (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors12.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error caught!");
+    });
+    test("Raise error assign to struct variable (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors13.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCDerror caught!");
+    });
+    test("Raise error assign to variable and recover", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors14.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@caught!#");
+    });
+    test("Raise error assign op to variable and recover", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors15.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("caught 1@caught 2^");
+    });
+}
+
 void test_codegen() {
 
     executable_path = get_executable_path();
@@ -2023,5 +2197,7 @@ void test_codegen() {
         enums_tests();
         slices_tests();
         varargs_tests();
+        interface_tests();
+        error_tests();
     }, true);
 }

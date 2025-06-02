@@ -1,0 +1,49 @@
+import std;
+import std.Error;
+
+struct TestError :: *Error {
+    const char* get_name() const {
+        return "TestError";
+    }
+    const char* get_message() const {
+        return "error raised!";
+    }
+}
+
+void write_val(int val) {
+
+#if OS_GROUP_WINDOWS
+    void* handle = std.GetStdHandle(-11);
+    uint32 written;
+    char c = as(char) val;
+    std.WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    char c = as(char) val;
+    std.write(1, &c, 1);
+#endif
+
+}
+
+int foo(bool b) raises TestError {
+    if b {
+        raise TestError{};
+    } else {
+        return 64;
+    }
+}
+
+void main() {
+    int a1 = try foo(false) {
+        std.print("not caught");
+        return;
+    };
+
+    write_val(a1);
+
+    int a2 = try foo(true) {
+        std.print("caught!");
+        recover 35;
+    };
+
+    write_val(a2);
+}
