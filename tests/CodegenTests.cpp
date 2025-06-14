@@ -887,6 +887,12 @@ static void switch_tests() {
 
         expect(result, std::identity()).to_be("range case");
     });
+    test("Switch with enum range eq", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"switches/switches17.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("case 2case 1case 1case 1case 4");
+    });
 }
 
 static void function_type_calls_tests() {

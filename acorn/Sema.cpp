@@ -1323,9 +1323,14 @@ void acorn::Sema::check_variable(Var* var) {
         case TypeKind::NamespaceRef:
         case TypeKind::EmptyArray:
         case TypeKind::Null:
-        case TypeKind::Range:
+        case TypeKind::Interface:
         case TypeKind::Expr:
-            error(expand(var), "Cannot assign incomplete type '%s' to variable declared auto",
+            error(expand(var), "Cannot assign incomplete type '%s' to variable with inferred type",
+                  var->assignment->type)
+                .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
+            return false;
+        case TypeKind::Range:
+            error(expand(var), "Cannot assign type 'range' to variable with inferred type",
                   var->assignment->type)
                 .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
             return false;
@@ -2306,18 +2311,20 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
             : kind(Kind::EMPTY) {
         }
 
-        static CmpNumber get(llvm::Constant* ll_value, Type* type) {
+        static CmpNumber get(Sema& sema, Expr* value) {
             CmpNumber number;
-            switch (type->get_kind()) {
+            switch (value->get_final_type()->get_kind()) {
             case TypeKind::Int:
             case TypeKind::Int8:
             case TypeKind::Int16:
             case TypeKind::Int32:
             case TypeKind::Int64:
-            case TypeKind::ISize:
-                number.value_s64 = static_cast<int64_t>(llvm::cast<llvm::ConstantInt>(ll_value)->getZExtValue());
+            case TypeKind::ISize: {
+                auto ll_value = llvm::cast<llvm::ConstantInt>(sema.gen_constant(value));
+                number.value_s64 = ll_value->getZExtValue();
                 number.kind = Kind::SIGNED_INT;
                 break;
+            }
             case TypeKind::UInt8:
             case TypeKind::UInt16:
             case TypeKind::UInt32:
@@ -2325,59 +2332,34 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
             case TypeKind::USize:
             case TypeKind::Char:
             case TypeKind::Char16:
-            case TypeKind::Char32:
-                number.value_u64 = llvm::cast<llvm::ConstantInt>(ll_value)->getZExtValue();
+            case TypeKind::Char32: {
+                auto ll_value = llvm::cast<llvm::ConstantInt>(sema.gen_constant(value));
+                number.value_u64 = ll_value->getZExtValue();
                 number.kind = Kind::UNSIGNED_INT;
                 break;
-            case TypeKind::Float32:
-                number.value_f32 = llvm::cast<llvm::ConstantFP>(ll_value)->getValueAPF().convertToFloat();
+            }
+            case TypeKind::Float32: {
+                auto ll_value = llvm::cast<llvm::ConstantFP>(sema.gen_constant(value));
+                number.value_f32 = ll_value->getValue().convertToFloat();
                 number.kind = Kind::FLOAT;
                 break;
-            case TypeKind::Float64:
-                number.value_f64 = llvm::cast<llvm::ConstantFP>(ll_value)->getValueAPF().convertToDouble();
+            }
+            case TypeKind::Float64: {
+                auto ll_value = llvm::cast<llvm::ConstantFP>(sema.gen_constant(value));
+                number.value_f64 = ll_value->getValue().convertToDouble();
                 number.kind = Kind::DOUBLE;
                 break;
+            }
             case TypeKind::Enum: {
-                auto enum_type = static_cast<EnumType*>(type);
-                return get(ll_value, enum_type->get_index_type());
+                auto ll_value = llvm::cast<llvm::ConstantInt>(sema.gen_constant(value));
+                auto enum_type = static_cast<EnumType*>(value->type);
+                if (enum_type->get_index_type()->is_signed()) {
+                    number.value_s64 = ll_value->getZExtValue();
+                } else {
+                    number.value_u64 = ll_value->getZExtValue();
+                }
+                break;
             }
-            default:
-                acorn_fatal("Unreachable. Not a foldable type");
-            }
-            return number;
-        }
-
-        static CmpNumber get(Number* value) {
-            CmpNumber number;
-            switch (value->type->get_kind()) {
-            case TypeKind::Int:
-            case TypeKind::Int8:
-            case TypeKind::Int16:
-            case TypeKind::Int32:
-            case TypeKind::Int64:
-            case TypeKind::ISize:
-                number.value_s64 = value->value_s64;
-                number.kind = Kind::SIGNED_INT;
-                break;
-            case TypeKind::UInt8:
-            case TypeKind::UInt16:
-            case TypeKind::UInt32:
-            case TypeKind::UInt64:
-            case TypeKind::USize:
-            case TypeKind::Char:
-            case TypeKind::Char16:
-            case TypeKind::Char32:
-                number.value_u64 = value->value_s64;
-                number.kind = Kind::UNSIGNED_INT;
-                break;
-            case TypeKind::Float32:
-                number.value_f32 = value->value_f32;
-                number.kind = Kind::FLOAT;
-                break;
-            case TypeKind::Float64:
-                number.value_f64 = value->value_f64;
-                number.kind = Kind::DOUBLE;
-                break;
             default:
                 acorn_fatal("Unreachable. Not a foldable type");
             }
@@ -2457,8 +2439,8 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
 
                 auto ll_int_type = llvm::Type::getIntNTy(context.get_ll_context(), value_type->get_number_of_bits());
 
-                auto cmp_lhs = CmpNumber::get(static_cast<Number*>(range->lhs));
-                auto cmp_rhs = CmpNumber::get(static_cast<Number*>(range->rhs));
+                auto cmp_lhs = CmpNumber::get(*this, range->lhs);
+                auto cmp_rhs = CmpNumber::get(*this, range->rhs);
 
                 if (is_value_in_range(range, value, cmp_lhs, cmp_rhs)) {
                     report_error_for_duplicate(scase, prior_case);
@@ -2503,17 +2485,17 @@ if (prior_value.value_s64 == value.value_s64) {     \
         };
 
         auto range = static_cast<BinOp*>(scase.cond);
-        uint64_t total_range_values = get_total_range_values(range);
+        uint64_t total_range_values = get_total_number_of_values_in_range(range);
 
-        if (total_range_values > 255) {
+        if (total_range_values > 64) {
             // If there are too many values we want to use an if chain
             // so as to not explode the compiler. The if version of the
             // switch can then check if the value is between two values.
             switchn->all_conds_foldable = false;
         }
 
-        auto lhs = CmpNumber::get(static_cast<Number*>(range->lhs));
-        auto rhs = CmpNumber::get(static_cast<Number*>(range->rhs));
+        auto lhs = CmpNumber::get(*this, range->lhs);
+        auto rhs = CmpNumber::get(*this, range->rhs);
 
         for (size_t i = 0; i < prior_values.size(); i++) {
             auto& prior_case = switchn->cases[i];
@@ -2534,8 +2516,8 @@ if (prior_value.value_s64 == value.value_s64) {     \
                     continue;
                 }
 
-                auto cmp_lhs = CmpNumber::get(static_cast<Number*>(cmp_range->lhs));
-                auto cmp_rhs = CmpNumber::get(static_cast<Number*>(cmp_range->rhs));
+                auto cmp_lhs = CmpNumber::get(*this, cmp_range->lhs);
+                auto cmp_rhs = CmpNumber::get(*this, cmp_range->rhs);
 
                 bool found_error = false;
                 switch (cmp_range->op) {
@@ -2606,6 +2588,13 @@ if (prior_value.value_s64 == value.value_s64) {     \
         switch_on_enum = enum_type->get_enum();
     }
 
+    auto find_ident_refrence_enum = [switch_on_enum](IdentRef* ref) finline {
+        auto itr = std::ranges::find_if(switch_on_enum->values, [ref](const Enum::Value& value){
+            return value.name == ref->ident;
+        });
+        return itr;
+    };
+
     size_t case_count = 0;
     for (SwitchCase scase : switchn->cases) {
         if (scase.cond) {
@@ -2614,16 +2603,90 @@ if (prior_value.value_s64 == value.value_s64) {     \
                 auto ref = static_cast<IdentRef*>(scase.cond);
 
                 // First check if the identifier refers to an identifier in the enum.
-                auto itr = std::ranges::find_if(switch_on_enum->values, [ref](const Enum::Value& value) {
-                    return value.name == ref->ident;
-                });
-                if (itr != switch_on_enum->values.end()) {
-                    ref->set_enum_value_ref(itr);
+                auto enum_value = find_ident_refrence_enum(ref);
+                if (enum_value != switch_on_enum->values.end()) {
+                    ref->set_enum_value_ref(enum_value);
                     scase.cond->type = switchn->on->type;
                     cond_foldable = true;
                 } else {
                     check_ident_ref(ref, nspace, false);
                     cond_foldable = ref->is_foldable || ref->is_enum_value_ref();
+                }
+            } else if (switch_on_enum && scase.cond->is(NodeKind::BinOp)) {
+                auto bin_op = static_cast<BinOp*>(scase.cond);
+
+                Enum::Value* lhs_enum_value = nullptr;
+                Enum::Value* rhs_enum_value = nullptr;
+
+                if (bin_op->op == Token::RangeEq || bin_op->op == Token::RangeLt) {
+
+                    if (bin_op->lhs->is(NodeKind::IdentRef)) {
+                        auto ref = static_cast<IdentRef*>(bin_op->lhs);
+                        lhs_enum_value = find_ident_refrence_enum(ref);
+                    }
+
+                    if (bin_op->rhs->is(NodeKind::IdentRef)) {
+                        auto ref = static_cast<IdentRef*>(bin_op->rhs);
+                        rhs_enum_value = find_ident_refrence_enum(ref);
+                    }
+
+                    if (lhs_enum_value && rhs_enum_value) {
+
+                        auto lhs_ref = static_cast<IdentRef*>(bin_op->lhs);
+                        auto rhs_ref = static_cast<IdentRef*>(bin_op->rhs);
+
+                        lhs_ref->set_enum_value_ref(lhs_enum_value);
+                        rhs_ref->set_enum_value_ref(rhs_enum_value);
+
+                        bin_op->lhs->type = switch_on_enum->enum_type;
+                        bin_op->rhs->type = switch_on_enum->enum_type;
+                        bin_op->type = type_table.get_range_type(switch_on_enum->enum_type);
+                        cond_foldable = true;
+
+                        check_constant_range_for_bigger_lhs(bin_op, switch_on_enum->enum_type);
+
+                    } else if (lhs_enum_value) {
+                        check_node(bin_op->rhs);
+                        if (bin_op->rhs->type && bin_op->rhs->type->is(switch_on_enum->enum_type)) {
+
+                            auto ref = static_cast<IdentRef*>(bin_op->lhs);
+                            ref->set_enum_value_ref(lhs_enum_value);
+
+                            bin_op->type = type_table.get_range_type(switch_on_enum->enum_type);
+                            bin_op->lhs->type = switch_on_enum->enum_type;
+                            bin_op->rhs->type = switch_on_enum->enum_type;
+                            cond_foldable = bin_op->rhs->is_foldable;
+
+                            check_constant_range_for_bigger_lhs(bin_op, switch_on_enum->enum_type);
+
+                        } else {
+                            report_binary_op_cannot_apply(bin_op, bin_op->rhs);
+                        }
+                    } else if (rhs_enum_value) {
+                        check_node(bin_op->lhs);
+                        if (bin_op->lhs->type && bin_op->lhs->type->is(switch_on_enum->enum_type)) {
+
+                            auto ref = static_cast<IdentRef*>(bin_op->rhs);
+                            ref->set_enum_value_ref(rhs_enum_value);
+
+                            bin_op->type = type_table.get_range_type(switch_on_enum->enum_type);
+                            bin_op->lhs->type = switch_on_enum->enum_type;
+                            bin_op->rhs->type = switch_on_enum->enum_type;
+                            cond_foldable = bin_op->rhs->is_foldable;
+
+                            check_constant_range_for_bigger_lhs(bin_op, switch_on_enum->enum_type);
+
+                        } else {
+                            report_binary_op_cannot_apply(bin_op, bin_op->lhs);
+                        }
+                    } else {
+                        check_binary_op(bin_op);
+                        cond_foldable = scase.cond->is_foldable;
+                    }
+                } else {
+                    // Not a range so cannot attempt to reference the enum.
+                    check_binary_op(bin_op);
+                    cond_foldable = scase.cond->is_foldable;
                 }
             } else {
                 check_node(scase.cond);
@@ -2666,8 +2729,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
                     prior_values.push_back({}); // Need to still add empty to keep indices correct.
 
                 } else if (cond_foldable) {
-                    auto ll_value = gen_constant(scase.cond);
-                    add_foldable_value(CmpNumber::get(ll_value, scase.cond->type), scase);
+                    add_foldable_value(CmpNumber::get(*this, scase.cond), scase);
                 } else {
                     prior_values.push_back({}); // Need to still add empty to keep indices correct.
                 }
@@ -3512,6 +3574,9 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
 
         create_cast(lhs, result_type);
         create_cast(rhs, result_type);
+
+        check_constant_range_for_bigger_lhs(bin_op, result_type);
+
         bin_op->type = type_table.get_range_type(result_type);
         break;
     }
@@ -3645,13 +3710,64 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
         return;
     }
     case Token::RangeEq: case Token::RangeLt: {
-        // TODO: allow for enum ranges!
-        report_binary_op_cannot_apply(bin_op, bin_op->lhs);
+
+        lhs_type = bin_op->lhs->type->remove_all_const();
+        rhs_type = bin_op->rhs->type->remove_all_const();
+
+        if (!(lhs_type->is_integer() || lhs_type->is_enum())) {
+            report_binary_op_cannot_apply(bin_op, bin_op->lhs);
+            return;
+        }
+        if (!(rhs_type->is_integer() || rhs_type->is_enum())) {
+            report_binary_op_cannot_apply(bin_op, bin_op->rhs);
+            return;
+        }
+
+        if (lhs_type->is_not(rhs_type)) {
+            // One of them is an enum.
+            report_binary_op_mistmatch_types(bin_op);
+            return;
+        }
+
+        check_constant_range_for_bigger_lhs(bin_op, lhs_type);
+
+        bin_op->type = type_table.get_range_type(lhs_type);
         break;
     }
     default:
         acorn_fatal("checkcheck_binary_op_for_enums_binary_op(): Failed to implement case");
         break;
+    }
+}
+
+void acorn::Sema::check_constant_range_for_bigger_lhs(BinOp* bin_op, Type* result_type) {
+    if (!bin_op->is_foldable) {
+        return;
+    }
+
+    auto ll_lhs = llvm::cast<llvm::ConstantInt>(gen_constant(bin_op->lhs));
+    auto ll_rhs = llvm::cast<llvm::ConstantInt>(gen_constant(bin_op->rhs));
+
+    if (ll_lhs && ll_rhs) {
+
+        auto lhs_value = ll_lhs->getZExtValue();
+        auto rhs_value = ll_rhs->getZExtValue();
+
+        auto report_lhs_bigger = [this, bin_op]() finline{
+            auto op_str = token_kind_to_string(context, bin_op->op);
+            error(expand(bin_op), "Operator %s expects right hand side to be bigger", op_str)
+                .end_error(ErrCode::SemaRangeExpectsRightSideBigger);
+        };
+
+        if (result_type->is_signed()) {
+            if (static_cast<int64_t>(lhs_value) > static_cast<int64_t>(rhs_value)) {
+                report_lhs_bigger();
+            }
+        } else {
+            if (lhs_value > rhs_value) {
+                report_lhs_bigger();
+            }
+        }
     }
 }
 
@@ -6072,6 +6188,38 @@ acorn::Type* acorn::Sema::get_type_of_type_expr(Expr* expr) {
     } else {
         auto type_expr = static_cast<TypeExpr*>(expr);
         return type_expr->expr_type;
+    }
+}
+
+uint64_t acorn::Sema::get_total_number_of_values_in_range(BinOp* range) {
+    acorn_assert(range->is_foldable, "Cannot get the total number of values as the range is not foldable");
+
+    auto ll_lhs_value = llvm::cast<llvm::ConstantInt>(gen_constant(range->lhs));
+    auto ll_rhs_value = llvm::cast<llvm::ConstantInt>(gen_constant(range->rhs));
+
+    uint64_t lhs_value = ll_lhs_value->getZExtValue();
+    uint64_t rhs_value = ll_rhs_value->getZExtValue();
+
+    switch (range->op) {
+    case Token::RangeEq:
+        if (range->type) {
+            int64_t lhs_value_signed = static_cast<int64_t>(lhs_value);
+            int64_t rhs_value_signed = static_cast<int64_t>(rhs_value);
+            return rhs_value_signed - lhs_value_signed + 1;
+        } else {
+            return rhs_value - lhs_value + 1;
+        }
+    case Token::RangeLt:
+        if (range->type) {
+            int64_t lhs_value_signed = static_cast<int64_t>(lhs_value);
+            int64_t rhs_value_signed = static_cast<int64_t>(rhs_value);
+            return rhs_value_signed - lhs_value_signed;
+        } else {
+            return rhs_value - lhs_value;
+        }
+    default:
+        acorn_fatal("Unreachable. Unknown range type");
+        return 0ull;
     }
 }
 

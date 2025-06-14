@@ -149,6 +149,10 @@ uint32_t acorn::Type::get_number_of_bits() const {
     case TypeKind::Char32:  return 32;
     case TypeKind::Float32: return 32;
     case TypeKind::Float64: return 64;
+    case TypeKind::Enum: {
+        auto enum_type = static_cast<const EnumType*>(this);
+        return enum_type->get_index_type()->get_number_of_bits();
+    }
     default:
         acorn_fatal("unimplemented case");
         return 0;

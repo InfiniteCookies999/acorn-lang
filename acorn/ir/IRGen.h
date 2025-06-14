@@ -362,6 +362,8 @@ namespace acorn {
 
         llvm::GlobalVariable* gen_foldable_global_variable(IdentRef* ref);
 
+        void iterate_over_range_values(BinOp* range, const std::function<void(uint64_t)>& cb);
+
         void gen_nop();
 
     };

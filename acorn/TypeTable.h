@@ -59,6 +59,9 @@ namespace acorn {
         std::mutex func_types_mtx;
         llvm::DenseMap<FunctionTypeKey*, FunctionType*> func_types;
 
+        std::mutex range_types_mtx;
+        llvm::DenseMap<Type*, RangeType*> range_types;
+
         Type* create_type_from_type(Type* type, bool is_const);
 
     };

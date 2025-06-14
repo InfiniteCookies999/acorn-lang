@@ -100,6 +100,11 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = FunctionType::create(allocator, func_type->get_key(), is_const);
         break;
     }
+    case TypeKind::Range: {
+        auto range_type = static_cast<RangeType*>(type);
+        new_type = RangeType::create(allocator, range_type->get_value_type());
+        break;
+    }
     case TypeKind::UnresolvedBracket: {
         auto un_arr_type = static_cast<UnresolvedBracketType*>(type);
         new_type = UnresolvedBracketType::create(allocator, un_arr_type->get_elm_type(), un_arr_type->get_expr(), is_const);
@@ -252,25 +257,20 @@ acorn::Type* acorn::TypeTable::get_assigned_det_arr_type(Type* elm_type) {
 }
 
 acorn::RangeType* acorn::TypeTable::get_range_type(Type* value_type) {
-    switch (value_type->get_kind()) {
-    case TypeKind::Int: return context.int_range_type;
-    case TypeKind::Int8: return context.int8_range_type;
-    case TypeKind::Int16: return context.int16_range_type;
-    case TypeKind::Int32: return context.int32_range_type;
-    case TypeKind::Int64: return context.int64_range_type;
-    case TypeKind::UInt8: return context.uint8_range_type;
-    case TypeKind::UInt16: return context.uint16_range_type;
-    case TypeKind::UInt32: return context.uint32_range_type;
-    case TypeKind::UInt64: return context.uint64_range_type;
-    case TypeKind::ISize: return context.isize_range_type;
-    case TypeKind::USize: return context.usize_range_type;
-    case TypeKind::Char: return context.char_range_type;
-    case TypeKind::Char16: return context.char16_range_type;
-    case TypeKind::Char32: return context.char32_range_type;
-    default:
-        acorn_fatal("Tried to create a range type from an invalid value type");
-        return nullptr;
+    std::lock_guard lock(range_types_mtx);
+
+    // Ranges do not care about constness of the type.
+    value_type = value_type->remove_all_const();
+
+    auto itr = range_types.find(value_type);
+    if (itr != range_types.end()) {
+        return itr->second;
     }
+
+    auto range_type = RangeType::create(allocator, value_type);
+    range_types.insert({ value_type, range_type });
+
+    return range_type;
 }
 
 acorn::FunctionType* acorn::TypeTable::get_function_type(Type* return_type,

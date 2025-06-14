@@ -166,6 +166,7 @@ namespace acorn {
 
         void check_binary_op(BinOp* bin_op);
         void check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_type, EnumType* rhs_enum_type);
+        void check_constant_range_for_bigger_lhs(BinOp* bin_op, Type* result_type);
         void report_binary_op_cannot_apply(BinOp* bin_op, Expr* expr);
         void report_binary_op_mistmatch_types(BinOp* bin_op);
         Type* get_integer_type_for_binary_op(bool enforce_lhs,
@@ -267,6 +268,8 @@ namespace acorn {
         void display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code);
         void report_error_cannot_use_variable_before_assigned(SourceLoc error_loc, Var* var);
         Type* get_type_of_type_expr(Expr* expr);
+
+        uint64_t get_total_number_of_values_in_range(BinOp* range);
 
         Decl* find_composite(Identifier name);
 

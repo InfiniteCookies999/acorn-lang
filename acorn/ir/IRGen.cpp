@@ -4170,6 +4170,10 @@ llvm::Constant* acorn::IRGenerator::gen_one(Type* type) {
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), 1, false);
     case TypeKind::Bool:
         return builder.getInt1(1);
+    case TypeKind::Enum: {
+        auto enum_type = static_cast<EnumType*>(type);
+        return gen_one(enum_type->get_index_type());
+    }
     default:
         acorn_fatal("gen_one(): Missing case");
         return nullptr;
@@ -5007,6 +5011,50 @@ llvm::GlobalVariable* acorn::IRGenerator::gen_foldable_global_variable(IdentRef*
     context.ll_foldable_globals.insert({ ref->var_ref, ll_global });
 
     return ll_global;
+}
+
+namespace acorn {
+    template<typename T>
+    void iterate_over_range_values2(BinOp* range, T start, T end,
+                                    const std::function<void(uint64_t)>& cb) {
+
+        T total_range_values = end - start;
+        switch (range->op) {
+        case Token::RangeEq: {
+            for (T v = start; v <= end; v++) {
+                cb(static_cast<uint64_t>(v));
+            }
+            break;
+        }
+        case Token::RangeLt: {
+            for (T v = start; v < end; v++) {
+                cb(static_cast<uint64_t>(v));
+            }
+            break;
+        }
+        default:
+            acorn_fatal("Unreachable. Unknown range operator");
+            break;
+        }
+    }
+}
+
+
+void acorn::IRGenerator::iterate_over_range_values(BinOp* range, const std::function<void(uint64_t)>& cb) {
+
+    auto ll_lhs_value = llvm::cast<llvm::ConstantInt>(gen_rvalue(range->lhs));
+    auto ll_rhs_value = llvm::cast<llvm::ConstantInt>(gen_rvalue(range->rhs));
+
+    uint64_t lhs_value = ll_lhs_value->getZExtValue();
+    uint64_t rhs_value = ll_rhs_value->getZExtValue();
+
+    if (range->type->is_signed()) {
+        int64_t lhs_value_signed = static_cast<int64_t>(lhs_value);
+        int64_t rhs_value_signed = static_cast<int64_t>(rhs_value);
+        iterate_over_range_values2(range, lhs_value_signed, rhs_value_signed, cb);
+    } else {
+        iterate_over_range_values2(range, lhs_value, rhs_value, cb);
+    }
 }
 
 void acorn::IRGenerator::gen_nop() {

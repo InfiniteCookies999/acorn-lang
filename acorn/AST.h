@@ -563,10 +563,6 @@ namespace acorn {
     // Expressions
     //--------------------------------------
 
-    void iterate_over_range_values(BinOp* range, const std::function<void(uint64_t)>& cb);
-
-    uint64_t get_total_range_values(BinOp* range);
-
     struct Expr : Node {
         Expr(NodeKind kind) : Node(kind) {
         }
@@ -646,8 +642,6 @@ namespace acorn {
             float    value_f32;
             double   value_f64;
         };
-
-        bool uses_strict_type = false;
     };
 
     struct Bool : Expr {

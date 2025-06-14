@@ -217,6 +217,7 @@ X(SemaMainFunctionCannotDefineRaisesError     , 20168)
 X(SemaNativeFunctionsCannotDefineRaisesError  , 20169)
 X(SemaFuncImplInterfaceFuncHaveDefaultParamVal, 20170)
 X(SemaInterfaceFuncHaveDefaultParamVal        , 20171)
+X(SemaRangeExpectsRightSideBigger             , 20172)
 
 X(NumericOverflow                             , 40000)
 X(NumericUnderflow                            , 40001)
