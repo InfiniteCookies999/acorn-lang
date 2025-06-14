@@ -1,6 +1,20 @@
 import std;
 import std.Error;
 
+void write_val(int val) {
+
+#if OS_GROUP_WINDOWS
+    void* handle = std.GetStdHandle(-11);
+    uint32 written;
+    char c = as(char) val;
+    std.WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    char c = as(char) val;
+    std.write(1, &c, 1);
+#endif
+
+}
+
 struct TestError :: *Error {
     const char* get_name() const {
         return "TestError";
@@ -10,29 +24,17 @@ struct TestError :: *Error {
     }
 }
 
-struct A {
-    int8 v;
-    ~A() {
-        std.print("deconstructor called!");
+int foo(bool cond) raises TestError {
+    if cond {
+        return 64;
     }
-}
 
-A foo(bool b) raises TestError {
-    if b {
-        raise TestError{};
-    } else {
-        return A{ 64 };
-    }
+    raise TestError{};
 }
 
 void main() {
-    A a1 = try foo(false) {
-        return;
-    };
-    std.print("...");
-    A a2 = try foo(true) {
-        std.print("caught error!");
-        return;
-    };
-    std.print("not reached");
+    int$(bool)(raises TestError) f = foo;
+    int value = try f(true);
+    write_val(value);
+    try f(false);
 }

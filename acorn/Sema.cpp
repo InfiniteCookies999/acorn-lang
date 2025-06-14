@@ -417,24 +417,44 @@ acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
     auto func_type = static_cast<FunctionType*>(type);
 
     llvm::SmallVector<Type*, 8> fixed_param_types;
+    llvm::SmallVector<RaisedError> fixed_raised_errors;
+    fixed_raised_errors.reserve(func_type->get_raised_errors().size());
     bool type_needed_fixing = false;
 
     auto ret_type = func_type->get_return_type();
     auto fixed_ret_type = fixup_type(ret_type);
+    if (!fixed_ret_type) {
+        return nullptr;
+    }
+
     if (fixed_ret_type != ret_type) {
         type_needed_fixing = true;
     }
 
     for (auto param_type : func_type->get_param_types()) {
         auto fixed_param_type = fixup_type(param_type);
+        if (!fixed_param_type) {
+            return nullptr;
+        }
+
         fixed_param_types.push_back(fixed_param_type);
         if (fixed_param_type != param_type) {
             type_needed_fixing = true;
         }
     }
 
+    type_needed_fixing |= !func_type->get_raised_errors().empty();
+
+    for (auto& raised_error : func_type->get_raised_errors()) {
+        if (!check_raised_error(raised_error)) {
+            return nullptr;
+        }
+        fixed_raised_errors.push_back(raised_error);
+        raised_error.structn = nullptr;
+    }
+
     if (type_needed_fixing) {
-        return type_table.get_function_type(fixed_ret_type, std::move(fixed_param_types));
+        return type_table.get_function_type(fixed_ret_type, std::move(fixed_param_types), std::move(fixed_raised_errors));
     }
 
     return type;
@@ -791,39 +811,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
 
     bool raised_errors_have_errors = false;
     for (auto& raised_error : func->raised_errors) {
-        if (auto composite = find_composite(raised_error.name)) {
-            if (composite->is_not(NodeKind::Struct)) {
-                error(raised_error.error_loc, "Raised error '%s' must be an error struct", raised_error.name)
-                    .end_error(ErrCode::SemaRaisedErrorNotStruct);
-                continue;
-            }
-
-            auto structn = static_cast<Struct*>(composite);
-            if (!ensure_struct_checked(raised_error.error_loc, structn)) {
-                raised_errors_have_errors = true;
-                continue;
-            }
-
-            bool extends_error_interface = false;
-            for (auto& extension : structn->interface_extensions) {
-                if (extension.interfacen == context.std_error_interface) {
-                    extends_error_interface = true;
-                    break;
-                }
-            }
-
-            if (!extends_error_interface) {
-                error(raised_error.error_loc, "Cannot raise '%s' because it does not extend 'std.Error' interface",
-                      raised_error.name)
-                    .end_error(ErrCode::SemaRaisedErrorNotExtendErrorInterface);
-                continue;
-            }
-
-            raised_error.structn = structn;
-
-        } else {
-            error(raised_error.error_loc, "Raised error '%s' not found", raised_error.name)
-                .end_error(ErrCode::SemaRaisedErrorNotFound);
+        if (!check_raised_error(raised_error)) {
             raised_errors_have_errors = true;
         }
     }
@@ -3961,7 +3949,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         auto param_types = func->params | std::views::transform([](Var* param) { return param->type; })
                                         | std::ranges::to<llvm::SmallVector<Type*>>();
 
-        ref->type = type_table.get_function_type(func->return_type, param_types);
+        ref->type = type_table.get_function_type(func->return_type, std::move(param_types), func->raised_errors);
         ref->is_foldable = false;
         break;
     }
@@ -4142,7 +4130,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             param_types.insert(param_types.begin(), struct_ptr_type);
 
             dot->set_funcs_ref(funcs);
-            dot->type = type_table.get_function_type(func->return_type, param_types);
+            dot->type = type_table.get_function_type(func->return_type, std::move(param_types), func->raised_errors);
             dot->is_foldable = false;
 
         } else {
@@ -4154,6 +4142,20 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
 }
 
 void acorn::Sema::check_function_call(FuncCall* call) {
+
+    auto check_raised_errors = [this, call](const llvm::SmallVector<RaisedError>& raised_errors) finline {
+        if (raised_errors.empty()) {
+            return;
+        }
+        if (!cur_scope || !cur_scope->cur_try) {
+            error(expand(call), "Call has uncaught errors")
+                .end_error(ErrCode::SemaUncaughtErrors);
+        } else if (cur_scope) {
+            for (auto& raised_error : raised_errors) {
+                cur_scope->cur_try->caught_errors.insert(raised_error.structn);
+            }
+        }
+    };
 
     bool args_have_errors = false;
     for (Expr* arg : call->args) {
@@ -4195,7 +4197,9 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
 
     if (call->site->type->is_function()) {
-        check_function_type_call(call, static_cast<FunctionType*>(call->site->type));
+        auto function_type = static_cast<FunctionType*>(call->site->type);
+        check_function_type_call(call, function_type);
+        check_raised_errors(function_type->get_raised_errors());
         return;
     }
 
@@ -4233,16 +4237,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         return;
     }
 
-    if (!called_func->raised_errors.empty()) {
-        if (!cur_scope || !cur_scope->cur_try) {
-            error(expand(call), "Call has uncaught errors")
-                .end_error(ErrCode::SemaUncaughtErrors);
-        } else if (cur_scope) {
-            for (auto& raised_error : called_func->raised_errors) {
-                cur_scope->cur_try->caught_errors.insert(raised_error.structn);
-            }
-        }
-    }
+    check_raised_errors(called_func->raised_errors);
 
     call->is_foldable = false;
     call->called_func = called_func;
@@ -5863,6 +5858,44 @@ void acorn::Sema::check_modifiers_for_composite(Decl* decl, const char* composit
         error(decl->get_modifier_location(Modifier::Native), "%s cannot have native modifier", composite_type_str)
             .end_error(ErrCode::SemaCompositeCannotHaveNativeModifier);
     }
+}
+
+bool acorn::Sema::check_raised_error(RaisedError& raised_error) {
+    if (auto composite = find_composite(raised_error.name)) {
+        if (composite->is_not(NodeKind::Struct)) {
+            error(raised_error.error_loc, "Raised error '%s' must be an error struct", raised_error.name)
+                .end_error(ErrCode::SemaRaisedErrorNotStruct);
+            return false;
+        }
+
+        auto structn = static_cast<Struct*>(composite);
+        if (!ensure_struct_checked(raised_error.error_loc, structn)) {
+            return false;
+        }
+
+        bool extends_error_interface = false;
+        for (auto& extension : structn->interface_extensions) {
+            if (extension.interfacen == context.std_error_interface) {
+                extends_error_interface = true;
+                break;
+            }
+        }
+
+        if (!extends_error_interface) {
+            error(raised_error.error_loc, "Cannot raise '%s' because it does not extend 'std.Error' interface",
+                  raised_error.name)
+                .end_error(ErrCode::SemaRaisedErrorNotExtendErrorInterface);
+            return false;
+        }
+
+        raised_error.structn = structn;
+
+    } else {
+        error(raised_error.error_loc, "Raised error '%s' not found", raised_error.name)
+            .end_error(ErrCode::SemaRaisedErrorNotFound);
+        return false;
+    }
+    return true;
 }
 
 void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code) {

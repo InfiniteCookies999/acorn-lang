@@ -135,6 +135,8 @@ namespace acorn {
         Type* parse_optional_type_trailing_info(Type* type);
         Type* parse_function_type(Type* base_type);
 
+        void parse_raised_errors(llvm::SmallVector<RaisedError>& raised_errors);
+
         Expr* parse_assignment_and_expr();
         Expr* parse_assignment_and_expr(Expr* lhs);
         Expr* parse_expr();

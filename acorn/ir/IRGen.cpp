@@ -226,12 +226,12 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         ll_param_types.push_back(builder.getPtrTy());
     }
 
-    if (func->structn) {
+    bool passes_raised_error = !func->raised_errors.empty();
+    if (passes_raised_error) {
         ll_param_types.push_back(builder.getPtrTy());
     }
 
-    bool passes_raised_error = !func->raised_errors.empty() && func != context.get_main_function();
-    if (passes_raised_error) {
+    if (func->structn) {
         ll_param_types.push_back(builder.getPtrTy());
     }
 
@@ -299,11 +299,11 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         ll_param->addAttr(llvm::Attribute::NoAlias);
         ++param_idx;
     }
-    if (func->structn) {
-        assign_param_info(param_idx++, "in.this");
-    }
     if (passes_raised_error) {
         assign_param_info(param_idx++, "raised.err");
+    }
+    if (func->structn) {
+        assign_param_info(param_idx++, "in.this");
     }
 
     for (Var* param : func->params) {
@@ -386,6 +386,9 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     if (func->uses_aggr_param) {
         ll_ret_addr = ll_cur_func->getArg(param_idx++);
     }
+    if (!func->raised_errors.empty()) {
+        ++param_idx;
+    }
     if (func->structn) {
         ll_this = ll_cur_func->getArg(param_idx++);
 
@@ -422,9 +425,6 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
             ll_this->setName("this");
             di_emitter->emit_struct_this_variable(ll_this_address, func, builder);
         }
-    }
-    if (!func->raised_errors.empty()) {
-        ++param_idx;
     }
 
     for (Var* param : func->params) {
@@ -2259,9 +2259,6 @@ llvm::Value* acorn::IRGenerator::get_error_argument() {
     if (cur_func->uses_aggr_param) {
         ++error_index;
     }
-    if (cur_func->structn) {
-        ++error_index;
-    }
     return ll_cur_func->getArg(error_index);
 }
 
@@ -2785,7 +2782,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     }
     size_t arg_offset = 0;
 
-    bool passes_raised_error = !called_func->raised_errors.empty() && called_func != context.get_main_function();
+    bool passes_raised_error = !called_func->raised_errors.empty();
 
     if (uses_aggr_param) {
         ++ll_num_args;
@@ -2805,6 +2802,11 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     // Pass the return address as an argument.
     if (uses_aggr_param) {
         ll_args[arg_offset++] = ll_dest_addr;
+    }
+
+    // Pass the address of the error in case it is raised.
+    if (passes_raised_error) {
+        ll_args[arg_offset++] = cur_try->ll_error;
     }
 
     // Pass the address of the struct for the member function.
@@ -2832,10 +2834,6 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
 
         ll_args[arg_offset++] = ll_in_this;
 
-    }
-
-    if (passes_raised_error) {
-        ll_args[arg_offset++] = cur_try->ll_error;
     }
 
     if (uses_default_param_values) {
@@ -3079,66 +3077,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         ll_ret->setName("call.ret");
     }
 
-    if (cur_try && passes_raised_error) {
-        bool has_destructibles = !temporary_destructor_objects.empty();
-        if (temporary_destructor_objects.size() == 1) {
-            has_destructibles &= temporary_destructor_objects[0].ll_address != ll_dest_addr;
-        }
-
-        auto gen_temporary_destructibles_calls = [this, ll_dest_addr, call_loc]() {
-            auto& objects = temporary_destructor_objects;
-            for (auto itr = objects.rbegin(); itr != objects.rend(); ++itr) {
-                if (itr->ll_address == ll_dest_addr) {
-                    continue;
-                }
-
-                gen_call_destructors(itr->type, itr->ll_address, call_loc);
-
-            }
-        };
-
-        if (cur_try->passes_error_along) {
-            auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), cur_try->ll_error);
-
-            auto ll_then_bb = gen_bblock("try.catch", ll_cur_func);
-            auto ll_end_bb = gen_bblock("try.then", ll_cur_func);
-
-            auto ll_has_err_cond = builder.CreateIsNotNull(ll_vtable_ptr);
-            builder.CreateCondBr(ll_has_err_cond, ll_then_bb, ll_end_bb);
-
-            builder.SetInsertPoint(ll_then_bb);
-
-            if (has_destructibles) {
-                gen_temporary_destructibles_calls();
-            }
-            gen_raise_return(call_loc);
-
-            builder.SetInsertPoint(ll_end_bb);
-
-        } else {
-            auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), cur_try->ll_error);
-
-            auto ll_then_bb = cur_try->ll_catch_bb;
-
-            if (has_destructibles) {
-                ll_then_bb = gen_bblock("try.destruct.temps", ll_cur_func);
-            }
-
-            auto ll_end_bb = gen_bblock("try.then");
-
-            auto ll_has_err_cond = builder.CreateIsNotNull(ll_vtable_ptr);
-            builder.CreateCondBr(ll_has_err_cond, ll_then_bb, ll_end_bb);
-
-            if (has_destructibles) {
-                builder.SetInsertPoint(ll_then_bb);
-                gen_temporary_destructibles_calls();
-                builder.CreateBr(cur_try->ll_catch_bb);
-            }
-
-            insert_bblock_at_end(ll_end_bb);
-            builder.SetInsertPoint(ll_end_bb);
-        }
-    }
+    gen_call_try_jump(passes_raised_error, ll_dest_addr, call_loc);
 
     if (ll_dest_addr && !uses_aggr_param) {
         if (apply_implicit_return_ptr) {
@@ -3173,6 +3112,7 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
     auto func_type = static_cast<FunctionType*>(call->site->type);
     auto return_type = func_type->get_return_type();
     auto& param_types = func_type->get_param_types();
+    auto& raised_errors = func_type->get_raised_errors();
 
     bool uses_aggr_param = false;
     llvm::Type* ll_ret_type;
@@ -3191,7 +3131,12 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
     size_t ll_num_args = call->args.size();
     size_t arg_offset = 0;
 
+    bool passes_raised_error = !raised_errors.empty();
+
     if (uses_aggr_param) {
+        ++ll_num_args;
+    }
+    if (passes_raised_error) {
         ++ll_num_args;
     }
     ll_args.resize(ll_num_args);
@@ -3205,6 +3150,11 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
         ll_args[arg_offset++] = ll_dest_addr;
     }
 
+    // Pass the address of the error in case it is raised.
+    if (passes_raised_error) {
+        ll_args[arg_offset++] = cur_try->ll_error;
+    }
+
     for (size_t i = 0; i < call->args.size(); ++i) {
         Expr* arg = call->args[i];
         ll_args[arg_offset + i] = gen_function_call_arg(arg);
@@ -3215,6 +3165,9 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
     llvm::SmallVector<llvm::Type*> ll_param_types;
     ll_param_types.reserve(ll_num_args);
     if (uses_aggr_param) {
+        ll_param_types.push_back(builder.getPtrTy());
+    }
+    if (passes_raised_error) {
         ll_param_types.push_back(builder.getPtrTy());
     }
     for (Type* type : param_types) {
@@ -3263,6 +3216,8 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
         ll_ret->setName("call.ret");
     }
 
+    gen_call_try_jump(passes_raised_error, ll_dest_addr, call->loc);
+
     if (ll_dest_addr && !uses_aggr_param) {
         builder.CreateStore(ll_ret, ll_dest_addr);
         if (should_emit_debug_info && lvalue) {
@@ -3290,6 +3245,71 @@ llvm::Value* acorn::IRGenerator::gen_call_return_aggr_type_temporary(Type* retur
     }
 
     return nullptr;
+}
+
+void acorn::IRGenerator::gen_call_try_jump(bool passes_raised_error, llvm::Value* ll_dest_addr, SourceLoc call_loc) {
+    if (!(cur_try && passes_raised_error)) {
+        return;
+    }
+
+    bool has_destructibles = !temporary_destructor_objects.empty();
+    if (temporary_destructor_objects.size() == 1) {
+        has_destructibles &= temporary_destructor_objects[0].ll_address != ll_dest_addr;
+    }
+
+    auto gen_temporary_destructibles_calls = [this, ll_dest_addr, call_loc]() {
+        auto& objects = temporary_destructor_objects;
+        for (auto itr = objects.rbegin(); itr != objects.rend(); ++itr) {
+            if (itr->ll_address == ll_dest_addr) {
+                continue;
+            }
+
+            gen_call_destructors(itr->type, itr->ll_address, call_loc);
+
+        }
+    };
+
+    if (cur_try->passes_error_along) {
+        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), cur_try->ll_error);
+
+        auto ll_then_bb = gen_bblock("try.catch", ll_cur_func);
+        auto ll_end_bb = gen_bblock("try.then", ll_cur_func);
+
+        auto ll_has_err_cond = builder.CreateIsNotNull(ll_vtable_ptr);
+        builder.CreateCondBr(ll_has_err_cond, ll_then_bb, ll_end_bb);
+
+        builder.SetInsertPoint(ll_then_bb);
+
+        if (has_destructibles) {
+            gen_temporary_destructibles_calls();
+        }
+        gen_raise_return(call_loc);
+
+        builder.SetInsertPoint(ll_end_bb);
+
+    } else {
+        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), cur_try->ll_error);
+
+        auto ll_then_bb = cur_try->ll_catch_bb;
+
+        if (has_destructibles) {
+            ll_then_bb = gen_bblock("try.destruct.temps", ll_cur_func);
+        }
+
+        auto ll_end_bb = gen_bblock("try.then");
+
+        auto ll_has_err_cond = builder.CreateIsNotNull(ll_vtable_ptr);
+        builder.CreateCondBr(ll_has_err_cond, ll_then_bb, ll_end_bb);
+
+        if (has_destructibles) {
+            builder.SetInsertPoint(ll_then_bb);
+            gen_temporary_destructibles_calls();
+            builder.CreateBr(cur_try->ll_catch_bb);
+        }
+
+        insert_bblock_at_end(ll_end_bb);
+        builder.SetInsertPoint(ll_end_bb);
+    }
 }
 
 llvm::Value* acorn::IRGenerator::gen_intrinsic_call(FuncCall* call) {

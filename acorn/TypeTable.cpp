@@ -273,10 +273,12 @@ acorn::RangeType* acorn::TypeTable::get_range_type(Type* value_type) {
     }
 }
 
-acorn::FunctionType* acorn::TypeTable::get_function_type(Type* return_type, llvm::SmallVector<Type*> param_types) {
+acorn::FunctionType* acorn::TypeTable::get_function_type(Type* return_type,
+                                                         llvm::SmallVector<Type*> param_types,
+                                                         llvm::SmallVector<RaisedError> raised_errors) {
     std::lock_guard lock(func_types_mtx);
 
-    FunctionTypeKey cmp_key = FunctionTypeKey(return_type, std::move(param_types));
+    FunctionTypeKey cmp_key = FunctionTypeKey(return_type, std::move(param_types), std::move(raised_errors));
 
     auto itr = func_types.find(&cmp_key);
     if (itr != func_types.end()) {
@@ -284,7 +286,7 @@ acorn::FunctionType* acorn::TypeTable::get_function_type(Type* return_type, llvm
     }
 
     auto new_key = allocator.alloc_type<FunctionTypeKey>();
-    new (new_key) FunctionTypeKey(return_type, std::move(cmp_key.param_types));
+    new (new_key) FunctionTypeKey(return_type, std::move(cmp_key.param_types), std::move(cmp_key.raised_errors));
     auto func_type = FunctionType::create(allocator, new_key);
     func_type->non_const_version = func_type;
     func_types.insert({ new_key, func_type });

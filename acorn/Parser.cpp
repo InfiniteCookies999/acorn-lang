@@ -587,23 +587,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     }
 
     if (cur_token.is(Token::KwRaises)) {
-        next_token();
-        bool more_raised_errors = false;
-        do {
-
-            Token name_token = cur_token;
-            Identifier raised_error_name = expect_identifier("for raised error");
-            func->raised_errors.push_back(Func::RaisedError{
-                                            raised_error_name,
-                                            name_token.loc,
-                                            nullptr
-                                          });
-
-            more_raised_errors = cur_token.is(',');
-            if (more_raised_errors) {
-                next_token();
-            }
-        } while (more_raised_errors);
+        parse_raised_errors(func->raised_errors);
     }
 
     // Parsing the scope of the function.
@@ -1699,7 +1683,34 @@ acorn::Type* acorn::Parser::parse_function_type(Type* base_type) {
 
     expect(')', "for function type");
 
-    return type_table.get_function_type(base_type, std::move(param_types));
+    llvm::SmallVector<RaisedError> raised_errors;
+    if (cur_token.is('(') && peek_token(0).is(Token::KwRaises)) {
+        next_token(); // Consuming '(' token.
+        parse_raised_errors(raised_errors);
+        expect(')');
+    }
+
+    return type_table.get_function_type(base_type, std::move(param_types), std::move(raised_errors));
+}
+
+void acorn::Parser::parse_raised_errors(llvm::SmallVector<RaisedError>& raised_errors) {
+    next_token();
+    bool more_raised_errors = false;
+    do {
+
+        Token name_token = cur_token;
+        Identifier raised_error_name = expect_identifier("for raised error");
+        raised_errors.push_back(RaisedError{
+                                   raised_error_name,
+                                   name_token.loc,
+                                   nullptr
+                                });
+
+        more_raised_errors = cur_token.is(',');
+        if (more_raised_errors) {
+            next_token();
+        }
+    } while (more_raised_errors);
 }
 
 acorn::Expr* acorn::Parser::parse_assignment_and_expr() {

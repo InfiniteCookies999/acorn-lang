@@ -205,6 +205,7 @@ namespace acorn {
         llvm::Value* gen_function_call_arg_for_implicit_ptr(Expr* arg);
         llvm::Value* gen_function_type_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue, bool for_call_arg);
         llvm::Value* gen_call_return_aggr_type_temporary(Type* return_type, bool uses_aggr_param, bool for_call_arg);
+        void gen_call_try_jump(bool passes_raised_error, llvm::Value* ll_dest_addr, SourceLoc call_loc);
         llvm::Value* gen_intrinsic_call(FuncCall* call);
         llvm::Value* gen_bool(Bool* b);
         llvm::Value* gen_string(String* string);

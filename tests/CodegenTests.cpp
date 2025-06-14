@@ -2183,57 +2183,87 @@ static void error_tests() {
 
         expect(result, std::identity()).to_be("caught error!error raised!error raised!");
     });
+    test("Raise #abort error from function type call", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors17.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("error raised!");
+    });
+    test("Raise conditionally raises error or returns value from function type call", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors18.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error raised!");
+    });
+    test("Raise conditionally raises error or returns from function type call (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors19.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@error raised!");
+    });
+    test("Raise conditionally raises error or returns bg struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors20.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCDerror raised!");
+    });
+    test("Raise error and catch it from function type call", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors21.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("foo called!caught error!test error msg");
+    });
     // ... Destructors
     test("Raise error does not call destructor for assigned object", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"errors/errors17.ac"), true);
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors_destructors1.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("@deconstructor called!...error raised!");
     });
     test("Raise error does not call destructor for assigned object even with catch block", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"errors/errors18.ac"), true);
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors_destructors2.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("...caught error!deconstructor called!");
     });
     test("Raise error does not call destructor for ignored return object", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"errors/errors19.ac"), true);
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors_destructors3.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("deconstructor called!no raise!...error raised!");
     });
     test("Raise error does not call destructor for ignored return object even with catch block", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"errors/errors20.ac"), true);
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors_destructors4.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("deconstructor called!...caught error!");
     });
     test("Raise error does not call destructor for assigned object when raise in catch", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"errors/errors21.ac"), true);
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors_destructors5.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("@deconstructor called!...caught error!error raised!");
     });
     test("Raise error does not call destructor for temporary object of caught error return in catch", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"errors/errors22.ac"), true);
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors_destructors6.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("deconstructor called!@...caught error!");
     });
     test("Raise error destroys object up until the current point in expression retaining destructor order and catches error", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"errors/errors23.ac"), true);
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors_destructors7.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("~A called!@~D called!~B called!~C called!...~A called!caught error!~E called!~C called!");
     });
     test("Raise error destroys object up until the current point in expression and passes error", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"errors/errors24.ac"), true);
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors_destructors8.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("A deconstructor called!@B deconstructor called!...A deconstructor called!error raised!");
     });
     test("Raise error recover does not continue to destroy temporary is error was raised", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"errors/errors25.ac"), true);
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors_destructors9.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("~A called!@...caught error!^");

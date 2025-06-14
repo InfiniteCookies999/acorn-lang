@@ -3,6 +3,7 @@
 
 #include "Identifier.h"
 #include "Token.h"
+#include "RaisedError.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/DenseSet.h>
 
@@ -204,11 +205,6 @@ namespace acorn {
         uint32_t num_returns = 0;
         llvm::SmallVector<Var*, 16> vars_to_alloc;
 
-        struct RaisedError {
-            Identifier name;
-            SourceLoc  error_loc;
-            Struct*    structn;
-        };
         llvm::SmallVector<RaisedError> raised_errors;
 
         size_t default_params_offset = static_cast<size_t>(-1);

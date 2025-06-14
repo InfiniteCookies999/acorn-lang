@@ -401,6 +401,17 @@ std::string acorn::FunctionType::to_string() const {
         ++count;
     }
     str += ")";
+    if (!key->raised_errors.empty()) {
+        str += "(";
+        str += "raises ";
+        for (size_t i = 0; i < key->raised_errors.size(); i++) {
+            str += key->raised_errors[i].name.to_string();
+            if (i + 1 != key->raised_errors.size()) {
+                str += ", ";
+            }
+        }
+        str += ")";
+    }
     return str;
 }
 

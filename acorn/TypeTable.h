@@ -31,7 +31,9 @@ namespace acorn {
 
         RangeType* get_range_type(Type* value_type);
 
-        FunctionType* get_function_type(Type* return_type, llvm::SmallVector<Type*> param_types);
+        FunctionType* get_function_type(Type* return_type,
+                                        llvm::SmallVector<Type*> param_types,
+                                        llvm::SmallVector<RaisedError> raised_errors);
 
     private:
         PageAllocator& allocator;

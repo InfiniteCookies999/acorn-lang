@@ -262,6 +262,7 @@ namespace acorn {
         bool is_condition(Type* type) const;
         void check_modifier_incompatibilities(Decl* decl);
         void check_modifiers_for_composite(Decl* decl, const char* composite_type_str);
+        bool check_raised_error(RaisedError& raised_error);
         void display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code);
         void report_error_cannot_use_variable_before_assigned(SourceLoc error_loc, Var* var);
         Type* get_type_of_type_expr(Expr* expr);

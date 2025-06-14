@@ -10,6 +10,7 @@
 
 #include "Identifier.h"
 #include "Source.h"
+#include "RaisedError.h"
 
 namespace llvm {
     class StructType;
@@ -312,11 +313,12 @@ namespace acorn {
     };
 
     struct FunctionTypeKey {
-        Type*                    return_type;
-        llvm::SmallVector<Type*> param_types;
+        Type*                          return_type;
+        llvm::SmallVector<Type*>       param_types;
+        llvm::SmallVector<RaisedError> raised_errors;
 
-        FunctionTypeKey(Type* return_type, llvm::SmallVector<Type*> param_types)
-            : return_type(return_type), param_types(std::move(param_types)) {
+        FunctionTypeKey(Type* return_type, llvm::SmallVector<Type*> param_types, llvm::SmallVector<RaisedError> raised_errors)
+            : return_type(return_type), param_types(std::move(param_types)), raised_errors(std::move(raised_errors)) {
         }
     };
 
@@ -333,6 +335,10 @@ namespace acorn {
 
         const llvm::SmallVector<Type*>& get_param_types() const {
             return key->param_types;
+        }
+
+        llvm::SmallVector<RaisedError>& get_raised_errors() const {
+            return key->raised_errors;
         }
 
         FunctionTypeKey* get_key() const {
@@ -511,9 +517,18 @@ struct DenseMapInfo<acorn::FunctionTypeKey*> {
         if (lhs->param_types.size() != rhs->param_types.size()) {
             return false;
         }
+        if (lhs->raised_errors.size() != rhs->raised_errors.size()) {
+            return false;
+        }
 
         for (size_t i = 0; i < lhs->param_types.size(); i++) {
             if (lhs->param_types[i]->is_not(rhs->param_types[i])) {
+                return false;
+            }
+        }
+
+        for (size_t i = 0; i < lhs->raised_errors.size(); i++) {
+            if (lhs->raised_errors[i].structn != rhs->raised_errors[i].structn) {
                 return false;
             }
         }
