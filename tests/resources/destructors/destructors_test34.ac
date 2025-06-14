@@ -43,4 +43,5 @@ void foo(A^ a) {
 
 void main() {
     foo(bar());
+    print(" end", 4);
 }

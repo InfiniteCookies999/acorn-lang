@@ -784,6 +784,10 @@ bool acorn::Sema::check_function_decl(Func* func) {
         func->is_checking_declaration = false;
     };
 
+    if (func == context.get_main_function() && !func->raised_errors.empty()) {
+        error(func, "main function cannot be defined to raise errors")
+            .end_error(ErrCode::SemaMainFunctionCannotDefineRaisesError);
+    }
 
     bool raised_errors_have_errors = false;
     for (auto& raised_error : func->raised_errors) {
@@ -812,12 +816,6 @@ bool acorn::Sema::check_function_decl(Func* func) {
                 error(raised_error.error_loc, "Cannot raise '%s' because it does not extend 'std.Error' interface",
                       raised_error.name)
                     .end_error(ErrCode::SemaRaisedErrorNotExtendErrorInterface);
-                continue;
-            }
-
-            if (structn->aborts_error) {
-                error(raised_error.error_loc, "A function cannot specify that it raises an '#aborts' error")
-                    .end_error(ErrCode::SemaFuncCannotRaiseAbortsError);
                 continue;
             }
 
@@ -2651,6 +2649,12 @@ void acorn::Sema::check_raise(RaiseStmt* raise) {
         return;
     }
 
+    //if (cur_func == context.get_main_function()) {
+    //    error(raise, "Cannot use raise in the main function")
+    //        .end_error(ErrCode::SemaCannotRaiseInMainFunction);
+    //    return;
+    //}
+
     if (raise->expr->is_not(NodeKind::StructInitializer)) {
         error(raise->expr, "Expected error struct initializer")
             .end_error(ErrCode::SemaWrongRaiseExpr);
@@ -2732,6 +2736,32 @@ void acorn::Sema::check_try(Try* tryn, bool assigns) {
 
         pop_scope();
         catch_block_try = prev_catch_block_try;
+    } else {
+
+        // See if all the errors get passed along or not.
+        bool passes_at_least_one_error = false;
+        bool passes_all_errors = true;
+        for (Struct* caught_struct : tryn->caught_errors) {
+            auto itr = std::ranges::find_if(cur_func->raised_errors, [caught_struct](auto& e) {
+                return e.structn == caught_struct;
+            });
+            if (itr != cur_func->raised_errors.end()) {
+                passes_at_least_one_error = true;
+            } else {
+                passes_all_errors = false;
+            }
+        }
+
+        if (passes_at_least_one_error && !passes_all_errors) {
+            error(expand(tryn), "Must catch error because only some of the errors are caught by this function")
+                .add_line("Note: This would result in ambiguity for if the errors should be aborted or not")
+                .end_error(ErrCode::SemaOnlyPartlyPassesAlongError);
+        }
+
+        tryn->passes_error_along = passes_all_errors;
+        if (passes_all_errors) {
+            ++cur_func->num_returns;
+        }
     }
 
     tryn->type = tryn->caught_expr->type;
@@ -2902,6 +2932,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
 
     initializer->is_foldable = false;
     initializer->type = structn->struct_type;
+
 }
 
 void acorn::Sema::check_this(This* thisn) {

@@ -21,10 +21,17 @@ namespace acorn {
         // Emit based on the last created instruction.
         void emit_location(llvm::IRBuilder<>& ir_builder, SourceLoc location);
         void emit_location(llvm::Instruction* ll_instruction, SourceLoc location);
-        void emit_location_at_last_statement(llvm::IRBuilder<>& ir_builder);
 
-        void set_last_statement(Node* last_stmt) {
-            this->last_stmt = last_stmt;
+        void set_store_node(Node* store_node) {
+            this->store_node = store_node;
+        }
+
+        void clear_store_node() {
+            this->store_node = nullptr;
+        }
+
+        Node* get_store_node() const {
+            return store_node;
         }
 
         void emit_function_variable(Var* var, llvm::IRBuilder<>& ir_builder);
@@ -42,7 +49,7 @@ namespace acorn {
         SourceFile*          file;
         llvm::DIBuilder      builder;
         llvm::DICompileUnit* di_unit = nullptr;
-        Node*                last_stmt = nullptr;
+        Node*                store_node = nullptr;
 
         llvm::SmallVector<llvm::DIScope*> di_lexical_scopes;
 

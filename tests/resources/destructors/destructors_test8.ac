@@ -43,5 +43,5 @@ A foo() {
 
 void main() {
     foo();
-    print("begin ", 6);
+    print(" end", 4);
 }

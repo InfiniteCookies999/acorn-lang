@@ -1317,37 +1317,37 @@ static void destructors_tests() {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test7.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("begin called");
+        expect(result, std::identity()).to_be("called end");
     });
     test("Destructor called once for ret var (ret ignored bg struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test8.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("begin called");
+        expect(result, std::identity()).to_be("called end");
     });
     test("Destructor called once for ret var of call var type (ret ignored sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test9.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("begin called");
+        expect(result, std::identity()).to_be("called end");
     });
     test("Destructor called once for ret var of call var type (ret ignored bg struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test10.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("begin called");
+        expect(result, std::identity()).to_be("called end");
     });
     test("Destructor called for inline struct init mem func call (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test11.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("begin called");
+        expect(result, std::identity()).to_be("called end");
     });
     test("Destructor called for inline struct init mem func call (bg struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test12.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("begin called");
+        expect(result, std::identity()).to_be("called end");
     });
     test("Destructors called for array", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test13.ac"));
@@ -1365,13 +1365,13 @@ static void destructors_tests() {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test15.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("begin called");
+        expect(result, std::identity()).to_be("called end");
     });
     test("Destructor called for inline struct init mem field access (bg struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test16.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("begin called");
+        expect(result, std::identity()).to_be("called end");
     });
     test("Destructor called for each loop iteration", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test17.ac"));
@@ -1445,12 +1445,6 @@ static void destructors_tests() {
 
         expect(result, std::identity()).to_be("called1 called2 called2 ");
     });
-    test("Destructor called when reassigning to seperate variable and when both destroyed", [&] {
-        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test28.ac"));
-        if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-        expect(result, std::identity()).to_be("called1 called2 called2 ");
-    });
     test("Destructor called once when assigning to self", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test29.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
@@ -1479,13 +1473,13 @@ static void destructors_tests() {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test33.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("hello! called");
+        expect(result, std::identity()).to_be("hello! called end");
     });
     test("Destructor temp obj from func call for implicit param ptr", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test34.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("hello! called");
+        expect(result, std::identity()).to_be("hello! called end");
     });
     test("Multiple return destructor called for both paths with local var (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test35.ac"));
@@ -1498,6 +1492,42 @@ static void destructors_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("calledABCDcalledABCDcalledcalled");
+    });
+    test("Inline pass call arg with struct ret only calls destructor at call site (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test37.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@calledend");
+    });
+    test("Inline pass call arg with struct ret only calls destructor at call site (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test38.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCDcalledend");
+    });
+    test("Inline pass call arg with struct initializer only calls destructor at call site (sm struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test39.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@calledend");
+    });
+    test("Inline pass call arg with struct initializer only calls destructor at call site (bg struct)", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test40.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCDcalledend");
+    });
+    test("Temporary with member function that returns and assigns to another variable still retains destructor order", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test41.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("B calledD calledC calledA called");
+    });
+    test("Scope pop retains destructor call order", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"destructors/destructors_test42.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("C calledB calledA called");
     });
 }
 
@@ -2146,6 +2176,67 @@ static void error_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("caught 1@caught 2^");
+    });
+    test("Call function that raises error and passes raise along with try", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors16.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("caught error!error raised!error raised!");
+    });
+    // ... Destructors
+    test("Raise error does not call destructor for assigned object", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors17.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@deconstructor called!...error raised!");
+    });
+    test("Raise error does not call destructor for assigned object even with catch block", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors18.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("...caught error!deconstructor called!");
+    });
+    test("Raise error does not call destructor for ignored return object", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors19.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("deconstructor called!no raise!...error raised!");
+    });
+    test("Raise error does not call destructor for ignored return object even with catch block", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors20.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("deconstructor called!...caught error!");
+    });
+    test("Raise error does not call destructor for assigned object when raise in catch", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors21.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@deconstructor called!...caught error!error raised!");
+    });
+    test("Raise error does not call destructor for temporary object of caught error return in catch", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors22.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("deconstructor called!@...caught error!");
+    });
+    test("Raise error destroys object up until the current point in expression retaining destructor order and catches error", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors23.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("~A called!@~D called!~B called!~C called!...~A called!caught error!~E called!~C called!");
+    });
+    test("Raise error destroys object up until the current point in expression and passes error", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors24.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("A deconstructor called!@B deconstructor called!...A deconstructor called!error raised!");
+    });
+    test("Raise error recover does not continue to destroy temporary is error was raised", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors25.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("~A called!@...caught error!^");
     });
 }
 

@@ -35,5 +35,5 @@ struct A {
 
 void main() {
     int8 a = A{}.a;
-    print("begin ", 6);
+    print(" end", 4);
 }

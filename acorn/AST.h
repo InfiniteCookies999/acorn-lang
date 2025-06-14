@@ -871,6 +871,12 @@ namespace acorn {
         Try() : Expr(NodeKind::Try) {
         }
 
+        // If true then the current function is specified as raising an error and
+        // is calling a function that also is specified to raise the same error such
+        // that it simply passes the current error into the other function on call.
+        bool passes_error_along = false;
+        bool generating_expr = false;
+
         llvm::DenseSet<Struct*> caught_errors;
         Var*                    caught_var = nullptr;
         ScopeStmt*              catch_block = nullptr;
@@ -880,6 +886,7 @@ namespace acorn {
         llvm::Value* ll_error;
         llvm::BasicBlock* ll_catch_bb;
         llvm::BasicBlock* ll_end_bb;
+
     };
 }
 

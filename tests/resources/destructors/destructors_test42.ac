@@ -26,20 +26,27 @@ void print(const char* s, int length) {
 }
 
 struct A {
-    int64 a;
-    int64 b;
-    int64 c;
-    int64 d;
-
     ~A() {
-        print("called", 6);
+        print("A called", 8);
     }
+}
 
-    void foo() {
+struct B {
+    ~B() {
+        print("B called", 8);
+    }
+}
+
+struct C {
+    ~C() {
+        print("C called", 8);
     }
 }
 
 void main() {
-    A{}.foo();
-    print(" end", 4);
+    {
+        A a;
+        B b;
+        C c;
+    }
 }

@@ -25,7 +25,7 @@ void acorn::DebugInfoEmitter::emit_function(Func* func) {
 	if (func->structn) {
 		di_scope = emit_type(func->structn->struct_type);
 	} else {
-		di_scope = di_unit;
+		di_scope = di_unit->getFile();
 	}
 
 	size_t line_number       = func->file->line_table.get_line_number(func->loc);
@@ -111,6 +111,10 @@ void acorn::DebugInfoEmitter::emit_location(llvm::IRBuilder<>& ir_builder, Sourc
 
 void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction, SourceLoc location) {
 
+	if (store_node) {
+		location = store_node->loc;
+	}
+
 	auto [line_number, column_number] = file->line_table.get_line_and_column_number(location);
 
 	llvm::DIScope* di_scope = di_lexical_scopes.back();
@@ -125,12 +129,6 @@ void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction, S
 	);
 
 	ll_instruction->setDebugLoc(di_location);
-}
-
-void acorn::DebugInfoEmitter::emit_location_at_last_statement(llvm::IRBuilder<>& ir_builder) {
-	if (last_stmt) {
-		emit_location(ir_builder, last_stmt->loc);
-	}
 }
 
 void acorn::DebugInfoEmitter::emit_function_variable(Var* var, llvm::IRBuilder<>& ir_builder) {
@@ -170,7 +168,7 @@ void acorn::DebugInfoEmitter::emit_global_variable(Var* global) {
 	size_t line_number = global->file->line_table.get_line_number(global->loc);
 
 	auto di_global = builder.createGlobalVariableExpression(
-		di_unit,
+		di_unit, // TODO probably wrong!
 		global->name.to_string(),
 		global->ll_address->getName(), // Linkage name
 		di_unit->getFile(),
@@ -502,8 +500,30 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 		auto enum_type = static_cast<EnumType*>(type);
 		return emit_type(enum_type->get_index_type());
 	}
+	case TypeKind::Interface: {
+
+		auto interface_type = static_cast<InterfaceType*>(type);
+		auto interfacen = interface_type->get_interface();
+
+		auto file = interfacen->file;
+		// Because types can be referenced before any codegen associated with it's file
+		// as been generated we have to make sure the di_unit for that file is created.
+		file->di_emitter->emit_file(file);
+
+		auto di_unit = file->di_emitter->di_unit;
+
+		size_t line_number = file->line_table.get_line_number(interfacen->loc);
+
+		return builder.createForwardDecl(
+			llvm::dwarf::DW_TAG_structure_type,
+			interfacen->name.to_string(),
+			di_unit,
+			di_unit->getFile(),
+			line_number
+		);
+	}
 	default:
-		acorn_fatal("unreachable");
+		acorn_fatal_fmt("Unreachable, Unimplemented type: '%s'", type->to_string());
 		return nullptr;
 	}
 }

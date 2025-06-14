@@ -126,19 +126,24 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_assignment_op(Expr* lhs, Expr* rhs) {
+    emit_dbg(di_emitter->set_store_node(lhs));
     Try* prev_try = nullptr;
     if (rhs->tryn) {
         gen_try(rhs->tryn, prev_try);
     }
     auto ll_address = gen_node(lhs);
-    gen_assignment(ll_address, lhs->type, rhs, lhs, true);
+    gen_assignment(ll_address, lhs->type, rhs, lhs->loc, lhs, true);
     if (rhs->tryn) {
         finish_try(prev_try);
     }
+    emit_dbg(di_emitter->clear_store_node());
     return ll_address;
 }
 
 llvm::Value* acorn::IRGenerator::gen_apply_and_assign_op(tokkind op, SourceLoc loc, Type* rtype, Expr* lhs, Expr* rhs) {
+
+    emit_dbg(di_emitter->set_store_node(lhs));
+
     Try* prev_try = nullptr;
     if (rhs->tryn) {
         gen_try(rhs->tryn, prev_try);
@@ -153,6 +158,8 @@ llvm::Value* acorn::IRGenerator::gen_apply_and_assign_op(tokkind op, SourceLoc l
     if (rhs->tryn) {
         finish_try(prev_try);
     }
+
+    emit_dbg(di_emitter->clear_store_node());
     return nullptr;
 }
 
@@ -422,7 +429,6 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
 
 llvm::Value* acorn::IRGenerator::gen_ternary(Ternary* ternary,
                                              llvm::Value* ll_dest_addr,
-                                             Node* lvalue,
                                              bool is_assign_op,
                                              bool try_move) {
 
@@ -430,7 +436,7 @@ llvm::Value* acorn::IRGenerator::gen_ternary(Ternary* ternary,
         // Basically have to create an if statement.
 
         if (!ll_dest_addr) {
-            ll_dest_addr = gen_unseen_alloca(gen_type(ternary->type), "tmp.aggr");
+            ll_dest_addr = gen_unseen_alloca(ternary->type, "tmp.aggr");
         }
 
         auto ll_then_bb = gen_bblock("tern.then");
@@ -442,13 +448,13 @@ llvm::Value* acorn::IRGenerator::gen_ternary(Ternary* ternary,
         // Then block
         insert_bblock_at_end(ll_then_bb);
         builder.SetInsertPoint(ll_then_bb);
-        gen_assignment(ll_dest_addr, ternary->type, ternary->lhs, lvalue, is_assign_op, try_move);
+        gen_assignment(ll_dest_addr, ternary->type, ternary->lhs, ternary->loc, nullptr, is_assign_op, try_move);
         gen_branch_if_not_term(ll_end_bb);
 
         // Else block
         insert_bblock_at_end(ll_else_bb);
         builder.SetInsertPoint(ll_else_bb);
-        gen_assignment(ll_dest_addr, ternary->type, ternary->rhs, lvalue, is_assign_op, try_move);
+        gen_assignment(ll_dest_addr, ternary->type, ternary->rhs, ternary->loc, nullptr, is_assign_op, try_move);
         gen_branch_if_not_term(ll_end_bb);
 
         // Continuing forward into a new block after the ternary.

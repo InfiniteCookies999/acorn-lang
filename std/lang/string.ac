@@ -295,6 +295,46 @@ struct String {
     }
 
     /*
+     * Appends the string `s` to the end of this string.
+     */
+    String^ append(const String^ s) {
+        return append(s.buffer, s.length);
+    }
+
+    /*
+     * Appends the string null terminated string `s` to the end
+     * of this string.
+     */
+    String^ append(const char* s) {
+        return append(s, strlen(s));
+    }
+
+    /*
+     * Appends the string `s` to the end of this string for the given
+     * `length`.
+     */
+    String^ append(const char* s, int length) {
+
+        // TODO (maddie): should probably optimize by using existing capacity.
+
+        int new_string_length = this.length + length;
+        char* new_buffer = as(char*) malloc(new_string_length + 1); // +1 for null termination.
+
+        memcpy(new_buffer, this.buffer, this.length);
+        memcpy(new_buffer + this.length, s, length);
+
+        free(this.buffer);
+        this.buffer = new_buffer;
+        this.length = new_string_length;
+        this.capacity = new_string_length;
+
+        // Null terminating.
+        new_buffer[new_string_length] = '\0';
+
+        return this;
+    }
+
+    /*
      * Removes all occurrences substring `s` from this String.
      */
     String^ remove(const char* s) {

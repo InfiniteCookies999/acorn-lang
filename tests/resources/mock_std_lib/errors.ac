@@ -8,6 +8,21 @@ interface Error {
 
 }
 
+#if OS_GROUP_WINDOWS
+native dllimport void ExitProcess(uint32 uExitCode);
+#elif OS_GROUP_UNIX
+native void _exit(int32 status);
+#endif
+
+void exit(int exit_code) {
+#if OS_GROUP_WINDOWS
+    ExitProcess(as(uint32) exit_code);
+#elif OS_GROUP_UNIX
+    _exit(as(int32) exit_code);
+#endif
+}
+
 void abort(Error* error) {
     print(error.get_message());
+    exit(0);
 }
