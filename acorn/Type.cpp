@@ -400,6 +400,12 @@ std::string acorn::FunctionType::to_string() const {
         }
         ++count;
     }
+    if (key->uses_native_varargs) {
+        if (count != 0) {
+            str += ", ";
+        }
+        str += "...";
+    }
     str += ")";
     if (!key->raised_errors.empty()) {
         str += "(";

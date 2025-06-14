@@ -214,6 +214,7 @@ X(SemaRecoverStmtNoRecoveree                , 20165)
 X(SemaOnlyPartlyPassesAlongError            , 20166)
 X(SemaCannotRaiseInMainFunction             , 20167)
 X(SemaMainFunctionCannotDefineRaisesError   , 20168)
+X(SemaNativeFunctionsCannotDefineRaisesError, 20169)
 
 X(NumericOverflow                          , 40000)
 X(NumericUnderflow                         , 40001)

@@ -454,7 +454,10 @@ acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
     }
 
     if (type_needed_fixing) {
-        return type_table.get_function_type(fixed_ret_type, std::move(fixed_param_types), std::move(fixed_raised_errors));
+        return type_table.get_function_type(fixed_ret_type,
+                                            std::move(fixed_param_types),
+                                            std::move(fixed_raised_errors),
+                                            func_type->uses_native_varargs());
     }
 
     return type;
@@ -807,6 +810,11 @@ bool acorn::Sema::check_function_decl(Func* func) {
     if (func == context.get_main_function() && !func->raised_errors.empty()) {
         error(func, "main function cannot be defined to raise errors")
             .end_error(ErrCode::SemaMainFunctionCannotDefineRaisesError);
+    }
+
+    if (!func->raised_errors.empty() && func->has_modifier(Modifier::Native)) {
+        error(func, "native functions cannot be defined to raise errors")
+            .end_error(ErrCode::SemaNativeFunctionsCannotDefineRaisesError);
     }
 
     bool raised_errors_have_errors = false;
@@ -3949,7 +3957,10 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         auto param_types = func->params | std::views::transform([](Var* param) { return param->type; })
                                         | std::ranges::to<llvm::SmallVector<Type*>>();
 
-        ref->type = type_table.get_function_type(func->return_type, std::move(param_types), func->raised_errors);
+        ref->type = type_table.get_function_type(func->return_type,
+                                                 std::move(param_types),
+                                                 func->raised_errors,
+                                                 func->uses_native_varargs);
         ref->is_foldable = false;
         break;
     }
@@ -4130,7 +4141,10 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             param_types.insert(param_types.begin(), struct_ptr_type);
 
             dot->set_funcs_ref(funcs);
-            dot->type = type_table.get_function_type(func->return_type, std::move(param_types), func->raised_errors);
+            dot->type = type_table.get_function_type(func->return_type,
+                                                     std::move(param_types),
+                                                     func->raised_errors,
+                                                     func->uses_native_varargs);
             dot->is_foldable = false;
 
         } else {
@@ -4247,6 +4261,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
 
 void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_type) {
     auto& param_types = func_type->get_param_types();
+    bool uses_native_varargs = func_type->uses_native_varargs();
 
     auto display_error = [this, call, func_type]() finline {
         logger.begin_error(expand(call), "Invalid call to function type: %s", func_type);
@@ -4255,13 +4270,41 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
     };
 
-    if (call->args.size() != param_types.size()) {
-        display_error();
-        return;
+    if (!uses_native_varargs) {
+        if (call->args.size() != param_types.size()) {
+            display_error();
+            return;
+        }
+    } else {
+        if (call->args.size() < param_types.size()) {
+            display_error();
+            return;
+        }
     }
 
+    size_t last_index = param_types.size() - 1;
     for (size_t i = 0; i < call->args.size(); i++) {
-        Expr* arg        = call->args[i];
+        Expr* arg = call->args[i];
+
+        if (uses_native_varargs && i > last_index) {
+            // Still have to check for aggregates or incomplete types so that
+            // types which are not able to be passed to native functions are
+            // not passed.
+            //
+            if (arg->type->is_aggregate()) {
+                display_error();
+                return;
+            }
+
+            if (is_incomplete_type(arg->type)) {
+                display_error();
+                return;
+            }
+
+            continue;
+        }
+
+
         Type* param_type = param_types[i];
 
         if (arg->is(NodeKind::NamedValue)) {
@@ -4287,6 +4330,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                                    FuncList& candidates,
                                                    bool is_const_object) {
 
+    // Make sure the function declarations for the canidates have been checked.
     for (Func* canidate : candidates) {
         if (canidate->is_checking_declaration) {
             logger.begin_error(call_node->loc,
@@ -4349,6 +4393,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         }
     }
 
+    // Proceed to find the best canidate from the provided call canidates.
     bool is_ambiguous = false;
     bool selected_implicitly_converts_ptr_arg = false;
     bool passes_varargs_along = false;
@@ -4372,7 +4417,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
     size_t last_index = called_func->params.size() - 1;
     for (size_t i = 0; i < args.size(); i++) {
 
-        if (called_func->uses_native_varargs && i >= last_index) {
+        if (called_func->uses_native_varargs && i > last_index) {
             continue;
         }
 
@@ -4507,7 +4552,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         Type* param_type;
         Var* param;
 
-        if (candidate->uses_native_varargs && i >= last_index) {
+        if (candidate->uses_native_varargs && i > last_index) {
 
             // Still have to check for aggregates or incomplete types so that
             // types which are not able to be passed to native functions are
@@ -4731,7 +4776,11 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         if constexpr (is_func_decl) {
             return has_correct_number_of_args(candidate, args);
         } else {
-            return num_params == args.size();
+            if (!candidate->uses_native_varargs()) {
+                return args.size() == num_params;
+            } else {
+                return args.size() >= num_params;
+            }
         }
     };
 
@@ -4755,6 +4804,15 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
             }
         }
 
+        if constexpr (!is_func_decl) {
+            if (candidate->uses_native_varargs()) {
+                err_line(nullptr,
+                         "Incorrect number of args. Expected at least %s but found %s",
+                         num_params, args.size());
+                return;
+            }
+        }
+
         err_line(nullptr,
                  "Incorrect number of args. Expected %s but found %s",
                  num_params, args.size());
@@ -4762,6 +4820,7 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         return;
     }
 
+    // Checking const correctness.
     if constexpr (is_func_decl) {
         if (candidate->structn && !candidate->is_constant && !candidate->is_constructor) {
             auto call = static_cast<FuncCall*>(call_node);
@@ -4817,10 +4876,14 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         }
     };
 
-    size_t last_index = 0;
+    bool uses_native_varargs;
     if constexpr (is_func_decl) {
-        last_index = candidate->params.size() - 1;;
+        uses_native_varargs = candidate->uses_native_varargs;
+    } else {
+        uses_native_varargs = candidate->uses_native_varargs();
     }
+
+    size_t last_index = num_params - 1;
 
     // Pre checking some of the errors because these errors may cause conflict
     // and poor error reporting when trying to checking assignability.
@@ -4831,27 +4894,6 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
 
         Expr* arg_value = args[i];
         Var* param = nullptr;
-
-        if constexpr (is_func_decl) {
-            if (candidate->uses_native_varargs && i >= last_index) {
-
-                if (arg_value->type->is_aggregate()) {
-                    err_line(arg_value,
-                             "Arg %s of type '%s' cannot be used in a native varargs list",
-                             i + 1, arg_value->type);
-                }
-
-                if (is_incomplete_type(arg_value->type)) {
-                    err_line(arg_value,
-                             "Arg %s of type '%s' is incomplete",
-                             i + 1, arg_value->type);
-                }
-
-                // Variadic arguments for native functions take any type except
-                // aggregate types.
-                continue;
-            }
-        }
 
         if (arg_value->is(NodeKind::NamedValue)) {
 
@@ -4930,25 +4972,23 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
         Expr* arg_value = args[i];
         Var* param = nullptr;
 
-        if constexpr (is_func_decl) {
-            if (candidate->uses_native_varargs && i >= last_index) {
+        if (uses_native_varargs && i > last_index) {
 
-                if (arg_value->type->is_aggregate()) {
-                    err_line(arg_value,
-                             "Arg %s cannot pass aggregate types to native variadic parameters",
-                             i + 1);
-                }
-
-                if (is_incomplete_type(arg_value->type)) {
-                    err_line(arg_value,
-                             "Arg %s cannot pass incomplete types to native variadic parameters",
-                             i + 1);
-                }
-
-                // No reason to check native variadic type information because
-                // there is no parameter which they are compared to.
-                continue;
+            if (arg_value->type->is_aggregate()) {
+                err_line(arg_value,
+                            "Arg %s cannot pass aggregate types to native variadic parameters",
+                            i + 1);
             }
+
+            if (is_incomplete_type(arg_value->type)) {
+                err_line(arg_value,
+                            "Arg %s cannot pass incomplete types to native variadic parameters",
+                            i + 1);
+            }
+
+            // No reason to check native variadic type information because
+            // there is no parameter which they are compared to.
+            continue;
         }
 
         if (arg_value->is(NodeKind::NamedValue)) {

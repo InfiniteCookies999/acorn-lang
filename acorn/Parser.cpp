@@ -42,13 +42,13 @@ case Token::KwPrivate:   \
 case Token::KwReadonly
 
 acorn::Parser::Parser(Context& context, Module& modl, SourceFile* file)
-    : context(context),
-      modl(modl),
-      allocator(context.get_allocator()),
-      file(file),
-      logger(file->logger),
-      lex(context, file->buffer, logger),
-      type_table(context.type_table) {
+    : context(context)
+    , modl(modl)
+    , allocator(context.get_allocator())
+    , file(file)
+    , logger(file->logger)
+    , lex(context, file->buffer, logger)
+    , type_table(context.type_table) {
 }
 
 void acorn::Parser::parse() {
@@ -1657,10 +1657,18 @@ acorn::Type* acorn::Parser::parse_function_type(Type* base_type) {
     next_token();
     expect('(', "for function type");
 
+    bool uses_native_varargs = false;
+
     llvm::SmallVector<Type*> param_types;
     if (cur_token.is_not(')')) {
         bool more_param_types = true;
         while (more_param_types) {
+
+            if (cur_token.is(Token::DotDotDot)) {
+                next_token();
+                uses_native_varargs = true;
+                break;
+            }
 
             auto type = parse_type();
             param_types.push_back(type);
@@ -1690,7 +1698,7 @@ acorn::Type* acorn::Parser::parse_function_type(Type* base_type) {
         expect(')');
     }
 
-    return type_table.get_function_type(base_type, std::move(param_types), std::move(raised_errors));
+    return type_table.get_function_type(base_type, std::move(param_types), std::move(raised_errors), uses_native_varargs);
 }
 
 void acorn::Parser::parse_raised_errors(llvm::SmallVector<RaisedError>& raised_errors) {

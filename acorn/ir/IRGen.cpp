@@ -3113,6 +3113,7 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
     auto return_type = func_type->get_return_type();
     auto& param_types = func_type->get_param_types();
     auto& raised_errors = func_type->get_raised_errors();
+    bool uses_native_varargs = func_type->uses_native_varargs();
 
     bool uses_aggr_param = false;
     llvm::Type* ll_ret_type;
@@ -3205,7 +3206,8 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
     // debug_info += "]\n";
     // Logger::debug(debug_info.c_str());
 
-    auto ll_func_type = llvm::FunctionType::get(ll_ret_type, ll_param_types, false);
+
+    auto ll_func_type = llvm::FunctionType::get(ll_ret_type, ll_param_types, uses_native_varargs);
     auto ll_ret = builder.CreateCall(ll_func_type, ll_site, ll_args);
 
     if (should_emit_debug_info && cur_func) { // TODO: deal with emitting for global context? Or struct context?

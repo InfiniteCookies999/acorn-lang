@@ -316,9 +316,16 @@ namespace acorn {
         Type*                          return_type;
         llvm::SmallVector<Type*>       param_types;
         llvm::SmallVector<RaisedError> raised_errors;
+        bool                           uses_native_varargs;
 
-        FunctionTypeKey(Type* return_type, llvm::SmallVector<Type*> param_types, llvm::SmallVector<RaisedError> raised_errors)
-            : return_type(return_type), param_types(std::move(param_types)), raised_errors(std::move(raised_errors)) {
+        FunctionTypeKey(Type* return_type,
+                        llvm::SmallVector<Type*> param_types,
+                        llvm::SmallVector<RaisedError> raised_errors,
+                        bool uses_native_varargs)
+            : return_type(return_type),
+              param_types(std::move(param_types)),
+              raised_errors(std::move(raised_errors)),
+              uses_native_varargs(uses_native_varargs) {
         }
     };
 
@@ -339,6 +346,10 @@ namespace acorn {
 
         llvm::SmallVector<RaisedError>& get_raised_errors() const {
             return key->raised_errors;
+        }
+
+        bool uses_native_varargs() const {
+            return key->uses_native_varargs;
         }
 
         FunctionTypeKey* get_key() const {
@@ -531,6 +542,10 @@ struct DenseMapInfo<acorn::FunctionTypeKey*> {
             if (lhs->raised_errors[i].structn != rhs->raised_errors[i].structn) {
                 return false;
             }
+        }
+
+        if (lhs->uses_native_varargs != rhs->uses_native_varargs) {
+            return false;
         }
 
         return true;

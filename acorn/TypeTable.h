@@ -33,7 +33,8 @@ namespace acorn {
 
         FunctionType* get_function_type(Type* return_type,
                                         llvm::SmallVector<Type*> param_types,
-                                        llvm::SmallVector<RaisedError> raised_errors);
+                                        llvm::SmallVector<RaisedError> raised_errors,
+                                        bool uses_native_varargs);
 
     private:
         PageAllocator& allocator;
