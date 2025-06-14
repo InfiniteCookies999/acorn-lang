@@ -15,7 +15,24 @@ namespace acorn {
         size_t length;
     };
 
-    struct PointSourceLoc;
+    // SourceLoc but with a pointer to the most relevant location
+    // of the error. This is needed because if an error is too long
+    // and needs to be cutoff then it can use this point and branch
+    // forwards and backwards from this point.
+    //
+    // NOTE: Not extending the SourceLoc because we do not want any
+    //       possible implicit conversions.
+    //
+    struct PointSourceLoc {
+        const char* ptr;
+        uint16_t    length;
+        const char* point;
+        uint16_t    point_length;
+
+        const char* end() const {
+            return ptr + length;
+        }
+    };
 
     struct SourceLoc {
         // TODO: consider exchanging this for a 32 bit integer.
@@ -31,24 +48,14 @@ namespace acorn {
             };
         }
 
-        const char* end() const {
-            return ptr + length;
+        PointSourceLoc to_point_source() const {
+            return PointSourceLoc{
+                .ptr = ptr,
+                .length = length,
+                .point = ptr,
+                .point_length = length
+            };
         }
-    };
-
-    // SourceLoc but with a pointer to the most relevant location
-    // of the error. This is needed because if an error is too long
-    // and needs to be cutoff then it can use this point and branch
-    // forwards and backwards from this point.
-    //
-    // NOTE: Not extending the SourceLoc because we do not want any
-    //       possible implicit conversions.
-    //
-    struct PointSourceLoc {
-        const char* ptr;
-        uint16_t    length;
-        const char* point;
-        uint16_t    point_length;
 
         const char* end() const {
             return ptr + length;

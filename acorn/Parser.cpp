@@ -524,7 +524,8 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     cur_func = func;
 
     // Parsing parameters.
-    ++paran_count;
+    size_t num_default_params = 0;
+    ++paren_count;
     expect('(');
     if (cur_token.is_not(')') && cur_token.is_not('{')) {
         bool more_params = false, full_reported = false;
@@ -554,6 +555,9 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
 
             param->param_idx = param_idx++;
             param->has_implicit_ptr = has_implicit_ptr;
+            if (param->assignment) {
+                ++num_default_params;
+            }
 
             if (func->params.size() != MAX_FUNC_PARAMS) {
                 func->params.push_back(param);
@@ -579,7 +583,11 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     }
     expect(')', "for function declaration");
 
-    --paran_count;
+    if (num_default_params != 0) {
+        func->default_params_offset = func->params.size() - num_default_params;
+    }
+
+    --paren_count;
 
     if (cur_token.is(Token::KwConst)) {
         func->is_constant = true;
@@ -1364,7 +1372,7 @@ void acorn::Parser::parse_comptime_file_info() {
     Token start_token = cur_token;
     next_token();
 
-    ++paran_count;
+    ++paren_count;
     expect('(');
 
     if (cur_token.is_not(')')) {
@@ -1438,7 +1446,7 @@ void acorn::Parser::parse_comptime_file_info() {
     }
 
     expect(')');
-    --paran_count;
+    --paren_count;
 }
 
 // Expression parsing
@@ -2499,11 +2507,11 @@ acorn::Expr* acorn::Parser::parse_term() {
     case Token::KwAs: {
         Cast* cast = new_node<Cast>(cur_token);
         next_token();
-        ++paran_count;
+        ++paren_count;
         expect('(');
         cast->explicit_cast_type = parse_type();
         expect(')');
-        --paran_count;
+        --paren_count;
         cast->value = parse_postfix();
         return cast;
     }
@@ -2516,21 +2524,21 @@ acorn::Expr* acorn::Parser::parse_term() {
         SizeOf* sof = new_node<SizeOf>(cur_token);
         sof->trivially_reassignable = true;
         next_token();
-        ++paran_count;
+        ++paren_count;
         expect('(');
-        sof->parsed_type_with_size = parse_type();
+        sof->value = parse_expr();
         expect(')');
-        --paran_count;
+        --paren_count;
         return sof;
     }
     case Token::KwMoveobj: {
         MoveObj* move_obj = new_node<MoveObj>(cur_token);
         next_token();
-        ++paran_count;
+        ++paren_count;
         expect('(');
         move_obj->value = parse_expr();
         expect(')');
-        --paran_count;
+        --paren_count;
         return move_obj;
     }
     case TypeTokens: {
@@ -2550,11 +2558,11 @@ acorn::Expr* acorn::Parser::parse_term() {
         Reflect* reflect = new_node<Reflect>(cur_token);
         reflect->reflect_kind = context.get_reflect_kind(cur_token.text());
         next_token();
-        ++paran_count;
+        ++paren_count;
         expect('(');
         reflect->expr = parse_expr();
         expect(')');
-        --paran_count;
+        --paren_count;
         return reflect;
     }
     default:
@@ -3144,7 +3152,7 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
         case ',':
             return;
         case ')': {
-            if (paran_count > 0)
+            if (paren_count > 0)
                 return;
             next_token();
             break;

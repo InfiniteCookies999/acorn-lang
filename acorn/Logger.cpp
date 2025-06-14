@@ -153,7 +153,7 @@ void acorn::GlobalLogger::end_error(ErrCode error_code) {
         fmt_print("%s[%s%s%s]", White, BrightBlue, static_cast<unsigned>(error_code), White);
         facing_length += 2 + static_cast<int>(count_digits(static_cast<unsigned>(error_code)));
     }
-    fmt_print("%s: ", BrightWhite), facing_length += 4;
+    fmt_print("%s: ", BrightWhite), facing_length += 2;
     set_terminal_color(stream, White);
 
     print_cb();
@@ -766,7 +766,7 @@ void acorn::Logger::print_header(ErrCode error_code, const std::string& line_num
         fmt_print("%s[%s%s%s]", White, BrightBlue, static_cast<unsigned>(error_code), White);
         facing_length += 2 + count_digits(static_cast<unsigned>(error_code));
     }
-    fmt_print("%s: ", BrightWhite), facing_length += 4;
+    fmt_print("%s: ", BrightWhite), facing_length += 2;
 
     const auto& path = file.path.empty() ? L"[buffer]" : file.path;
     fmt_print("%s%s", BrightCyan, path);

@@ -77,6 +77,38 @@ acorn::SourceLoc acorn::Func::get_function_const_location() const {
     return SourceLoc::from_ptrs(start_ptr, start_ptr + 5);
 }
 
+acorn::PointSourceLoc acorn::Func::get_function_first_default_param_location() const {
+    const char* eq_ptr = nullptr;
+    Var* found_param = nullptr;
+    for (Var* param : params) {
+        SourceLoc loc = param->loc;
+        const char* ptr = loc.ptr + loc.length;
+        while (*ptr != ',' && *ptr != '=' && *ptr == ')') {
+            ++ptr;
+        }
+        if (*ptr == ')') {
+            acorn_fatal("This function should only be called if there is a default parameter");
+        }
+        if (*ptr == '=') {
+            found_param = param;
+            eq_ptr = ptr;
+            break;
+        }
+    }
+
+    auto expanded_assignment_loc = expand(found_param->assignment);
+
+    const char* end_ptr   = expanded_assignment_loc.end();
+    const char* start_ptr = found_param->loc.ptr;
+
+    return PointSourceLoc{
+        .ptr = start_ptr,
+        .length = static_cast<uint16_t>(end_ptr - start_ptr),
+        .point = eq_ptr,
+        .point_length = 1
+    };
+}
+
 std::string acorn::Func::get_decl_string() const {
     std::string str = name.to_string().str();
     str += "(";

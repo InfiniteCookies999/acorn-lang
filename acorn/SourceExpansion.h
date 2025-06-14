@@ -5,6 +5,8 @@
 
 namespace acorn {
 
+    // Keeps traversing until it encounters the close taking into
+    // account balancing of opens/closes.
     void go_until(const char*& e, char open, char close);
 
     // Takes the error location of a node, decends

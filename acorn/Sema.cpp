@@ -558,7 +558,7 @@ void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
 }
 
 bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2) {
-    if (do_functions_match(func1, func2)) {
+    if (do_functions_match<true>(func1, func2)) {
         report_redeclaration(func1, func2, func1->is_constructor ? "constructor" : "function", ErrCode::SemaDuplicateFunc);
         return true;
     }
@@ -817,6 +817,12 @@ bool acorn::Sema::check_function_decl(Func* func) {
             .end_error(ErrCode::SemaNativeFunctionsCannotDefineRaisesError);
     }
 
+    if (func->interfacen && func->default_params_offset != -1) {
+        auto err_loc = func->get_function_first_default_param_location();
+        error(err_loc, "Interface functions cannot have default parameter values")
+            .end_error(ErrCode::SemaInterfaceFuncHaveDefaultParamVal);
+    }
+
     bool raised_errors_have_errors = false;
     for (auto& raised_error : func->raised_errors) {
         if (!check_raised_error(raised_error)) {
@@ -899,7 +905,6 @@ bool acorn::Sema::check_function_decl(Func* func) {
     size_t pcount = 0;
     bool encountered_param_default_value = false;
     Var* last_default_param;
-    size_t num_default_params = 0;
     for (Var* param : func->params) {
         // Check for duplicate parameter names.
         //
@@ -928,7 +933,6 @@ bool acorn::Sema::check_function_decl(Func* func) {
         }
 
         if (param->assignment) {
-            ++num_default_params;
             last_default_param = param;
             encountered_param_default_value = true;
         }
@@ -952,10 +956,6 @@ bool acorn::Sema::check_function_decl(Func* func) {
         }
 
         ++pcount;
-    }
-
-    if (num_default_params != 0) {
-        func->default_params_offset = func->params.size() - num_default_params;
     }
 
     if (func->has_modifier(Modifier::Native)) {
@@ -1616,12 +1616,17 @@ void acorn::Sema::check_struct(Struct* structn) {
 
 }
 
+template<bool check_only_non_default_value_params>
 bool acorn::Sema::do_functions_match(const Func* func1, const Func* func2) {
     auto get_param_count = [](const Func* func) finline {
-        if (func->default_params_offset == -1) {
+        if constexpr (check_only_non_default_value_params) {
+            if (func->default_params_offset == -1) {
+                return func->params.size();
+            }
+            return func->default_params_offset;
+        } else {
             return func->params.size();
         }
-        return func->default_params_offset;
     };
 
     size_t param_count = get_param_count(func1);
@@ -1658,6 +1663,11 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn, Interface* i
     }
 
     for (auto interface_func : interfacen->functions) {
+
+        if (!interface_func->has_checked_declaration) {
+            check_function_decl(interface_func);
+        }
+
         if (interface_func->has_errors) {
             structn->has_errors = true;
             continue;
@@ -1690,6 +1700,14 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn, Interface* i
             if (found_match) {
                 func->mapped_interface_func = interface_func;
                 func->is_dynamic = is_dynamic;
+
+                // This is done here since it needs to happen after the function's declaration
+                // has been processed in order to determine if the functions match.
+                if (func->default_params_offset != -1) {
+                    auto err_loc = func->get_function_first_default_param_location();
+                    error(err_loc, "Interface function implementations cannot have default parameter values")
+                        .end_error(ErrCode::SemaFuncImplInterfaceFuncHaveDefaultParamVal);
+                }
                 break;
             }
         }
@@ -1725,8 +1743,22 @@ bool acorn::Sema::do_interface_functions_matches(Func* interface_func, Func* fun
         return false;
     }
 
-    if (!do_functions_match(interface_func, func)) {
+    if (!do_functions_match<false>(interface_func, func)) {
         return false;
+    }
+
+    // Checking to make sure raised errors match.
+    //
+    if (interface_func->raised_errors.size() != func->raised_errors.size()) {
+        return false;
+    }
+
+    for (size_t i = 0; i < interface_func->raised_errors.size(); i++) {
+        auto& interface_error = interface_func->raised_errors[i];
+        auto& func_error      = func->raised_errors[i];
+        if (interface_error.structn != func_error.structn) {
+            return false;
+        }
     }
 
     return true;
@@ -1737,13 +1769,6 @@ void acorn::Sema::display_interface_func_mismatch_info(Func* interface_func,
                                                        bool indent,
                                                        bool should_show_invidual_underlines) {
 
-    auto get_param_count = [](const Func* func) finline{
-        if (func->default_params_offset == -1) {
-            return func->params.size();
-        }
-        return func->default_params_offset;
-    };
-
 #define err_line(n, fmt, ...)                                         \
 {                                                                     \
     if (n && should_show_invidual_underlines) {                       \
@@ -1752,12 +1777,12 @@ void acorn::Sema::display_interface_func_mismatch_info(Func* interface_func,
     logger.add_line(("%s- " fmt), indent ? "  " : "", ##__VA_ARGS__); \
 }
 
-    size_t param_count = get_param_count(interface_func);
-    if (param_count != get_param_count(func)) {
+    size_t param_count = interface_func->params.size();
+    if (param_count != func->params.size()) {
         err_line(nullptr,
                  "Incorrect number of parameters. Expected %s but found %s",
                  param_count,
-                 get_param_count(func));
+                 func->params.size());
         return;
     }
 
@@ -1782,6 +1807,48 @@ void acorn::Sema::display_interface_func_mismatch_info(Func* interface_func,
         Var* param2 = func->params[i];
         if (param1->type->is_not(param2->type)) {
             err_line(param2, "Expected parameter type '%s' but found '%s'", param1->type, param2->type);
+        }
+    }
+
+    // report number of raised errors doesnt match (probably bad idea)
+
+    // report which raised errors are not raised/if they raise errors the interface doesn't
+    // then after this if that doesnt fail then report them being out of order
+
+    bool raised_errors_match = true;
+    for (auto& interface_error : interface_func->raised_errors) {
+        auto itr = std::ranges::find_if(func->raised_errors, [interface_error](auto& func_error) {
+            return func_error.structn == interface_error.structn;
+        });
+        if (itr == func->raised_errors.end()) {
+            err_line(nullptr, "Missing raised error '%s'", interface_error.name);
+            raised_errors_match = false;
+        }
+    }
+    for (auto& func_error : func->raised_errors) {
+        auto itr = std::ranges::find_if(interface_func->raised_errors, [func_error](auto& interface_error) {
+            return func_error.structn == interface_error.structn;
+        });
+        if (itr == interface_func->raised_errors.end()) {
+            logger.add_individual_underline(func_error.error_loc.to_point_source());
+            logger.add_line("%s- Error '%s' not raised by interface function", indent ? "  " : "", func_error.name);
+            raised_errors_match = false;
+        }
+    }
+
+    // Still verify that the order they are specified in matches.
+    if (raised_errors_match) {
+        bool order_matches = true;
+        for (size_t i = 0; i < interface_func->raised_errors.size(); i++) {
+            auto& interface_error = interface_func->raised_errors[i];
+            auto& func_error = func->raised_errors[i];
+            if (interface_error.structn != func_error.structn) {
+                order_matches = false;
+                break;
+            }
+        }
+        if (!order_matches) {
+            err_line(nullptr, "Raised errors do not appear in the same order as interface function");
         }
     }
 }
@@ -2944,9 +3011,11 @@ void acorn::Sema::check_this(This* thisn) {
 
 void acorn::Sema::check_sizeof(SizeOf* sof) {
 
-    sof->type_with_size = fixup_type(sof->parsed_type_with_size);
-    if (!sof->type_with_size) {
-        return;
+    check_and_verify_type(sof->value);
+    if (sof->value->type->get_kind() == TypeKind::Expr) {
+        sof->type_with_size = get_type_of_type_expr(sof->value);
+    } else {
+        sof->type_with_size = sof->value->type;
     }
 
     if (is_incomplete_type(sof->type_with_size)) {
@@ -4713,7 +4782,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
 
         Func* canidate = candidates[0];
 
-        logger.begin_error(error_loc, "Invalid call to '%s': '%s'", func_type_str, canidate->get_decl_string());
+        logger.begin_error(error_loc, "Invalid call to %s: '%s'", func_type_str, canidate->get_decl_string());
         logger.add_empty_line();
         display_call_mismatch_info(canidate, args, false, true, call_node);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
@@ -5509,6 +5578,8 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
     case TypeKind::Float32: case TypeKind::Float64: {
         if (from_type->is_float()) {
             return to_type->is(from_type);
+        } else if (from_type->is_integer()) {
+            return true;
         }
 
         if (expr->trivially_reassignable) {

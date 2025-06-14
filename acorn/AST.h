@@ -185,49 +185,42 @@ namespace acorn {
 
         // If not null then the function is a member function.
         Struct* structn = nullptr;
-        // If not null then the function is a function is an
+
+        // If not null then the function is a function of an
         // interface. Note, this is different than a function that
         // implements an interface function, this function is the
         // declaration within the interface.
         Interface* interfacen = nullptr;
 
-        llvm::Function* ll_func = nullptr;
-        // If the function is a native intrinsic function then this
-        // id is set.
-        llvm::Intrinsic::ID ll_intrinsic_id = 0;
-
-        llvm::StringRef linkname;
-
-        Type* parsed_return_type;
-        Type* return_type;
-        llvm::SmallVector<Var*, 8> params;
-
-        uint32_t num_returns = 0;
-        llvm::SmallVector<Var*, 16> vars_to_alloc;
-
-        llvm::SmallVector<RaisedError> raised_errors;
-
-        size_t default_params_offset = static_cast<size_t>(-1);
-
         // If this function belongs to an interface then this
         // is the n-th function of the interface.
         size_t interface_idx;
-
-        ScopeStmt* scope = nullptr;
 
         // If this function is the implementation of an interface function
         // then the `mapped_interface_func` is the function of the interface
         // that is implemented.
         Func* mapped_interface_func = nullptr;
 
-        // when the function returns an aggregate type such
-        // as an array then if the aggregate type can fit into
-        // an integer this is the integer llvm type.
-        llvm::Type* ll_aggr_int_ret_type = nullptr;
+        Type* parsed_return_type;
+        Type* return_type;
+        llvm::SmallVector<Var*, 8> params;
+        llvm::SmallVector<RaisedError> raised_errors;
+
+        llvm::StringRef linkname;
+
+        uint32_t num_returns = 0;
+        llvm::SmallVector<Var*, 16> vars_to_alloc;
+
+        size_t default_params_offset = static_cast<size_t>(-1);
+
+        ScopeStmt* scope = nullptr;
+
         // when the function returns an aggregate type the function
         // may use a parameter that points to the return value instead
         // of returning a value directly.
         bool uses_aggr_param = false;
+
+        Var* aggr_ret_var = nullptr;
 
         bool cannot_use_aggr_ret_var = false;
         bool has_checked_declaration = false;
@@ -242,13 +235,27 @@ namespace acorn {
         bool is_constant             = false;
         bool has_errors              = false;
         bool is_dynamic              = false;
-        Var* aggr_ret_var = nullptr;
+
+        // when the function returns an aggregate type such
+        // as an array then if the aggregate type can fit into
+        // an integer this is the integer llvm type.
+        llvm::Type* ll_aggr_int_ret_type = nullptr;
+
+        // If the function is a native intrinsic function then this
+        // id is set.
+        llvm::Intrinsic::ID ll_intrinsic_id = 0;
+
+        llvm::Function* ll_func = nullptr;
 
         Var* find_parameter(Identifier name) const;
 
         // Scans forward until it finds the 'const' keyword after the parameter
         // type information.
         SourceLoc get_function_const_location() const;
+
+        // Scans forward until it finds the first parameter location with a default
+        // parameter value.
+        PointSourceLoc get_function_first_default_param_location() const;
 
         std::string get_decl_string() const;
 
@@ -834,7 +841,8 @@ namespace acorn {
         SizeOf() : Expr(NodeKind::SizeOf) {
         }
 
-        Type* parsed_type_with_size;
+        //Type* parsed_type_with_size;
+        Expr* value;
         Type* type_with_size;
     };
 

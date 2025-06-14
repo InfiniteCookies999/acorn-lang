@@ -114,6 +114,7 @@ namespace acorn {
 
         } * cur_scope = nullptr;
 
+        template<bool check_only_non_default_value_params>
         static bool do_functions_match(const Func* func1, const Func* func2);
 
         void check_struct_interface_extension(Struct* structn, Interface* interfacen, bool is_dynamic);

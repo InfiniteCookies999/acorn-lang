@@ -3053,12 +3053,17 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         llvm::SmallVector<llvm::Type*> ll_param_types;
         ll_param_types.reserve(ll_num_args + 1);
 
-        // Pointer for "this" pointer.
-        ll_param_types.push_back(builder.getPtrTy());
-
         if (uses_aggr_param) {
             ll_param_types.push_back(builder.getPtrTy());
         }
+
+        if (passes_raised_error) {
+            ll_param_types.push_back(builder.getPtrTy());
+        }
+
+        // Pointer for "this" pointer.
+        ll_param_types.push_back(builder.getPtrTy());
+
         for (Var* param : called_func->params) {
             if (param->type->is_array()) {
                 ll_param_types.push_back(builder.getPtrTy());

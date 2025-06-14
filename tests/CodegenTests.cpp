@@ -2213,6 +2213,18 @@ static void error_tests() {
 
         expect(result, std::identity()).to_be("foo called!caught error!test error msg");
     });
+    test("Raise uncaught error when calling interface function", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors22.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("foo called!test error msg");
+    });
+    test("Raise conditionally raises error when calling interface function", [&] {
+        auto [err_msg, result] = run_codegen_test(src(L"errors/errors23.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@test error msg");
+    });
     // ... Destructors
     test("Raise error does not call destructor for assigned object", [&] {
         auto [err_msg, result] = run_codegen_test(src(L"errors/errors_destructors1.ac"), true);

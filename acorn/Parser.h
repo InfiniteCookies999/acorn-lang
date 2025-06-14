@@ -64,7 +64,7 @@ namespace acorn {
         bool parsing_import_tops      = true;
         bool allow_struct_initializer = true;
 
-        int paran_count   = 0;
+        int paren_count   = 0;
         int bracket_count = 0;
 
         // Statement parsing
