@@ -9,6 +9,8 @@
 #include "Module.h"
 #include "SourceFile.h"
 
+#include "TestFramework.h"
+
 using namespace acorn;
 
 static llvm::LLVMContext ll_context;
@@ -36,7 +38,7 @@ void test_lexer() {
             .length  = strlen(program)
         };
         SourceFile* mock_file = new SourceFile(*context, L"", L"", buffer, mock_modl);
-        Lexer* lexer = new Lexer(*context, buffer, mock_logger(mock_file->logger));
+        Lexer* lexer = new Lexer(*context, buffer, set_logger_mock_interpreter(mock_file->logger));
         return lexer;
     };
 

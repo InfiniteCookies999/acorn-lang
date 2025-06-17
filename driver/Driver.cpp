@@ -44,7 +44,11 @@ Options:
     -o=<name>, -out-name, -output-name
         Sets the name of the executable.
 
-    -d=<dir>, -directory, -out-directory, -output-directory
+    -d, -debug, -debug-info
+        Emits debug information so the code may be stepped
+        through by a debugger.
+
+    -dir=<dir>, -directory, -out-directory, -output-directory
         Sets the directory to place the output files such as
         the executable. Will create the director(ies) if they
         do not exist.
@@ -92,8 +96,7 @@ Options:
 
     -nshow-spell-checking
         Stops performing spell checking when an identifier is
-        not found and it tries to find an identifier with a
-        closely matching string.
+        not found to provide recommendation.
 
     -show-linker-command, -show-linker-cmd
         Shows the command that is ran to perform linking.
@@ -132,7 +135,7 @@ int main(int argc, char* argv[]) {
     processor.add_flag("output-name", { "out-name", "o" }, [](CommandConsumer& consumer) {
         consumer.next_eql_pair(&acorn::Compiler::set_output_name, "Missing output program name");
     }, true);
-    processor.add_flag("output-directory", { "out-directory", "d", "directory" }, [](CommandConsumer& consumer) {
+    processor.add_flag("output-directory", { "out-directory", "dir", "directory" }, [](CommandConsumer& consumer) {
         consumer.next_eql_pair(&acorn::Compiler::set_output_directory, "Missing directory");
     }, true);
 

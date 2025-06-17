@@ -46,3 +46,7 @@ std::pair<size_t, size_t> acorn::LineTable::get_line_and_column_number(const cha
 
     return { line_number, column_number };
 }
+
+size_t acorn::LineTable::get_file_offset(size_t line_number) const {
+    return line_offsets[line_number];
+}

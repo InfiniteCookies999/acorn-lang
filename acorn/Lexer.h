@@ -13,6 +13,8 @@ namespace acorn {
 
         Lexer(const Context& context, Buffer buffer, Logger& logger);
 
+        Lexer(const Lexer& lexer, llvm::SmallVector<Token, 8> peeked_tokens, Logger& logger);
+
         Lexer(Lexer&&) = default;
 
         [[nodiscard]] Token next_token();

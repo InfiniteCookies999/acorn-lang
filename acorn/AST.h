@@ -291,6 +291,7 @@ namespace acorn {
 
         uint32_t param_idx = NotParam;
         uint32_t field_idx = NotField;
+        uint32_t ll_field_idx;
         bool     is_global = false;
 
         // This is the type that is parsed and does not change
@@ -351,6 +352,7 @@ namespace acorn {
 
         struct UnresolvedExtension {
             Identifier name;
+            SourceLoc  error_loc;
             bool       is_dynamic;
         };
 
@@ -389,8 +391,6 @@ namespace acorn {
 
         Var* find_field(Identifier name) const;
         const InterfaceExtension* find_interface_extension(Identifier name) const;
-
-        SourceLoc get_extension_location(Identifier name) const;
 
     };
 
@@ -458,6 +458,8 @@ namespace acorn {
 
         bool is_imported_namespace() const { return imported_kind == NamespaceKind; }
         bool is_imported_composite() const { return imported_kind == CompositeKind; }
+
+        PointSourceLoc get_key_location(bool center_by_last) const;
 
         void set_imported_namespace(Namespace* nspace) {
             imported_kind = NamespaceKind;
@@ -736,6 +738,9 @@ namespace acorn {
         bool is_slice_ptr    = false;
         bool is_enum_value   = false;
         Expr* site;
+
+        PointSourceLoc expand_access_only() const;
+
     };
 
     struct TypeExpr : Expr {
@@ -765,6 +770,8 @@ namespace acorn {
         size_t     mapped_idx;
         Identifier name;
         Expr*      assignment;
+
+        SourceLoc get_name_location() const;
     };
 
     struct FuncCall : Expr {

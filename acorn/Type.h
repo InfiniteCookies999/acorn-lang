@@ -148,6 +148,10 @@ namespace acorn {
             return kind == TypeKind::Pointer || kind == TypeKind::Null || kind == TypeKind::Function;
         }
 
+        bool is_callable() const {
+            return is_function();
+        }
+
         bool is_sized() const;
 
         uint32_t get_number_of_bits() const;

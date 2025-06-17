@@ -141,7 +141,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "#else"        , Token::KwCTElse      },
           { "#endif"       , Token::KwCTEndIf     },
           { "#file"        , Token::KwCTFile      },
-          { "#type_info"   , Token::KwCTReflect   },
+          { "#type_info"   , Token::KwCTTypeInfo  },
           { "#aborts"      , Token::KwCTAborts    },
       }),
 

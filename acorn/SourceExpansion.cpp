@@ -76,7 +76,18 @@ if (e1 > e) { e = e1; }           \
         }
         case NodeKind::DotOperator: {
             DotOperator* dot = static_cast<DotOperator*>(node);
+            // There can still be whitespace after the .
+            //
+            // This is valid:
+            // a.  b;
+            while (is_whitespace(*e)) {
+                ++e;
+            }
             e += dot->ident.to_string().size();
+            // Still have to traverse the site because `expand` doesn't just
+            // impact the dot operator alone. Expand gets called recursively
+            // and the assumption is that the children will expand to cover
+            // their entire expression.
             get(dot->site);
             break;
         }
@@ -88,6 +99,8 @@ if (e1 > e) { e = e1; }           \
         case NodeKind::StructInitializer: {
             // Include the closing }
             go_until(e, '{', '}');
+            StructInitializer* initializer = static_cast<StructInitializer*>(node);
+            get(initializer->ref);
             break;
         }
         case NodeKind::MoveObj: {

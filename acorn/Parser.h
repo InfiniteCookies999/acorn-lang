@@ -25,11 +25,11 @@ namespace acorn {
         void parse();
 
         int get_total_lines_parsed() const {
-            return lex.get_total_lines_lexed();
+            return lexer.get_total_lines_lexed();
         }
 
         int get_whitespace_lines_parsed() const {
-            return lex.get_whitespace_lines_lexed();
+            return lexer.get_whitespace_lines_lexed();
         }
 
     private:
@@ -45,7 +45,7 @@ namespace acorn {
         Struct*    cur_struct = nullptr;
         Interface* cur_interface = nullptr;
 
-        Lexer lex;
+        Lexer lexer;
         Token cur_token;
         Token prev_token;
 
@@ -90,9 +90,9 @@ namespace acorn {
                              bool is_copy_constructor = false,
                              bool is_move_constructor = false);
 
-        Var* parse_variable();
-        Var* parse_variable(uint32_t modifiers, Type* type);
-        Var* parse_variable(uint32_t modifiers, Type* type, Identifier name);
+        Var* parse_variable(bool is_for_expr);
+        Var* parse_variable(uint32_t modifiers, Type* type, bool is_for_expr);
+        Var* parse_variable(uint32_t modifiers, Type* type, Identifier name, bool is_for_expr);
         Node* parse_variable_list(uint32_t modifiers, Type* type);
 
         Struct* parse_struct();
@@ -102,6 +102,8 @@ namespace acorn {
 
         Enum* parse_enum(uint32_t modifiers);
         Interface* parse_interface(uint32_t modifiers);
+
+        void check_composite_name_conflict_with_imports(Identifier name, const char* composite_type_str);
 
         uint32_t parse_modifiers();
 

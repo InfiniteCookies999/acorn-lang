@@ -21,25 +21,25 @@ static PageAllocator allocator(4096);
 
 static Context* context;
 
-std::string node_kind_to_string(NodeKind kind) {
+static std::string node_kind_to_string(NodeKind kind) {
     return std::to_string(static_cast<unsigned>(kind));
 }
 
-std::string identifier_to_string(Identifier identifier) {
+static std::string identifier_to_string(Identifier identifier) {
     return identifier.to_string().str();
 }
 
-std::string type_to_string(Type* type) {
+static std::string type_to_string(Type* type) {
     return type->to_string();
+}
+
+static acorn::Node* get_bad_scope_node(const acorn::Module::BadScopeNode& bad_node) {
+    return bad_node.node;
 }
 
 template<typename K, typename V>
 auto get_second(const std::pair<K, V>& pair) -> V {
     return pair.second;
-}
-
-acorn::Node* get_bad_scope_node(const acorn::Module::BadScopeNode& bad_node) {
-    return bad_node.node;
 }
 
 void test_parser() {
@@ -59,7 +59,7 @@ void test_parser() {
         acorn::Identifier::clear_cache();
         Module* mock_modl = new Module();
         SourceFile* mock_file = new SourceFile(*context, L"", L"", buffer, *mock_modl);
-        mock_logger(mock_file->logger);
+        set_logger_mock_interpreter(mock_file->logger);
         Parser* parser = new Parser(*context, *mock_modl, mock_file);
         parser->parse();
         return mock_file;

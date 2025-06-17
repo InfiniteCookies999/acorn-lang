@@ -151,6 +151,20 @@ int CommandLineProcessor::process(llvm::StringRef flag_name, int idx) {
         return consumer.offset;
     }
 
+    size_t eq_idx = flag_name.find('=');
+    if (eq_idx != std::string::npos) {
+        auto possible_name = flag_name.substr(0, eq_idx);
+        for (Flag& flag : flags) {
+            if ((flag.flag_name == possible_name ||
+                  std::ranges::find(flag.aliases, possible_name) != flag.aliases.end())
+                ) {
+                acorn::Logger::global_error(*compiler.get_context(), "Flag %s does not take a value", possible_name)
+                    .end_error(acorn::ErrCode::GlobalFlagDoesNotTakeValue);
+                return idx + 1;
+            }
+        }
+    }
+
     acorn::Logger::global_error(*compiler.get_context(), "Unknown flag: -%s", flag_name)
         .end_error(acorn::ErrCode::GlobalUnknownCompilerFlag);
 

@@ -485,7 +485,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 
 		llvm::SmallVector<llvm::Metadata*> di_field_types;
 		for (Var* field : structn->fields) {
-			uint64_t offset_in_bits = ll_struct_layout->getElementOffsetInBits(field->field_idx);
+			uint64_t offset_in_bits = ll_struct_layout->getElementOffsetInBits(field->ll_field_idx);
 			di_field_types.push_back(create_member_field_type(field, offset_in_bits));
 		}
 

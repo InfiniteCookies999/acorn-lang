@@ -44,6 +44,9 @@ acorn::Compiler::Compiler(PageAllocator& allocator)
     ll_module(new llvm::Module("AcornModule", ll_context)),
     context(*new_context(ll_context, *ll_module, allocator)) {
     set_output_name(L"program");
+    // Start tracking time before run is called to include timing for
+    // command line processing.
+    total_timer.start();
 }
 
 bool acorn::Compiler::pre_initialize_target_machine() {
@@ -52,8 +55,6 @@ bool acorn::Compiler::pre_initialize_target_machine() {
 
 int acorn::Compiler::run(SourceVector& sources) {
 #define go(f) { f; if (context.has_errors()) return 1; }
-
-    total_timer.start();
 
     go(initialize_codegen());
 

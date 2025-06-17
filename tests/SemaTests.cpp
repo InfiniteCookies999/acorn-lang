@@ -35,7 +35,7 @@ void test_sema() {
         context->get_modules().insert({ Identifier::get("sema_modl"), mock_modl});
         SourceFile* mock_file = new SourceFile(*context, L"", L"", buffer, *mock_modl);
         mock_modl->add_source_file(mock_file);
-        mock_logger(mock_file->logger);
+        set_logger_mock_interpreter(mock_file->logger);
         Parser* parser = new Parser(*context, *mock_modl, mock_file);
         parser->parse();
 

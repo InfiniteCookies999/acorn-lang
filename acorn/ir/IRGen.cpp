@@ -473,7 +473,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
         //       list.
 
         for (Var* field : structn->fields) {
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->field_idx);
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->ll_field_idx);
             if (field->assignment) {
                 gen_assignment(ll_field_addr, field->type, field->assignment, field->loc);
             } else {
@@ -496,7 +496,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
             auto ll_struct_type = gen_struct_type(structn->struct_type);
             for (Var* field : structn->fields) {
                 if (field->type->needs_destruction()) {
-                    auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->field_idx);
+                    auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->ll_field_idx);
                     gen_call_destructors(field->type, ll_field_addr, func->scope->end_loc);
                 }
             }
@@ -857,10 +857,10 @@ void acorn::IRGenerator::finish_incomplete_struct_type_global(llvm::Value* ll_ad
         if (field->type->is_struct()) {
             auto field_struct_type = static_cast<StructType*>(field->type);
             finish_incomplete_struct_type_global(nullptr, field_struct_type, [=, this]() -> llvm::Value* {
-                return builder.CreateStructGEP(ll_struct_type, get_struct_address(), field->field_idx);
+                return builder.CreateStructGEP(ll_struct_type, get_struct_address(), field->ll_field_idx);
             });
         } else if (field->assignment && !field->assignment->is_foldable) {
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, get_struct_address(), field->field_idx);
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, get_struct_address(), field->ll_field_idx);
             gen_assignment(ll_field_addr, field->type, field->assignment, field->loc);
         }
     }
@@ -915,7 +915,7 @@ void acorn::IRGenerator::gen_implicit_default_constructor(Struct* structn) {
     }
 
     for (Var* field : structn->fields) {
-        auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->field_idx);
+        auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->ll_field_idx);
         if (field->assignment) {
             gen_assignment(ll_field_addr, field->type, field->assignment, field->loc);
         } else {
@@ -940,7 +940,7 @@ void acorn::IRGenerator::gen_implicit_destructor(Struct* structn) {
 
     for (Var* field : structn->fields) {
         if (field->type->needs_destruction()) {
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->field_idx);
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->ll_field_idx);
             gen_call_destructors(field->type, ll_field_addr, structn->loc);
         }
     }
@@ -985,8 +985,8 @@ void acorn::IRGenerator::gen_implicit_move_constructor(Struct* structn) {
     auto ll_from_struct_address = ll_cur_func->getArg(1);
 
     for (Var* field : structn->fields) {
-        auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_this, field->field_idx);
-        auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->field_idx);
+        auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_this, field->ll_field_idx);
+        auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->ll_field_idx);
         try_move_then_copy_struct_field_constructor(field,
                                                     ll_this,
                                                     ll_from_struct_address,
@@ -2400,7 +2400,7 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
             fields_set_list[named_val->mapped_idx] = true;
         } else {
             Var* field = structn->fields[field_idx];
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field->field_idx);
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field->ll_field_idx);
             gen_assignment(ll_field_addr, field->type, value, field->loc, lvalue);
 
             fields_set_list[field_idx] = true;
@@ -2415,7 +2415,7 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
     for (field_idx = initializer->non_named_vals_offset; field_idx < structn->fields.size(); field_idx++) {
         if (!fields_set_list[field_idx]) {
             Var* field = structn->fields[field_idx];
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field->field_idx);
+            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, field->ll_field_idx);
             if (field->assignment) {
                 gen_assignment(ll_field_addr, field->type, field->assignment, field->loc, lvalue);
             } else {
@@ -2544,7 +2544,7 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
 
         if (var->is_field()) {
             auto ll_struct_type = gen_type(cur_struct->struct_type);
-            return builder.CreateStructGEP(ll_struct_type, ll_this, var->field_idx);
+            return builder.CreateStructGEP(ll_struct_type, ll_this, var->ll_field_idx);
         }
 
         if (var->is_global) {
@@ -3684,7 +3684,7 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
         }
 
         auto field = dot->var_ref;
-        return builder.CreateStructGEP(ll_struct_type, ll_struct_address, field->field_idx);
+        return builder.CreateStructGEP(ll_struct_type, ll_struct_address, field->ll_field_idx);
     };
 
     if (dot->is_array_length) {
@@ -4775,8 +4775,8 @@ void acorn::IRGenerator::copy_struct_field_constructor(Var* field,
                                                        llvm::Value* ll_from_struct_address,
                                                        llvm::Type* ll_struct_type) {
 
-    auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_to_struct_address, field->field_idx);
-    auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->field_idx);
+    auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_to_struct_address, field->ll_field_idx);
+    auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->ll_field_idx);
 
     if (field->type->is_struct()) {
         gen_copy_struct(ll_to_field_addr, ll_from_field_addr, static_cast<StructType*>(field->type), field->loc);
@@ -4793,8 +4793,8 @@ void acorn::IRGenerator::try_move_then_copy_struct_field_constructor(Var* field,
                                                                      llvm::Value* ll_from_struct_address,
                                                                      llvm::Type* ll_struct_type) {
 
-    auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_to_struct_address, field->field_idx);
-    auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->field_idx);
+    auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_to_struct_address, field->ll_field_idx);
+    auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->ll_field_idx);
 
     if (field->type->is_struct()) {
         auto field_struct_type = static_cast<StructType*>(field->type);

@@ -28,6 +28,16 @@ acorn::Lexer::Lexer(const Context& context, Buffer buffer, Logger& logger) :
     end(buffer.content + buffer.length) {
 }
 
+acorn::Lexer::Lexer(const Lexer& lexer, llvm::SmallVector<Token, 8> peeked_tokens, Logger& logger)
+    : context(lexer.context),
+      logger(logger),
+      ptr(lexer.ptr),
+      end(lexer.end),
+      total_lines_lexed(lexer.total_lines_lexed),
+      whitespace_lines_lexed(lexer.whitespace_lines_lexed) {
+
+}
+
 acorn::Token acorn::Lexer::next_token() {
 
     bool whitespace = false;
@@ -247,7 +257,7 @@ case c1:                                        \
         unsigned char unknown_char = static_cast<unsigned char>(*ptr);
         if (unknown_char >= 33 && unknown_char <= 126) { // Easily displayable.
             logger.begin_error(SourceLoc{ ptr, 1 }, "Invalid character: '%s'", std::string(1, unknown_char))
-                  .add_arrow_msg(Logger::ArrowPosition::At, "remove this character")
+                  .add_arrow_msg(Logger::CaretPlacement::At, "remove this character")
                   .end_error(ErrCode::LexInvalidChar);
         } else {
             error("Invalid character (ascii code): '%s'", unknown_char).end_error(ErrCode::LexInvalidChar);
@@ -278,7 +288,7 @@ void acorn::Lexer::eat_single_line_comment() {
 
 void acorn::Lexer::eat_multiline_comment() {
 
-    ptr += 2; // Skip '/*'
+    ptr += 1; // Skip '/*'. Note: one character was already eaten.
 
     int depth = 1;
     while (*ptr != '\0' && depth > 0) {
@@ -416,10 +426,12 @@ acorn::Token acorn::Lexer::finish_int_number(tokkind kind, const char* start) {
     }
 
     if (*ptr == '\'') {
-        auto invalid_type_spec = [this, start]() finline{
-            auto error_loc = SourceLoc{ start, static_cast<uint16_t>(ptr - start) };
-            logger.begin_error(error_loc, "Expected to end in a type specifier")
-                  .add_line("One of: 'i8, 'i16, 'i32, 'i64, 'u8, 'u16, 'u32, 'u64")
+        auto type_spec_start = ptr;
+
+        auto invalid_type_spec = [this, type_spec_start, start]() finline{
+            auto error_loc = SourceLoc{ type_spec_start, static_cast<uint16_t>(ptr - type_spec_start) };
+            logger.begin_error(error_loc, "Invalid type specifier")
+                  .add_line("One of: i8, i16, i32, i64, u8, u16, u32, u64")
                   .end_error(ErrCode::LexNumberBadTypeSpec);
             return new_token(Token::InvalidNumberLiteral, start);
         };
@@ -471,10 +483,12 @@ acorn::Token acorn::Lexer::finish_float_number(const char* start, bool has_error
 }
 
 bool acorn::Lexer::skip_unicode_seq_digits(size_t n) {
+    auto start = ptr;
     ++ptr; // Skip u or U
     for (size_t i = 0; i < n && *ptr != '\0'; ++i, ++ptr) {
         if (!is_hexidecimal(*ptr)) {
-            error("Incomplete unicode sequence. Expected '%s' digits", n)
+            logger.begin_error(SourceLoc{ start - 1, static_cast<uint16_t>(i + 2) },
+                               "Incomplete unicode sequence. Expected %s digits", n)
                 .end_error(ErrCode::LexInvalidUnicodeSeq);
             return false;
         }

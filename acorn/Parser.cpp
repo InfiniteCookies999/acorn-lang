@@ -47,7 +47,7 @@ acorn::Parser::Parser(Context& context, Module& modl, SourceFile* file)
     , allocator(context.get_allocator())
     , file(file)
     , logger(file->logger)
-    , lex(context, file->buffer, logger)
+    , lexer(context, file->buffer, logger)
     , type_table(context.type_table) {
 }
 
@@ -131,7 +131,9 @@ void acorn::Parser::parse_import_top() {
     if (!importn) return;
 
     if (auto prev_import = file->try_add_import(importn)) {
-        error(importn->loc, "Duplicate import")
+        const auto& last_key_part = importn->key.back();
+        auto name = last_key_part.name.to_string();
+        logger.begin_error(importn->get_key_location(true), "Duplicate import of '%s'", name)
             .end_error(ErrCode::ParseDuplicateImport);
     }
 }
@@ -201,7 +203,6 @@ acorn::Node* acorn::Parser::parse_statement() {
         error(cur_token, "Import expected at top of file")
             .end_error(ErrCode::ParseImportNotTopOfFile);
         parse_import();
-        expect(';');
         return nullptr;
     }
     case Token::KwContinue:
@@ -373,7 +374,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
         if (!is_for_expr) {
             return parse_decl(0, parse_type());
         } else {
-            return parse_variable(0, parse_type());
+            return parse_variable(0, parse_type(), is_for_expr);
         }
     } else if (peek1.is('[')) {
 
@@ -415,7 +416,7 @@ acorn::Node* acorn::Parser::parse_ident_decl_or_expr(bool is_for_expr) {
             if (!is_for_expr) {
                 return parse_decl(0, type);
             } else {
-                return parse_variable(0, type);
+                return parse_variable(0, type, is_for_expr);
             }
         } else {
             // Memory accessing.
@@ -457,14 +458,14 @@ acorn::Node* acorn::Parser::parse_decl(uint32_t modifiers, Type* type) {
     } else {
         expect_identifier("for declaration");
         if (cur_token.is('=')) {
-            auto stmt = parse_variable(modifiers, type, Identifier());
+            auto stmt = parse_variable(modifiers, type, Identifier(), false);
             expect(';');
             return stmt;
         } else if (cur_token.is('(')) {
             return parse_function(modifiers, type, false, Identifier());
         } else if (cur_token.is_keyword() && peek_token(0).is('=')) {
             next_token(); // Consuming the extra keyword.
-            auto stmt = parse_variable(modifiers, type, Identifier());
+            auto stmt = parse_variable(modifiers, type, Identifier(), false);
             expect(';');
             return stmt;
         } else if (cur_token.is_keyword() && peek_token(0).is('(')) {
@@ -551,7 +552,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
                 next_token();
             }
 
-            Var* param = parse_variable(0, type);
+            Var* param = parse_variable(0, type, false);
 
             param->param_idx = param_idx++;
             param->has_implicit_ptr = has_implicit_ptr;
@@ -564,7 +565,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
             } else if (!full_reported) {
                 // TODO: The parameter might not refer to a location correctly.
                 error(param->loc,
-                      "Exceeded maximum number of function parameters. Max (%s)", MAX_FUNC_PARAMS)
+                      "Exceeded maximum number of function parameters. Max: %s", MAX_FUNC_PARAMS)
                     .end_error(ErrCode::ParseExceededMaxFuncParams);
                 full_reported = true;
             }
@@ -602,10 +603,10 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     bool expects_body = !(func->has_modifier(Modifier::Native) || cur_interface);
     if (expects_body || cur_token.is('{')) {
         if (func->has_modifier(Modifier::Native)) {
-            error(cur_token, "Native functions do not have bodies")
+            error(cur_token, "Native functions should not have bodies")
                 .end_error(ErrCode::ParseNativeFuncNoHaveBodies);
         } else if (cur_interface) {
-            error(cur_token, "Interface functions do not have bodies")
+            error(cur_token, "Interface functions should not have bodies")
                 .end_error(ErrCode::ParseInterfaceFuncNoHaveBodies);
         }
         func->scope = new_node<ScopeStmt>(cur_token);
@@ -624,15 +625,15 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     return func;
 }
 
-acorn::Var* acorn::Parser::parse_variable() {
-    return parse_variable(0, parse_type_for_decl());
+acorn::Var* acorn::Parser::parse_variable(bool is_for_expr) {
+    return parse_variable(0, parse_type_for_decl(), is_for_expr);
 }
 
-acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type) {
-    return parse_variable(modifiers, type, expect_identifier("for variable"));
+acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, bool is_for_expr) {
+    return parse_variable(modifiers, type, expect_identifier("for variable"), is_for_expr);
 }
 
-acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identifier name) {
+acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identifier name, bool is_for_expr) {
 
     Var* var = new_declaration<Var, true>(modifiers, name, prev_token);
     var->parsed_type = type;
@@ -643,7 +644,7 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, Type* type, Identi
         if (cur_token.is(Token::SubSubSub)) {
             next_token();
             var->should_default_initialize = false;
-        } else if (cur_token.is(Token::KwTry)) {
+        } else if (cur_token.is(Token::KwTry) && !is_for_expr) {
             var->assignment = parse_try();
             var->assignment->tryn->catch_recoveree = var;
         } else {
@@ -659,7 +660,7 @@ acorn::Node* acorn::Parser::parse_variable_list(uint32_t modifiers, Type* type) 
     auto vlist = &var_list;
 
     auto name = expect_identifier("for variable");
-    auto first_var = parse_variable(modifiers, type, name);
+    auto first_var = parse_variable(modifiers, type, name, false);
 
     if (cur_token.is_not(',')) {
         return first_var;
@@ -671,7 +672,7 @@ acorn::Node* acorn::Parser::parse_variable_list(uint32_t modifiers, Type* type) 
         next_token(); // Consuming ',' token
 
         auto name = expect_identifier("for variable");
-        vlist->list.push_back(parse_variable(modifiers, type, name));
+        vlist->list.push_back(parse_variable(modifiers, type, name, false));
 
         if (cur_token.is_not(',')) {
             break;
@@ -689,18 +690,7 @@ acorn::Struct* acorn::Parser::parse_struct() {
 
 acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) {
 
-    if (name != Identifier::Invalid) {
-        if (auto existing_import = file->find_import(name)) {
-            error(prev_token, "Name of struct '%s' conflicts with import", name)
-                .add_line([this, existing_import](auto& logger) {
-                    auto [line_number, _] =
-                        file->line_table.get_line_and_column_number(existing_import->loc.ptr);
-
-                    logger.fmt_print("import defined at line: %s%s%s", Color::BrightYellow, line_number, Color::BrightWhite);
-                 })
-                .end_error(ErrCode::ParseDataTypeNameConflictWithImport);
-        }
-    }
+    check_composite_name_conflict_with_imports(name, "struct");
 
     auto structn = new_declaration<Struct, false>(modifiers, name, prev_token);
     structn->nspace = allocator.alloc_type<Namespace>();
@@ -720,9 +710,11 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, Identifier name) 
                 next_token();
             }
 
+            Token extension_name_token = cur_token;
             auto extension_name = expect_identifier("for interface extension");
             structn->unresolved_extensions.push_back({
                 extension_name,
+                extension_name_token.loc,
                 is_dynamic
             });
 
@@ -755,6 +747,8 @@ acorn::Enum* acorn::Parser::parse_enum(uint32_t modifiers) {
     auto name = expect_identifier();
     Enum* enumn = new_declaration<Enum, false>(modifiers, name, name_token);
     enumn->enum_type = EnumType::create(allocator, enumn);
+
+    check_composite_name_conflict_with_imports(name, "enum");
 
     if (cur_token.is(Token::ColCol)) {
         next_token(); // Consuming '::' token.
@@ -800,6 +794,8 @@ acorn::Interface* acorn::Parser::parse_interface(uint32_t modifiers) {
     Interface* interfacen = new_declaration<Interface, false>(modifiers, name, name_token);
     interfacen->interface_type = InterfaceType::create(allocator, interfacen);
 
+    check_composite_name_conflict_with_imports(name, "interface");
+
     auto prev_interface = cur_interface;
     cur_interface = interfacen;
 
@@ -815,11 +811,29 @@ acorn::Interface* acorn::Parser::parse_interface(uint32_t modifiers) {
     return interfacen;
 }
 
+void acorn::Parser::check_composite_name_conflict_with_imports(Identifier name, const char* composite_type_str) {
+    if (name == Identifier::Invalid) {
+        return;
+    }
+
+    if (auto existing_import = file->find_import(name)) {
+        error(prev_token, "Name of %s '%s' conflicts with import", composite_type_str, name)
+            .add_line([this, existing_import](auto& logger) {
+                auto [line_number, _] =
+                    file->line_table.get_line_and_column_number(existing_import->loc.ptr);
+
+                logger.fmt_print("import defined at line: %s%s%s", Color::BrightYellow, line_number, Color::BrightWhite);
+                })
+            .end_error(ErrCode::ParseDataTypeNameConflictWithImport);
+    }
+}
+
 void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
 
     auto process_var = [structn](Var* var) finline {
         if (var->name != Identifier::Invalid) {
             structn->nspace->add_variable(var);
+            var->field_idx = structn->fields.size();
             structn->fields.push_back(var);
             var->structn = structn;
         }
@@ -997,19 +1011,21 @@ acorn::IfStmt* acorn::Parser::parse_if() {
     switch (cur_token.kind) {
     case TypeTokens:
     case Token::Identifier: {
-        size_t off = cur_token.is(Token::KwConst) ? 1 : 0;
 
-        if (peek_token(off).is('*') && peek_token(off + 1).is(Token::Identifier) && peek_token(off + 2).is('=')) {
-            ifs->cond = parse_variable();
+        allow_struct_initializer = false;
+        if (cur_token.is(Token::Identifier)) {
+            ifs->cond = parse_ident_decl_or_expr(true);
+        } else {
+            ifs->cond = parse_variable(true);
+        }
+
+        if (ifs->cond->is(NodeKind::Var)) {
             if (cur_token.is(';')) {
                 next_token();
                 ifs->post_variable_cond = parse_expr();
             }
-        } else {
-            allow_struct_initializer = false;
-            ifs->cond = parse_expr();
-            allow_struct_initializer = true;
         }
+        allow_struct_initializer = true;
         break;
     }
     default:
@@ -1029,7 +1045,7 @@ acorn::IfStmt* acorn::Parser::parse_if() {
             // We do not want the user to use 'else if'.
             SourceLoc error_loc = SourceLoc::from_ptrs(prev_token.loc.ptr,
                                                        cur_token.loc.ptr + cur_token.loc.length);
-            error(error_loc, "Must use 'elif' for else if statements")
+            error(error_loc, "Should use 'elif' for else if statements")
                 .end_error(ErrCode::ParseMustUseElif);
         }
         ifs->elseif = parse_scope();
@@ -1047,7 +1063,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
     bool top_took_path = !takes_path;
     if (!context.has_errors()) {
         Sema analyzer(context, file, logger);
-        takes_path &= analyzer.check_comptime_cond(cond);
+        takes_path &= analyzer.check_comptime_cond(cond, "#if");
     } else {
         // Give up and do not even try sema because there are parse
         // errors somewhere.
@@ -1156,7 +1172,7 @@ acorn::Node* acorn::Parser::parse_loop() {
 
     switch (cur_token.kind) {
     case TypeTokens: {
-        Var* var = parse_variable();
+        Var* var = parse_variable(true);
         return loop_with_var(var);
     }
     case Token::Identifier: {
@@ -1541,8 +1557,8 @@ return t; }
     case Token::KwFloat64: ty(context.float64_type);
     case Token::KwAuto: {
         if (is_const) {
-            error(prev_token, "Auto cannot be const")
-                .add_line("If you want a constant auto type just 'const'")
+            error(prev_token, "Type 'auto' cannot be const")
+                .add_line("If you want a constant auto type just use 'const'")
                 .end_error(ErrCode::ParseAutoCannotBeConst);
         }
         next_token();
@@ -1599,7 +1615,7 @@ acorn::Type* acorn::Parser::construct_unresolved_bracket_type(Type* base_type,
                 .ptr = loc_ptr,
                 .length = 1
             };
-            error(error_loc, "Element type must have length")
+            error(error_loc, "Element type should have length")
                 .end_error(ErrCode::ParseElmTypeMustHaveArrLen);
 
             reported_error_about_elm_must_have_length = true;
@@ -2243,7 +2259,7 @@ acorn::FuncCall* acorn::Parser::parse_function_call(Expr* site) {
             if (call->args.size() != MAX_FUNC_PARAMS) {
                 call->args.push_back(arg);
             } else if (!full_reported) {
-                logger.begin_error(expand(arg), "Exceeded maximum number of function arguments. Max (%s)",
+                logger.begin_error(expand(arg), "Exceeded maximum number of function arguments. Max: %s",
                                    MAX_FUNC_PARAMS)
                     .end_error(ErrCode::ParseExceededMaxFuncCallArgs);
                 full_reported = true;
@@ -2554,7 +2570,7 @@ acorn::Expr* acorn::Parser::parse_term() {
         type_expr->loc = type_location;
         return type_expr;
     }
-    case Token::KwCTReflect: {
+    case Token::KwCTTypeInfo: {
         Reflect* reflect = new_node<Reflect>(cur_token);
         reflect->reflect_kind = context.get_reflect_kind(cur_token.text());
         next_token();
@@ -3060,7 +3076,7 @@ void acorn::Parser::next_token() {
         std::rotate(peeked_tokens, peeked_tokens + 1, peeked_tokens + peeked_size);
         --peeked_size;
     } else {
-        cur_token = lex.next_token();
+        cur_token = lexer.next_token();
     }
 }
 
@@ -3069,7 +3085,7 @@ acorn::Token acorn::Parser::peek_token(size_t n) {
 
     // Ensure the tokens up to n are stored.
     while (peeked_size <= n) {
-        peeked_tokens[peeked_size++] = lex.next_token();
+        peeked_tokens[peeked_size++] = lexer.next_token();
     }
 
     return peeked_tokens[n];
@@ -3086,8 +3102,21 @@ bool acorn::Parser::expect(tokkind kind, const char* for_msg) {
         const auto closing_msg = is_closing ? " closing" : "";
         auto fixed_for_msg = for_msg ? std::string{ " " } + for_msg : "";
 
+        if (prev_token.is(Token::InvalidStringLiteral)) {
+            auto text = prev_token.text();
+            if (text.back() != '\"') {
+                // The string was missing its ending " so checking if the
+                // character we expect happens to be in the string.
+                if (kind <= 255) {
+                    if (static_cast<tokkind>(text.back()) == kind) {
+                        return false;
+                    }
+                }
+            }
+        }
+
         logger.begin_error(prev_token.loc, "Expected%s '%s' token%s", closing_msg, str_kind, fixed_for_msg)
-              .add_arrow_msg(Logger::ArrowPosition::After, arrow_msg)
+              .add_arrow_msg(Logger::CaretPlacement::After, arrow_msg)
               .end_error(ErrCode::ParseExpect);
         return false;
     }
@@ -3146,7 +3175,6 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
         case '{':
         case '}':
         case ';':
-        case ',':
             return;
         case ')': {
             if (paren_count > 0)
@@ -3166,10 +3194,33 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
             next_token();
             break;
         }
+        case TypeTokens:
         case Token::Identifier: {
-            if (peek_token(0).is('=')) {
-                return;
+
+            // Check for variable assignment.
+            if (cur_token.is(Token::Identifier)) {
+                switch (cur_token.kind) {
+                case '=':
+                case Token::AddEq:
+                case Token::SubEq:
+                case Token::MulEq:
+                case Token::DivEq:
+                case Token::ModEq:
+                case Token::AndEq:
+                case Token::OrEq:
+                case Token::CaretEq:
+                case Token::TildeEq:
+                case Token::LtLtEq:
+                case Token::GtGtEq: {
+                    // Variable assignment.
+                    return;
+                default:
+                    break;
+                }
+                }
             }
+
+            // Continue to next token, was not the start of a new declaration.
             next_token();
             break;
         }

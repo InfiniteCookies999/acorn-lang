@@ -171,24 +171,62 @@ const acorn::Struct::InterfaceExtension* acorn::Struct::find_interface_extension
     return itr != interface_extensions.end() ? itr : nullptr;
 }
 
-acorn::SourceLoc acorn::Struct::get_extension_location(Identifier name) const {
-    // We have to manually implement rfind because otherwise we would have to
-    // create a std::string for the file contents which could potentially be
-    // slow.
-    const char* ptr = loc.ptr;
+acorn::PointSourceLoc acorn::ImportStmt::get_key_location(bool center_by_last) const {
+    const auto& last_key_part  = key.back();
+    const auto& first_key_part =  key.front();
+    const char* start_loc = first_key_part.error_loc.ptr;
+    const char* end_loc   = last_key_part.error_loc.ptr + last_key_part.error_loc.length;
 
-    auto str = name.to_string().data();
-    auto str_len = name.to_string().size();
-
-    const char* buf_end = file->buffer.content + file->buffer.length;
-    while (ptr - str_len + 1 < buf_end) {
-        if (std::memcmp(ptr, str, str_len) == 0) {
-            // Found the source location!
-            return SourceLoc{ ptr, static_cast<uint16_t>(str_len) };
-        }
-        ++ptr;
+    auto loc = SourceLoc::from_ptrs(start_loc, end_loc).to_point_source();
+    if (center_by_last) {
+        loc.point        = last_key_part.error_loc.ptr;
+        loc.point_length = last_key_part.error_loc.length;
     }
 
-    acorn_fatal("unreachable");
-    return SourceLoc{};
+    return loc;
+}
+
+acorn::PointSourceLoc acorn::DotOperator::expand_access_only() const {
+    // There can still be whitespace after the .
+    //
+    // This is valid:
+    // a.  b;
+    const char* end_ptr = loc.end();
+    while (is_whitespace(*end_ptr)) {
+        ++end_ptr;
+    }
+    end_ptr += ident.to_string().size();
+
+    return PointSourceLoc{
+        .ptr = loc.ptr,
+        .length = static_cast<uint16_t>(end_ptr - loc.ptr),
+        .point = loc.ptr,
+        .point_length = 1
+    };
+}
+
+acorn::SourceLoc acorn::NamedValue::get_name_location() const {
+    const char* ptr = assignment->loc.ptr;
+    while (*ptr != '=' || is_whitespace(*ptr)) {
+        --ptr;
+    }
+    acorn_assert(*ptr == '=', "should hit =");
+    --ptr; // back off =.
+
+    while (is_whitespace(*ptr)) {
+        --ptr;
+    }
+    auto is_ident_char = [](char c) {
+        return (c >= '0' && c <= '9') ||
+               (c >= 'a' && c <= 'z') ||
+               (c >= 'A' && c <= 'Z') ||
+                c == '_';
+    };
+    const char* name_end = ptr + 1;
+    acorn_assert(is_ident_char(*ptr), "should hit identifier character");
+    while (is_ident_char(*ptr)) {
+        --ptr;
+    }
+    ++ptr;
+    return SourceLoc::from_ptrs(ptr, name_end);
 }

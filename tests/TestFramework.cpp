@@ -37,7 +37,7 @@ void TestCase::run() {
 
     }
     std::lock_guard lock(test_print_mutex);
-    std::cout << std::string(4 * depth, ' ') << "(Test) '" << name << "'";
+    std::cout << std::string(4 * depth, ' ') << "Test: '" << name << "'";
     if (!failed()) {
         set_color(acorn::Color::BrightGreen);
         std::cout << std::setw(50 - 4 * depth - strlen(name)) << "passed";
@@ -81,7 +81,7 @@ void TestSection::add_test_case(const char* name, const std::function<void()>& t
 }
 
 void TestSection::run() {
-    std::cout << std::string(4 * depth, ' ') << "(Testing) '" << name << "'\n";
+    std::cout << std::string(4 * depth, ' ') << "Testing: '" << name << "'\n";
     for (TestSection* sub_section : sub_sections) {
         sub_section->run();
     }
@@ -175,6 +175,8 @@ void section(const char* name, const std::function<void()>& cb, bool run_multith
 }
 
 void test(const char* name, const std::function<void()>& cb, bool only_run_this) {
+    using namespace acorn;
+    acorn_assert(current_section != nullptr, "You likely accidently placed a test outside a section");
     current_section->add_test_case(name, cb);
     if (only_run_this) {
         single_run_case = new TestCase(name, 0, cb);
@@ -192,7 +194,7 @@ acorn::Compiler* mock_compiler_instance(acorn::PageAllocator& allocator) {
     return compiler_instance;
 }
 
-acorn::Logger& mock_logger(acorn::Logger& logger) {
+acorn::Logger& set_logger_mock_interpreter(acorn::Logger& logger) {
     logger.set_error_code_interceptor(error_interceptor);
     return logger;
 }

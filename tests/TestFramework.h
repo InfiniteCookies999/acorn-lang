@@ -120,7 +120,7 @@ struct Expector {
             fail([this, error_code, error_codes = intercepted_error_codes]() {
                 std::cout << "Expected a single error to occure but multiple occured";
                 bool is_duplicate = true;
-                for (auto intercepted : error_codes) {
+                for (const auto& intercepted : error_codes) {
                     if (intercepted.code != error_code) {
                         print_encountered_error_msg(intercepted);
                         is_duplicate = false;
@@ -201,7 +201,7 @@ inline void force_fail_impl(std::string fail_msg, const char* cpp_file, int line
 #define force_fail(fail_msg) force_fail_impl(fail_msg, __FILE__, __LINE__)
 
 acorn::Compiler* mock_compiler_instance(acorn::PageAllocator& allocator);
-acorn::Logger&   mock_logger(acorn::Logger& logger);
+acorn::Logger&   set_logger_mock_interpreter(acorn::Logger& logger);
 
 void run_tests();
 

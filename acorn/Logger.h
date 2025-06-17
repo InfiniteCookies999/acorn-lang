@@ -14,6 +14,8 @@
 #include "Util.h"
 #include "Errors.h"
 
+class LoggerTester; // Forward declare so the tester can access and test the logger functions.
+
 namespace acorn {
 
     // It is fine for this to not be per thread we intend this to be
@@ -153,7 +155,7 @@ namespace acorn {
         static void print(Stream stream, T v) {
 
             // Create buffer and write backwards into it.
-            char buffer[22];
+            char buffer[22] = {0};
             char* p = buffer + sizeof(buffer) - 1;
             *p = '\0';
 
@@ -177,7 +179,7 @@ namespace acorn {
 
         template<std::floating_point T>
         static void print(Stream stream, T v) {
-            char buffer[32];
+            char buffer[32] = {0};
             int length = snprintf(buffer, sizeof(buffer), "%f", v);
             print(stream, buffer, length);
         }
@@ -244,34 +246,40 @@ namespace acorn {
 
     class Logger : public AbstractLogger<Logger> {
     public:
-        enum class ArrowPosition {
+        enum class CaretPlacement {
             At,
             After,
             Alongside,
             None
         };
 
-        struct LineInfo {
-            std::string unprocessed_text;
-            const char* line_start_ptr;
-            bool is_first; // Is this the first line being printed.
-            bool is_last;  // Is this the last line being printed.
-            size_t dots_width;
+        enum class ErrorMarker {
+            Underline,
+            Arrow,
+            None,
         };
 
         // Data used for printing errors.
-        using InfoLines = llvm::SmallVector<LineInfo, 8>;
+        struct ErrorLine {
+            std::string              characters;
+            std::vector<ErrorMarker> character_markers;
+            size_t line_number;
+            bool   has_right_cutoff;
+            bool   is_pivot_line;
+
+            bool empty() const {
+                return characters.empty();
+            }
+        };
+
         struct ErrorInfo {
-            InfoLines   lines;
-            size_t      start_line_number;
-            size_t      last_line_number;
+            std::vector<ErrorLine> lines;
             std::string line_number_pad;
-            bool        exceeded_start, exceeded_end;
-            size_t      start_width;
-            size_t      end_width;
-            int         pline_leading_ws_cutoff_count;
-            int         pline_leading_non_ws_cutoff_count;
-            size_t      primary_line_number;
+            size_t      min_line_number             = std::numeric_limits<size_t>::max();
+            size_t      max_line_number             = 0;
+            bool        has_left_cutoff             = false;
+            bool        has_more_lines_down_cutoff  = false;
+            bool        has_more_lines_up_cutoff    = false;
         };
 
         Logger(Context& context, SourceFile& file)
@@ -370,64 +378,102 @@ namespace acorn {
 
         // Adds a message to point to the error to help the user determine what they
         // need to change in their code to fix things.
-        Logger& add_arrow_msg(ArrowPosition position, std::string msg) {
-            if (position == ArrowPosition::Alongside) {
+        Logger& add_arrow_msg(CaretPlacement position, std::string msg) {
+            if (position == CaretPlacement::Alongside) {
                 acorn_fatal("Must call add_arrow_msg_alongside with ArrowLoc::Alongside");
             }
-            arrow_msg = { .msg = msg, .position = position };
+            caret_msg = { .msg = msg, .placement = position };
             return *this;
         }
 
         Logger& add_arrow_msg_alongside(std::string msg, SourceLoc location) {
-            arrow_msg = {
+            caret_msg = {
                 .msg = msg,
-                .position = ArrowPosition::Alongside,
+                .placement = CaretPlacement::Alongside,
                 .location = location
             };
             return *this;
         }
 
+        Logger& add_individual_underline(SourceLoc underline_loc) {
+            individual_underlines.push_back(underline_loc.to_point_source());
+            return *this;
+        }
+
+        Logger& add_individual_underline(PointSourceLoc underline_loc) {
+            individual_underlines.push_back(underline_loc);
+            return *this;
+        }
+
+        Logger& still_give_main_location_priority() {
+            main_location_still_has_priority = true;
+            return *this;
+        }
+
+        void silence_errors() {
+            should_silence_errors = true;
+        }
+
     private:
+        friend class LoggerTester;
+
         void print_header(ErrCode error_code, const std::string& line_number_pad);
+
+        void print_line_bar(const ErrorInfo& info, bool include_new_line);
+        void print_line_number_bar(const ErrorInfo& info, const ErrorLine& line);
 
         void print_error_location(const ErrorInfo& info);
 
-        void print_error_location_line(const ErrorInfo& info,
-                                       const LineInfo& line_info,
-                                       bool has_arrow_msg,
-                                       bool is_alongside_arrow_msg,
-                                       bool is_at_arrow_msg,
-                                       bool is_arrow_after,
-                                       const size_t line_number);
-        void print_line_number_bar(const ErrorInfo& info, size_t line_number);
+        ErrorInfo collect_error_info();
 
-        void print_arrow_after_msg(const ErrorInfo& info,
-                                   const LineInfo& line_info,
-                                   const std::string& line,
-                                   size_t& total_printed_characters_for_line);
+        ErrorLine create_error_line(long long line_number,
+                                    size_t    left_cutoff,
+                                    size_t    left_pivot_distance,
+                                    size_t    cutoff_shift);
 
-        void print_underline(const ErrorInfo& info,
-                             const LineInfo& line_info,
-                             bool is_at_arrow_msg,
-                             const std::string& line,
-                             size_t& total_printed_characters_for_line);
-        bool print_individual_underlines(const ErrorInfo& info,
-                                         const LineInfo& line_info,
-                                         size_t primary_line_leading_trim,
-                                         size_t& total_printed_characters_for_line);
+        // Given the distance from the start of the pivot line to the pivot point (A point of interest
+        // of where in the buffer the error occured) `left_pivot_distance` and a line number calculates
+        // how many characters would be cut off past the end of the right side of the error window for the
+        // given line.
+        //
+        //                        /-----------error window-----------\
+        //                        |                                  |
+        // /* a comment */  int a = 142.2 + 14124.2412 + 13232.555 + 32523.0
+        //                      ~~|~~~~~~                            |     |
+        //                        |                                  |-----|
+        //                        \- pivot point since the                 |- 6 characters cut off
+        //                           assignment is the point                    that is what is returned.
+        //                           of interest.
+        //
+        //
+        size_t calculate_right_cutoff_from_pivot(long long line_number, size_t left_pivot_distance);
 
-        void calc_alongwith_arrow_msg_info_and_print_location(const LineInfo& line_info,
-                                                              size_t line_number,
-                                                              bool& alongside_arrow_msg_on_line,
-                                                              bool& alongside_arrow_msg_after_dots);
-        void print_alongwith_arrow_msg_on_last_line(const LineInfo& line_info,
-                                                    size_t total_printed_characters_for_line);
-        void print_alongwith_arrow_msg_after_dots(const LineInfo& line_info,
-                                                  size_t total_printed_characters_for_line);
+        // Calculates how many characters may be cutoff on the left side window for a given line without removing
+        // a character that has a marker (underline or arrow).
+        //
+        size_t calculate_spare_left_characters(long long line_number, size_t left_cutoff, size_t left_pivot_distance);
 
-        void print_line_bar(const ErrorInfo& info, bool include_new_line = true);
+        //
+        //
+        bool is_line_within_error_location(long long line_number) const;
+
+        // Is the pointer at the end of the line.
+        //
+        bool is_eol(const char* ptr) const;
+
+        // Checks if the character found at `ptr` is marked with an underline or
+        // arrow.
+        //
+        bool does_character_have_marker(const char* ptr) const;
+
+        // Checks if the character found at `ptr` is marked with an underline.
+        //
+        bool is_within_underline(const char* ptr) const;
+
     public:
         void end_error(ErrCode error_code);
+
+        void reset_state();
 
         static void set_color(Stream stream, Color color);
 
@@ -454,23 +500,26 @@ namespace acorn {
             error_code_interceptor = interceptor;
         }
 
-        void add_individual_underline(PointSourceLoc underline_loc) {
-            individual_underlines.push_back(underline_loc);
-        }
-
     private:
+
         SourceFile& file;
 
         PointSourceLoc        main_location;
         size_t                facing_length = 0;
         std::function<void()> primary_print_cb;
 
-        struct ArrowMsg {
-            std::string   msg;
-            ArrowPosition position;
-            SourceLoc     location;
-        } arrow_msg;
+        const size_t MAX_LEADING_LENGTH  = 20;
+        const size_t MAX_TRAILING_LENGTH = 40;
 
+        bool should_silence_errors = false;
+
+        struct CaretMessage {
+            std::string    msg;
+            CaretPlacement placement = CaretPlacement::None;
+            SourceLoc      location;
+        } caret_msg;
+
+        bool main_location_still_has_priority = false;
         llvm::SmallVector<PointSourceLoc> individual_underlines;
 
         // This is not the total number of accumulated errors. This

@@ -21,6 +21,8 @@ namespace acorn {
         std::pair<size_t, size_t> get_line_and_column_number(SourceLoc location);
         std::pair<size_t, size_t> get_line_and_column_number(const char* ptr);
 
+        size_t get_file_offset(size_t line_number) const;
+
     private:
         const char* content;
         size_t      buf_length;

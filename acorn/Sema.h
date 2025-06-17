@@ -16,6 +16,7 @@ namespace acorn {
     class SourceFile;
     class FunctionType;
     class PointerType;
+    class ErrorSpellChecker;
 
     class Sema {
     public:
@@ -36,7 +37,7 @@ namespace acorn {
         static void resolve_imports(Context& context, SourceFile* file);
         static void resolve_import(Context& context, ImportStmt* importn);
 
-        bool check_comptime_cond(Expr* cond);
+        bool check_comptime_cond(Expr* cond, const char* comptime_type_str);
 
         void check_function(Func* func);
         void check_variable(Var* var);
@@ -117,7 +118,9 @@ namespace acorn {
         template<bool check_only_non_default_value_params>
         static bool do_functions_match(const Func* func1, const Func* func2);
 
-        void check_struct_interface_extension(Struct* structn, Interface* interfacen, bool is_dynamic);
+        void check_struct_interface_extension(Struct* structn,
+                                              Interface* interfacen,
+                                              const Struct::UnresolvedExtension& extension);
         bool do_interface_functions_matches(Func* interface_func, Func* func);
         void display_interface_func_mismatch_info(Func* interface_func,
                                                   Func* func,
@@ -175,7 +178,13 @@ namespace acorn {
                                              Type* rhs_type) const;
         void check_unary_op(UnaryOp* unary_op);
         template<bool is_spell_checking = false>
-        void check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call);
+        void check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call, bool is_dot_op_site = false);
+        void spellcheck_variables_for_ident(const llvm::SmallVector<Var*>& variables,
+                                            ErrorSpellChecker& spell_checker,
+                                            bool is_for_call);
+        void spellcheck_variables_for_ident(const llvm::DenseMap<Identifier, Var*>& variables,
+                                            ErrorSpellChecker& spell_checker,
+                                            bool is_for_call);
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
         void check_function_type_call(FuncCall* call, FunctionType* func_type);
@@ -281,6 +290,13 @@ namespace acorn {
         Type* get_array_type_for_mismatch_error(Array* arr,
                                                 llvm::SmallVector<size_t>& lengths,
                                                 size_t depth) const;
+
+        template<typename... TArgs>
+        void add_error_line(Node* err_node,
+                            bool should_show_invidual_underlines,
+                            bool indent,
+                            const char* fmt,
+                            TArgs&&... args);
 
         template<typename... TArgs>
         [[nodiscard]] Logger& error(PointSourceLoc loc, const char* fmt, TArgs... args) {
