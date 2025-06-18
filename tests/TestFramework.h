@@ -25,7 +25,7 @@ struct IError {
     int            line_number;
 };
 extern thread_local llvm::SmallVector<IError> intercepted_error_codes;
-extern thread_local int thread_id;
+extern thread_local unsigned thread_id;
 
 class TestCaseFailedException : std::exception {
 public:
@@ -34,7 +34,7 @@ public:
 
 class TestCase {
 public:
-    TestCase(const char* name, uint32_t depth, const std::function<void()>& cb);
+    TestCase(const char* name, int depth, const std::function<void()>& cb);
 
     void run();
 
@@ -49,7 +49,7 @@ public:
 
 private:
     const char* name;
-    uint32_t depth;
+    int depth;
     const std::function<void()> cb;
     bool has_failed = false;
     std::function<void()> failed_info_cb;
@@ -59,7 +59,7 @@ private:
 
 class TestSection {
 public:
-    TestSection(const char* name, uint32_t depth, bool run_multithreaded);
+    TestSection(const char* name, int depth, bool run_multithreaded);
 
     void add_sub_section(TestSection* section);
 
@@ -69,7 +69,7 @@ public:
 
 private:
     const char* name;
-    uint32_t depth;
+    int depth;
     llvm::SmallVector<TestSection*> sub_sections;
     llvm::SmallVector<TestCase*>    tests;
     llvm::SmallVector<std::thread>  test_threads;

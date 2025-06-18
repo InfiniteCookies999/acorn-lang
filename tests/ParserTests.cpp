@@ -58,7 +58,7 @@ void test_parser() {
         };
         acorn::Identifier::clear_cache();
         Module* mock_modl = new Module();
-        SourceFile* mock_file = new SourceFile(*context, L"", L"", buffer, *mock_modl);
+        SourceFile* mock_file = new SourceFile(*context, "", "", buffer, *mock_modl);
         set_logger_mock_interpreter(mock_file->logger);
         Parser* parser = new Parser(*context, *mock_modl, mock_file);
         parser->parse();

@@ -1,6 +1,4 @@
 
-#include <codecvt>
-
 #include "Context.h"
 #include "PageAllocator.h"
 #include "Module.h"
@@ -111,10 +109,12 @@ Options:
 
 )";
 
-int main(int argc, char* argv[]) {
+static int run_driver(int argc, char* argv[]) {
 
     acorn::PageAllocator allocator(acorn::get_system_page_size());
     acorn::Compiler compiler(allocator);
+
+    acorn::set_terminal_codepoint_to_utf8();
 
     CommandLineProcessor processor(compiler, argc, argv);
 
@@ -135,8 +135,10 @@ int main(int argc, char* argv[]) {
     processor.add_flag("output-name", { "out-name", "o" }, [](CommandConsumer& consumer) {
         consumer.next_eql_pair(&acorn::Compiler::set_output_name, "Missing output program name");
     }, true);
-    processor.add_flag("output-directory", { "out-directory", "dir", "directory" }, [](CommandConsumer& consumer) {
-        consumer.next_eql_pair(&acorn::Compiler::set_output_directory, "Missing directory");
+    processor.add_flag("output-directory", { "out-directory", "dir", "directory" }, [&compiler](CommandConsumer& consumer) {
+        consumer.next_eql_pair([&compiler](std::string dir) {
+            compiler.set_output_directory(acorn::SystemPath(dir));
+       }, "Missing directory");
     }, true);
 
     processor.add_flag("max-errors", [&compiler](CommandConsumer& consumer) {
@@ -149,7 +151,7 @@ int main(int argc, char* argv[]) {
     }, true);
 
     processor.add_flag("L", [&compiler](CommandConsumer& consumer) {
-        std::wstring value = consumer.get_flag_name().substr(1);
+        std::string value = consumer.get_flag_name().substr(1);
         if (!value.empty()) {
             compiler.add_library_path(value);
             return;
@@ -158,7 +160,7 @@ int main(int argc, char* argv[]) {
         consumer.next(&acorn::Compiler::add_library_path, "Missing library path");
     }, true);
     processor.add_flag("l", [&compiler](CommandConsumer& consumer) {
-        std::wstring value = consumer.get_flag_name().substr(1);
+        std::string value = consumer.get_flag_name().substr(1);
         if (!value.empty()) {
             compiler.add_library(value);
             return;
@@ -167,7 +169,6 @@ int main(int argc, char* argv[]) {
         consumer.next(&acorn::Compiler::add_library, "Missing library");
     }, true);
 
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
     acorn::Compiler::SourceVector sources;
     for (int i = 1; i < argc;) {
         if (argv[i][0] == '-') {
@@ -184,7 +185,7 @@ int main(int argc, char* argv[]) {
             i = processor.process(flag_name, i);
 
         } else {
-            sources.push_back(acorn::Source{ wconverter.from_bytes(argv[i]), "" });
+            sources.push_back(acorn::Source{ acorn::SystemPath(argv[i]), "" });
             ++i;
         }
     }
@@ -202,3 +203,25 @@ int main(int argc, char* argv[]) {
 
     return compiler.run(sources);
 }
+
+#if WIN_OS
+int wmain(int argc, wchar_t* argv[]) {
+
+    std::vector<std::string> argv_buffer;
+    char** argv_utf8 = new char* [argc];
+
+    for (int i = 0; i < argc; i++) {
+        auto arg_utf8 = acorn::wide_to_utf8(argv[i]);
+        argv_buffer.push_back(std::move(arg_utf8));
+    }
+    for (int i = 0; i < argc; i++) {
+        argv_utf8[i] = argv_buffer[i].data();
+    }
+
+    return run_driver(argc, argv_utf8);
+}
+#elif
+int main(int argc, char* argv[]) {
+    return run_driver(argc, argv);
+}
+#endif

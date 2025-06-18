@@ -37,7 +37,7 @@ void test_lexer() {
             .content = const_cast<char*>(program),
             .length  = strlen(program)
         };
-        SourceFile* mock_file = new SourceFile(*context, L"", L"", buffer, mock_modl);
+        SourceFile* mock_file = new SourceFile(*context, "", "", buffer, mock_modl);
         Lexer* lexer = new Lexer(*context, buffer, set_logger_mock_interpreter(mock_file->logger));
         return lexer;
     };

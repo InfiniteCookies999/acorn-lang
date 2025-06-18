@@ -10,6 +10,8 @@
 
 int main() {
 
+    acorn::set_terminal_codepoint_to_utf8();
+
     test_lexer();
 
     test_parser();

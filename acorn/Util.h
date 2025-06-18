@@ -1,7 +1,6 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#include <fstream>
 #include <llvm/ADT/SmallVector.h>
 
 #include "PageAllocator.h"
@@ -17,38 +16,12 @@
 #define MAC_OS  (defined(__APPLE__) && defined(__MACH__))
 #define UNIX_OS (defined(__unix__) || defined(__unix) || defined(__linux__) || MAC_OS)
 
-#if WIN_OS
-#if defined(_UNICODE) || defined(UNICODE)
-#define wide_funcs 1
-#else
-#define wide_funcs 0
-#endif
-#endif
-
 #define IS_64_BITS (defined(__x86_64__) || defined(__AMD64__) || _WIN64 || defined(__aarch64__) || defined(__arm64__))
 
 namespace acorn {
 
-    template<typename P>
-    bool read_entire_file(const P& path, char*& buffer, size_t& length, PageAllocator& allocator) {
-        std::ifstream stream(path, std::ios::binary);
-
-        if (!stream) {
-            return false;
-        }
-
-        stream.seekg(0, std::ios::end);
-        std::streamsize tlength = stream.tellg();
-        stream.seekg(0, std::ios::beg);
-
-        length = static_cast<size_t>(tlength);
-        buffer = static_cast<char*>(allocator.allocate(length + 1));
-
-        stream.read(buffer, length);
-        buffer[length] = 0; // Null terminate.
-
-        return true;
-    }
+    class SystemPath;
+    bool read_entire_file(const acorn::SystemPath& path, char*& buffer, size_t& length, PageAllocator& allocator);
 
     uint64_t next_pow2(uint64_t value);
 
@@ -94,6 +67,8 @@ namespace acorn {
         return value <= std::numeric_limits<T>::max();
     }
 
+    void set_terminal_codepoint_to_utf8();
+
     extern bool disable_terminal_colors;
     void set_terminal_color(Stream stream, Color color);
 
@@ -108,6 +83,12 @@ namespace acorn {
     bool is_whitespace(char c);
 
     llvm::SmallVector<std::string> split_by_whitespace(const std::string& s);
+
+    std::string wide_to_utf8(const wchar_t* str);
+    std::string wide_to_utf8(const wchar_t* str, size_t length);
+
+    std::wstring utf8_to_wide(const char* str);
+    std::wstring utf8_to_wide(const char* str, size_t byte_length);
 
     size_t get_system_page_size();
 

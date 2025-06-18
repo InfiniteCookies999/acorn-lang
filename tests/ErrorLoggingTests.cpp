@@ -45,7 +45,7 @@ public:
         };
         acorn::Identifier::clear_cache();
         Module* mock_modl = new Module();
-        SourceFile* mock_file = new SourceFile(*context, L"", L"", buffer, *mock_modl);
+        SourceFile* mock_file = new SourceFile(*context, "", "", buffer, *mock_modl);
         set_logger_mock_interpreter(mock_file->logger);
         return mock_file;
     }

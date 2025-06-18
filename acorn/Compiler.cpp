@@ -43,7 +43,7 @@ acorn::Compiler::Compiler(PageAllocator& allocator)
     // NOTE: cannot use the allocator because it needs it's memory deleted.
     ll_module(new llvm::Module("AcornModule", ll_context)),
     context(*new_context(ll_context, *ll_module, allocator)) {
-    set_output_name(L"program");
+    set_output_name("program");
     // Start tracking time before run is called to include timing for
     // command line processing.
     total_timer.start();
@@ -75,19 +75,15 @@ int acorn::Compiler::run(SourceVector& sources) {
 #undef go
 }
 
-void acorn::Compiler::set_output_name(std::wstring output_name) {
+void acorn::Compiler::set_output_name(std::string output_name) {
 #if WIN_OS
-    exe_name = output_name.ends_with(L".exe") ? output_name : output_name + L".exe";
+    exe_name = output_name.ends_with(".exe") ? output_name : output_name + ".exe";
 #elif UNIX_OS
     exe_name = output_name;
 #endif
-    obj_name = output_name.ends_with(L".exe") ? output_name.substr(0, output_name.length() - 4) : output_name;
-    obj_name += L".o";
+    obj_name = output_name.ends_with(".exe") ? output_name.substr(0, output_name.length() - 4) : output_name;
+    obj_name += ".o";
     this->output_name = std::move(output_name);
-}
-
-void acorn::Compiler::set_output_directory(std::wstring output_directory) {
-    this->output_directory = output_directory;
 }
 
 bool acorn::Compiler::initialize_target_machine() {
@@ -184,8 +180,10 @@ int acorn::Compiler::run_program() {
     }
 
     int exit_code;
-    exe_process(absolute_exe_path.data(),
-                absolute_output_directory.data(),
+    auto process_path = absolute_exe_path.to_utf8_string();
+    auto process_dir  = absolute_output_directory.to_utf8_string();
+    exe_process(process_path.data(),
+                process_dir.data(),
                 should_run_seperate_window,
                 exit_code);
     return exit_code;
@@ -194,29 +192,34 @@ int acorn::Compiler::run_program() {
 void acorn::Compiler::initialize_codegen() {
     codegen_timer.start();
 
-    std::error_code ec;
-    auto output_directory_path = output_directory.empty() ? fs::current_path()
-                                                          : fs::path(output_directory);
+    std::string err;
+    auto output_directory_path = !output_directory.has_value() ? get_current_directory_path(err)
+                                                               : output_directory.value();
 
-    if (ec) {
-        Logger::global_error(context, "Failed to find the current path. Error %s", ec.message())
+    if (!err.empty()) {
+        Logger::global_error(context, "Failed to find the current path. Error %s", err)
             .end_error(ErrCode::GlobalFailedToFindCurrentPath);
         return;
     }
 
-    std::filesystem::create_directories(output_directory_path, ec);
-    if (ec) {
+    make_directory(output_directory_path, err, false);
+    if (!err.empty()) {
         Logger::global_error(context, "Failed to create output directory: '%s'. Error: %s",
-                             output_directory, ec.message())
+                             output_directory_path, err)
             .end_error(ErrCode::GlobalFailedToCreateOutputDirectory);
         return;
     }
 
-    absolute_output_directory =
-        fs::absolute(output_directory_path).generic_wstring();
+    absolute_output_directory = get_absolute_path(output_directory_path, err);
+    if (!err.empty()) {
+        Logger::global_error(context, "Failed to get absolute path of output directory: '%s'. Error: %s",
+                             output_directory_path, err)
+            .end_error(ErrCode::GlobalFailedToCreateOutputDirectory);
+        return;
+    }
 
-    absolute_obj_path = absolute_output_directory + L"/" + obj_name;
-    absolute_exe_path = absolute_output_directory + L"/" + exe_name;
+    absolute_obj_path = absolute_output_directory / obj_name;
+    absolute_exe_path = absolute_output_directory / exe_name;
 
     if (!initialize_target_machine()) {
         return;
@@ -422,7 +425,8 @@ void acorn::Compiler::sema_and_irgen() {
 
 void acorn::Compiler::codegen() {
     codegen_timer.start();
-    write_obj_file(context, absolute_obj_path.c_str(), *ll_module, ll_target_machine);
+    auto obj_path = absolute_obj_path.to_utf8_string();
+    write_obj_file(context, obj_path.c_str(), *ll_module, ll_target_machine);
     codegen_timer.stop();
 }
 
@@ -430,7 +434,7 @@ void acorn::Compiler::link() {
     link_timer.start();
 
 #if WIN_OS
-    std::wstring msvc_bin_path, msvc_lib_path;
+    std::string msvc_bin_path, msvc_lib_path;
     if (!get_msvc_install_paths(context, allocator, true, msvc_bin_path, msvc_lib_path)) {
         if (!context.has_errors()) {
             Logger::global_error(context, "Failed to find msvc paths for linking")
@@ -438,7 +442,7 @@ void acorn::Compiler::link() {
         }
         return;
     }
-    std::wstring winkit_lib_um_path, winkit_lib_ucrt_path;
+    std::string winkit_lib_um_path, winkit_lib_ucrt_path;
     if (!get_windows_kits_install_paths(context, allocator, true, winkit_lib_um_path, winkit_lib_ucrt_path)) {
         return;
     }
@@ -456,9 +460,9 @@ void acorn::Compiler::link() {
     library_paths.push_back(winkit_lib_ucrt_path);
 
     auto get_lib_paths = [this] {
-        std::wstring lib_paths;
-        for (const std::wstring& lib_path : library_paths) {
-            lib_paths += std::format(L"/LIBPATH:\"{}\" ", lib_path);
+        std::string lib_paths;
+        for (const std::string& lib_path : library_paths) {
+            lib_paths += std::format("/LIBPATH:\"{}\" ", lib_path);
         }
         return lib_paths;
     };
@@ -468,47 +472,47 @@ void acorn::Compiler::link() {
         // libucrt.lib  -- static standard C lib
         // libcmt.lib  -- static CRT.
         // msvcrt.lib  -- dynamic CRT.
-        std::wstring libs = L"msvcrt.lib ucrt.lib kernel32.lib user32.lib shell32.lib gdi32.lib Advapi32.lib ";
-        for (const std::wstring& lib : libraries) {
-            libs += lib.ends_with(L".lib") ? lib : lib + L".lib ";
+        std::string libs = "msvcrt.lib ucrt.lib kernel32.lib user32.lib shell32.lib gdi32.lib Advapi32.lib ";
+        for (const std::string& lib : libraries) {
+            libs += lib.ends_with(".lib") ? lib : lib + ".lib ";
         }
         return libs;
     };
 
-    std::wstring cmd = std::format(L"\"{}\" /NOLOGO {} /OUT:{} {} {} {}",
-                                   msvc_bin_path + L"\\link.exe",
-                                   context.should_emit_debug_info() ? L"/DEBUG" : L"",
-                                   absolute_exe_path,
-                                   absolute_obj_path,
-                                   get_lib_paths(),
-                                   get_libs());
+    std::string cmd = std::format("\"{}\" /NOLOGO {} /OUT:{} {} {} {}",
+                                  msvc_bin_path + "\\link.exe",
+                                  context.should_emit_debug_info() ? "/DEBUG" : "",
+                                  absolute_exe_path.to_utf8_string(),
+                                  absolute_obj_path.to_utf8_string(),
+                                  get_lib_paths(),
+                                  get_libs());
 
 
 #elif UNIX_OS
 
     auto get_lib_paths = [this] {
-        std::wstring lib_paths;
-        for (const std::wstring& lib_path : library_paths) {
-            lib_paths += std::format(L"-L\"{}\" ", lib_path);
+        std::string lib_paths;
+        for (const std::string& lib_path : library_paths) {
+            lib_paths += std::format("-L\"{}\" ", lib_path);
         }
         return lib_paths;
     };
 
     auto get_libs = [this] {
-        std::wstring libs = L"";
-        for (const std::wstring& lib : libraries) {
-            libs += std::format(L"-l{} ", lib);
+        std::string libs = "";
+        for (const std::string& lib : libraries) {
+            libs += std::format("-l{} ", lib);
         }
         return libs;
     };
 
     // TODO: Fix this so it doesn't change assume we are using clang.
-    std::wstring cmd = std::format(L"clang {} {} {} {} -o {}",
-                                   context.should_emit_debug_info() ? L"-g" : L"",
-                                   get_lib_paths(),
-                                   get_libs(),
-                                   absolute_obj_path,
-                                   absolute_exe_path);
+    std::string cmd = std::format("clang {} {} {} {} -o {}",
+                                  context.should_emit_debug_info() ? "-g" : "",
+                                  get_lib_paths(),
+                                  get_libs(),
+                                  absolute_obj_path,
+                                  absolute_exe_path);
 
 #endif
 
@@ -533,11 +537,11 @@ void acorn::Compiler::link() {
             .end_error(ErrCode::GlobalFailedToFindLinker);
     }
 
-    std::error_code ec;
-    fs::remove(absolute_obj_path, ec);
-    if (ec) {
+    std::string err;
+    remove_file(absolute_obj_path, err);
+    if (!err.empty()) {
         Logger::global_error(context, "Failed to delete object file '%s'. Error %s",
-                             absolute_obj_path, ec.message())
+                             absolute_obj_path, err)
             .end_error(ErrCode::GlobalFailedToDeleteObjFile);
         return;
     }
@@ -547,15 +551,7 @@ void acorn::Compiler::link() {
     }
 
     if (exit_code == 0 && !dont_show_wrote_to_msg) {
-        bool is_wide = std::ranges::any_of(absolute_exe_path, [](wchar_t c) {
-            return c > 0x7F;
-        });
-        if (!is_wide) {
-            std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
-            std::cout << "Wrote program to: " << wconverter.to_bytes(absolute_exe_path) << "\n";
-        } else {
-            std::wcout << "Wrote program to: " << absolute_exe_path << "\n";
-        }
+        std::cout << "Wrote program to: " << absolute_exe_path.to_utf8_string() << "\n";
     }
 
     link_timer.stop();
@@ -565,17 +561,17 @@ bool acorn::Compiler::validate_sources(const SourceVector& sources) {
 
     bool failed_to_find_source = false;
     for (const auto& source : sources) {
-        fs::path path = fs::path(source.path);
-        std::error_code ec;
-        if (!fs::exists(path, ec) || ec) {
-            if (ec) {
+        std::string err;
+        if (!path_exists(source.path, err)) {
+            if (!err.empty()) {
                 Logger::global_error(context,
                     "Could not check if source \"%s\" exists. Please check permissions. Error: '%s'",
-                    source.path, ec.message())
+                    source.path, err)
                     .end_error(ErrCode::GlobalCouldNotCheckIfSourceExists);
             } else {
                 Logger::global_error(context, "Source \"%s\" does not exist", source.path)
                     .end_error(ErrCode::GlobalSourceDoesNotExists);
+
             }
             failed_to_find_source = true;
         }
@@ -600,8 +596,8 @@ void acorn::Compiler::parse_files(SourceVector& sources) {
         auto lib_path = get_std_lib_path();
         if (!lib_path.empty()) {
             sources.push_back(Source{
-                              .path     = std::move(lib_path),
-                              .mod_name = "std"
+                                  .path     = SystemPath(std::move(lib_path)),
+                                  .mod_name = "std"
                               });
         } else {
             Logger::global_error(context, "Missing standard library environment variable")
@@ -616,30 +612,31 @@ void acorn::Compiler::parse_files(SourceVector& sources) {
     }
 
     for (const auto& source : sources) {
-        fs::path path = fs::path(source.path);
         auto modl = context.get_or_create_modl(source.mod_name);
 
-        std::error_code ec;
-        if (fs::is_directory(path, ec) && !ec) {
+        auto& path = source.path;
+
+        std::string err;
+        if (is_directory(path, err)) {
             // The user specified a path to a directory (parsing all acorn
             // files under the directory).
             parse_directory(*modl, path);
-        } else if (ec) {
+        } else if (!err.empty()) {
             Logger::global_error(context,
                 "Failed to check if source \"%s\" is a directory. "
                 "Make sure not to modify files while compiling. Error: '%s'",
-                source.path, ec.message())
+                path, err)
                 .end_error(ErrCode::GlobalFailedToCheckSourceIsDir);
         } else {
-            if (path.extension() != ".ac") {
+            if (path.utf8_extension() != ".ac") {
                 Logger::global_error(context, "Expected source file with extension type "
-                                              ".ac for file \"%s\"", source.path)
+                                              ".ac for file \"%s\"", path)
                     .end_error(ErrCode::GlobalWrongExtensionTypeForFile);
                 continue; // Skip this file.
             }
 
             // The user specified a path to a file.
-            parse_file(*modl, path, path.root_directory());
+            parse_file(*modl, path, path.parent_directory(err));
         }
     }
 
@@ -647,17 +644,25 @@ void acorn::Compiler::parse_files(SourceVector& sources) {
 
 }
 
-void acorn::Compiler::parse_directory(Module& modl, const fs::path& dir_path) {
-    auto root_dir_path = dir_path.parent_path();
-    for (const auto& entry : fs::recursive_directory_iterator(dir_path)) {
-        if (entry.is_regular_file() && entry.path().extension() == L".ac") {
-            const auto& path = entry.path().generic_wstring();
-            parse_file(modl, path, root_dir_path);
+void acorn::Compiler::parse_directory(Module& modl, const SystemPath& dir_path) {
+    std::string err;
+    auto base_path = dir_path.parent_directory(err);
+
+    recursively_iterate_directory(dir_path, err, [this, &modl, &base_path](SystemPath path, PathKind kind) {
+        if (kind == PathKind::REGULAR && path.utf8_extension() == ".ac") {
+            parse_file(modl, path, base_path);
         }
+    });
+
+    if (!err.empty()) {
+        Logger::global_error(context, "Failed to iterate over directory %s. Error: %s",
+                             dir_path, err)
+            .end_error(ErrCode::GlobalFailedToIterateDirectory);
+        return;
     }
 }
 
-acorn::Buffer acorn::Compiler::read_file_to_buffer(const std::filesystem::path& path) {
+acorn::Buffer acorn::Compiler::read_file_to_buffer(const SystemPath& path) {
 
     Buffer buffer;
     if (!read_entire_file(path, buffer.content, buffer.length, allocator)) {
@@ -670,22 +675,28 @@ acorn::Buffer acorn::Compiler::read_file_to_buffer(const std::filesystem::path& 
     return buffer;
 }
 
-void acorn::Compiler::parse_file(Module& modl,
-                                 const fs::path& path,
-                                 const fs::path& root_path) {
+void acorn::Compiler::parse_file(Module& modl, const SystemPath& path, const SystemPath& base_path) {
     auto buffer = read_file_to_buffer(path);
 
-    size_t root_path_size = root_path.generic_wstring().size();
-    if (root_path_size) {
+    size_t base_path_length = base_path.to_utf8_string().length();
+    if (base_path_length) {
         // If it exists we need to add one to get rid of the '/'.
-        ++root_path_size;
+        ++base_path_length;
     }
-    // Short path for debugging.
-    std::wstring wpath = path.generic_wstring().substr(root_path_size);
-    std::wstring wfull_path = fs::absolute(path).generic_wstring();
+
+    std::string err;
+    auto abs_path = get_absolute_path(path, err);
+    if (!err.empty()) {
+        Logger::global_error(context, "Failed to get absolute path of file: \"%s\". Error: %s", path, err)
+            .end_error(ErrCode::GlobalFailedToGetAbsolutePathOfFile);
+        return;
+    }
+
+    auto full_path  = abs_path.to_utf8_string();
+    auto short_path = abs_path.to_utf8_string().substr(base_path_length);
 
     SourceFile* file = allocator.alloc_type<SourceFile>();
-    new (file) SourceFile(context, std::move(wpath), std::move(wfull_path),  buffer, modl);
+    new (file) SourceFile(context, std::move(short_path), std::move(full_path), buffer, modl);
     if (error_code_interceptor) {
         file->logger.set_error_code_interceptor(error_code_interceptor);
     }
@@ -818,14 +829,13 @@ void acorn::Compiler::find_std_lib_declarations() {
     }
 }
 
-std::wstring acorn::Compiler::get_std_lib_path() const {
+std::string acorn::Compiler::get_std_lib_path() const {
     if (std_lib_path.empty()) {
         auto lib_path = std::getenv(StdLibEnvironmentVariable);
         if (!lib_path) {
-            return L"";
+            return "";
         }
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-        return converter.from_bytes(lib_path);
+        return lib_path;
     }
     return std_lib_path;
 }

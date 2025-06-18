@@ -247,8 +247,8 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
             int max_whole_digits = 8;
             int min_exp_value = -45;
             int max_exp_value = 38;
-            double exp_dist_mean = 6.0;
-            double exp_dist_std_dev = 10.0;
+            int exp_dist_mean = 6;
+            int exp_dist_std_dev = 10;
             lexeme = create_float_literal(max_whole_digits, exp_dist_mean, exp_dist_std_dev, min_exp_value, max_exp_value);
             lexeme += "f";
             break;
@@ -257,8 +257,8 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
             int max_whole_digits = 16;
             int min_exp_value = -324;
             int max_exp_value = 308;
-            double exp_dist_mean = 50.0;
-            double exp_dist_std_dev = 95.0;
+            double exp_dist_mean = 50;
+            double exp_dist_std_dev = 95;
             lexeme = create_float_literal(max_whole_digits, exp_dist_mean, exp_dist_std_dev, min_exp_value, max_exp_value);
             break;
         }

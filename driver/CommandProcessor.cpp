@@ -2,24 +2,24 @@
 
 #include "Logger.h"
 
-void CommandConsumer::next(const std::function<void(std::wstring)>& then, const char* missing_error_msg) {
+void CommandConsumer::next(const std::function<void(std::string)>& then, const char* missing_error_msg) {
     if (offset == argc) {
         report_error_missing_arg(missing_error_msg);
         return;
     }
 
     char* arg = argv[offset++];
-    then(wconverter.from_bytes(arg));
+    then(arg);
 }
 
-void CommandConsumer::next(void(acorn::Compiler::*then)(std::wstring), const char* missing_error_msg) {
+void CommandConsumer::next(void(acorn::Compiler::*then)(std::string), const char* missing_error_msg) {
     auto bound_then = std::bind(then, std::ref(compiler), std::placeholders::_1);
     next(bound_then, missing_error_msg);
 }
 
-void CommandConsumer::next_eql_pair(const std::function<void(std::wstring)>& then, const char* missing_error_msg) {
+void CommandConsumer::next_eql_pair(const std::function<void(std::string)>& then, const char* missing_error_msg) {
     auto itr = flag_name.find('=');
-    if (itr == std::wstring::npos) {
+    if (itr == std::string::npos) {
         acorn::Logger::global_error(*compiler.get_context(), "Expected '=' for flag -%s", flag_name)
             .end_error(acorn::ErrCode::GlobalArgumentFlagFailedToParse);
         return;
@@ -33,14 +33,14 @@ void CommandConsumer::next_eql_pair(const std::function<void(std::wstring)>& the
     then(value);
 }
 
-void CommandConsumer::next_eql_pair(void(acorn::Compiler::* then)(std::wstring), const char* missing_error_msg) {
+void CommandConsumer::next_eql_pair(void(acorn::Compiler::* then)(std::string), const char* missing_error_msg) {
     auto bound_then = std::bind(then, std::ref(compiler), std::placeholders::_1);
     next_eql_pair(bound_then, missing_error_msg);
 }
 
 CommandConsumer& CommandConsumer::next_eql_pair(const char* missing_error_msg) {
-    parsed_value = L"";
-    next_eql_pair([this](std::wstring value) {
+    parsed_value = "";
+    next_eql_pair([this](std::string value) {
         parsed_value = value;
     }, missing_error_msg);
     return *this;
@@ -50,7 +50,7 @@ void CommandConsumer::parse_int(const std::function<void(int)>& then) {
     if (parsed_value.empty()) return;
 
     int value = 0, prev_value;
-    for (wchar_t c : parsed_value) {
+    for (char c : parsed_value) {
         if (c < 48 || c > 57) {
             acorn::Logger::global_error(*compiler.get_context(),
                                         "Unexpected character when parsing integer for flag %s", flag_name)
@@ -144,7 +144,7 @@ int CommandLineProcessor::process(llvm::StringRef flag_name, int idx) {
         }
 
         consumer.offset = idx + 1;
-        consumer.flag_name = consumer.wconverter.from_bytes(flag_name.data());
+        consumer.flag_name = flag_name.data();
 
         flag.callback(consumer);
 

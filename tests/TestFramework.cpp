@@ -12,7 +12,7 @@ thread_local llvm::SmallVector<IError> intercepted_error_codes;
 TestCase* single_run_case = nullptr;
 
 static thread_local TestSection*       current_section = nullptr;
-static thread_local uint32_t           current_depth   = 0;
+static thread_local int                current_depth   = 0;
 static llvm::SmallVector<TestSection*> sections;
 
 static std::atomic<int> num_failed_tests = 0;
@@ -20,13 +20,13 @@ static std::atomic<int> num_tests_ran    = 0;
 
 static std::mutex test_print_mutex;
 
-thread_local int thread_id;
+thread_local unsigned thread_id;
 
 static void set_color(acorn::Color color) {
     acorn::set_terminal_color(acorn::Stream::StdOut, color);
 }
 
-TestCase::TestCase(const char* name, uint32_t depth, const std::function<void()>& cb)
+TestCase::TestCase(const char* name, int depth, const std::function<void()>& cb)
     : name(name), depth(depth), cb(cb) {
 }
 
@@ -38,14 +38,19 @@ void TestCase::run() {
     }
     std::lock_guard lock(test_print_mutex);
     std::cout << std::string(4 * depth, ' ') << "Test: '" << name << "'";
+
+    int width = 50 - 4 * depth - static_cast<int>(strlen(name));
+    if (width < 0) {
+        width = 0;
+    }
     if (!failed()) {
         set_color(acorn::Color::BrightGreen);
-        std::cout << std::setw(50 - 4 * depth - strlen(name)) << "passed";
+        std::cout << std::setw(width) << "passed";
         set_color(acorn::Color::White);
         std::cout << "!";
     } else {
         set_color(acorn::Color::BrightRed);
-        std::cout << std::setw(50 - 4 * depth - strlen(name)) << "failed";
+        std::cout << std::setw(width) << "failed";
         set_color(acorn::Color::White);
         std::cout << "!\n" << std::string(4 * depth + 4, ' ');
         set_color(acorn::Color::BrightRed);
@@ -68,7 +73,7 @@ void TestCase::run() {
     std::cout << "\n" << std::flush;
 }
 
-TestSection::TestSection(const char* name, uint32_t depth, bool run_multithreaded)
+TestSection::TestSection(const char* name, int depth, bool run_multithreaded)
     : name(name), depth(depth), run_multithreaded(run_multithreaded) {
 }
 
@@ -113,7 +118,7 @@ void TestSection::run() {
             }
         };
 
-        for(int thr_id = 0; thr_id < maximum_threads; thr_id++) {
+        for(unsigned thr_id = 0; thr_id < maximum_threads; thr_id++) {
             test_threads.push_back(std::thread([&test_idx, &tests=this->tests, thr_id] {
                 thread_id = thr_id;
 

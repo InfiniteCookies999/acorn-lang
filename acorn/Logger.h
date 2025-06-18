@@ -34,6 +34,7 @@ namespace acorn {
     class Logger;
     class GlobalLogger;
 
+    class SystemPath;
 
     class FatalException : std::exception {
     public:
@@ -137,6 +138,10 @@ namespace acorn {
             }
         }
 
+        static void print(Stream stream, const std::string& s) {
+            print(stream, s.c_str(), s.length());
+        }
+
         static void print(Stream stream, Color color) {
             set_terminal_color(stream, color);
         }
@@ -148,6 +153,8 @@ namespace acorn {
         static void print(Stream stream, llvm::StringRef s) {
             print(stream, s.data(), s.size());
         }
+
+        static void print(Stream stream, const SystemPath& path);
 
         static void print(Stream stream, Type* type);
 
@@ -192,20 +199,6 @@ namespace acorn {
 
         static void print(Stream stream, bool v) {
             print(stream, v ? "true" : "false");
-        }
-
-        static void print(Stream stream, std::wstring_view s) {
-            print(stream, std::wstring{ s });
-        }
-
-        static void print(Stream stream, const std::wstring& s);
-
-        static void print(Stream stream, const std::string& s) {
-            print(stream, s.c_str(), s.length());
-        }
-
-        static void print(Stream stream, std::string_view s) {
-            print(stream, s.data(), s.length());
         }
 
         static void print(Stream stream, const char* s) {

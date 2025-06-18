@@ -67,7 +67,7 @@ void acorn::set_llvm_module_target(llvm::Module& ll_module, llvm::TargetMachine*
 }
 
 static std::mutex write_mtx;
-void acorn::write_obj_file(Context& context, const wchar_t* file_path,
+void acorn::write_obj_file(Context& context, const char* file_path,
                            llvm::Module& ll_module, llvm::TargetMachine* ll_target_machine) {
 
     auto report_error_could_not_open_object_file = [&context](const char* error_msg) {
@@ -75,11 +75,13 @@ void acorn::write_obj_file(Context& context, const wchar_t* file_path,
             .end_error(ErrCode::GlobalFailedToWriteObjFile);
     };
 
-#if WIN_OS && wide_funcs
+#if WIN_OS
     // Have to do extra work when dealing with wide paths because raw_fd_ostream doesn't directly
     // deal with them.
 
-    HANDLE handle = CreateFileW(file_path,
+    std::wstring wfile_path = acorn::utf8_to_wide(file_path);
+
+    HANDLE handle = CreateFileW(wfile_path.c_str(),
                                 GENERIC_WRITE,
                                 0,
                                 nullptr,
@@ -104,11 +106,8 @@ void acorn::write_obj_file(Context& context, const wchar_t* file_path,
     llvm::raw_fd_ostream stream(fd, true);
 
 #else
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
-    std::string fixed_path = wconverter.to_bytes(file_path);
-
     std::error_code err_code;
-    llvm::raw_fd_ostream stream(fixed_path, err_code, llvm::sys::fs::OF_None);
+    llvm::raw_fd_ostream stream(file_path, err_code, llvm::sys::fs::OF_None);
 
     if (err_code) {
         report_error_could_not_open_object_file(err_code.message().c_str());

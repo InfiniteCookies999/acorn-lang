@@ -15,9 +15,45 @@
 #include <string>
 #include <string_view>
 #include <sstream>
+#include <fstream>
+
+#include "Logger.h"
+#include "SystemFiles.h"
 
 // Forward declaration.
 bool acorn::disable_terminal_colors = false;
+
+void acorn::set_terminal_codepoint_to_utf8() {
+#if _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+}
+
+bool acorn::read_entire_file(const SystemPath& path, char*& buffer, size_t& length, PageAllocator& allocator) {
+#if _WIN32
+    // On windows ifstream expects it as a wide path.
+    auto wpath = path.to_wide_string();
+    std::ifstream stream(wpath, std::ios::binary);
+#else
+    std::ifstream stream(path, std::ios::binary);
+#endif
+
+    if (!stream) {
+        return false;
+    }
+
+    stream.seekg(0, std::ios::end);
+    std::streamsize tlength = stream.tellg();
+    stream.seekg(0, std::ios::beg);
+
+    length = static_cast<size_t>(tlength);
+    buffer = static_cast<char*>(allocator.allocate(length + 1));
+
+    stream.read(buffer, length);
+    buffer[length] = 0; // Null terminate.
+
+    return true;
+}
 
 void acorn::set_terminal_color(Stream stream, Color color) {
     if (disable_terminal_colors) {
@@ -126,6 +162,89 @@ llvm::SmallVector<std::string> acorn::split_by_whitespace(const std::string& s) 
     return tokens;
 }
 
+std::string acorn::wide_to_utf8(const wchar_t* str) {
+    int length = static_cast<int>(wcslen(str));
+    return wide_to_utf8(str, length);
+}
+
+std::string acorn::wide_to_utf8(const wchar_t* str, size_t length) {
+#if WIN_OS
+    if (length == 0) {
+        return ""; // Documentation tells us it fails when length is zero.
+    }
+
+    // First determining the length of the resulting multibyte string.
+    int utf8_length = WideCharToMultiByte(CP_UTF8,  // UTF-8 conversion
+                                          0,        // TODO (maddie): special flags?
+                                          str,      // Pointer to string to convert
+                                          length,   // Length of wide string. May be -1 if null terminated
+                                          nullptr,  // Pointer to the resulting utf8 string (Need to determine length first)
+                                          0,        // Size of the utf8 string (Need to determine length first)
+                                          nullptr,  // Pointer to a character if a character cannot be interpreted
+                                          nullptr   // Pointer to a flag to indicate if the function uses a default character
+    );
+    if (utf8_length <= 0) {
+        acorn_fatal("Failed to convert wide to utf8");
+    }
+
+    // Converting!
+    std::string result(utf8_length, 0);
+    WideCharToMultiByte(CP_UTF8,
+                        0,
+                        str,
+                        length,
+                        result.data(),
+                        utf8_length,
+                        nullptr,
+                        nullptr
+    );
+    return result;
+#else
+    acorn_fatal("wide_to_utf8: not supported outside windows");
+    return 0;
+#endif
+}
+
+std::wstring acorn::utf8_to_wide(const char* str) {
+    int byte_length = static_cast<int>(strlen(str));
+    return utf8_to_wide(str, byte_length);
+}
+
+std::wstring acorn::utf8_to_wide(const char* str, size_t byte_length) {
+#if WIN_OS
+    if (byte_length == 0) {
+        return L""; // Documentation tells us it fails when length is zero.
+    }
+
+    // First determining the length of the resulting wide string.
+    int wide_length = MultiByteToWideChar(CP_UTF8,      // UTF-8 conversion
+                                          0,            // TODO (maddie): special flags?
+                                          str,          // Pointer to string to convert
+                                          byte_length,  // Length of utf8 string (in bytes). May be -1 if null terminated
+                                          nullptr,      // Pointer to the resulting wide string (Need to determine length first)
+                                          0             // Size of the wide string (Need to determine length first)
+    );
+    if (wide_length <= 0) {
+        acorn_fatal("Failed to convert utf8 to wide");
+    }
+
+    // Converting!
+    std::wstring result(wide_length, 0);
+    MultiByteToWideChar(CP_UTF8,
+                        0,
+                        str,
+                        byte_length,
+                        result.data(),
+                        wide_length
+
+    );
+    return result;
+#else
+    acorn_fatal("utf8_to_wide: not supported outside windows");
+    return 0;
+#endif
+}
+
 size_t acorn::get_system_page_size() {
 #ifdef _WIN32
     SYSTEM_INFO sys_info;
@@ -140,3 +259,4 @@ size_t acorn::get_system_page_size() {
     return page_size < 1024 ? 1024 : page_size;
 #endif
 }
+

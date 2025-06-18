@@ -17,9 +17,9 @@ namespace acorn {
     class SourceFile : public Namespace {
     public:
         // Non-full path used for error reporting.
-        std::wstring      path;
+        std::string       path;
         // The full path to the file.
-        std::wstring      full_path;
+        std::string       full_path;
         Buffer            buffer;
         LineTable         line_table;
         Logger            logger;
@@ -30,7 +30,7 @@ namespace acorn {
 
         SourceFile(SourceFile&&) = default;
 
-        SourceFile(Context& context, std::wstring path, std::wstring full_path, Buffer buffer, Module& modl);
+        SourceFile(Context& context, std::string path, std::string full_path, Buffer buffer, Module& modl);
 
         void set_namespace(Namespace* nspace) {
             this->nspace = nspace;

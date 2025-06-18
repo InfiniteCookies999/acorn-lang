@@ -7,28 +7,18 @@
 #undef min
 #undef max
 
-#if wide_funcs
-#define create_proc CreateProcessW
-#else
-#define create_proc CreateProcessA
-#endif
-
 #elif UNIX_OS
 #include <sys/wait.h>
 #include <poll.h>
 #endif
 
-#include <codecvt>
-
 #define min(a, b) (a) > (b) ? (a) : (b)
 
 #if UNIX_OS
 namespace acorn {
-    const char** get_cmd_and_args(wchar_t* process) {
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-        auto char_process = converter.to_bytes(process);
+    static const char** get_cmd_and_args(char* process) {
 
-        auto cmd_and_args = split_by_whitespace(char_process);
+        auto cmd_and_args = split_by_whitespace(process);
         const char** argv = new const char*[cmd_and_args.size() + 1]; // +1 because requires nullptr at end.
         for (size_t i = 0; i < cmd_and_args.size(); ++i) {
             argv[i] = strdup(cmd_and_args[i].c_str());
@@ -38,19 +28,17 @@ namespace acorn {
         return argv;
     }
 
-    void add_process_directory(wchar_t* process_dir) {
+    static void add_process_directory(char* process_dir) {
         if (!process_dir) return;
 
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-        auto char_process_dir = converter.to_bytes(process_dir);
-        if (chdir(char_process_dir.c_str()) != 0) {
+        if (chdir(char_process_dir) != 0) {
             acorn_fatal("Failed to change directory for new process");
         }
     }
 }
 #endif
 
-bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::string& std_out, int& exit_code) {
+bool acorn::exe_hidden_process(char* process, char* process_dir, std::string& std_out, int& exit_code) {
 #if WIN_OS
     HANDLE write_handle_in, write_handle;
 
@@ -64,34 +52,26 @@ bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
         acorn_fatal("Failed to create pipe for process");
     }
 
+    std::wstring wprocess = acorn::utf8_to_wide(process);
+
     PROCESS_INFORMATION process_info = {0};
-#if wide_funcs
+
     STARTUPINFOW startup_info = {0};
     startup_info.cb = sizeof(STARTUPINFOW);
-#else
-    STARTUPINFOA startup_info = {0};
-    startup_info.cb = sizeof(STARTUPINFOA);
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
-    auto char_process = wconverter.to_bytes(process);
-#endif
 
     startup_info.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
     startup_info.hStdOutput  = write_handle;
     startup_info.hStdError   = write_handle;
     startup_info.wShowWindow = SW_HIDE; // Don't show the newly created window.
 
-    if (!create_proc(nullptr,
-#if wide_funcs
-                     process,
-#else
-                     char_process.data(),
-#endif
-                     nullptr, nullptr, TRUE,
-                     CREATE_NEW_CONSOLE,
-                     nullptr,
-                     nullptr,
-                     &startup_info,
-                     &process_info)) {
+    if (!CreateProcessW(nullptr,
+                        wprocess.data(),
+                        nullptr, nullptr, TRUE,
+                        CREATE_NEW_CONSOLE,
+                        nullptr,
+                        nullptr,
+                        &startup_info,
+                        &process_info)) {
         CloseHandle(write_handle);
         CloseHandle(write_handle_in);
         return false;
@@ -102,9 +82,9 @@ bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
 
         is_running = !(WaitForSingleObject(process_info.hProcess, 50) == WAIT_OBJECT_0);
 
+        char buffer[1024];
         while (true) {
 
-            char buffer[1024];
             DWORD amount_read = 0, avail = 0;
 
             if (!PeekNamedPipe(write_handle_in, nullptr, 0, nullptr, &avail, nullptr)) {
@@ -241,43 +221,29 @@ bool acorn::exe_hidden_process(wchar_t* process, wchar_t* process_dir, std::stri
     return true;
 }
 
-bool acorn::exe_process(wchar_t* process, wchar_t* process_dir, bool seperate_window, int& exit_code) {
+bool acorn::exe_process(char* process, char* process_dir, bool seperate_window, int& exit_code) {
 #if WIN_OS
     // No need to use inherited handles since this does not capture
     // the program's output.
 
     PROCESS_INFORMATION process_info = {0};
-#if wide_funcs
-    STARTUPINFOW startup_info = {0};
+    STARTUPINFOW startup_info = { 0 };
     startup_info.cb = sizeof(STARTUPINFOW);
-#else
-    STARTUPINFOA startup_info = {0};
-    startup_info.cb = sizeof(STARTUPINFOA);
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
-    auto char_process = wconverter.to_bytes(process);
-    const char* char_process_dir = nullptr;
-    if (process_dir) {
-        std::string converted = wconverter.to_bytes(process_dir);
-        char_process_dir = converted.c_str();
-    }
-#endif
 
-    if (!create_proc(nullptr,
-#if wide_funcs
-                     process,
-#else
-                     char_process.data(),
-#endif
-                     nullptr, nullptr, FALSE,
-                     seperate_window ? CREATE_NEW_CONSOLE : 0,
-                     nullptr,
-#if wide_funcs
-                     process_dir,
-#else
-                     char_process_dir,
-#endif
-                     &startup_info,
-                     &process_info)) {
+    std::wstring wprocess = acorn::utf8_to_wide(process);
+    std::wstring wprocess_dir;
+    if (process_dir) {
+        wprocess_dir = acorn::utf8_to_wide(process_dir);
+    }
+
+    if (!CreateProcessW(nullptr,
+                        wprocess.data(),
+                        nullptr, nullptr, FALSE,
+                        seperate_window ? CREATE_NEW_CONSOLE : 0,
+                        nullptr,
+                        !wprocess_dir.empty() ? wprocess_dir.data() : nullptr,
+                        &startup_info,
+                        &process_info)) {
         return false;
     }
     WaitForSingleObject(process_info.hProcess, INFINITE);

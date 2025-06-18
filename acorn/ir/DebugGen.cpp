@@ -214,22 +214,16 @@ void acorn::DebugInfoEmitter::emit_file(SourceFile* file) {
         return; // Exit early because the debug info has already been generated.
     }
 
-	auto& wfull_path = file->full_path;
+	std::string full_path = file->full_path;
 
-	auto itr = wfull_path.find_last_of('/');
-	bool has_last_slash = itr != std::wstring::npos;
+	auto itr = full_path.find_last_of('/');
+	bool has_last_slash = itr != std::string::npos;
 
-	auto wfile_name = has_last_slash ? wfull_path.substr(itr + 1) : wfull_path;
-	auto wdirectory = wfull_path.substr(0, wfull_path.size() - wfile_name.size());
-	if (wdirectory.ends_with('/')) {
-		wdirectory = wdirectory.substr(0, wdirectory.size() - 1);
+	auto file_name = has_last_slash ? full_path.substr(itr + 1) : full_path;
+	auto directory = full_path.substr(0, full_path.size() - file_name.size());
+	if (directory.ends_with('/')) {
+		directory = directory.substr(0, directory.size() - 1);
 	}
-
-	// TODO: validate that converting to ascii works here.
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
-	auto file_name = wconverter.to_bytes(wfile_name);
-	auto directory = wconverter.to_bytes(wdirectory);
-
 
 	// TODO: Checksums can be used as a way to verify that the source code
 	//       is the same as the executable's debug info for that source code.

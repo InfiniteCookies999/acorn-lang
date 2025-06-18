@@ -7,11 +7,11 @@
 #endif
 
 #include <filesystem>
-#include <codecvt>
 
 #include "../Logger.h"
 #include "../Util.h"
 #include "../Context.h"
+#include "SystemFiles.h"
 
 // COM objects from visual studio's configuration dll. Do not want to go through the process
 // of including the setup configuration headers so the interfaces we want are defined here with
@@ -66,7 +66,7 @@ Deferer<F> new_deferer(F&& cb) {
 #define defer(code) auto defer_name(_defer_val) = new_deferer([&] { code; });
 
 namespace acorn {
-    std::wstring find_newest_ver_directory(const std::wstring& path) {
+    static std::string find_newest_ver_directory(const std::string& path) {
 
         int best_ver[4]{0};
         namespace fs = std::filesystem;
@@ -76,7 +76,7 @@ namespace acorn {
             if (!entry.is_directory()) continue;
             std::string dir_name = entry.path().filename().string().c_str();
 
-            int ver[4];
+            int ver[4] = {0};
             auto r = sscanf_s((const char* const)dir_name.c_str(), "%d.%d.%d.%d", &ver[0], &ver[1], &ver[2], &ver[3]);
             if (r < 4) continue;
 
@@ -87,20 +87,20 @@ namespace acorn {
                 }
             }
         }
-        return std::format(L"{}.{}.{}.{}", best_ver[0], best_ver[1], best_ver[2], best_ver[3]);
+        return std::format("{}.{}.{}.{}", best_ver[0], best_ver[1], best_ver[2], best_ver[3]);
     }
 
-    bool get_registry_value(HKEY key, const char* value_name, char*& buffer, PageAllocator& allocator) {
-        DWORD al_length;
+    static bool get_registry_value(HKEY key, const wchar_t* value_name, wchar_t*& buffer, PageAllocator& allocator) {
+        DWORD byte_length;
         // First request the allocation size.
-        if (RegQueryValueExA(key, value_name, nullptr, nullptr, nullptr, &al_length) != ERROR_SUCCESS) {
+        if (RegQueryValueExW(key, value_name, nullptr, nullptr, nullptr, &byte_length) != ERROR_SUCCESS) {
             return false;
         }
 
         // Retrieving the registry value.
-        DWORD req_length = al_length + 2;
-        buffer = static_cast<char*>(allocator.allocate(req_length));
-        if (RegQueryValueExA(key, value_name, nullptr, nullptr, (LPBYTE)buffer, &req_length) != ERROR_SUCCESS) {
+        size_t wchar_count = (byte_length + sizeof(wchar_t) - 1) / sizeof(wchar_t); // round up
+        buffer = static_cast<wchar_t*>(allocator.allocate(wchar_count * sizeof(wchar_t)));
+        if (RegQueryValueExW(key, value_name, nullptr, nullptr, reinterpret_cast<LPBYTE>(buffer), &byte_length) != ERROR_SUCCESS) {
             return false;
         }
 
@@ -109,16 +109,14 @@ namespace acorn {
         }
 
         // Null terminating.
-        if (buffer[req_length]) {
-            buffer[req_length] = '\0';
-        }
+        buffer[wchar_count - 1] = L'\0';
 
         return true;
     }
 }
 
 bool acorn::get_windows_kits_install_paths(Context& context, PageAllocator& allocator, bool is_64bit_target,
-                                           std::wstring& winkit_lib_um_path, std::wstring& winkit_lib_ucrt_path) {
+                                           std::string& winkit_lib_um_path, std::string& winkit_lib_ucrt_path) {
 
     // TODO: Won't work on older versions of windows. This applies to windows 10+
 
@@ -131,34 +129,32 @@ bool acorn::get_windows_kits_install_paths(Context& context, PageAllocator& allo
     }
     defer(RegCloseKey(main_key));
 
-    char* buffer = nullptr;
-    if (!get_registry_value(main_key, "KitsRoot10", buffer, allocator)) {
+    wchar_t* buffer = nullptr;
+    if (!get_registry_value(main_key, L"KitsRoot10", buffer, allocator)) {
         Logger::global_error(context, "Failed to find registry value for KitsRoot10")
             .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
         return false;
     }
 
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-    auto sdk_path = converter.from_bytes(buffer);
-
-    auto lib_path = sdk_path + L"Lib\\";
+    auto sdk_path = acorn::wide_to_utf8(buffer);
+    auto lib_path = sdk_path + "Lib\\";
 
     auto best_dir = find_newest_ver_directory(lib_path);
-    winkit_lib_um_path = lib_path + best_dir + L"\\um";
-    winkit_lib_ucrt_path = lib_path + best_dir + L"\\ucrt";
+    winkit_lib_um_path = lib_path + best_dir + "\\um";
+    winkit_lib_ucrt_path = lib_path + best_dir + "\\ucrt";
     if (is_64bit_target) {
-        winkit_lib_um_path += L"\\x64";
-        winkit_lib_ucrt_path += L"\\x64";
+        winkit_lib_um_path += "\\x64";
+        winkit_lib_ucrt_path += "\\x64";
     } else {
-        winkit_lib_um_path += L"\\x86";
-        winkit_lib_ucrt_path += L"\\x86";
+        winkit_lib_um_path += "\\x86";
+        winkit_lib_ucrt_path += "\\x86";
     }
 
     return true;
 }
 
 bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, bool is_64bit_target,
-                                   std::wstring& bin_path, std::wstring& lib_path) {
+                                   std::string& bin_path, std::string& lib_path) {
 
     // Initialize some OOP library thing with windows that we require.
     if (CoInitialize(nullptr) != S_OK) {
@@ -214,11 +210,12 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
 
         // Microsoft.VCToolsVersion.default.txt contains the default version that is invoked by default
         // when executing command line tools so we will use that version.
-        auto default_ver_file_path = inst_path + L"\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt";
+        auto wdefault_ver_file_path = inst_path + L"\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt";
 
         char*  buffer;
         size_t length;
-        if (!read_entire_file(default_ver_file_path, buffer, length, allocator)) {
+        if (!read_entire_file(SystemPath(wdefault_ver_file_path), buffer, length, allocator)) {
+            auto default_ver_file_path = acorn::wide_to_utf8(wdefault_ver_file_path.c_str());
             Logger::global_error(context, "Your system is missing file '%s'", default_ver_file_path)
                 .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
             return false;
@@ -227,8 +224,7 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
         auto version = std::string(buffer, length);
         version = trim(version);
 
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-        auto wversion = converter.from_bytes(version);
+        auto wversion = acorn::utf8_to_wide(version.c_str());
 
         auto base_path = inst_path + L"\\VC\\Tools\\MSVC\\" + wversion;
 
@@ -249,8 +245,8 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
         }
 
 
-        bin_path = msvc_bin;
-        lib_path = msvc_lib;
+        bin_path = acorn::wide_to_utf8(msvc_bin.c_str());
+        lib_path = acorn::wide_to_utf8(msvc_lib.c_str());
         if (is_preferred) {
             return true;
         }

@@ -17,17 +17,17 @@ public:
         Int
     };
 
-    void next(const std::function<void(std::wstring)>& then, const char* missing_error_msg);
-    void next(void(acorn::Compiler::*then)(std::wstring), const char* missing_error_msg);
+    void next(const std::function<void(std::string)>& then, const char* missing_error_msg);
+    void next(void(acorn::Compiler::*then)(std::string), const char* missing_error_msg);
 
-    void next_eql_pair(const std::function<void(std::wstring)>& then, const char* missing_error_msg);
-    void next_eql_pair(void(acorn::Compiler::* then)(std::wstring), const char* missing_error_msg);
+    void next_eql_pair(const std::function<void(std::string)>& then, const char* missing_error_msg);
+    void next_eql_pair(void(acorn::Compiler::* then)(std::string), const char* missing_error_msg);
 
     [[nodiscard]] CommandConsumer& next_eql_pair(const char* missing_error_msg);
 
     void parse_int(const std::function<void(int)>& then);
 
-    std::wstring get_flag_name() const { return flag_name; }
+    std::string get_flag_name() const { return flag_name; }
 
 private:
     friend CommandLineProcessor;
@@ -38,14 +38,12 @@ private:
 
     void report_error_missing_arg(const char* missing_error_msg);
 
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> wconverter;
-
     acorn::Compiler& compiler;
 
     // The current flag being processed.
-    std::wstring flag_name;
+    std::string flag_name;
 
-    std::wstring parsed_value;
+    std::string parsed_value;
 
     // Offset into the consumed arguments.
     int    offset;

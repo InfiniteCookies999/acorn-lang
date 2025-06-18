@@ -17,7 +17,7 @@
 #include "Context.h"
 #include "Type.h"
 #include "SourceFile.h"
-
+#include "SystemFiles.h"
 
 #include <iostream>
 
@@ -55,48 +55,13 @@ void acorn::AbstractLogger<L>::print_exceeded_errors_msg(Context& context) {
 }
 
 template<typename L>
-void acorn::AbstractLogger<L>::print(Stream stream, Type* type) {
-    print(stream, type->to_string());
+void acorn::AbstractLogger<L>::print(Stream stream, const SystemPath& path) {
+    print(stream, path.to_utf8_string());
 }
 
 template<typename L>
-void acorn::AbstractLogger<L>::print(Stream stream, const std::wstring& s) {
-
-#if WIN_OS
-
-    bool is_wide = std::ranges::any_of(s, [](wchar_t c) {
-        return c > 0x7F;
-    });
-
-    if (!is_wide) {
-        std::string narrow_string;
-        narrow_string.reserve(s.size());
-        for (wchar_t wc : s) {
-            narrow_string += static_cast<char>(wc);
-        }
-
-        HANDLE handle = get_handle(stream);
-        DWORD written;
-        WriteFile(handle, narrow_string.c_str(), static_cast<DWORD>(narrow_string.length()), &written, nullptr);
-    } else {
-        HANDLE handle = get_handle(stream);
-        DWORD written;
-        WriteFile(handle, s.c_str(), static_cast<DWORD>(s.length()) * sizeof(wchar_t), &written, nullptr);
-    }
-#elif UNIX_OS
-
-    // Unix cannot have wide directory paths so we just convert to narrow.
-    std::string narrow_string;
-    narrow_string.reserve(s.size());
-    for (wchar_t wc : s) {
-        narrow_string += static_cast<char>(wc);
-    }
-
-    int handle = get_handle(stream);
-    write(handle, narrow_string.c_str(), narrow_string.length());
-
-#endif
-
+void acorn::AbstractLogger<L>::print(Stream stream, Type* type) {
+    print(stream, type->to_string());
 }
 
 template<typename L>
@@ -261,7 +226,8 @@ void acorn::Logger::print_header(ErrCode error_code, const std::string& line_num
     }
     fmt_print("%s: ", BrightWhite), facing_length += 2;
 
-    const auto& path = file.path.empty() ? L"[buffer]" : file.path;
+    const auto& path = file.path;
+
     fmt_print("%s%s", BrightCyan, path);
     facing_length += path.length();
 
@@ -435,12 +401,7 @@ void acorn::Logger::end_error(ErrCode error_code) {
             exit(1);
         }
         auto [start_line_number, _] = file.line_table.get_line_and_column_number(main_location.point);
-        std::string narrow_path;
-        narrow_path.reserve(file.path.size());
-        for (wchar_t wc : file.path) {
-            narrow_path += static_cast<char>(wc);
-        }
-        error_code_interceptor(error_code, narrow_path, static_cast<int>(start_line_number));
+        error_code_interceptor(error_code, file.path, static_cast<int>(start_line_number));
         mtx.unlock();
         return;
     }
@@ -526,7 +487,7 @@ acorn::Logger::ErrorInfo acorn::Logger::collect_error_info() {
     // TODO (maddie): this is wrong! this assumes the distance has no tabs!
     auto pivot_line_start_ptr = get_line_number_buffer_ptr(file, pivot_line_number);
     auto left_pivot_distance = static_cast<size_t>(pivot_point_ptr - pivot_line_start_ptr);
-    auto left_cutoff = 0;
+    size_t left_cutoff = 0;
     if (left_pivot_distance > MAX_LEADING_LENGTH) {
         left_cutoff = left_pivot_distance - MAX_LEADING_LENGTH;
     }
