@@ -10,6 +10,8 @@
 
 #include "TestFramework.h"
 
+#include "Logger.h"
+
 using namespace acorn;
 
 static llvm::LLVMContext ll_context;

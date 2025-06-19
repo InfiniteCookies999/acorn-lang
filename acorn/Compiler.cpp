@@ -511,8 +511,8 @@ void acorn::Compiler::link() {
                                   context.should_emit_debug_info() ? "-g" : "",
                                   get_lib_paths(),
                                   get_libs(),
-                                  absolute_obj_path,
-                                  absolute_exe_path);
+                                  absolute_obj_path.to_utf8_string(),
+                                  absolute_exe_path.to_utf8_string());
 
 #endif
 

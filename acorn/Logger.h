@@ -408,7 +408,7 @@ namespace acorn {
         }
 
     private:
-        friend class LoggerTester;
+        friend class ::LoggerTester;
 
         void print_header(ErrCode error_code, const std::string& line_number_pad);
 

@@ -35,7 +35,8 @@ bool acorn::read_entire_file(const SystemPath& path, char*& buffer, size_t& leng
     auto wpath = path.to_wide_string();
     std::ifstream stream(wpath, std::ios::binary);
 #else
-    std::ifstream stream(path, std::ios::binary);
+    auto utf8_path = path.to_utf8_string();
+    std::ifstream stream(utf8_path, std::ios::binary);
 #endif
 
     if (!stream) {
@@ -201,7 +202,7 @@ std::string acorn::wide_to_utf8(const wchar_t* str, size_t length) {
     return result;
 #else
     acorn_fatal("wide_to_utf8: not supported outside windows");
-    return 0;
+    return "";
 #endif
 }
 
@@ -241,7 +242,7 @@ std::wstring acorn::utf8_to_wide(const char* str, size_t byte_length) {
     return result;
 #else
     acorn_fatal("utf8_to_wide: not supported outside windows");
-    return 0;
+    return L"";
 #endif
 }
 

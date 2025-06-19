@@ -45,7 +45,6 @@ int64 time_in_nanosecs() {
         return as(int64) (ts.tv_sec * 1E+9) + (as(int64) ts.tv_nsec);
     } else {
         raise StateError{ "Failed to get clock time" };
-        return 0;
     }
 #endif
 }

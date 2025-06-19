@@ -220,7 +220,7 @@ int wmain(int argc, wchar_t* argv[]) {
 
     return run_driver(argc, argv_utf8);
 }
-#elif
+#else
 int main(int argc, char* argv[]) {
     return run_driver(argc, argv);
 }

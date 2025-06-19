@@ -28,7 +28,7 @@ int main() {
 #endif
 
     acorn::Source source = {
-        .path = "fuzz.ac",
+        .path = acorn::SystemPath("fuzz.ac"),
         .mod_name = "fuzz"
     };
 

@@ -8,6 +8,12 @@
 #include <mach-o/dyld.h>
 #endif
 
+#if !WIN_OS
+#include <sys/stat.h>
+#include <dirent.h>
+#endif
+
+#include "Logger.h"
 
 acorn::SystemPath::SystemPath()
     : storage(Storage::NONE) {
@@ -55,7 +61,7 @@ acorn::SystemPath acorn::SystemPath::parent_directory(std::string& err) const {
     if (abs_path.storage == Storage::UTF8) {
 #if _WIN32
         size_t idx = abs_path.utf8.find_last_of("/\\");
-#elif
+#else
         size_t idx = abs_path.utf8.find_last_of('/');
 #endif
         if (idx != std::string::npos) {
@@ -112,7 +118,7 @@ acorn::SystemPath acorn::SystemPath::append_path(const std::string& path) {
         if (utf8.ends_with('/') || utf8.ends_with('\\')) {
             return SystemPath(utf8 + path);
         }
-#elif
+#else
         if (utf8.ends_with('/')) {
             return SystemPath(utf8 + path);
         }
@@ -200,8 +206,7 @@ acorn::SystemPath acorn::get_executable_path(std::string& err) {
     if (length != -1) {
         return SystemPath(buffer, length);
     }
-    acorn_fatal("Not implemented");
-    // TODO (maddie): error handling!
+    err = strerror(errno);
     return SystemPath();
 #endif
 }
@@ -219,13 +224,33 @@ acorn::SystemPath acorn::get_absolute_path(const SystemPath& path, std::string& 
     }
     err = win32_error_code_to_string(GetLastError());
     return SystemPath();
-#elif
-    acorn_fatal("Not implemented");
+#else
+    std::string utf8_path = path.to_utf8_string();
+    char buffer[PATH_MAX];
+    if (realpath(utf8_path.c_str(), buffer)) {
+        return SystemPath(buffer);
+    }
+    err = strerror(errno);
     return SystemPath();
 #endif
 }
 
 void acorn::make_directory(const SystemPath& path, std::string& err, bool error_if_exists) {
+
+    auto check_already_exists = [&path, &err, error_if_exists]() finline {
+        if (error_if_exists) {
+            err = "Already exists";
+            return;
+        }
+
+        if (!is_directory(path, err)) {
+            if (!err.empty()) {
+                return;
+            }
+            err = "Already exists as a but not as directory";
+        }
+    };
+
 #if WIN_OS
 
     std::wstring wpath = path.to_wide_string();
@@ -233,10 +258,7 @@ void acorn::make_directory(const SystemPath& path, std::string& err, bool error_
     if (!CreateDirectoryW(wpath.c_str(), nullptr)) {
         DWORD ec = GetLastError();
         if (ec == ERROR_ALREADY_EXISTS) {
-            if (!error_if_exists) {
-                return;
-            }
-            err = "Already exists";
+            check_already_exists();
         } else if (ec == ERROR_PATH_NOT_FOUND) {
             err = "Path not found";
         } else {
@@ -244,7 +266,16 @@ void acorn::make_directory(const SystemPath& path, std::string& err, bool error_
         }
     }
 #else
-    acorn_fatal("Not implemented");
+    std::string utf8_path = path.to_utf8_string();
+    if (mkdir(utf8_path.c_str(), 0775) != 0) {
+        if (errno == EEXIST) {
+            check_already_exists();
+        } else if (errno == ENOENT) {
+            err = "Path not found";
+        } else {
+            err = strerror(errno);
+        }
+    }
 #endif
 }
 
@@ -256,6 +287,16 @@ static void win32_get_file_attribs_error(DWORD ec, std::string& err) {
         err = "Access denied";
     } else {
         err = win32_error_code_to_string(ec);
+    }
+}
+#else
+static void unix_get_file_stat_error(std::string& err) {
+    if (errno == ENOENT || errno == ENOTDIR) {
+        err = "Path not found";
+    } else if (errno == EACCES) {
+        err = "Access denied";
+    } else {
+        err = strerror(errno);
     }
 }
 #endif
@@ -281,7 +322,23 @@ void acorn::remove_file(const SystemPath& path, std::string& err) {
         return;
     }
 #else
-    acorn_fatal("Not implemented");
+
+    struct stat path_stat;
+
+    std::string utf8_path = path.to_utf8_string();
+    if (stat(utf8_path.c_str(), &path_stat) != 0) {
+        unix_get_file_stat_error(err);
+        return;
+    }
+
+    if (S_ISDIR(path_stat.st_mode)) {
+        err = "Path is directory";
+        return;
+    }
+
+    if (unlink(utf8_path.c_str()) != 0) {
+        err = strerror(errno);
+    }
 #endif
 }
 
@@ -302,8 +359,18 @@ bool acorn::path_exists(const SystemPath& path, std::string& err) {
 
     return true;
 #else
-    acorn_fatal("Not implemented");
-    return false;
+    struct stat path_stat;
+
+    std::string utf8_path = path.to_utf8_string();
+    if (stat(utf8_path.c_str(), &path_stat) != 0) {
+        if (errno == ENOENT || errno == ENOTDIR) {
+            return false;
+        }
+        unix_get_file_stat_error(err);
+        return false;
+    }
+
+    return true;
 #endif
 }
 
@@ -320,15 +387,22 @@ bool acorn::is_directory(const SystemPath& path, std::string& err) {
 
     return (attribs & FILE_ATTRIBUTE_DIRECTORY) != 0;
 #else
-    acorn_fatal("Not implemented");
-    return false;
+    struct stat path_stat;
+
+    std::string utf8_path = path.to_utf8_string();
+    if (stat(utf8_path.c_str(), &path_stat) != 0) {
+        unix_get_file_stat_error(err);
+        return false;
+    }
+
+    return S_ISDIR(path_stat.st_mode);
 #endif
 }
 
 void acorn::recursively_iterate_directory(const SystemPath& dir_path,
                                           std::string& err,
                                           std::function<void(SystemPath, PathKind)> callback) {
-#if WIN_OS
+
     if (!is_directory(dir_path, err)) {
         if (!err.empty()) {
             return;
@@ -337,6 +411,7 @@ void acorn::recursively_iterate_directory(const SystemPath& dir_path,
         return;
     }
 
+#if WIN_OS
     std::wstring wpath = dir_path.to_wide_string();
     std::wstring glob_path = wpath + L"\\*";
 
@@ -392,6 +467,63 @@ void acorn::recursively_iterate_directory(const SystemPath& dir_path,
     }
 
     err = win32_error_code_to_string(ec);
+#else
+
+    std::string utf8_path = dir_path.to_utf8_string();
+
+    DIR* dir = opendir(utf8_path.c_str());
+    if (!dir) {
+        err = strerror(errno);
+        return;
+    }
+
+    struct dirent* entry;
+    while (true) {
+        // We have to set the errror number to zero because it is possible
+        // an error happened somewhere else in the code and it is important
+        // not to confuse errors happening outside this function for errors
+        // happening because of it.
+        errno = 0;
+        entry = readdir(dir);
+        if (!entry) {
+            break;
+        }
+
+        const char* name = entry->d_name;
+
+        // Skip "." and ".."
+        if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+            continue;
+        }
+
+        std::string full_path = utf8_path + "/" + name;
+
+        struct stat entry_stat;
+        if (stat(full_path.c_str(), &entry_stat) != 0) {
+            unix_get_file_stat_error(err);
+            closedir(dir);
+            return;
+        }
+
+        if (S_ISDIR(entry_stat.st_mode)) {
+            recursively_iterate_directory(SystemPath(full_path), err, callback);
+            if (!err.empty()) {
+                closedir(dir);
+                return;
+            }
+        } else if (S_ISREG(entry_stat.st_mode)) {
+            callback(SystemPath(full_path), PathKind::REGULAR);
+        } else {
+            callback(SystemPath(full_path), PathKind::OTHER);
+        }
+    }
+
+    if (errno != 0) {
+        err = strerror(errno);
+        return;
+    }
+
+    closedir(dir);
 
 #endif
 }

@@ -31,7 +31,7 @@ namespace acorn {
     static void add_process_directory(char* process_dir) {
         if (!process_dir) return;
 
-        if (chdir(char_process_dir) != 0) {
+        if (chdir(process_dir) != 0) {
             acorn_fatal("Failed to change directory for new process");
         }
     }
