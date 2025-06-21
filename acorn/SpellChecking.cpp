@@ -149,6 +149,7 @@ llvm::StringRef acorn::find_closest_spelling_match(const llvm::SmallVector<llvm:
         ++index;
     }
 
+    // TODO (maddie): this could use better support for
     if (smallest_cost > find_for.size() / 2) {
         return "";
     }

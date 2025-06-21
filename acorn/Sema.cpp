@@ -2998,14 +2998,19 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
         return;
     }
 
-    if (!structn->constructors.empty()) {
-        // Need to check the arguments before trying to select a constructor.
-        bool args_have_errors = false;
-        for (auto arg : initializer->values) {
+    bool args_have_errors = false;
+    for (auto arg : initializer->values) {
+        if (arg->is(NodeKind::MoveObj)) {
+            check_moveobj(static_cast<MoveObj*>(arg), true);
+        } else {
             check_node(arg);
-            if (!arg->type) args_have_errors = true;
         }
-        if (args_have_errors) return;
+        if (!arg->type) args_have_errors = true;
+    }
+    if (args_have_errors) return;
+
+
+    if (!structn->constructors.empty()) {
 
         Func* found_constructor = check_function_decl_call(initializer,
                                                            initializer->values,
@@ -3068,7 +3073,6 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
     uint32_t named_value_high_idx = 0;
     for (size_t i = 0; i < values.size(); i++) {
         Expr* value = values[i];
-        check_and_verify_type(value);
 
         Var* field;
         if (value->is(NodeKind::NamedValue)) {
@@ -4061,7 +4065,11 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
                     return;
                 }
                 if constexpr (is_spell_checking) {
-                    spellcheck_variables_for_ident(cur_scope->variables, spell_checker, is_for_call);
+                    auto scope_itr = cur_scope;
+                    while (scope_itr) {
+                        spellcheck_variables_for_ident(scope_itr->variables, spell_checker, is_for_call);
+                        scope_itr = scope_itr->parent;
+                    }
                 }
             }
 

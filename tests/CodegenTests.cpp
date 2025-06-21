@@ -1765,6 +1765,18 @@ static void move_constructors_tests() {
 
         expect(result, std::identity()).to_be("called");
     });
+    test("Passing argument with moveobj to constructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("move_constructors/move_constructors_test14.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@called%@");
+    });
+    test("Passing argument with moveobj to struct initializer", [&] {
+        auto [err_msg, result] = run_codegen_test(src("move_constructors/move_constructors_test15.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@called%@");
+    });
 }
 
 static void ternaries_tests() {
