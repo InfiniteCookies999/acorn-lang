@@ -1579,10 +1579,15 @@ void acorn::Sema::check_struct(Struct* structn) {
     uint32_t ll_field_count = 0;
 
     if (structn->uses_vtable) {
+        structn->is_default_foldable = false;
         for (auto& extension : structn->interface_extensions) {
             if (!extension.is_dynamic) continue;
             ++ll_field_count;
         }
+    }
+
+    if (!structn->constructors.empty()) {
+        structn->is_default_foldable = false;
     }
 
     for (Var* field : structn->fields) {
@@ -1614,8 +1619,15 @@ void acorn::Sema::check_struct(Struct* structn) {
                 }
             }
         }
+
         if (field->assignment) {
+            if (field->type) {
+                structn->is_default_foldable &= field->assignment->is_foldable;
+            }
+
             structn->fields_have_assignments = true;
+        } else if (field->type) {
+            structn->is_default_foldable &= field->type->is_default_foldable();
         }
     }
 
@@ -3069,6 +3081,10 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
 
     initializer->structn = structn;
 
+    if (!structn->is_default_foldable) {
+        initializer->is_foldable = false;
+    }
+
     bool named_values_out_of_order = false;
     uint32_t named_value_high_idx = 0;
     for (size_t i = 0; i < values.size(); i++) {
@@ -3116,10 +3132,15 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
                 .end_error(ErrCode::SemaFieldInitTypeMismatch);
         }
 
+        if (field->assignment) {
+            initializer->is_foldable &= field->assignment->is_foldable;
+        } else {
+            initializer->is_foldable &= field->type->is_default_foldable();
+        }
+
         create_cast(value, field->type);
     }
 
-    initializer->is_foldable = false;
     initializer->type = structn->struct_type;
 
 }

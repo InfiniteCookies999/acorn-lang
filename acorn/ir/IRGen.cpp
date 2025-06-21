@@ -716,14 +716,6 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
 
     auto ll_global = llvm::cast<llvm::GlobalVariable>(var->ll_address);
 
-    auto gen_constant_value = [this, var]() {
-        if (var->assignment->type->is_array()) {
-            return gen_constant_array_for_global(static_cast<Array*>(var->assignment));
-        } else {
-            auto ll_value = gen_rvalue(var->assignment);
-            return llvm::cast<llvm::Constant>(ll_value);
-        }
-    };
 
     if (!var->should_default_initialize) {
         ll_global->setInitializer(gen_zero(var->type));
@@ -731,27 +723,23 @@ void acorn::IRGenerator::gen_global_variable_body(Var* var) {
     }
 
     if (!var->assignment) {
-        if (var->type->is_struct()) {
-            // Initialize as many fields as possible then post-pone the initialization
-            // of the rest of the values in the initialize function.
-
-            auto struct_type = static_cast<StructType*>(var->type);
-
-            llvm::Constant* ll_constant_struct;
-            bool all_values_initialized = gen_constant_struct_for_global(struct_type, ll_constant_struct);
-
-            ll_global->setInitializer(ll_constant_struct);
-            if (!all_values_initialized) {
+        if (var->type->is_struct() || var->type->is_array()) {
+            // Make sure the object can actually be default initialized and if not
+            // then it needs postponed.
+            if (var->type->is_default_foldable()) {
+                ll_global->setInitializer(gen_constant_default_value(var->type));
+            } else {
+                ll_global->setInitializer(gen_zero(var->type));
                 finish_incomplete_global_variable(var);
             }
         } else {
-            ll_global->setInitializer(gen_zero(var->type));
+            ll_global->setInitializer(gen_constant_default_value(var->type));
         }
         return;
     }
 
     if (var->assignment->is_foldable) {
-        ll_global->setInitializer(gen_constant_value());
+        ll_global->setInitializer(gen_constant_value(var->assignment));
     } else {
         ll_global->setInitializer(gen_zero(var->type));
         finish_incomplete_global_variable(var);
@@ -773,97 +761,57 @@ void acorn::IRGenerator::finish_incomplete_global_variable(Var* var) {
 
     builder.SetInsertPoint(&context.ll_global_init_function->back());
 
-    if (!var->assignment && var->type->is_struct()) {
-        auto struct_type = static_cast<StructType*>(var->type);
-        finish_incomplete_struct_type_global(var->ll_address, struct_type);
-    } else {
+    if (var->assignment) {
         gen_assignment(var->ll_address, var->type, var->assignment, var->loc);
+    } else {
+        gen_default_value(var->ll_address, var->type, var->loc);
     }
 }
 
-bool acorn::IRGenerator::gen_constant_struct_for_global(StructType* struct_type, llvm::Constant*& ll_constant_struct) {
+llvm::Constant* acorn::IRGenerator::gen_constant_struct_initializer(StructInitializer* initializer) {
 
-    bool all_values_initialized = true;
+    auto structn = initializer->structn;
 
-    auto structn        = struct_type->get_struct();
-    auto ll_struct_type = gen_struct_type(struct_type);
+    llvm::SmallVector<bool, 32> fields_set_list(structn->fields.size(), false);
 
     llvm::SmallVector<llvm::Constant*, 16> ll_field_values;
+    ll_field_values.reserve(structn->fields.size());
 
-    for (Var* field : structn->fields) {
-        if (field->type->is_struct()) {
-            auto field_struct_type = static_cast<StructType*>(field->type);
-            llvm::Constant* ll_constant;
-            all_values_initialized &= gen_constant_struct_for_global(field_struct_type, ll_constant);
-            ll_field_values.push_back(ll_constant);
-        } else if (field->type->is_array()) {
-            if (!field->assignment) {
-                ll_field_values.push_back(gen_zero(field->type));
-                continue;
-            }
-
-            if (field->assignment->is_foldable) {
-                auto arr = static_cast<Array*>(field->assignment);
-                ll_field_values.push_back(gen_constant_array_for_global(arr));
-            } else {
-                ll_field_values.push_back(gen_zero(field->type));
-                all_values_initialized = false;
-            }
-        } else if (field->assignment && field->assignment->is_foldable) {
-            auto ll_constant = llvm::cast<llvm::Constant>(gen_rvalue(field->assignment));
-            ll_field_values.push_back(ll_constant);
+    size_t field_idx = 0;
+    for (Expr* value : initializer->values) {
+        Var* field;
+        if (value->is(NodeKind::NamedValue)) {
+            auto named_val = static_cast<NamedValue*>(value);
+            field = structn->fields[named_val->mapped_idx];
+            fields_set_list[named_val->mapped_idx] = true;
         } else {
-            ll_field_values.push_back(gen_zero(field->type));
+            field = structn->fields[field_idx];
+            fields_set_list[field_idx] = true;
+        }
+
+        ll_field_values.push_back(gen_constant_value(value));
+
+        ++field_idx;
+    }
+
+    // Filling in remainder fields that were not set.
+    if (initializer->non_named_vals_offset == -1) {
+        initializer->non_named_vals_offset = 0;
+    }
+    for (field_idx = initializer->non_named_vals_offset; field_idx < structn->fields.size(); field_idx++) {
+        if (!fields_set_list[field_idx]) {
+            Var* field = structn->fields[field_idx];
             if (field->assignment) {
-                all_values_initialized = false;
+                ll_field_values.push_back(gen_constant_value(field->assignment));
+            } else {
+                // TODO annoying nonsense
             }
         }
     }
 
-    // LLVM expects non empty struct so we need to give it the dummy struct value.
-    if (ll_field_values.empty()) {
-        ll_field_values.push_back(builder.getInt8(0));
-    }
-
-    ll_constant_struct = llvm::ConstantStruct::get(ll_struct_type, ll_field_values);
-
-    return all_values_initialized;
-}
-
-llvm::Constant* acorn::IRGenerator::gen_constant_array_for_global(Array* arr) {
-    // If we ever allow assigning an array directly to a pointer then this code
-    // will need changed since first it would need to create a constant global
-    // array then point to that array.
-    auto arr_type = static_cast<ArrayType*>(arr->get_final_type());
-    auto ll_array_type = llvm::cast<llvm::ArrayType>(gen_type(arr_type));
-    return gen_constant_array(arr, arr_type, ll_array_type);
-}
-
-void acorn::IRGenerator::finish_incomplete_struct_type_global(llvm::Value* ll_address,
-                                                              StructType* struct_type,
-                                                              const std::function<llvm::Value*()>& address_getter) {
-
-    auto structn = struct_type->get_struct();
+    auto struct_type = static_cast<StructType*>(initializer->type);
     auto ll_struct_type = gen_struct_type(struct_type);
-
-    auto get_struct_address = [&ll_address, address_getter]() finline{
-        if (!ll_address) {
-            ll_address = address_getter();
-        }
-        return ll_address;
-    };
-
-    for (Var* field : structn->fields) {
-        if (field->type->is_struct()) {
-            auto field_struct_type = static_cast<StructType*>(field->type);
-            finish_incomplete_struct_type_global(nullptr, field_struct_type, [=, this]() -> llvm::Value* {
-                return builder.CreateStructGEP(ll_struct_type, get_struct_address(), field->ll_field_idx);
-            });
-        } else if (field->assignment && !field->assignment->is_foldable) {
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, get_struct_address(), field->ll_field_idx);
-            gen_assignment(ll_field_addr, field->type, field->assignment, field->loc);
-        }
-    }
+    return llvm::ConstantStruct::get(ll_struct_type, ll_field_values);
 }
 
 void acorn::IRGenerator::destroy_global_variables() {
@@ -1204,42 +1152,12 @@ void acorn::IRGenerator::gen_call_destructors(Type* type, DestructorObject::Obje
             // one was generated at which point we can then proceed to print the object
             // out.
 
-
-
-            /*
-            llvm::Value* ll_interface_func = ll_in_this;
-            // Load v-table pointer.
-            ll_interface_func = builder.CreateLoad(builder.getPtrTy(), ll_interface_func);
-
-            if (called_func->interface_idx != 0) {
-
-                // The pointer already points to the start of the vtable now just have to offset
-                // the function into the vtable.
-                auto ll_offset = builder.getInt64(called_func->interface_idx);
-                ll_interface_func = builder.CreateInBoundsGEP(builder.getPtrTy(), ll_interface_func, { ll_offset });
-
-            }
-
-            if (interfacen->functions.size() > 1) {
-                // Points to a v-table instead of a single function so have to load the address of the
-                // function.
-                ll_interface_func = builder.CreateLoad(builder.getPtrTy(), ll_interface_func);
-            }
-            */
-
-            //auto ll_loaded_error = builder.CreateLoad(builder.getPtrTy(), ll_address);
-            //auto ll_error_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), ll_loaded_error);
-
-
-            // TODO (maddie): we can probably get rid of this first load by loading
-            // the allocated union instead.
-            //
             // Error** -> Error*
             auto ll_loaded_error = builder.CreateLoad(builder.getPtrTy(), ll_address);
             // It is a `Error` pointer so we know that the address is already pointing to the
             // vtable so we can safely load the error to get back the vtable.
             //
-            //Load vtable ptr, the first field of the struct.
+            // Load vtable ptr, the first field of the struct.
             auto ll_error_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), ll_loaded_error);
             // Load again to load the first function in the vtable which will be what is used
             // for comparison.
@@ -3711,39 +3629,6 @@ llvm::Value* acorn::IRGenerator::gen_array(Array* arr, llvm::Value* ll_dest_addr
     }
 
     return ll_dest_addr;
-}
-
-llvm::Constant* acorn::IRGenerator::gen_constant_array(Array* arr, ArrayType* arr_type, llvm::ArrayType* ll_arr_type) {
-
-    bool elms_are_arrays = arr_type->get_elm_type()->is_array();
-    auto ll_elm_type = ll_arr_type->getElementType();
-
-    llvm::SmallVector<llvm::Constant*> ll_values;
-    ll_values.reserve(ll_arr_type->getNumElements());
-
-    auto get_element = [this, elms_are_arrays, ll_elm_type](Expr* elm) finline {
-        if (elms_are_arrays) {
-            auto elm_arr = static_cast<Array*>(elm);
-            auto elm_arr_type = static_cast<ArrayType*>(elm_arr->get_final_type());
-            return gen_constant_array(elm_arr, elm_arr_type, llvm::cast<llvm::ArrayType>(ll_elm_type));
-        } else {
-            return llvm::cast<llvm::Constant>(gen_rvalue(elm));
-        }
-    };
-
-    for (Expr* elm : arr->elms) {
-        if (elm) {
-            ll_values.push_back(get_element(elm));
-        } else {
-            ll_values.push_back(gen_zero(arr_type->get_elm_type()));
-        }
-    }
-    // Zero fill the rest.
-    for (size_t i = arr->elms.size(); i < ll_arr_type->getNumElements(); ++i) {
-        ll_values.push_back(gen_zero(arr_type->get_elm_type()));
-    }
-
-    return llvm::ConstantArray::get(ll_arr_type, ll_values);
 }
 
 llvm::GlobalVariable* acorn::IRGenerator::gen_store_constant_array_to_global(llvm::Type* ll_arr_type,

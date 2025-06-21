@@ -103,6 +103,42 @@ bool acorn::Type::is_comparable() const {
     }
 }
 
+bool acorn::Type::is_default_foldable() const {
+    // TODO (maddie): enums?
+    switch (kind) {
+    case TypeKind::Int:
+    case TypeKind::Int8:
+    case TypeKind::Int16:
+    case TypeKind::Int32:
+    case TypeKind::Int64:
+    case TypeKind::ISize:
+    case TypeKind::UInt8:
+    case TypeKind::UInt16:
+    case TypeKind::UInt32:
+    case TypeKind::UInt64:
+    case TypeKind::USize:
+    case TypeKind::Char:
+    case TypeKind::Char16:
+    case TypeKind::Float32:
+    case TypeKind::Float64:
+    case TypeKind::Bool:
+    case TypeKind::Pointer:
+        return true;
+    case TypeKind::Struct: {
+        auto struct_type = static_cast<const StructType*>(this);
+        auto field_struct = struct_type->get_struct();
+        return field_struct->is_default_foldable;
+    }
+    case TypeKind::Array: {
+        auto arr_type = static_cast<const ArrayType*>(this);
+        auto elm_type = arr_type->get_elm_type();
+        return elm_type->is_default_foldable();
+    }
+    default:
+        return false;
+    }
+}
+
 bool acorn::Type::is_sized() const {
     switch (kind) {
     case TypeKind::Int8:

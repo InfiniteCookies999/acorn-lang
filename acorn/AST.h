@@ -388,6 +388,7 @@ namespace acorn {
         bool fields_need_move_call   = false;
         bool uses_vtable             = false;
         bool aborts_error            = false;
+        bool is_default_foldable     = true;
 
         Var* find_field(Identifier name) const;
         const InterfaceExtension* find_interface_extension(Identifier name) const;

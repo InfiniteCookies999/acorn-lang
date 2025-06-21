@@ -132,6 +132,8 @@ namespace acorn {
             return is_array() || is_struct() || is_slice();
         }
 
+        bool is_default_foldable() const;
+
         bool is_pointer() const   { return kind == TypeKind::Pointer;   }
         bool is_array() const     { return kind == TypeKind::Array;     }
         bool is_bool() const      { return kind == TypeKind::Bool;      }

@@ -145,12 +145,14 @@ namespace acorn {
         void gen_global_variable_decl(Var* var);
         void gen_global_variable_body(Var* var);
         void finish_incomplete_global_variable(Var* var);
-        bool gen_constant_struct_for_global(StructType* struct_type, llvm::Constant*& ll_constant_struct);
-        llvm::Constant* gen_constant_array_for_global(Array* arr);
 
-        void finish_incomplete_struct_type_global(llvm::Value* ll_address,
-                                                  StructType* struct_type,
-                                                  const std::function<llvm::Value*()>& address_getter = {});
+        llvm::Constant* gen_constant_value(Expr* value);
+        llvm::Constant* gen_constant_default_value(Type* type);
+        llvm::Constant* gen_constant_default_struct(StructType* struct_type);
+        llvm::Constant* gen_constant_default_array(ArrayType* arr_type);
+        llvm::Constant* gen_constant_array(Array* arr);
+        llvm::Constant* gen_constant_array(Array* arr, ArrayType* arr_type, llvm::ArrayType* ll_arr_type);
+        llvm::Constant* gen_constant_struct_initializer(StructInitializer* initializer);
 
         void add_object_with_destructor(Type* type, llvm::Value* ll_address, bool is_temporary);
         void gen_call_destructors(llvm::SmallVector<DestructorObject>& objects, SourceLoc loc);
@@ -222,7 +224,6 @@ namespace acorn {
         llvm::Value* gen_null();
         llvm::Value* gen_cast(Cast* cast);
         llvm::Value* gen_array(Array* arr, llvm::Value* ll_dest_addr, SourceLoc loc);
-        llvm::Constant* gen_constant_array(Array* arr, ArrayType* arr_type, llvm::ArrayType* ll_arr_type);
         llvm::GlobalVariable* gen_store_constant_array_to_global(llvm::Type* ll_arr_type,
                                                                  llvm::Type* ll_elm_type,
                                                                  llvm::Constant* ll_const_arr,
