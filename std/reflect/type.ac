@@ -21,7 +21,6 @@ enum TypeId {
 
     Char,
     Char16,
-    Char32,
 
     Float32,
     Float64,
@@ -80,7 +79,7 @@ struct EnumTypeInfo {
             const uint64[2]* bucket = index_mappings + bucket_index;
             if (*bucket)[0] == index {
                 // Still have to check for -1 because it is possible the user wanted
-                // to store a -1 index value index the enum and -1 is used for empty keys.
+                // to store a -1 index value in the enum and -1 is used for empty keys.
                 if (*bucket)[1] != -1 {
                     return (*bucket)[1];
                 }

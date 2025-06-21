@@ -204,7 +204,7 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
         case TokId::KwInt64:   case TokId::KwUInt8:    case TokId::KwUInt16:  case TokId::KwUInt32:
         case TokId::KwUInt64:  case TokId::KwISize:    case TokId::KwUSize:   case TokId::KwFloat32:
         case TokId::KwFloat64: case TokId::KwBool:     case TokId::KwVoid:    case TokId::KwChar:
-        case TokId::KwChar16:  case TokId::KwChar32:   case TokId::KwConst:   case TokId::KwAuto:
+        case TokId::KwConst:   case TokId::KwAuto:
         case TokId::KwAs:      case TokId::KwIf:       case TokId::KwElIf:    case TokId::KwElse:
         case TokId::KwImport:  case TokId::KwContinue: case TokId::KwBreak:   case TokId::KwSwitch:
         case TokId::KwCase:    case TokId::KwStatic:   case TokId::KwStruct:  case TokId::KwEnum:
@@ -240,7 +240,7 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
         case TokId::CharLiteral:
             lexeme = create_char_literal();
             break;
-        case TokId::String8BitLiteral:
+        case TokId::StringLiteral:
             lexeme = create_string_literal();
             break;
         case TokId::Float32Literal: {

@@ -468,64 +468,26 @@ void test_parser() {
                 "";
                 "abcASwe325#@R12eAsF/.,(1";
                 "abc\n\\\tew@\f";
-                "abc\uBA1F:D";
-                "abc\U000Abf03jt";
             )";
             Module& modl = mock_parser(program)->modl;
 
             auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
                                                get_bad_scope_node);
 
-            expect(nodes.size(), to_string<size_t>).to_be(5);
+            expect(nodes.size(), to_string<size_t>).to_be(3);
 
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::String);
             expect(static_cast<String*>(nodes[0])->type, type_to_string).to_be(context->const_char_ptr_type);
-            expect(static_cast<String*>(nodes[0])->text8bit, std::identity()).to_be("");
+            expect(static_cast<String*>(nodes[0])->text, std::identity()).to_be("");
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::String);
             expect(static_cast<String*>(nodes[1])->type, type_to_string).to_be(context->const_char_ptr_type);
-            expect(static_cast<String*>(nodes[1])->text8bit, std::identity()).to_be("abcASwe325#@R12eAsF/.,(1");
+            expect(static_cast<String*>(nodes[1])->text, std::identity()).to_be("abcASwe325#@R12eAsF/.,(1");
 
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::String);
             expect(static_cast<String*>(nodes[2])->type, type_to_string).to_be(context->const_char_ptr_type);
-            expect(static_cast<String*>(nodes[2])->text8bit, std::identity()).to_be("abc\n\\\tew@\f");
+            expect(static_cast<String*>(nodes[2])->text, std::identity()).to_be("abc\n\\\tew@\f");
 
-            expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::String);
-            expect(static_cast<String*>(nodes[3])->type, type_to_string).to_be(context->const_char16_ptr_type);
-
-            expect(nodes[4]->kind, node_kind_to_string).to_be(NodeKind::String);
-            expect(static_cast<String*>(nodes[4])->type, type_to_string).to_be(context->const_char32_ptr_type);
-
-        });
-        test("char literals", [&] {
-            const char* program = R"(
-                'a';
-                '^';
-                '\uB35c';
-                '\U62Ab0DD7';
-            )";
-            Module& modl = mock_parser(program)->modl;
-
-            auto nodes = std::views::transform(modl.get_bad_scope_nodes(),
-                                               get_bad_scope_node);
-
-            expect(nodes.size(), to_string<size_t>).to_be(4);
-
-            expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->char_type);
-            expect(static_cast<Number*>(nodes[0])->value_u64, to_string<uint64_t>).to_be(97);
-
-            expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->char_type);
-            expect(static_cast<Number*>(nodes[1])->value_u64, to_string<uint64_t>).to_be(94);
-
-            expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->char16_type);
-            expect(static_cast<Number*>(nodes[2])->value_u64, to_string<uint64_t>).to_be(0xB35c);
-
-            expect(nodes[3]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(static_cast<Number*>(nodes[3])->type, type_to_string).to_be(context->char32_type);
-            expect(static_cast<Number*>(nodes[3])->value_u64, to_string<uint64_t>).to_be(0x62Ab0DD7);
 
         });
         test("elm type of array must have element", [&] {

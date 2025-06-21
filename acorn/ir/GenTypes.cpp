@@ -26,7 +26,7 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Mod
         return llvm::Type::getInt8Ty(ll_context);
     case TypeKind::Int16: case TypeKind::UInt16: case TypeKind::Char16:
         return llvm::Type::getInt16Ty(ll_context);
-    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32: case TypeKind::Char32:
+    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32:
         return llvm::Type::getInt32Ty(ll_context);
     case TypeKind::Int64: case TypeKind::UInt64:
         return llvm::Type::getInt64Ty(ll_context);

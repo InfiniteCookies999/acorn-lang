@@ -560,22 +560,6 @@ private native("strlen") isize _strlen(const char* s);
  */
 native char* strcpy(char* dest, const char* source);
 
-/*
- * Copies the contents of the `wide_source` into `dest` by treating each
- * wide character as two multibyte characters.
- *
- * @dest_max_size The maximum number of characters that can be stored into
- *                the `dest` buffer. Since the `dest` is null terminated the
- *                size should include space for the null terminator.
- * @wide_source A null terminated wide character c-string.
- * @return        The number of characters that were written into the `dest`
- *                buffer.
- */
-int wide_to_multibyte(char* dest, int dest_max_size, const char16* wide_source) {
-    return as(int) wcstombs(dest, wide_source, as(isize) dest_max_size);
-}
-private native isize wcstombs(char* mbstr, const char16* wcstr, isize count);
-
  /*
   * Compares two strings `s1` and `s2`.
   * Both strings must be null-terminated.

@@ -18,7 +18,7 @@ namespace acorn {
             Invalid = 0,
 
             // Reserve space for ASCII characters
-            UniqueTokens = 256,
+            UniqueTokens = 127,
 
             KeywordStart,
 
@@ -39,7 +39,6 @@ namespace acorn {
             KwVoid,
             KwChar,
             KwChar16,
-            KwChar32,
             KwConst,
             KwAuto,
             KwAs,
@@ -132,9 +131,7 @@ namespace acorn {
             Float32Literal,
             Float64Literal,
             Identifier,
-            String8BitLiteral,
-            String16BitLiteral,
-            String32BitLiteral,
+            StringLiteral,
             CharLiteral,
             InvalidStringLiteral,
             InvalidCharLiteral,

@@ -292,7 +292,6 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 	}
 	case TypeKind::Char:    return make_basic_type("char"   , 8 , llvm::dwarf::DW_ATE_unsigned_char);
 	case TypeKind::Char16:  return make_basic_type("char16" , 16, llvm::dwarf::DW_ATE_UTF);
-	case TypeKind::Char32:  return make_basic_type("char32" , 32, llvm::dwarf::DW_ATE_UTF);
 	case TypeKind::Float32: return make_basic_type("float32", 32, llvm::dwarf::DW_ATE_float);
 	case TypeKind::Float64: return make_basic_type("float64", 64, llvm::dwarf::DW_ATE_float);
 	case TypeKind::Bool:    return make_basic_type("bool"   , 8 , llvm::dwarf::DW_ATE_boolean);

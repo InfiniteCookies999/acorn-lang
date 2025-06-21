@@ -28,7 +28,6 @@ case Token::KwFloat64: \
 case Token::KwConst:   \
 case Token::KwChar:    \
 case Token::KwChar16:  \
-case Token::KwChar32:  \
 case Token::KwUSize:   \
 case Token::KwISize:   \
 case Token::KwBool:    \
@@ -922,16 +921,13 @@ uint32_t acorn::Parser::parse_modifiers() {
             next_token();
             if (cur_token.is('(')) {
                 next_token();
-                if (cur_token.is(Token::String8BitLiteral)) {
+                // TODO (maddie): can linknames take utf8?
+                if (cur_token.is(Token::StringLiteral)) {
 
                     linkname = cur_token.text();
                     linkname = linkname.substr(1, linkname.size() - 2);
 
                     next_token();
-                } else if (cur_token.is(Token::String16BitLiteral) ||
-                           cur_token.is(Token::String32BitLiteral)) {
-                    error(cur_token, "Linkage name cannot contain unicode")
-                        .end_error(ErrCode::ParseNativeLinkNameHasUnicode);
                 } else if (cur_token.is(Token::InvalidStringLiteral)) {
                     // They writed to write a string but it was improperly lexed so
                     // we will just eat the token.
@@ -1550,7 +1546,6 @@ return t; }
     case Token::KwBool:    ty(context.bool_type);
     case Token::KwChar:    ty(context.char_type);
     case Token::KwChar16:  ty(context.char16_type);
-    case Token::KwChar32:  ty(context.char32_type);
     case Token::KwISize:   ty(context.isize_type);
     case Token::KwUSize:   ty(context.usize_type);
     case Token::KwFloat32: ty(context.float32_type);
@@ -2113,7 +2108,7 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
             return fold_int<uint8_t> (op, lnum, rnum, to_type);
         case TypeKind::UInt16: case TypeKind::Char16:
             return fold_int<uint16_t>(op, lnum, rnum, to_type);
-        case TypeKind::UInt32: case TypeKind::Char32:
+        case TypeKind::UInt32:
             return fold_int<uint32_t>(op, lnum, rnum, to_type);
         case TypeKind::UInt64: return fold_int<uint64_t>(op, lnum, rnum, to_type);
         case TypeKind::Int8:   return fold_int<int8_t> (op, lnum, rnum, to_type);
@@ -2353,9 +2348,7 @@ acorn::Expr* acorn::Parser::parse_term() {
     case Token::OctLiteral:           return parse_oct_literal();
     case Token::Float32Literal:       return parse_float32_literal();
     case Token::Float64Literal:       return parse_float64_literal();
-    case Token::String8BitLiteral:    return parse_string8bit_literal();
-    case Token::String16BitLiteral:   return parse_string16bit_literal();
-    case Token::String32BitLiteral:   return parse_string32bit_literal();
+    case Token::StringLiteral:        return parse_string_literal();
     case Token::CharLiteral:          return parse_char_literal();
     case Token::InvalidStringLiteral:
     case Token::InvalidCharLiteral:
@@ -2448,7 +2441,7 @@ acorn::Expr* acorn::Parser::parse_term() {
 
             switch (num->type->get_kind()) {
             case TypeKind::UInt64: num->value_u64 = -num->value_u64; break;
-            case TypeKind::UInt32: case TypeKind::Char32:
+            case TypeKind::UInt32:
                 num->value_u32 = -num->value_u32; break;
             case TypeKind::UInt16: case TypeKind::Char16:
                 num->value_u16 = -num->value_u16; break;
@@ -2470,7 +2463,7 @@ acorn::Expr* acorn::Parser::parse_term() {
 
             switch (num->type->get_kind()) {
             case TypeKind::UInt64: num->value_u64 = ~num->value_u64; break;
-            case TypeKind::UInt32: case TypeKind::Char32:
+            case TypeKind::UInt32:
                 num->value_u32 = ~num->value_u32; break;
             case TypeKind::UInt16: case TypeKind::Char16:
                 num->value_u16 = ~num->value_u16; break;
@@ -2707,33 +2700,14 @@ namespace acorn {
     }
 }
 
-acorn::Expr* acorn::Parser::parse_string8bit_literal() {
+acorn::Expr* acorn::Parser::parse_string_literal() {
 
     auto string = new_node<String>(cur_token);
-    string->bit_type = String::Str8Bit;
     string->type = type_table.get_ptr_type(type_table.get_const_type(context.char_type));
 
-    auto text = cur_token.text();
-    const char* ptr = text.data() + 1; // +1 skip the "
-    while (*ptr != '"') {
-        if (*ptr == '\\') {
-            ++ptr;
-            string->text8bit += get_escape_char(*ptr);
-            ++ptr;
-        } else {
-            string->text8bit += *ptr;
-            ++ptr;
-        }
-    }
-    next_token();
-    return string;
-}
-
-acorn::Expr* acorn::Parser::parse_string16bit_literal() {
-
-    auto string = new_node<String>(cur_token);
-    string->bit_type = String::Str16Bit;
-    string->type = type_table.get_ptr_type(type_table.get_const_type(context.char16_type));
+#define next_codepoint_digit(codepoint)        \
+codepoint = 16u * codepoint + hex_table[*ptr]; \
+++ptr;
 
     auto text = cur_token.text();
     const char* ptr = text.data() + 1; // +1 skip the "
@@ -2741,80 +2715,99 @@ acorn::Expr* acorn::Parser::parse_string16bit_literal() {
         if (*ptr == '\\') {
             ++ptr;
             if (*ptr == 'u') {
-                ++ptr;
-                string->text16bit += parse_unicode_value<char16_t>(ptr, ptr + 4);
-                ptr += 4;
-            } else {
-                string->text16bit += static_cast<char16_t>(get_escape_char(*ptr));
-                ++ptr;
-            }
-        } else {
-            string->text16bit += static_cast<char16_t>(*ptr);
-            ++ptr;
-        }
-    }
-    next_token();
-    return string;
-}
+                ++ptr; // skip past u
 
-acorn::Expr* acorn::Parser::parse_string32bit_literal() {
-
-    auto string = new_node<String>(cur_token);
-    string->bit_type = String::Str32Bit;
-    string->type = type_table.get_ptr_type(type_table.get_const_type(context.char32_type));
-
-    auto text = cur_token.text();
-    const char* ptr = text.data() + 1; // +1 skip the "
-    while (*ptr != '"') {
-        if (*ptr == '\\') {
-            ++ptr;
-            if (*ptr == 'u') {
+                uint32_t codepoint = 0;
+                codepoint = hex_table[*ptr];
                 ++ptr;
-                string->text32bit += parse_unicode_value<char32_t>(ptr, ptr + 4);
-                ptr += 4;
+                next_codepoint_digit(codepoint);
+                next_codepoint_digit(codepoint);
+                next_codepoint_digit(codepoint);
+
+                convert_and_check_codepoint(codepoint, string->text, ptr, 6);
             } else if (*ptr == 'U') {
+                ++ptr; // skip past U
+
+                uint32_t codepoint = 0;
+                codepoint = hex_table[*ptr];
                 ++ptr;
-                string->text32bit += parse_unicode_value<char32_t>(ptr, ptr + 8);
-                ptr += 8;
+                next_codepoint_digit(codepoint);
+                next_codepoint_digit(codepoint);
+                next_codepoint_digit(codepoint);
+                next_codepoint_digit(codepoint);
+                next_codepoint_digit(codepoint);
+                next_codepoint_digit(codepoint);
+                next_codepoint_digit(codepoint);
+
+                convert_and_check_codepoint(codepoint, string->text, ptr, 10);
             } else {
-                string->text32bit += static_cast<char32_t>(get_escape_char(*ptr));
+                string->text += get_escape_char(*ptr);
                 ++ptr;
             }
         } else {
-            string->text32bit += static_cast<char32_t>(*ptr);
-            ++ptr;
+            unsigned char ch = static_cast<unsigned char>(*ptr);
+            if (ch < 0x80) {
+                string->text += *ptr;
+                ++ptr;
+            } else {
+                // dealing with multi-byte character.
+
+                bool is_valid_utf8;
+                bool is_overlong;
+                size_t num_bytes = get_utf8_byte_distance(ptr, is_valid_utf8, is_overlong);
+
+                if (!is_valid_utf8) {
+                    error("Invalid UTF-8 characters in string")
+                        .end_error(ErrCode::ParseInvalidUTF8InString);
+                    ++ptr;
+                    continue;
+                }
+
+                size_t byte_count = 0;
+                while (byte_count < num_bytes) {
+                    string->text += *ptr;
+                    ++byte_count;
+                    ++ptr;
+                }
+            }
         }
     }
     next_token();
     return string;
+#undef next_codepoint_digit
 }
 
 acorn::Expr* acorn::Parser::parse_char_literal() {
 
     auto character = new_node<Number>(cur_token);
+    character->type = context.char_type;
 
     auto text = cur_token.text();
     const char* ptr = text.data() + 1; // Skip the '
 
-    if (*ptr == '\\' && *(ptr + 1) == 'u') {
-        ptr += 2;
-        character->value_u64 = parse_unicode_value<char16_t>(ptr, ptr + 4);
-        character->type = context.char16_type;
-    } else if (*ptr == '\\' && *(ptr + 1) == 'U') {
-        ptr += 2;
-        character->value_u64 = parse_unicode_value<char32_t>(ptr, ptr + 8);
-        character->type = context.char32_type;
-    } else if (*ptr == '\\') {
-        character->value_u64 = get_escape_char(*(ptr + 1));
-        character->type = context.char_type;
+    if (*ptr == '\\') {
+        ++ptr;
+        character->value_u64 = get_escape_char(*ptr);
     } else {
         character->value_u64 = *ptr;
-        character->type = context.char_type;
     }
 
     character->trivially_reassignable = true;
     next_token();
     return character;
+}
+
+void acorn::Parser::convert_and_check_codepoint(uint32_t codepoint,
+                                                std::string& dest_string,
+                                                const char* ptr,
+                                                int ptr_offset) {
+    bool is_valid;
+    codepoint_to_utf8(codepoint, dest_string, is_valid);
+    if (!is_valid) {
+        auto error_loc = SourceLoc::from_ptrs(ptr - ptr_offset, ptr);
+        error(error_loc, "Invalid UTF-8 codepoint")
+            .end_error(ErrCode::ParseInvalidCodepoint);
+    }
 }
 
 template<uint32_t radix, uint64_t convert_table[256], bool use_table>
@@ -3107,7 +3100,7 @@ bool acorn::Parser::expect(tokkind kind, const char* for_msg) {
             if (text.back() != '\"') {
                 // The string was missing its ending " so checking if the
                 // character we expect happens to be in the string.
-                if (kind <= 255) {
+                if (kind <= 128) {
                     if (static_cast<tokkind>(text.back()) == kind) {
                         return false;
                     }

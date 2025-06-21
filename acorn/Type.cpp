@@ -93,7 +93,6 @@ bool acorn::Type::is_comparable() const {
     case TypeKind::USize:
     case TypeKind::Char:
     case TypeKind::Char16:
-    case TypeKind::Char32:
     case TypeKind::Pointer:
     case TypeKind::Enum:
     case TypeKind::Null:
@@ -117,7 +116,6 @@ bool acorn::Type::is_sized() const {
     case TypeKind::Bool:
     case TypeKind::Char:
     case TypeKind::Char16:
-    case TypeKind::Char32:
     case TypeKind::Float32:
     case TypeKind::Float64:
     case TypeKind::Pointer:
@@ -146,7 +144,6 @@ uint32_t acorn::Type::get_number_of_bits() const {
     case TypeKind::Bool:    return 8;
     case TypeKind::Char:    return 8;
     case TypeKind::Char16:  return 16;
-    case TypeKind::Char32:  return 32;
     case TypeKind::Float32: return 32;
     case TypeKind::Float64: return 64;
     case TypeKind::Enum: {
@@ -208,7 +205,6 @@ std::string acorn::Type::to_string() const {
     case TypeKind::Bool:      return str("bool");
     case TypeKind::Char:      return str("char");
     case TypeKind::Char16:    return str("char16");
-    case TypeKind::Char32:    return str("char32");
     case TypeKind::Null:      return str("null");
     case TypeKind::ISize:     return str("isize");
     case TypeKind::USize:     return str("usize");

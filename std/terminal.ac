@@ -116,7 +116,6 @@ private void print_any(const void* ptr, const Type* type) {
     case Char:    print(*as(const char*) ptr);
     // Just print out the numeric value of the characters.
     case Char16:  print(as(uint64) *as(const char16*) ptr);
-    case Char32:  print(as(uint64) *as(const char32*) ptr);
     // TODO: case Float32: case Float64:
     case Bool:    print(*as(const bool*) ptr);
     case Pointer:
@@ -204,7 +203,6 @@ private void print_enum(const void* ptr, const EnumTypeInfo* enum_info) {
     case USize:   index = as(uint64) *as(const usize*)  ptr;
     case Char:    index = as(uint64) *as(const char*)   ptr;
     case Char16:  index = as(uint64) *as(const char16*) ptr;
-    case Char32:  index = as(uint64) *as(const char32*) ptr;
     }
 
     const char* name = enum_info.get_value_name(index);

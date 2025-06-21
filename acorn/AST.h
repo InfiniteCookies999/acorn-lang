@@ -802,15 +802,7 @@ namespace acorn {
         String() : Expr(NodeKind::String) {
         }
 
-        enum {
-            Str8Bit,
-            Str16Bit,
-            Str32Bit
-        } bit_type;
-
-        std::string    text8bit;
-        std::u16string text16bit;
-        std::u32string text32bit;
+        std::string text;
     };
 
     struct Null : Expr {

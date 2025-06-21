@@ -2392,8 +2392,7 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
             case TypeKind::UInt64:
             case TypeKind::USize:
             case TypeKind::Char:
-            case TypeKind::Char16:
-            case TypeKind::Char32: {
+            case TypeKind::Char16: {
                 auto ll_value = llvm::cast<llvm::ConstantInt>(sema.gen_constant(value));
                 number.value_u64 = ll_value->getZExtValue();
                 number.kind = Kind::UNSIGNED_INT;
@@ -5782,8 +5781,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
     case TypeKind::Int32: case TypeKind::UInt32:
     case TypeKind::Int64: case TypeKind::UInt64:
     case TypeKind::USize: case TypeKind::ISize:
-    case TypeKind::Char: case TypeKind::Char16:
-    case TypeKind::Char32: {
+    case TypeKind::Char: case TypeKind::Char16: {
         if (to_type->is(from_type)) {
             return true;
         }
@@ -5811,7 +5809,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
                     return fits_in_range<uint8_t>(value);
                 case TypeKind::UInt16: case TypeKind::Char16:
                     return fits_in_range<uint16_t>(value);
-                case TypeKind::UInt32: case TypeKind::USize: case TypeKind::Char32:
+                case TypeKind::UInt32: case TypeKind::USize:
                     return fits_in_range<uint32_t>(value);
                 case TypeKind::UInt64: return fits_in_range<uint64_t>(value);
 
@@ -5860,11 +5858,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
     }
     case TypeKind::Pointer: {
         if (expr->is(NodeKind::String)) {
-            if (expr->type->is(context.const_char_ptr_type) &&
-                (to_type->is(context.char16_ptr_type) || to_type->is(context.char32_ptr_type))) {
-                return true;
-            } else if (expr->type->is(context.const_char16_ptr_type) &&
-                       to_type->is(context.char32_ptr_type)) {
+            if (expr->type->is(context.const_char_ptr_type)) {
                 return true;
             }
 

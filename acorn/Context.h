@@ -57,12 +57,9 @@ namespace acorn {
         Type* bool_type;
         Type* char_type;
         Type* char16_type;
-        Type* char32_type;
         Type* const_char_ptr_type;
         Type* char16_ptr_type;
-        Type* char32_ptr_type;
         Type* const_char16_ptr_type;
-        Type* const_char32_ptr_type;
         Type* const_char_ptr_ptr_type;
         Type* funcs_ref_type;
         Type* namespace_ref_type;

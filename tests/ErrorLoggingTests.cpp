@@ -62,6 +62,41 @@ public:
         acorn::initialize_float_parsing(allocator);
 
         section("Error Logging", []() {
+            section("Logger::calculate_left_pivot_distance", []() {
+                test("Calculates basic pivot distance", []() {
+                    const char* program = "    int a = 4124124;";
+
+                    auto file = create_mock_file(program);
+
+                    auto location = create_location(program, "a = 4124124");
+                    file->logger.begin_error(location, "");
+
+                    size_t pivot_distance = file->logger.calculate_left_pivot_distance(1, location.ptr);
+                    expect(pivot_distance, to_string<size_t>).to_be(8);
+                });
+                test("Calculate pivot distance containg tabs and unicode", []() {
+                    const char* program = "🚀\t int 😀\ta = 4124124;";
+
+                    auto file = create_mock_file(program);
+
+                    auto location = create_location(program, "a = 4124124");
+                    file->logger.begin_error(location, "");
+
+                    size_t pivot_distance = file->logger.calculate_left_pivot_distance(1, location.ptr);
+                    expect(pivot_distance, to_string<size_t>).to_be(17);
+                });
+                test("Calculate pivot distance of zero", []() {
+                    const char* program = "a = 4124124;";
+
+                    auto file = create_mock_file(program);
+
+                    auto location = create_location(program, "a = 4124124");
+                    file->logger.begin_error(location, "");
+
+                    size_t pivot_distance = file->logger.calculate_left_pivot_distance(1, location.ptr);
+                    expect(pivot_distance, to_string<size_t>).to_be(0);
+                });
+            });
             section("Logger::calculate_right_cutoff_from_pivot", []() {
                 test("Line too short to cutoff to the right", []() {
                     const char* program = "int a = 1412412.3223;";
@@ -95,6 +130,17 @@ public:
 
                     size_t offset = file->logger.calculate_right_cutoff_from_pivot(1, 6);
                     expect(offset, to_string<size_t>).to_be(36);
+                });
+                test("Calculates the amount of cutoff characters past the right of window with tabs and unicode", []() {
+                    const char* program = "int a = 412134'u64 \t+ 23521421'u64 +🚀\t + 78012809212'u64 \t + 563421746'u64 + 🚀🚀 + 25434124'u64; // hello!";
+
+                    auto file = create_mock_file(program);
+
+                    auto location = create_location(program, "= 412134'u64 \t+ 23521421'u64 +🚀\t + 78012809212'u64 \t + 563421746'u64 + 🚀🚀 + 25434124'u64");
+                    file->logger.begin_error(location, "");
+
+                    size_t offset = file->logger.calculate_right_cutoff_from_pivot(1, 6);
+                    expect(offset, to_string<size_t>).to_be(60);
                 });
                 test("Calculates zero for the amount of characters past the right of window because right on boundry", []() {
                     const char* program = "int a = 412134'u64 + 23521421'u64 + 780180'u64; // These are not cutoff! >_<";

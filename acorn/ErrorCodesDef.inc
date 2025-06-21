@@ -47,6 +47,8 @@ X(ParseAutoCannotBeConst                      , 20037)
 X(ParseMustUseElif                            , 20038)
 X(ParseVarArgsNotLast                         , 20039)
 X(ParseInterfaceFuncNoHaveBodies              , 20040)
+X(ParseInvalidCodepoint                       , 20041)
+X(ParseInvalidUTF8InString                    , 20042)
 
 X(SemaNotAllFuncPathReturn                    , 30000)
 X(SemaVariableCannotHaveVoidType              , 30001)

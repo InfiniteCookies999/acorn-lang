@@ -92,6 +92,13 @@ namespace acorn {
 
     size_t get_system_page_size();
 
+    bool is_valid_utf8_codepoint(uint32_t codepoint, size_t num_bytes, bool& is_overlong);
+
+    uint32_t get_utf8_codepoint(const char* ptr, size_t& num_bytes, bool& is_valid, bool& is_overlong);
+    size_t get_utf8_byte_distance(const char* ptr, bool& is_valid, bool& is_overlong);
+
+    void codepoint_to_utf8(uint32_t codepoint, std::string& dest_string, bool& is_valid);
+
 }
 
 #endif // UTIL_H

@@ -254,16 +254,46 @@ case c1:                                        \
     case '\0':
         return new_token_and_eat(Token::EOB);
     default: {
-        unsigned char unknown_char = static_cast<unsigned char>(*ptr);
-        if (unknown_char >= 33 && unknown_char <= 126) { // Easily displayable.
-            logger.begin_error(SourceLoc{ ptr, 1 }, "Invalid character: '%s'", std::string(1, unknown_char))
+
+        const char* start = ptr;
+
+        auto byte = static_cast<unsigned char>(*ptr);
+        if (byte >= 33 && byte <= 126) { // Easily displayable.
+            logger.begin_error(SourceLoc{ ptr, 1 }, "Invalid character: '%s'", std::string(1, byte))
                   .add_arrow_msg(Logger::CaretPlacement::At, "remove this character")
                   .end_error(ErrCode::LexInvalidChar);
-        } else {
-            error("Invalid character (ascii code): '%s'", unknown_char).end_error(ErrCode::LexInvalidChar);
+            ++ptr;
+            return new_token(Token::Invalid, start);
         }
-        ++ptr;
-        goto RestartLexingLabel;
+
+        if (byte <= 127) {
+            error("Invalid character (ASCII code): '%s'", byte).end_error(ErrCode::LexInvalidChar);
+            ++ptr;
+            return new_token(Token::Invalid, start);
+        }
+
+        // Dealing with non-ascii characters.
+        bool is_valid_utf8;
+        bool is_overlong;
+        size_t num_bytes = get_utf8_byte_distance(ptr, is_valid_utf8, is_overlong);
+
+        if (!is_valid_utf8) {
+            // else not a valid utf-8 character.
+            error("Invalid character. Could not interpret character using UTF-8 encoding")
+                .end_error(ErrCode::LexInvalidChar);
+            ++ptr;
+            return new_token(Token::Invalid, start);
+        }
+
+        SourceLoc loc = {
+            .ptr = ptr,
+            .length = static_cast<uint16_t>(num_bytes)
+        };
+        error("Invalid character. Only ASCII characters are allowed outside comments and strings")
+            .end_error(ErrCode::LexInvalidChar);
+
+        ptr += num_bytes;
+        return new_token(Token::Invalid, start);
     }
     }
 }
@@ -488,7 +518,7 @@ bool acorn::Lexer::skip_unicode_seq_digits(size_t n) {
     for (size_t i = 0; i < n && *ptr != '\0'; ++i, ++ptr) {
         if (!is_hexidecimal(*ptr)) {
             logger.begin_error(SourceLoc{ start - 1, static_cast<uint16_t>(i + 2) },
-                               "Incomplete unicode sequence. Expected %s digits", n)
+                               "Incomplete UTF-8 sequence. Expected %s digits", n)
                 .end_error(ErrCode::LexInvalidUnicodeSeq);
             return false;
         }
@@ -501,7 +531,6 @@ acorn::Token acorn::Lexer::next_string() {
     const char* start = ptr;
     ++ptr; // Skip initial "
 
-    tokkind kind = Token::String8BitLiteral;
     bool invalid = false;
     while (true) {
         switch (*ptr) {
@@ -509,21 +538,18 @@ acorn::Token acorn::Lexer::next_string() {
             goto FinishedStringLexLab;
         case '\\': { // Escape cases!
             ++ptr;
-            if (*ptr == 'u') {          // Unicode 16 bits
-                if (kind != Token::String32BitLiteral)
-                    kind = Token::String16BitLiteral;
+            if (*ptr == 'u') {
                 invalid |= !skip_unicode_seq_digits(4);
-            } else if (*ptr == 'U') {   // Unicode 32 bits
-                kind = Token::String32BitLiteral;
-                // TODO: This does not actually reach 32 bits of unicode characters!
+            } else if (*ptr == 'U') {
                 invalid |= !skip_unicode_seq_digits(8);
             } else if (!(*ptr == '\n' || *ptr == '\r' || *ptr == '\0')) {
+                ++ptr;
+            } else {
                 ++ptr;
             }
             break;
         }
         default:
-            // TODO: check for character validation?
             ++ptr;
         }
     }
@@ -545,7 +571,9 @@ FinishedStringLexLab:
             .end_error(ErrCode::LexStringMissingEndQuote);
     }
 
-    return new_token(start, static_cast<uint16_t>(ptr - start), !invalid ? kind : Token::InvalidStringLiteral);
+    return new_token(start,
+                     static_cast<uint16_t>(ptr - start),
+                     !invalid ? Token::StringLiteral : Token::InvalidStringLiteral);
 }
 
 acorn::Token acorn::Lexer::next_char() {
@@ -564,11 +592,8 @@ acorn::Token acorn::Lexer::next_char() {
     }
     case '\\': {
         ++ptr;
-        if (*ptr == 'u' || *ptr == 'U') {
-            if (!skip_unicode_seq_digits(*ptr == 'u' ? 4 : 8)) {
-                return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidCharLiteral);
-            }
-        } else if(!(*ptr == '\n' || *ptr == '\r' || *ptr == '\0')) {
+        // Prevent the closing quote from ending up on the next line/EOF.
+        if (!(*ptr == '\n' || *ptr == '\r' || *ptr == '\0')) {
             ++ptr;
         }
         break;

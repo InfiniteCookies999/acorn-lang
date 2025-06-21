@@ -261,3 +261,139 @@ size_t acorn::get_system_page_size() {
 #endif
 }
 
+bool acorn::is_valid_utf8_codepoint(uint32_t codepoint, size_t num_bytes, bool& is_overlong) {
+
+    is_overlong = false;
+
+    // Making sure not to exceed the largest codepoint.
+    if (codepoint > 0x0010FFFF) {
+        return false;
+    }
+
+    // Certain codepoints are reserved to UTF-16 so checking
+    // to make sure it is not one of those.
+    if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
+        return false;
+    }
+
+    // Check for overlong encoding.
+    if (codepoint < 0x80 && num_bytes != 1) {
+        is_overlong = true;
+        return false;
+    } else if (codepoint < 0x800 && num_bytes != 2) {
+        is_overlong = true;
+        return false;
+    } else if (codepoint < 0x10000 && num_bytes != 3) {
+        is_overlong = true;
+        return false;
+    }
+
+    return true;
+}
+
+uint32_t acorn::get_utf8_codepoint(const char* ptr, size_t& num_bytes, bool& is_valid, bool& is_overlong) {
+    const unsigned char* uptr = reinterpret_cast<const unsigned char*>(ptr);
+
+    is_overlong = false;
+    is_valid = false;
+    num_bytes = 1;
+
+    // Calculating the number of bytes of a utf8 character based on the first byte.
+    unsigned char first_byte = *uptr;
+    uint32_t codepoint = 0;
+    if (first_byte <= 127) {
+        // ASCII byte.
+        is_valid = true;
+        return 0;
+    }
+
+    if ((first_byte & 0xE0) == 0xC0) {        // 110   start
+        num_bytes = 2;
+        codepoint = first_byte & 0x1F;
+    } else if ((first_byte & 0xF0) == 0xE0) { // 1110  start
+        num_bytes = 3;
+        codepoint = first_byte & 0x0F;
+    } else if ((first_byte & 0xF8) == 0xF0) { // 11110 start
+        num_bytes = 4;
+        codepoint = first_byte & 0x07;
+    } else {
+        // Invalid first byte.
+        return 0;
+    }
+
+    ++uptr; // Skip first byte.
+
+    // Validate the start of the next bytes all start with 10.
+    size_t byte_count = 1;
+    while (byte_count < num_bytes && *uptr != '\0') {
+        unsigned char byte = *uptr;
+        if ((byte & 0xC0) != 0x80) {
+            // Invalid start to byte.
+            return 0;
+        }
+        // continue to shift up by 6 and take the first 6 bits
+        // of the byte.
+        codepoint = (codepoint << 6) | (byte & 0x3F);
+        ++uptr;
+        ++byte_count;
+    }
+    if (byte_count != num_bytes) {
+        // Not enough bytes left.
+        return 0;
+    }
+
+    if (!is_valid_utf8_codepoint(codepoint, num_bytes, is_overlong)) {
+        return 0;
+    }
+
+    // Note: Ignoring overlong encoding because we only care about codepoints in-so-far
+    // as printing characters and traversing the buffer. However, under a lot of situations
+    // caring about overlong encoding matters since it can be a security risk.
+
+    is_valid = true;
+    return codepoint;
+}
+
+size_t acorn::get_utf8_byte_distance(const char* ptr, bool& is_valid, bool& is_overlong) {
+    size_t num_bytes;
+    get_utf8_codepoint(ptr, num_bytes, is_valid, is_overlong);
+    return num_bytes;
+}
+
+void acorn::codepoint_to_utf8(uint32_t codepoint, std::string& dest_string, bool& is_valid) {
+    is_valid = false;
+
+    size_t num_bytes = 0;
+    if (codepoint < 0x80) {
+        num_bytes = 1;
+    } else if (codepoint < 0x800) {
+        num_bytes = 2;
+    } else if (codepoint < 0x10000) {
+        num_bytes = 3;
+    } else {
+        num_bytes = 4;
+    }
+
+    bool is_overlong;
+    if (!is_valid_utf8_codepoint(codepoint, num_bytes, is_overlong)) {
+        return;
+    }
+
+    if (num_bytes == 1) {
+        dest_string += codepoint;
+    } else if (num_bytes == 2) {
+        dest_string += (codepoint >> 6)   + 0xC0;
+        dest_string += (codepoint & 0x3F) + 0x80;
+    } else if (num_bytes == 3) {
+        dest_string += (codepoint >> 12)         + 0xE0;
+        dest_string += ((codepoint >> 6) & 0x3F) + 0x80;
+        dest_string += (codepoint        & 0x3F) + 0x80;
+    } else {
+        dest_string += (codepoint >> 18)          + 0xF0;
+        dest_string += ((codepoint >> 12) & 0x3F) + 0x80;
+        dest_string += ((codepoint >> 6)  & 0x3F) + 0x80;
+        dest_string += (codepoint         & 0x3F) + 0x80;
+    }
+
+    is_valid = true;
+}

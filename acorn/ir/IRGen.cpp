@@ -3470,51 +3470,28 @@ llvm::Value* acorn::IRGenerator::gen_bool(Bool* b) {
 
 llvm::Value* acorn::IRGenerator::gen_string(String* string) {
 
-    auto text_to_const_array = [](const auto& text, llvm::Type* ll_elm_type) {
-        llvm::ArrayType* ll_arr_type = llvm::ArrayType::get(ll_elm_type, text.size() + 1);
+    auto& text = string->text;
 
-        llvm::SmallVector<llvm::Constant*> ll_elements;
-        ll_elements.reserve(text.size() + 1);
+    auto ll_elm_type = llvm::Type::getInt8Ty(ll_context);
+    auto ll_arr_type = llvm::ArrayType::get(ll_elm_type, text.size() + 1);
 
-        for (const auto c : text) {
-            ll_elements.push_back(llvm::ConstantInt::get(ll_elm_type, c));
-        }
-        ll_elements.push_back(llvm::ConstantInt::get(ll_elm_type, 0)); // Null terminate.
+    llvm::SmallVector<llvm::Constant*> ll_elements;
+    ll_elements.reserve(text.size() + 1);
 
-        return llvm::ConstantArray::get(ll_arr_type, ll_elements);
-    };
-    auto text_to_global_array = [this, text_to_const_array](const auto& text,
-                                                            llvm::Type* ll_elm_type,
-                                                            uint64_t alignment) {
-        llvm::Constant* const_array = text_to_const_array(text, ll_elm_type);
-        auto ll_global = gen_const_global_variable(get_global_name("global.string"),
-                                                   const_array->getType(),
-                                                   const_array);
-        ll_global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-        ll_global->setAlignment(llvm::Align(alignment));
-        return ll_global;
-    };
-
-    if (string->bit_type == String::Str8Bit) {
-        if (string->cast_type->is(context.const_char16_ptr_type)) {
-            return text_to_global_array(string->text8bit, llvm::Type::getInt16Ty(ll_context), 2);
-        } else if (string->cast_type->is(context.const_char32_ptr_type)) {
-            return text_to_global_array(string->text8bit, llvm::Type::getInt32Ty(ll_context), 4);
-        } else {
-            return text_to_global_array(string->text8bit, llvm::Type::getInt8Ty(ll_context), 1);
-        }
-    } else if (string->bit_type == String::Str16Bit) {
-        if (string->cast_type->is(context.const_char32_ptr_type)) {
-            return text_to_global_array(string->text16bit, llvm::Type::getInt32Ty(ll_context), 4);
-        } else {
-            return text_to_global_array(string->text16bit, llvm::Type::getInt16Ty(ll_context), 2);
-        }
-    } else if (string->bit_type == String::Str32Bit) {
-        return text_to_global_array(string->text32bit, llvm::Type::getInt32Ty(ll_context), 4);
-    } else {
-        acorn_fatal("unreachable: not valid bit type for string");
-        return nullptr;
+    for (const auto c : text) {
+        ll_elements.push_back(llvm::ConstantInt::get(ll_elm_type, c));
     }
+    ll_elements.push_back(llvm::ConstantInt::get(ll_elm_type, 0)); // Null terminate.
+
+    auto ll_const_array = llvm::ConstantArray::get(ll_arr_type, ll_elements);
+
+    auto ll_global = gen_const_global_variable(get_global_name("global.string"),
+                                               ll_const_array->getType(),
+                                               ll_const_array);
+    ll_global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+    ll_global->setAlignment(llvm::Align(1));
+
+    return ll_global;
 }
 
 llvm::Value* acorn::IRGenerator::gen_null() {
@@ -4123,7 +4100,7 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
         return builder.getInt8(0);
     case TypeKind::Int16: case TypeKind::UInt16: case TypeKind::Char16:
         return builder.getInt16(0);
-    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32: case TypeKind::Char32:
+    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32:
         return builder.getInt32(0);
     case TypeKind::Int64: case TypeKind::UInt64:
         return builder.getInt64(0);
@@ -4160,7 +4137,7 @@ llvm::Constant* acorn::IRGenerator::gen_one(Type* type) {
         return builder.getInt8(1);
     case TypeKind::Int16: case TypeKind::UInt16: case TypeKind::Char16:
         return builder.getInt16(1);
-    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32: case TypeKind::Char32:
+    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32:
         return builder.getInt32(1);
     case TypeKind::Int64: case TypeKind::UInt64:
         return builder.getInt64(1);
@@ -4242,7 +4219,6 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
     case TypeKind::ISize:
     case TypeKind::Char:
     case TypeKind::Char16:
-    case TypeKind::Char32:
     case TypeKind::Bool: {
         if (from_type->is_integer() || from_type->is_bool()) {
             return builder.CreateIntCast(ll_value, gen_type(to_type), to_type->is_signed(), "cast");
@@ -4325,7 +4301,7 @@ llvm::Value* acorn::IRGenerator::gen_enum_index(uint64_t index, Type* index_type
         return builder.getInt8(static_cast<uint8_t>(index));
     case TypeKind::Int16: case TypeKind::UInt16: case TypeKind::Char16:
         return builder.getInt16(static_cast<uint16_t>(index));
-    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32: case TypeKind::Char32:
+    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32:
         return builder.getInt32(static_cast<uint32_t>(index));
     case TypeKind::Int64: case TypeKind::UInt64:
         return builder.getInt64(index);

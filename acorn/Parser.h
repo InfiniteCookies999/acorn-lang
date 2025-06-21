@@ -166,10 +166,12 @@ namespace acorn {
         Number* parse_float32_literal();
         Number* parse_float64_literal();
         void report_float_error(FloatParseError parse_error);
-        Expr* parse_string8bit_literal();
-        Expr* parse_string16bit_literal();
-        Expr* parse_string32bit_literal();
+        Expr* parse_string_literal();
         Expr* parse_char_literal();
+        void convert_and_check_codepoint(uint32_t codepoint,
+                                         std::string& dest_string,
+                                         const char* ptr,
+                                         int ptr_offset);
 
         template<uint32_t radix, uint64_t convert_table[256], bool use_table = true>
         Number* parse_number_literal(const char* start, const char* end);

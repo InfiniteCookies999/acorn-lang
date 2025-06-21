@@ -45,7 +45,7 @@ void test_lexer() {
     section("lexing", [&] {
         test("keywords", [&] {
             const char* program = "int8 int16 int32 int64 uint8 "
-                "uint16 uint32 uint64 bool void char char16 char32 "
+                "uint16 uint32 uint64 bool void char "
                 "const as null true false native dllimport return";
             Lexer& lexer = *mock_lexer(program);
 
@@ -62,8 +62,6 @@ void test_lexer() {
             expect(lexer.next_token().kind, to_string).to_be(Token::KwBool);
             expect(lexer.next_token().kind, to_string).to_be(Token::KwVoid);
             expect(lexer.next_token().kind, to_string).to_be(Token::KwChar);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwChar16);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwChar32);
             expect(lexer.next_token().kind, to_string).to_be(Token::KwConst);
             expect(lexer.next_token().kind, to_string).to_be(Token::KwAs);
             expect(lexer.next_token().kind, to_string).to_be(Token::KwNull);
@@ -311,37 +309,12 @@ void test_lexer() {
 
             auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
 
-            expect(lexer.next_token().kind, to_string).to_be(Token::String8BitLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::String8BitLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::String8BitLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::String8BitLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::String8BitLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::String8BitLiteral);
-        });
-        test("string 16bit tokens", [&] {
-            const char* program = R"(
-                "asd!\u0000"   "asd!\u1Ca2ASd21@"
-            )";
-            Lexer& lexer = *mock_lexer(program);
-
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
-
-            expect(lexer.next_token().kind, to_string).to_be(Token::String16BitLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::String16BitLiteral);
-        });
-        test("string 32bit tokens", [&] {
-            const char* program = R"(
-                "asd!\U00000000"   "asd!\U00FAF12Sd21@"
-                "dgwSA@\u0011 abc\U000C23A6"  "abc\U000C23A6 dgwSA@\u0011"
-            )";
-            Lexer& lexer = *mock_lexer(program);
-
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
-
-            expect(lexer.next_token().kind, to_string).to_be(Token::String32BitLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::String32BitLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::String32BitLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::String32BitLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
         });
         test("string missing closing quote", [&] {
             const char* program = R"(

@@ -52,7 +52,6 @@ namespace acorn {
 
         Char,
         Char16,
-        Char32,
 
         Float32,
         Float64,
@@ -107,7 +106,7 @@ namespace acorn {
         }
 
         bool is_integer() const {
-            return kind <= TypeKind::Char32;
+            return kind <= TypeKind::Char16;
         }
 
         bool is_signed() const {

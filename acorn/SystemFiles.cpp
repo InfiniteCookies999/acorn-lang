@@ -148,7 +148,7 @@ void acorn::SystemPath::normalize_empty() {
 
 
 #if WIN_OS
-static std::string win32_error_code_to_string(DWORD ec) {
+static void win32_error_code_to_string(DWORD ec, std::string& err) {
 
     wchar_t* buffer = nullptr;
     DWORD length = FormatMessageW(
@@ -162,10 +162,10 @@ static std::string win32_error_code_to_string(DWORD ec) {
     );
 
     if (length == 0) {
-        return "Failed to format Win32 Error";
+        err = "Failed to format Win32 Error";
     }
 
-    return acorn::wide_to_utf8(buffer, length);
+    err = acorn::wide_to_utf8(buffer, length);
 }
 #endif
 
@@ -189,7 +189,7 @@ acorn::SystemPath acorn::get_executable_path(std::string& err) {
     if (length != 0) {
         return SystemPath(buffer, length);
     }
-    err = win32_error_code_to_string(GetLastError());
+    win32_error_code_to_string(GetLastError(), err);
     return SystemPath();
 #elif MAC_OS
     char buffer[PATH_MAX + 1];
@@ -222,7 +222,7 @@ acorn::SystemPath acorn::get_absolute_path(const SystemPath& path, std::string& 
     if (length != 0) {
         return SystemPath(buffer, length);
     }
-    err = win32_error_code_to_string(GetLastError());
+    win32_error_code_to_string(GetLastError(), err);
     return SystemPath();
 #else
     std::string utf8_path = path.to_utf8_string();
@@ -262,7 +262,7 @@ void acorn::make_directory(const SystemPath& path, std::string& err, bool error_
         } else if (ec == ERROR_PATH_NOT_FOUND) {
             err = "Path not found";
         } else {
-            err = win32_error_code_to_string(ec);
+            win32_error_code_to_string(ec, err);
         }
     }
 #else
@@ -286,7 +286,7 @@ static void win32_get_file_attribs_error(DWORD ec, std::string& err) {
     } else if (ec == ERROR_ACCESS_DENIED) {
         err = "Access denied";
     } else {
-        err = win32_error_code_to_string(ec);
+        win32_error_code_to_string(ec, err);
     }
 }
 #else
@@ -318,7 +318,7 @@ void acorn::remove_file(const SystemPath& path, std::string& err) {
     }
 
     if (DeleteFileW(wpath.c_str()) == 0) {
-        err = win32_error_code_to_string(GetLastError());
+        win32_error_code_to_string(GetLastError(), err);
         return;
     }
 #else
@@ -423,7 +423,7 @@ void acorn::recursively_iterate_directory(const SystemPath& dir_path,
         if (ec == ERROR_NO_MORE_FILES) {
             return;
         }
-        err = win32_error_code_to_string(ec);
+        win32_error_code_to_string(ec, err);
         return;
     }
 
@@ -466,7 +466,7 @@ void acorn::recursively_iterate_directory(const SystemPath& dir_path,
         return;
     }
 
-    err = win32_error_code_to_string(ec);
+    win32_error_code_to_string(ec, err);
 #else
 
     std::string utf8_path = dir_path.to_utf8_string();

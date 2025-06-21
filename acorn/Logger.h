@@ -248,7 +248,7 @@ namespace acorn {
 
         enum class ErrorMarker {
             Underline,
-            Arrow,
+            Caret,
             None,
         };
 
@@ -424,6 +424,11 @@ namespace acorn {
                                     size_t    left_pivot_distance,
                                     size_t    cutoff_shift);
 
+
+        // Calculate the total column width from the start of the pivot line to the pivot point.
+        //
+        size_t calculate_left_pivot_distance(size_t pivot_line_number, const char* pivot_point_ptr);
+
         // Given the distance from the start of the pivot line to the pivot point (A point of interest
         // of where in the buffer the error occured) `left_pivot_distance` and a line number calculates
         // how many characters would be cut off past the end of the right side of the error window for the
@@ -446,7 +451,12 @@ namespace acorn {
         //
         size_t calculate_spare_left_characters(long long line_number, size_t left_cutoff, size_t left_pivot_distance);
 
+        // Checks if the location of the left cutoff results in characters that have
+        // 2 column width would be cut in half.
         //
+        bool does_cut_column_in_half(long long line_number, size_t left_cutoff);
+
+        // Does the error line fit within the error location.
         //
         bool is_line_within_error_location(long long line_number) const;
 
@@ -462,6 +472,19 @@ namespace acorn {
         // Checks if the character found at `ptr` is marked with an underline.
         //
         bool is_within_underline(const char* ptr) const;
+
+        // Moves the pointer forward by the number of bytes the character
+        // occupies.
+        //
+        // Returns the number of bytes skipped.
+        //
+        size_t skip_bytes_based_on_utf8_distance(const char*& ptr);
+
+        // Chooses a column width for utf8 encoded character. There is no standard
+        // for choosing therefore a best guess approach is taken in hopes to display
+        // the best possible output to the user.
+        //
+        size_t get_character_column_width(const char* ptr);
 
     public:
         void end_error(ErrCode error_code);
@@ -505,6 +528,7 @@ namespace acorn {
         const size_t MAX_TRAILING_LENGTH = 40;
 
         bool should_silence_errors = false;
+        bool encountered_overlong_utf8 = false;
 
         struct CaretMessage {
             std::string    msg;

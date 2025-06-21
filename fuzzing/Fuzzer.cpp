@@ -23,7 +23,7 @@ int main() {
 
     //fuzzer_completely_random(ostream);
     //fuzzer_only_valid_characters(ostream);
-    fuzzer_valid_lexemes(ostream, compiler);
+    //fuzzer_valid_lexemes(ostream, compiler);
     ostream.close(); // Close the file so that the compiler may open the file.
 #endif
 

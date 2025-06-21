@@ -6,6 +6,7 @@
 
 std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
     switch (kind) {
+    case Token::Invalid:              return "invalid";
     case Token::EOB:                  return "eob";
     case Token::Identifier:           return "identifier";
     case Token::IntLiteral:           return "int-literal";
@@ -14,9 +15,7 @@ std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
     case Token::OctLiteral:           return "oct-literal";
     case Token::Float32Literal:       return "float32-literal";
     case Token::Float64Literal:       return "float64-literal";
-    case Token::String8BitLiteral:    return "string-bit8-literal";
-    case Token::String16BitLiteral:   return "string-bit16-literal";
-    case Token::String32BitLiteral:   return "string-bit32-literal";
+    case Token::StringLiteral:        return "string-literal";
     case Token::CharLiteral:          return "char-literal";
     case Token::InvalidStringLiteral: return "invalid-string-literal";
     case Token::InvalidCharLiteral:   return "invalid-char-literal";
@@ -56,11 +55,11 @@ std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
         if (kind > Token::KeywordStart && kind < Token::KeywordEnd) {
             return context.get_keyword_from_kind(kind).str();
         } else if (kind < Token::UniqueTokens) {
-            uint32_t utf8_kind = static_cast<uint32_t>(kind);
-            if (utf8_kind >= 33 && utf8_kind <= 126) {
+            uint32_t val = static_cast<uint32_t>(kind);
+            if (val >= 33 && val <= 126) {
                 return std::string(1, static_cast<char>(kind));
             } else {
-                return std::format("cc ({})", utf8_kind);
+                return std::format("cc ({})", val);
             }
         }
         return "Unknown (Internal error)";
