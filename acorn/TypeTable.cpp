@@ -174,9 +174,9 @@ acorn::PointerType* acorn::TypeTable::get_ptr_type(Type* elm_type) {
         ptr_type->contains_const = true;
         Type* non_const_elm_type = elm_type->non_const_version;
 
-        auto itr = ptr_types.find(non_const_elm_type);
-        if (itr != ptr_types.end()) {
-            ptr_type->non_const_version = itr->second;
+        auto itr1 = ptr_types.find(non_const_elm_type);
+        if (itr1 != ptr_types.end()) {
+            ptr_type->non_const_version = itr1->second;
         } else {
             auto new_non_const_ptr_type = PointerType::create(allocator, non_const_elm_type);
             new_non_const_ptr_type->non_const_version = new_non_const_ptr_type;
@@ -206,9 +206,9 @@ acorn::ArrayType* acorn::TypeTable::get_arr_type(Type* elm_type, uint32_t length
         arr_type->contains_const = true;
         Type* non_const_elm_type = elm_type->non_const_version;
 
-        auto itr = arr_types.find({ non_const_elm_type, length });
-        if (itr != arr_types.end()) {
-            arr_type->non_const_version = itr->second;
+        auto itr1 = arr_types.find({ non_const_elm_type, length });
+        if (itr1 != arr_types.end()) {
+            arr_type->non_const_version = itr1->second;
         } else {
             auto new_non_const_ptr_type = ArrayType::create(allocator, non_const_elm_type, length);
             arr_types.insert({ { non_const_elm_type, length }, new_non_const_ptr_type });
@@ -236,9 +236,9 @@ acorn::SliceType* acorn::TypeTable::get_slice_type(Type* elm_type) {
         slice_type->contains_const = true;
         auto non_const_elm_type = elm_type->non_const_version;
 
-        auto itr = slice_types.find(non_const_elm_type);
-        if (itr != slice_types.end()) {
-            slice_type->non_const_version = itr->second;
+        auto itr1 = slice_types.find(non_const_elm_type);
+        if (itr1 != slice_types.end()) {
+            slice_type->non_const_version = itr1->second;
         } else {
             auto new_non_const_slice_type = SliceType::create(allocator, non_const_elm_type);
             new_non_const_slice_type->non_const_version = new_non_const_slice_type;

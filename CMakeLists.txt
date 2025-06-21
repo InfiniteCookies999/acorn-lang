@@ -26,9 +26,24 @@ endif()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_compile_options(-Werror=unused-result)  # [[nodiscard]]
     add_compile_options(-Werror=return-type)    # Cannot ignore return.
+
+    # No extra tokens at end of preprocessor
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        add_compile_options(-Werror=extra-tokens)
+    else()
+        add_compile_options(-Werror=endif-labels)
+    endif()
+
+    add_compile_options(-Wshadow=local)         # No shadowing local variables or parameters.
+    add_compile_options(-Werror=shadow)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    add_compile_options(/permissive-)           # Make MSVC standard compliant.
     add_compile_options(/we4834)                # [[nodiscard]]
     add_compile_options(/we4715)                # Cannot ignore return.
+    add_compile_options(/Za)
+    add_compile_options(/we4067)                # No extra tokens at end of preprocessor
+    add_compile_options(/we4456)                # No shadowing local variables.
+    add_compile_options(/we4457)                # No shadowing local parameters.
 endif()
 
 # Setting output directories for when using GNU or Clang compilers.

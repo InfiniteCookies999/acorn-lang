@@ -84,7 +84,7 @@ namespace acorn {
 
         Func* parse_function(uint32_t modifiers, Type* type);
         Func* parse_function(uint32_t modifiers,
-                             Type* type,
+                             Type* return_type,
                              bool has_implicit_return_ptr,
                              Identifier name,
                              bool is_copy_constructor = false,

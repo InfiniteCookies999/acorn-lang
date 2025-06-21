@@ -73,4 +73,4 @@ namespace acorn {
     };
 }
 
-#endif // LEXER_H
+#endif

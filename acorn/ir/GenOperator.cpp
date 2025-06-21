@@ -388,8 +388,8 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
             // the address of the pointer).
             return ll_ptr;
         } else if (expr->is(NodeKind::UnaryOp)) {
-            auto unary_op = static_cast<UnaryOp*>(expr);
-            auto op = unary_op->op;
+            auto expr_unary_op = static_cast<UnaryOp*>(expr);
+            auto op = expr_unary_op->op;
             if (op == Token::AddAdd || op == Token::SubSub ||
                 op == Token::PostAddAdd || op == Token::PostSubSub) {
                 // Read comment for binary op. It is pointer arithmetic so

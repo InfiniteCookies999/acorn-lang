@@ -2899,10 +2899,10 @@ void acorn::Sema::check_try(Try* tryn, bool assigns) {
             .end_error(ErrCode::SemaExprDoesNotRaiseErrors);
     }
 
-    if (tryn->catch_block) {
+    if (tryn->catch_scope) {
         SemScope sem_scope = push_scope();
-        Try* prev_catch_block_try = catch_block_try;
-        catch_block_try = tryn;
+        Try* prev_catch_scope_try = catch_scope_try;
+        catch_scope_try = tryn;
 
         if (tryn->caught_var) {
             add_variable_to_local_scope(tryn->caught_var);
@@ -2911,7 +2911,7 @@ void acorn::Sema::check_try(Try* tryn, bool assigns) {
             tryn->caught_var->type = type_table.get_ptr_type(context.std_error_interface->interface_type);
         }
 
-        check_scope(tryn->catch_block, &sem_scope);
+        check_scope(tryn->catch_scope, &sem_scope);
 
         if (assigns && !cur_scope->all_paths_branch) {
             error(expand(tryn), "Assignment lacks value when error is caught")
@@ -2920,7 +2920,7 @@ void acorn::Sema::check_try(Try* tryn, bool assigns) {
         }
 
         pop_scope();
-        catch_block_try = prev_catch_block_try;
+        catch_scope_try = prev_catch_scope_try;
     } else {
 
         // See if all the errors get passed along or not.
@@ -2957,13 +2957,13 @@ void acorn::Sema::check_recover(RecoverStmt* recover) {
 
     check_and_verify_type(recover->value);
 
-    if (!catch_block_try) {
-        error(recover, "Can only use 'recover' in catch blocks")
-            .end_error(ErrCode::SemaRecoverStmtNotInCatchBlock);
+    if (!catch_scope_try) {
+        error(recover, "Can only use 'recover' in catch scopes")
+            .end_error(ErrCode::SemaRecoverStmtNotInCatchScope);
         return;
     }
 
-    if (!catch_block_try->catch_recoveree) {
+    if (!catch_scope_try->catch_recoveree) {
         error(recover, "The try expression does not assign in order to recover")
             .end_error(ErrCode::SemaRecoverStmtNoRecoveree);
         return;
@@ -4134,10 +4134,10 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
             } else {
                 acorn_fatal("Unknown import kind");
             }
-        } else if (auto composite = file->find_composite(ref->ident)) {
-            ref->set_composite_ref(composite);
-        } else if (auto composite = nspace->find_composite(ref->ident)) {
-            ref->set_composite_ref(composite);
+        } else if (auto composite1 = file->find_composite(ref->ident)) {
+            ref->set_composite_ref(composite1);
+        } else if (auto composite2 = nspace->find_composite(ref->ident)) {
+            ref->set_composite_ref(composite2);
         }
 
         if constexpr (is_spell_checking) {
@@ -4481,7 +4481,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
                 .end_error(ErrCode::SemaUncaughtErrors);
         } else if (cur_scope) {
             for (auto& raised_error : raised_errors) {
-                cur_scope->cur_try->caught_errors.insert(raised_error.structn);
+                cur_scope->cur_try->caught_errors.push_back(raised_error.structn);
             }
         }
     };
@@ -6292,8 +6292,8 @@ void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, con
 
     // Calculate the maximum name length to format the display better.
     size_t max_name_length = 0;
-    for (const auto& dep : dep_chain) {
-        max_name_length = std::max(max_name_length, dep->name.to_string().size());
+    for (const auto& dep1 : dep_chain) {
+        max_name_length = std::max(max_name_length, dep1->name.to_string().size());
     }
 
     for (auto itr = dep_chain.begin(); itr != dep_chain.end(); ++itr) {

@@ -874,11 +874,11 @@ namespace acorn {
         bool passes_error_along = false;
         bool generating_expr = false;
 
-        llvm::DenseSet<Struct*> caught_errors;
-        Var*                    caught_var = nullptr;
-        ScopeStmt*              catch_block = nullptr;
-        Expr*                   caught_expr;
-        Node*                   catch_recoveree = nullptr;
+        llvm::SmallVector<Struct*> caught_errors;
+        Var*                       caught_var = nullptr;
+        ScopeStmt*                 catch_scope = nullptr;
+        Expr*                      caught_expr;
+        Node*                      catch_recoveree = nullptr;
 
         llvm::Value* ll_error;
         llvm::BasicBlock* ll_catch_bb;

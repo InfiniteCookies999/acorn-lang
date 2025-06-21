@@ -84,7 +84,7 @@ namespace acorn {
         // How many nested loops currently within.
         int loop_depth = 0;
 
-        Try* catch_block_try = nullptr;
+        Try* catch_scope_try = nullptr;
 
         // A structure to keep track of current scope information
         // to help report errors.

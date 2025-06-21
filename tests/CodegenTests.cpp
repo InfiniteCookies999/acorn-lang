@@ -2240,6 +2240,30 @@ static void error_tests() {
 
         expect(result, std::identity()).to_be("~A called!@...caught error!^");
     });
+    test("Raise error with destructor calls error's destructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors10.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("caught error!destructor called!end!");
+    });
+    test("Raise error with destructor calls error's destructor when using recover", [&] {
+        auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors11.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("caught error!destructor called!end!");
+    });
+    test("Raise errors with destructors calls both error's destructors", [&] {
+        auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors12.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("caught error!destructor called 1!...caught error!destructor called 2!end!");
+    });
+    test("Raise errors with one destructor other not called. Only error with destructor called", [&] {
+        auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors13.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("caught error!destructor called 1!...caught error!end!");
+    });
 }
 
 void test_codegen() {

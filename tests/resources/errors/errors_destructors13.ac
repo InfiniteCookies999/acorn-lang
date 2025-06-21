@@ -1,0 +1,43 @@
+import std;
+import std.Error;
+
+struct TestError1 :: *Error {
+    const char* get_name() const {
+        return "TestError1";
+    }
+    const char* get_message() const {
+        return "error raised!";
+    }
+
+    ~TestError1() {
+        std.print("destructor called 1!");
+    }
+}
+
+struct TestError2 :: *Error {
+    const char* get_name() const {
+        return "TestError2";
+    }
+    const char* get_message() const {
+        return "error raised!";
+    }
+}
+
+void foo(bool b) raises TestError1, TestError2 {
+    if b {
+        raise TestError1{};
+    } else {
+        raise TestError2{};
+    }
+}
+
+void main() {
+    try err: foo(true) {
+        std.print("caught error!");
+    };
+    std.print("...");
+    try err: foo(false) {
+        std.print("caught error!");
+    };
+    std.print("end!");
+}

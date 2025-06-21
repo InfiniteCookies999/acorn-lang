@@ -499,7 +499,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, Type* type) {
 }
 
 acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
-                                           Type* type,
+                                           Type* return_type,
                                            bool has_implicit_return_ptr,
                                            Identifier name,
                                            bool is_copy_constructor,
@@ -511,11 +511,11 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers,
     // }
 
     if (has_implicit_return_ptr) {
-        type = type_table.get_ptr_type(type);
+        return_type = type_table.get_ptr_type(return_type);
     }
 
     Func* func = new_declaration<Func, true>(modifiers, name, prev_token);
-    func->parsed_return_type = type;
+    func->parsed_return_type = return_type;
     func->has_implicit_return_ptr = has_implicit_return_ptr;
     func->is_copy_constructor = is_copy_constructor;
     func->is_move_constructor = is_move_constructor;
@@ -670,7 +670,7 @@ acorn::Node* acorn::Parser::parse_variable_list(uint32_t modifiers, Type* type) 
     while (true) {
         next_token(); // Consuming ',' token
 
-        auto name = expect_identifier("for variable");
+        name = expect_identifier("for variable");
         vlist->list.push_back(parse_variable(modifiers, type, name, false));
 
         if (cur_token.is_not(',')) {
@@ -1332,7 +1332,7 @@ acorn::Expr* acorn::Parser::parse_try() {
     caught_expr->tryn = tryn;
 
     if (catches_error || cur_token.is('{')) {
-        tryn->catch_block = parse_scope("for catch block");
+        tryn->catch_scope = parse_scope("for catch block");
     }
 
     return caught_expr;

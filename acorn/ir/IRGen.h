@@ -75,8 +75,17 @@ namespace acorn {
         llvm::SmallVector<llvm::BasicBlock*, 8> loop_continue_stack;
 
         struct DestructorObject {
-            Type*        type;
-            llvm::Value* ll_address;
+            Type* type;
+            union ObjectInfo {
+                llvm::Value* ll_address;
+                // If within a catch scope the `Error*` type object
+                // needs to have its typed checked to determine
+                // which object was allocated in order to destroy
+                // the appropriate object. The try node contains
+                // the set of caught errors that can be used to
+                // determine which possible error type was raised.
+                Try* tryn;
+            } object_info;
         };
 
         struct IRScope {
@@ -89,6 +98,7 @@ namespace acorn {
             llvm::SmallVector<DestructorObject> objects_needing_destroyed;
             // Is the current scope the scope of a loop.
             bool is_loop_scope = false;
+            bool is_catch_scope = false;
         }* ir_scope = nullptr;
 
         Try* cur_try = nullptr;
@@ -144,7 +154,7 @@ namespace acorn {
 
         void add_object_with_destructor(Type* type, llvm::Value* ll_address, bool is_temporary);
         void gen_call_destructors(llvm::SmallVector<DestructorObject>& objects, SourceLoc loc);
-        void gen_call_destructors(Type* type, llvm::Value* ll_address, SourceLoc loc);
+        void gen_call_destructors(Type* type, DestructorObject::ObjectInfo object_info, SourceLoc loc);
         void gen_call_loc_scope_destructors(ScopeStmt* scope);
         void process_destructor_state(Type* type, llvm::Value* ll_address, bool is_temporary);
 
