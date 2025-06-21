@@ -346,10 +346,6 @@ uint32_t acorn::get_utf8_codepoint(const char* ptr, size_t& num_bytes, bool& is_
         return 0;
     }
 
-    // Note: Ignoring overlong encoding because we only care about codepoints in-so-far
-    // as printing characters and traversing the buffer. However, under a lot of situations
-    // caring about overlong encoding matters since it can be a security risk.
-
     is_valid = true;
     return codepoint;
 }
