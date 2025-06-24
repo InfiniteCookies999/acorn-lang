@@ -29,29 +29,24 @@ void write_val(int val) {
 
 }
 
-enum En {
-    A = 55,
-    B = 56,
-    C = 57,
-    D = 58
+generics[T]
+T foo(T* a, T b) {
+    return *a + b;
 }
 
 void main() {
 
-    En e1 = En.A;
-    En(int) v1 = e1 + 10;
-    write_val(as(int) v1);
+    int a0 = 43;
+    int* a1 = &a0;
+    int v1 = foo(a1, 21);
+    write_val(v1);
 
-    En e2 = En.B;
-    En(int) v2 = e2 + 10;
-    write_val(as(int) v2);
-
-    En e3 = En.C;
-    En(int) v3 = e3 + 10;
-    write_val(as(int) v3);
-
-    En e4 = En.D;
-    En(int) v4 = e4 + 10;
-    write_val(as(int) v4);
+    // Use 0.5f since additions result in deterministic
+    // behavior for IEEE floating points.
+    float32 f0 = 0.5f;
+    float32* f1 = &f0;
+    float32 f = foo(f1, 0.5f);
+    int v2 = (as(int) f) + 36;
+    write_val(v2);
 
 }

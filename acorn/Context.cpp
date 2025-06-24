@@ -123,6 +123,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "raises"       , Token::KwRaises      },
           { "try"          , Token::KwTry         },
           { "recover"      , Token::KwRecover     },
+          { "generics"     , Token::KwGenerics    },
 
           { "native"       , Token::KwNative      },
           { "dllimport"    , Token::KwDllimport   },
@@ -310,20 +311,21 @@ acorn::Module* acorn::Context::find_module(Identifier name) {
     return itr == modls.end() ? nullptr : itr->second;
 }
 
-void acorn::Context::queue_gen(Decl* decl) {
-    if (decl->generated) {
-        return;
+void acorn::Context::queue_gen(Decl* decl, GenericIntance* generic_instance) {
+    if (!generic_instance) {
+        // TODO (maddie): we search through a list of all declarations ever established.
+        // this will probably be rather slow as the size of the applications grow. It should
+        // probably use a different data structure.
+        auto itr = std::ranges::find(unchecked_gen_queue, decl);
+        if (itr != unchecked_gen_queue.end()) {
+            unchecked_gen_queue.erase(itr);
+        }
     }
-    auto itr = std::ranges::find(unchcked_gen_queue, decl);
-    if (itr != unchcked_gen_queue.end()) {
-        unchcked_gen_queue.erase(itr);
-    }
-    decl->generated = true;
-    decls_gen_queue.push_back(decl);
+    decls_gen_queue.push_back({ decl, generic_instance });
 }
 
 void acorn::Context::queue_gen_implicit_function(ImplicitFunc* implicit_func) {
-    decls_gen_queue.push_back(implicit_func);
+    decls_gen_queue.push_back({ implicit_func, nullptr });
 }
 
 void acorn::Context::add_canidate_main_function(Func* main_func) {

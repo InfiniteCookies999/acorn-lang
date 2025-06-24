@@ -27,6 +27,11 @@ namespace acorn {
     class Type;
     class DebugInfoEmitter;
 
+    struct DeclGen {
+        Node*           decl;
+        GenericIntance* generic_instance;
+    };
+
     class Context {
     public:
 
@@ -137,22 +142,22 @@ namespace acorn {
         llvm::DenseMap<Identifier, Module*>& get_modules() { return modls; }
         Module* find_module(Identifier name);
 
-        void queue_gen(Decl* decl);
+        void queue_gen(Decl* decl, GenericIntance* generic_instance);
         void queue_gen_implicit_function(ImplicitFunc* implicit_func);
         void add_unchecked_decl(Decl* decl) {
-            unchcked_gen_queue.push_back(decl);
+            unchecked_gen_queue.push_back(decl);
         }
 
         auto get_unchecked() const {
-            return unchcked_gen_queue;
+            return unchecked_gen_queue;
         }
 
         bool decl_queue_empty() const { return decls_gen_queue.empty(); }
 
-        Node* decl_queue_next() {
-            Node* decl = decls_gen_queue.back();
+        DeclGen decl_queue_next() {
+            auto decl_gen = decls_gen_queue.back();
             decls_gen_queue.pop_back();
-            return decl;
+            return decl_gen;
         }
 
         void add_canidate_main_function(Func* main_func);
@@ -281,8 +286,8 @@ namespace acorn {
         llvm::LLVMContext& ll_context;
         llvm::Module&      ll_module;
 
-        llvm::SmallVector<Node*, 1024> decls_gen_queue;
-        llvm::SmallVector<Decl*, 1024> unchcked_gen_queue;
+        llvm::SmallVector<DeclGen, 1024> decls_gen_queue;
+        llvm::SmallVector<Decl*, 1024>   unchecked_gen_queue;
 
         llvm::StringMap<tokkind>                 keyword_mapping;
         llvm::DenseMap<tokkind, llvm::StringRef> inv_keyword_mapping; // Inverse of keyword_mapping.

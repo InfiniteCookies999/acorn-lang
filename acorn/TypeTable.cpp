@@ -85,7 +85,11 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
     }
     case TypeKind::Array: {
         auto arr_type = static_cast<ArrayType*>(type);
-        new_type = ArrayType::create(allocator, arr_type->get_elm_type(), arr_type->get_length(), is_const);
+        if (arr_type->has_determined_length()) {
+            new_type = ArrayType::create(allocator, arr_type->get_elm_type(), arr_type->get_length(), is_const);
+        } else {
+            new_type = ArrayType::create(allocator, arr_type->get_elm_type(), arr_type->get_expr(), is_const);
+        }
         break;
     }
     case TypeKind::Slice: {
@@ -105,16 +109,12 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = RangeType::create(allocator, range_type->get_value_type());
         break;
     }
-    case TypeKind::UnresolvedBracket: {
-        auto un_arr_type = static_cast<UnresolvedBracketType*>(type);
-        new_type = UnresolvedBracketType::create(allocator, un_arr_type->get_elm_type(), un_arr_type->get_expr(), is_const);
-        break;
-    }
     case TypeKind::UnresolvedComposite: {
         auto un_composite_type = static_cast<UnresolvedCompositeType*>(type);
         new_type = UnresolvedCompositeType::create(allocator,
                                                    un_composite_type->get_composite_name(),
                                                    un_composite_type->get_error_location(),
+                                                   un_composite_type->get_generic_exprs(),
                                                    is_const);
         break;
     }

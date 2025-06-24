@@ -339,7 +339,7 @@ bool remove(const String^ path) {
     return remove(path.buffer);
 }
 
-FileHandle open(const char* path, FileFlag[uint32] flags) {
+FileHandle open(const char* path, FileFlag(uint32) flags) {
 #if OS_GROUP_WINDOWS
     uint32 access_flags = 0;
     uint32 share_flags  = 0;
@@ -431,6 +431,6 @@ FileHandle open(const char* path, FileFlag[uint32] flags) {
 #endif
 }
 
-FileHandle open(const String^ path, FileFlag[uint32] flags) {
+FileHandle open(const String^ path, FileFlag(uint32) flags) {
     return open(path.buffer, flags);
 }

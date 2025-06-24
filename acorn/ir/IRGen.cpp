@@ -23,13 +23,13 @@ acorn::IRGenerator::IRGenerator(Context& context)
 {
 }
 
-void acorn::IRGenerator::gen_function(Func* func) {
+void acorn::IRGenerator::gen_function(Func* func, GenericFuncInstance* generic_instance) {
 
     // -- Debug
     // Logger::debug("generating function: %s", func->name);
 
-    gen_function_decl(func);
-    gen_function_body(func);
+    gen_function_decl(func, generic_instance);
+    gen_function_body(func, generic_instance);
 
 }
 
@@ -200,13 +200,24 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
     return ll_value;
 }
 
-void acorn::IRGenerator::gen_function_decl(Func* func) {
+void acorn::IRGenerator::gen_function_decl(Func* func, GenericFuncInstance* generic_instance) {
 
-    if (func->ll_func) {
-        return; // Return early because the declaration has already been generated.
+    if (!generic_instance) {
+        if (func->ll_func) {
+            return;
+        }
+    } else {
+        if (generic_instance->ll_func) {
+            return;
+        }
     }
 
-    context.queue_gen(func);
+    //Logger::debug("generating declaration for: %s", func->name);
+
+    bool is_main = func == context.get_main_function();
+    if (func != context.get_main_function()) { // Have to check for main because it gets queued at the beginning of the application.
+        context.queue_gen(func, generic_instance);
+    }
 
     if (func->has_modifier(Modifier::Native)) {
         if (func->ll_intrinsic_id != llvm::Intrinsic::not_intrinsic) {
@@ -217,8 +228,8 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     llvm::SmallVector<llvm::Type*> ll_param_types;
     ll_param_types.reserve(func->params.size());
 
-    bool is_main = func == context.get_main_function();
-    auto ll_ret_type = gen_function_return_type(func, is_main);
+
+    auto ll_ret_type = gen_function_return_type(func, generic_instance, is_main);
 
     // Creating the parameter types.
     //
@@ -236,7 +247,7 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     }
 
     for (Var* param : func->params) {
-        ll_param_types.push_back(gen_function_param_type(param));
+        ll_param_types.push_back(gen_function_param_type(param, generic_instance));
     }
 
     // Creating the function type.
@@ -262,7 +273,11 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
         get_name(),
         ll_module
     );
-    func->ll_func = ll_func;
+    if (!generic_instance) {
+        func->ll_func = ll_func;
+    } else {
+        generic_instance->ll_func = ll_func;
+    }
 
     // Setting information that is most relavent when working with native functions on
     // platforms.
@@ -321,11 +336,16 @@ void acorn::IRGenerator::gen_function_decl(Func* func) {
     }
 }
 
-llvm::Type* acorn::IRGenerator::gen_function_return_type(Func* func, bool is_main) {
+llvm::Type* acorn::IRGenerator::gen_function_return_type(Func* func, GenericFuncInstance* generic_instance, bool is_main) {
+    auto return_type = func->return_type;
+    if (generic_instance) {
+        return_type = generic_instance->qualified_types[0];
+    }
+
     if (is_main) {
         return llvm::Type::getInt32Ty(ll_context);
-    } else if (func->return_type->is_aggregate()) {
-        if (auto ll_type = try_get_optimized_int_type(func->return_type)) {
+    } else if (return_type->is_aggregate()) {
+        if (auto ll_type = try_get_optimized_int_type(return_type)) {
             func->ll_aggr_int_ret_type = ll_type;
             return ll_type;
         }
@@ -335,15 +355,20 @@ llvm::Type* acorn::IRGenerator::gen_function_return_type(Func* func, bool is_mai
         // Return void because the aggregate is passed in as a parameter.
         return llvm::Type::getVoidTy(ll_context);
     }
-    return gen_type(func->return_type);
+    return gen_type(return_type);
 }
 
-void acorn::IRGenerator::gen_function_body(Func* func) {
+void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* generic_instance) {
     if (!func->scope) return;
 
     cur_func    = func;
     cur_struct  = func->structn;
-    ll_cur_func = func->ll_func;
+
+    if (!generic_instance) {
+        ll_cur_func = func->ll_func;
+    } else {
+        ll_cur_func = generic_instance->ll_func;
+    }
 
     auto ll_entry = gen_bblock("entry", ll_cur_func);
     builder.SetInsertPoint(ll_entry);
@@ -428,9 +453,19 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     }
 
     for (Var* param : func->params) {
-        if (!param->is_aggr_param) {
+        bool is_aggr_param = false;
+        if (param->type->is_struct()) {
+            auto struct_type = static_cast<StructType*>(param->type);
+            if (!try_get_optimized_int_type(struct_type)) {
+                is_aggr_param = true;
+            }
+        } else if (param->type->is_array() || param->type->is_slice()) {
+            is_aggr_param = true;
+        }
+
+        if (!is_aggr_param) {
             auto ll_param_type = gen_type(param->type);
-            gen_variable_address(param, ll_param_type);
+            param->ll_address = gen_alloca(ll_param_type, param->name.to_string());
             emit_dbg(di_emitter->emit_function_variable(param, builder));
             builder.CreateStore(ll_cur_func->getArg(param_idx++), param->ll_address);
         } else {
@@ -455,7 +490,7 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
         if (func->uses_aggr_param && var == func->aggr_ret_var) {
             var->ll_address = ll_ret_addr;
         } else {
-            gen_variable_address(var, gen_type(var->type));
+            var->ll_address = gen_alloca(gen_type(var->type), var->name.to_string());
         }
     }
 
@@ -602,10 +637,6 @@ void acorn::IRGenerator::gen_function_body(Func* func) {
     }
 }
 
-void acorn::IRGenerator::gen_variable_address(Var* var, llvm::Type* ll_alloc_type) {
-    var->ll_address = gen_alloca(ll_alloc_type, var->name.to_string());
-}
-
 llvm::AllocaInst* acorn::IRGenerator::gen_alloca(llvm::Type* ll_alloc_type, llvm::Twine ll_name) {
     // LLVM uses preferred alignment for some reason by default. Possibly because they
     // still want to be able to allow for generating IR without setting the data layout.
@@ -623,25 +654,27 @@ llvm::AllocaInst* acorn::IRGenerator::gen_alloca(llvm::Type* ll_alloc_type, llvm
     return ll_address;
 }
 
-llvm::Type* acorn::IRGenerator::gen_function_param_type(Var* param) const {
-    if (param->type->is_array()) {
-        param->is_aggr_param = true;
+llvm::Type* acorn::IRGenerator::gen_function_param_type(Var* param, GenericFuncInstance* generic_instance) const {
+    Type* param_type = param->type;
+    if (generic_instance) {
+        param_type = generic_instance->qualified_types[param->param_idx + 1];
+    }
+
+    if (param_type->is_array()) {
         return llvm::PointerType::get(ll_context, 0);
-    } else if (param->type->is_struct()) {
-        auto struct_type = static_cast<StructType*>(param->type);
+    } else if (param_type->is_struct()) {
+        auto struct_type = static_cast<StructType*>(param_type);
 
         if (auto ll_type = try_get_optimized_int_type(struct_type)) {
             return ll_type;
         }
 
         // Will pass a pointer and memcpy over at the call site.
-        param->is_aggr_param = true;
         return llvm::PointerType::get(ll_context, 0);
-    } else if (param->type->is_slice()) {
-        param->is_aggr_param = true;
+    } else if (param_type->is_slice()) {
         return llvm::PointerType::get(ll_context, 0);
     }
-    return gen_type(param->type);
+    return gen_type(param_type);
 }
 
 void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
@@ -650,7 +683,7 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
         return; // Return early because the declaration has already been generated.
     }
 
-    context.queue_gen(var);
+    context.queue_gen(var, nullptr);
 
     // Have to check for a destructor because unless the global variable
     // is reassigned it will not request generation for the destructor.
@@ -663,7 +696,7 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
         auto struct_type = static_cast<StructType*>(var->type);
         auto structn = struct_type->get_struct();
         if (structn->destructor) {
-            context.queue_gen(structn->destructor);
+            context.queue_gen(structn->destructor, nullptr);
             context.globals_needing_destroyed.push_back(var);
         }
     } else if (var->type->is_array()) {
@@ -673,7 +706,7 @@ void acorn::IRGenerator::gen_global_variable_decl(Var* var) {
             auto struct_type = static_cast<StructType*>(base_type);
             auto structn = struct_type->get_struct();
             if (structn->destructor) {
-                context.queue_gen(structn->destructor);
+                context.queue_gen(structn->destructor, nullptr);
                 context.globals_needing_destroyed.push_back(var);
             }
         }
@@ -1094,7 +1127,7 @@ void acorn::IRGenerator::gen_call_destructors(Type* type, DestructorObject::Obje
                 gen_no_param_member_function_decl(structn, name + (structn->destructor ? ".acorn" : ".implicit.acorn"));
             if (structn->destructor) {
                 structn->destructor->ll_func = structn->ll_destructor;
-                context.queue_gen(structn->destructor);
+                context.queue_gen(structn->destructor, nullptr);
             } else {
                 auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::Destructor, structn);
                 context.queue_gen_implicit_function(implicit_func);
@@ -2423,7 +2456,8 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
                                nullptr,
                                ll_dest_addr,
                                false,
-                               for_call_arg);
+                               for_call_arg,
+                               nullptr);
         return ll_dest_addr;
     }
 
@@ -2635,7 +2669,11 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
     } else {
         Func* called_func = call->called_func;
         if (!called_func->interfacen) {
-            gen_function_decl(called_func);
+            if (!called_func->is_generic()) {
+                gen_function_decl(called_func);
+            } else {
+                gen_function_decl(called_func, call->generic_instance);
+            }
         }
 
         if (called_func->ll_intrinsic_id != llvm::Intrinsic::not_intrinsic) {
@@ -2682,7 +2720,8 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
                                       ll_dest_addr,
                                       ll_in_this,
                                       call->implicitly_converts_return,
-                                      for_call_arg);
+                                      for_call_arg,
+                                      call->generic_instance);
     }
 }
 
@@ -2827,7 +2866,10 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
                                                         llvm::Value* ll_dest_addr,
                                                         llvm::Value* ll_in_this,
                                                         bool apply_implicit_return_ptr,
-                                                        bool for_call_arg) {
+                                                        bool for_call_arg,
+                                                        GenericFuncInstance* generic_instance) {
+
+    // Logger::debug("generating function decl call?");
 
     bool uses_aggr_param = called_func->uses_aggr_param;
     bool uses_default_param_values = called_func->default_params_offset != -1;
@@ -2854,8 +2896,14 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     }
     ll_args.resize(ll_num_args);
 
+    auto return_type = called_func->return_type;
+    if (generic_instance) {
+        return_type = generic_instance->qualified_types[0];
+    }
+
+
     if (!ll_dest_addr && (!for_call_arg || uses_aggr_param)) {
-        ll_dest_addr = gen_call_return_aggr_type_temporary(called_func->return_type, uses_aggr_param, for_call_arg);
+        ll_dest_addr = gen_call_return_aggr_type_temporary(return_type, uses_aggr_param, for_call_arg);
     }
 
     // Pass the return address as an argument.
@@ -2908,6 +2956,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     llvm::ArrayType* ll_varargs_arr_type = nullptr;
     if (called_func->uses_varargs) {
 
+        // TODO (maddie): deal with generic types!
         forwards_varargs = cur_func && cur_func->forwards_varargs(args.back());
         if (!forwards_varargs) {
 
@@ -3074,7 +3123,11 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         // debug_info += "]\n";
         // Logger::debug(debug_info.c_str());
 
-        ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
+        if (!generic_instance) {
+            ll_ret = builder.CreateCall(called_func->ll_func, ll_args);
+        } else {
+            ll_ret = builder.CreateCall(generic_instance->ll_func, ll_args);
+        }
     } else {
         auto interfacen = called_func->interfacen;
 
@@ -3098,15 +3151,15 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         }
 
         llvm::Type* ll_ret_type;
-        if (called_func->return_type->is_aggregate()) {
+        if (return_type->is_aggregate()) {
             if (uses_aggr_param) {
                 ll_ret_type = builder.getVoidTy();
             } else {
                 // The aggregate can fit into an integer.
-                ll_ret_type = try_get_optimized_int_type(called_func->return_type);
+                ll_ret_type = try_get_optimized_int_type(return_type);
             }
         } else {
-            ll_ret_type = gen_type(called_func->return_type);
+            ll_ret_type = gen_type(return_type);
         }
 
         llvm::SmallVector<llvm::Type*> ll_param_types;
@@ -3148,7 +3201,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
             // If the function returns an implicit dereferencable pointer then
             // this code goes ahead and will store the dereferenced pointer into
             // the provided address.
-            auto ptr_type = static_cast<PointerType*>(called_func->return_type);
+            auto ptr_type = static_cast<PointerType*>(return_type);
             auto elm_type = ptr_type->get_elm_type();
             if (elm_type->is_struct()) {
                 auto struct_type = static_cast<StructType*>(elm_type);
@@ -3165,7 +3218,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         }
     }
 
-    if (ll_dest_addr && called_func->return_type->is_aggregate()) {
+    if (ll_dest_addr && return_type->is_aggregate()) {
         return ll_dest_addr;
     } else {
         return ll_ret;
@@ -4316,9 +4369,20 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
 
         goto NoCastFound;
     }
-
     default:
     NoCastFound:
+        if (EnumType* enum_type = to_type->get_container_enum_type()) {
+            if (from_type->is_enum()) {
+
+                auto ll_index = ll_value;
+                if (enum_type->get_values_type()->is_integer()) {
+                    return ll_index;
+                }
+
+                return gen_enum_value_from_enum_array(enum_type, ll_index);
+            }
+        }
+
         acorn_fatal("gen_cast(): Failed to implement case");
         break;
     }
@@ -4429,7 +4493,7 @@ void acorn::IRGenerator::gen_call_default_constructor(llvm::Value* ll_address, S
             gen_no_param_member_function_decl(structn, ll_name + (structn->default_constructor ? ".acorn" : ".implicit.acorn"));
         if (structn->default_constructor) {
             structn->default_constructor->ll_func = structn->ll_default_constructor;
-            context.queue_gen(structn->default_constructor);
+            context.queue_gen(structn->default_constructor, nullptr);
         } else {
             auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::DefaultConstructor, structn);
             context.queue_gen_implicit_function(implicit_func);
@@ -4912,7 +4976,7 @@ void acorn::IRGenerator::gen_call_copy_constructor(llvm::Value* ll_to_address,
         structn->ll_copy_constructor = ll_func;
         if (structn->copy_constructor) {
             structn->copy_constructor->ll_func = ll_func;
-            context.queue_gen(structn->copy_constructor);
+            context.queue_gen(structn->copy_constructor, nullptr);
         } else {
             auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::CopyConstructor, structn);
             context.queue_gen_implicit_function(implicit_func);
@@ -4957,7 +5021,7 @@ void acorn::IRGenerator::gen_call_move_constructor(llvm::Value* ll_to_address,
         structn->ll_move_constructor = ll_func;
         if (structn->move_constructor) {
             structn->move_constructor->ll_func = ll_func;
-            context.queue_gen(structn->move_constructor);
+            context.queue_gen(structn->move_constructor, nullptr);
         } else {
             auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::MoveConstructor, structn);
             context.queue_gen_implicit_function(implicit_func);

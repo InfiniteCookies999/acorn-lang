@@ -22,6 +22,7 @@ namespace acorn {
 
     class Module;
     class Type;
+    class GenericType;
     struct Var;
     struct Expr;
     struct Func;
@@ -38,6 +39,8 @@ namespace acorn {
     struct BinOp;
     struct Interface;
     struct Try;
+    struct Generic;
+    class PageAllocator;
 
     const size_t MAX_FUNC_PARAMS = 64;
 
@@ -52,6 +55,7 @@ namespace acorn {
         Struct,
         Enum,
         Interface,
+        Generic,
 
         ReturnStmt,
         IfStmt,
@@ -139,11 +143,12 @@ namespace acorn {
     // Statements
     //--------------------------------------
 
+    struct GenericIntance {};
+
     struct Decl : Node {
         Decl(NodeKind kind) : Node(kind) {
         }
 
-        bool generated = false;
         bool is_being_checked = false;
 
         SourceFile* file;
@@ -179,6 +184,23 @@ namespace acorn {
 
     };
 
+    struct GenericFuncInstance : GenericIntance {
+        llvm::SmallVector<Type*> generic_bindings;
+        // Parameters have their types fully qualified so that future
+        // calls to the generic function know how to properly call the
+        // function.
+        //
+        // TODO (maddie): do we really need this? IR gen seems to rely
+        // very little on it outside of some stuff to do with variadics
+        // and generating the function declaration.
+        // ^^ it is also used to initialize the parameters atm.
+        //
+        // Index 0 is the return type.
+        llvm::SmallVector<Type*> qualified_types;
+
+        llvm::Function* ll_func = nullptr;
+    };
+
     struct Func : Decl {
         Func() : Decl(NodeKind::Func) {
         }
@@ -206,6 +228,14 @@ namespace acorn {
         llvm::SmallVector<Var*, 8> params;
         llvm::SmallVector<RaisedError> raised_errors;
 
+        // Generic information
+        llvm::SmallVector<Generic*>             generics;
+        llvm::SmallVector<GenericFuncInstance*> generic_instances;
+        // Index 0 is the return type.
+        llvm::SmallVector<Type*> partially_qualified_types;
+
+
+
         llvm::StringRef linkname;
 
         uint32_t num_returns = 0;
@@ -232,7 +262,7 @@ namespace acorn {
         bool has_implicit_return_ptr = false;
         bool uses_native_varargs     = false;
         bool uses_varargs            = false;
-        bool is_constant             = false;
+        bool is_constant             = false; // has const qualifier
         bool has_errors              = false;
         bool is_dynamic              = false;
 
@@ -260,6 +290,14 @@ namespace acorn {
         std::string get_decl_string() const;
 
         bool forwards_varargs(Expr* arg_value) const;
+
+        bool is_generic() const {
+            return !generics.empty();
+        }
+
+        GenericFuncInstance* get_generic_instance(PageAllocator& allocator,
+                                                  llvm::SmallVector<Type*> generic_bindings,
+                                                  llvm::SmallVector<Type*> qualified_param_types);
 
     };
 
@@ -310,20 +348,20 @@ namespace acorn {
         // generated value of the variable.
         llvm::Value* ll_comptime_value = nullptr;
 
-        // If this is set to true then the function passes the
-        // struct value as an integer type then converts it back
-        // once inside the body of the function.
-        bool is_aggr_int_param = true;
-        // If this is set to true then struct type parameters
-        // are passed as pointers and memcpy is used at the
-        // calling location.
-        bool is_aggr_param = false;
-
         llvm::Value* ll_address;
 
         bool is_param() const { return param_idx != NotParam; }
         bool is_field() const { return field_idx != NotField; }
 
+    };
+
+    struct Generic : Node {
+        Generic() : Node(NodeKind::Generic) {
+        }
+
+        Identifier   name;
+        size_t       index;
+        GenericType* type;
     };
 
     struct VarList : Node {
@@ -488,7 +526,7 @@ namespace acorn {
 
         Node*      cond;
         Expr*      post_variable_cond = nullptr;
-        Node*      elseif;
+        Node*      elseif = nullptr;
         ScopeStmt* scope;
     };
 
@@ -505,9 +543,9 @@ namespace acorn {
         }
 
         Node*      init_node = nullptr;
-        Expr*      cond = nullptr;
+        Expr*      cond      = nullptr;
+        Node*      inc       = nullptr;
         ScopeStmt* scope;
-        Node*      inc = nullptr;
     };
 
     struct IteratorLoopStmt : Node {
@@ -744,20 +782,8 @@ namespace acorn {
 
     };
 
-    struct TypeExpr : Expr {
-        TypeExpr() : Expr(NodeKind::TypeExpr) {
-        }
-
-        TypeExpr(NodeKind kind) : Expr(kind) {
-        }
-
-        NodeKind prev_node_kind = NodeKind::InvalidExpr;
-        Type* parsed_expr_type;
-        Type* expr_type;
-    };
-
-    struct MemoryAccess : TypeExpr {
-        MemoryAccess() : TypeExpr(NodeKind::MemoryAccess) {
+    struct MemoryAccess : Expr {
+        MemoryAccess() : Expr(NodeKind::MemoryAccess) {
         }
 
         Expr* site;
@@ -779,8 +805,12 @@ namespace acorn {
         FuncCall() : Expr(NodeKind::FuncCall) {
         }
 
-        Expr* site;
-        Func* called_func;
+        Expr*                site;
+        Func*                called_func;
+        // If calling a generic function this becomes
+        // the instance specific information about the
+        // generic function.
+        GenericFuncInstance* generic_instance = nullptr;
 
         size_t non_named_args_offset = -1;
         llvm::SmallVector<Expr*> args;
@@ -815,6 +845,7 @@ namespace acorn {
         Cast() : Expr(NodeKind::Cast) {
         }
 
+        // TODO (maddie): this name is terrible.
         Type* explicit_cast_type;
         Expr* value;
     };
@@ -835,7 +866,6 @@ namespace acorn {
         SizeOf() : Expr(NodeKind::SizeOf) {
         }
 
-        //Type* parsed_type_with_size;
         Expr* value;
         Type* type_with_size;
     };
@@ -856,6 +886,18 @@ namespace acorn {
         Expr* value;
     };
 
+    struct TypeExpr : Expr {
+        TypeExpr() : Expr(NodeKind::TypeExpr) {
+        }
+
+        TypeExpr(NodeKind kind) : Expr(kind) {
+        }
+
+        NodeKind prev_node_kind = NodeKind::InvalidExpr;
+        Type* parsed_expr_type;
+        Type* expr_type;
+    };
+
     struct Reflect : Expr {
         Reflect() : Expr(NodeKind::Reflect) {
         }
@@ -873,6 +915,8 @@ namespace acorn {
         // is calling a function that also is specified to raise the same error such
         // that it simply passes the current error into the other function on call.
         bool passes_error_along = false;
+        // IRGen temporary. Does not need reset for generics because it only is set
+        // during its IR Generation.
         bool generating_expr = false;
 
         llvm::SmallVector<Struct*> caught_errors;

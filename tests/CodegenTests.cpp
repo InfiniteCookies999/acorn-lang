@@ -1867,6 +1867,12 @@ static void enums_tests() {
 
         expect(result, std::identity()).to_be("ABCDEF");
     });
+    test("Enum type to enum container type", [&] {
+        auto [err_msg, result] = run_codegen_test(src("enums/enums_test8.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCD");
+    });
 }
 
 static void slices_tests() {
@@ -2278,6 +2284,27 @@ static void error_tests() {
     });
 }
 
+static void generics_tests() {
+    test("Call generic function with different types", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics1.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%");
+    });
+    test("Call generic function with pointer to generic type", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics2.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%");
+    });
+    test("Call generic function with array of generic types", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics3.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%");
+    });
+}
+
 void test_codegen() {
 
     std::string err;
@@ -2326,5 +2353,6 @@ void test_codegen() {
         varargs_tests();
         interface_tests();
         error_tests();
+        generics_tests();
     }, true);
 }

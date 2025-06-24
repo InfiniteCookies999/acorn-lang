@@ -52,6 +52,12 @@ namespace acorn {
             : context(context), stream(stream) {
         }
 
+        L& add_line(std::string msg) {
+            return add_line([msg](L&) {
+                print(Stream::StdErr, msg);
+            });
+        }
+
         L& add_line(const char* msg) {
             return add_line([msg](L&) {
                 print(Stream::StdErr, msg);

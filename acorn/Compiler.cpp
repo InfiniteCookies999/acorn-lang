@@ -19,6 +19,7 @@
 #include "ProcessExec.h"
 #include "SourceFile.h"
 #include "FloatParsing.h"
+#include "GenericReset.h"
 
 namespace fs = std::filesystem;
 
@@ -268,7 +269,7 @@ void acorn::Compiler::sema_and_irgen() {
             .end_error(ErrCode::GlobalCouldNotFindEntryPointFunc);
         return;
     }
-    context.queue_gen(context.get_main_function());
+    context.queue_gen(context.get_main_function(), nullptr);
 
     // Check to make sure that there are no duplicate declarations within
     // any namespaces.
@@ -310,12 +311,12 @@ void acorn::Compiler::sema_and_irgen() {
     }
     ir_timer.stop();
 
-    auto check_decl = [this](Decl* decl) finline {
+    auto check_decl = [this](Decl* decl, GenericIntance* generic_instance) finline {
         sema_timer.start();
 
         Sema sema(context, decl->file, decl->get_logger());
         if (decl->is(NodeKind::Func)) {
-            sema.check_function(static_cast<Func*>(decl));
+            sema.check_function(static_cast<Func*>(decl), static_cast<GenericFuncInstance*>(generic_instance));
         } else if (decl->is(NodeKind::Var)) {
             auto var = static_cast<Var*>(decl);
             if (!var->has_been_checked) {
@@ -344,20 +345,45 @@ void acorn::Compiler::sema_and_irgen() {
     };
 
     while (!context.decl_queue_empty()) {
-        Node* decl = context.decl_queue_next();
+        auto decl_gen = context.decl_queue_next();
+        Node* decl            = decl_gen.decl;
+        auto generic_instance = decl_gen.generic_instance;
+
+        if (generic_instance) {
+            // setting the parameter types from the qualified types.
+            //
+            auto func_generic_instance = static_cast<GenericFuncInstance*>(generic_instance);
+            auto func = static_cast<Func*>(decl);
+
+            func->return_type = func_generic_instance->qualified_types[0];
+
+            for (size_t i = 0; i < func->params.size(); i++) {
+                auto qualified_type = func_generic_instance->qualified_types[i + 1];
+                func->params[i]->type = qualified_type;
+            }
+        }
 
         // Semantic analysis.
         if (decl->is_not(NodeKind::ImplicitFunc)) {
-            check_decl(static_cast<Decl*>(decl));
+            check_decl(static_cast<Decl*>(decl), generic_instance);
         }
 
         // Code generation.
         ir_timer.start();
-        if (context.has_errors()) continue;
+        if (context.has_errors()) {
+            // Still want to reset the generic instance so that it error reporting continues to
+            // be accurate.
+            if (generic_instance) {
+                auto func_generic_instance = static_cast<GenericFuncInstance*>(generic_instance);
+                auto func = static_cast<Func*>(decl);
+                reset_generic_function(func, func_generic_instance);
+            }
+            continue;
+        }
 
         IRGenerator generator(context);
         if (decl->is(NodeKind::Func)) {
-            generator.gen_function(static_cast<Func*>(decl));
+            generator.gen_function(static_cast<Func*>(decl), static_cast<GenericFuncInstance*>(generic_instance));
         } else if (decl->is(NodeKind::Var)) {
             generator.gen_global_variable(static_cast<Var*>(decl));
         } else if (decl->is(NodeKind::ImplicitFunc)) {
@@ -367,6 +393,11 @@ void acorn::Compiler::sema_and_irgen() {
         }
         ir_timer.stop();
 
+        if (generic_instance) {
+            auto func_generic_instance = static_cast<GenericFuncInstance*>(generic_instance);
+            auto func = static_cast<Func*>(decl);
+            reset_generic_function(func, func_generic_instance);
+        }
     }
 
     ir_timer.start();
@@ -378,7 +409,7 @@ void acorn::Compiler::sema_and_irgen() {
     // Checking any declarations that were not checked.
     //
     for (Decl* decl : context.get_unchecked()) {
-        check_decl(decl);
+        check_decl(decl, nullptr);
     }
 
     if (context.has_errors()) {

@@ -39,7 +39,7 @@ namespace acorn {
 
         bool check_comptime_cond(Expr* cond, const char* comptime_type_str);
 
-        void check_function(Func* func);
+        void check_function(Func* func, GenericFuncInstance* generic_instance);
         void check_variable(Var* var);
         void check_struct(Struct* structn);
         void check_enum(Enum* enumn);
@@ -67,8 +67,9 @@ namespace acorn {
         static const uint32_t PREFER_NON_CONST_LIMIT                = MAX_FUNC_PARAMS * 2;
         static const uint32_t IMPLICIT_CAST_TO_ANY_LIMIT            = PREFER_NON_CONST_LIMIT * MAX_FUNC_PARAMS * 2;
         static const uint32_t IS_VARARGS_LIMIT                      = IMPLICIT_CAST_TO_ANY_LIMIT * 2;
+        static const uint32_t IS_GENERIC_LIMIT                      = IS_VARARGS_LIMIT * 2;
 
-        static const uint32_t NON_CONST_FROM_CONST_OBJ_LIMIT        = IS_VARARGS_LIMIT * 2;
+        static const uint32_t NON_CONST_FROM_CONST_OBJ_LIMIT        = IS_GENERIC_LIMIT * 2;
         static const uint32_t NOT_ASSIGNABLE_TYPES_LIMIT            = NON_CONST_FROM_CONST_OBJ_LIMIT * 2;
         static const uint32_t CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT = NOT_ASSIGNABLE_TYPES_LIMIT * MAX_FUNC_PARAMS * 2;
 
@@ -83,6 +84,13 @@ namespace acorn {
 
         // How many nested loops currently within.
         int loop_depth = 0;
+
+        // When calling a generic function and qualifying the types this
+        // is set to be used during type fixup in order to qualify the
+        // generic types.
+        llvm::SmallVector<Type*>* func_call_generic_bindings = nullptr;
+        // If checking a generic declaration this is set.
+        GenericIntance*           generic_instance = nullptr;
 
         Try* catch_scope_try = nullptr;
 
@@ -132,10 +140,11 @@ namespace acorn {
         void check_node(Node* node);
 
         Type* fixup_type(Type* type, bool is_ptr_elm_type = false);
-        Type* fixup_unresolved_bracket_type(Type* type);
+        Type* fixup_array_type(Type* type);
         Type* fixup_assign_det_arr_type(Type* type, Var* var);
         Type* fixup_unresolved_composite_type(Type* type, bool is_ptr_elm_type);
         Type* fixup_function_type(Type* type);
+        Type* fixup_generic_type(Type* type);
 
         // Statement checking
         //--------------------------------------
@@ -197,7 +206,8 @@ namespace acorn {
                                        llvm::SmallVector<Expr*>& args,
                                        bool& selected_implicitly_converts_ptr_arg,
                                        bool& is_ambiguous,
-                                       bool is_const_object);
+                                       bool is_const_object,
+                                       llvm::SmallVector<Type*>& generic_bindings);
         uint32_t get_function_call_score(const Func* candidate,
                                          const llvm::SmallVector<Expr*>& args,
                                          bool is_const_object);
@@ -213,17 +223,26 @@ namespace acorn {
             SUCCESS
         };
 
+        struct GenericArgumentBindState {
+            llvm::SmallVector<Type*>& bindings;
+        };
+
         // Tells weather or not the function is callable and gathers information
         // to indicate if calling the function would be more viable to call than
         // a different overloaded version of the function.
         //
         // @return true if the function is callable with the given arguments.
-        template<bool for_score_gathering>
+        template<bool for_score_gathering, bool checking_generic>
         CallCompareStatus compare_as_call_candidate(const Func* canidate,
                                                     const llvm::SmallVector<Expr*>& args,
                                                     const bool is_const_object,
                                                     uint32_t& score,
-                                                    bool& implicitly_converts_ptr_arg);
+                                                    bool& implicitly_converts_ptr_arg,
+                                                    llvm::SmallVector<Type*>& generic_bindings);
+        bool compare_argument_to_generic_parameter(Type* to_type,   // Type at current level of comparison
+                                                   Type* from_type, // Type at current level of comparison
+                                                   GenericArgumentBindState& bind_state);
+
         bool has_correct_number_of_args(const Func* candidate,
                                         const llvm::SmallVector<Expr*>& args) const;
         void display_call_mismatch_info(PointSourceLoc error_loc,

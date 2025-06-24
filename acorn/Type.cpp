@@ -219,7 +219,7 @@ std::string acorn::Type::to_string() const {
             s = "const " + s;
         }
         auto contained_type_str = container_enum_type->get_values_type()->to_string();
-        return s + "[" + contained_type_str + "]";
+        return s + "(" + contained_type_str + ")";
     }
 
 #define str(s) !is_const() ? (s) : std::string("const ") + (s);
@@ -265,12 +265,49 @@ std::string acorn::Type::to_string() const {
     case TypeKind::AssignDeterminedArray:
                               return str2(static_cast<const AssignDeterminedArrayType*>(this)->to_string());
     case TypeKind::Interface: return str(static_cast<const InterfaceType*>(this)->to_string());
+    case TypeKind::Generic:   return str(static_cast<const GenericType*>(this)->to_string());
     default:
         acorn_fatal_fmt("Type::to_string() missing to_string case. Kind=%s", static_cast<int>(kind));
         return "";
     }
 #undef str
 #undef str2
+}
+
+void acorn::Type::get_generic_types(llvm::SmallVector<const GenericType*>& generics) const {
+    // TODO (maddie): once composites can contain generics it will need to handle
+    // that as well.
+    switch (kind) {
+    case TypeKind::Generic: {
+        auto generic_type = static_cast<const GenericType*>(this);
+        generics.push_back(generic_type);
+        return;
+    }
+    case TypeKind::Pointer:
+    case TypeKind::Array:
+    case TypeKind::Slice: {
+        auto ptr_type = static_cast<const ContainerType*>(this);
+        auto elm_type = ptr_type->get_base_type();
+        elm_type->get_generic_types(generics);
+        return;
+    }
+    case TypeKind::Function: {
+        auto func_type = static_cast<const FunctionType*>(this);
+        for (auto param_type : func_type->get_key()->param_types) {
+            param_type->get_generic_types(generics);
+        }
+        func_type->get_key()->return_type->get_generic_types(generics);
+        return;
+    }
+    case TypeKind::Range: {
+        auto range_type = static_cast<const RangeType*>(this);
+        auto value_type = range_type->get_value_type();
+        value_type->get_generic_types(generics);
+        return;
+    }
+    default:
+        return;
+    }
 }
 
 acorn::Type* acorn::ContainerType::get_base_type() const {
@@ -300,29 +337,43 @@ size_t acorn::ContainerType::get_depth() const {
 
 acorn::PointerType* acorn::PointerType::create(PageAllocator& allocator, Type* elm_type, bool is_const) {
     PointerType* ptr_type = allocator.alloc_type<PointerType>();
+    new (ptr_type) PointerType(is_const, elm_type);
     ptr_type->contains_const = is_const;
-    return new (ptr_type) PointerType(is_const, elm_type);
+    ptr_type->contains_generics = elm_type->does_contain_generics();
+    return ptr_type;
 }
 
 std::string acorn::PointerType::to_string() const {
     return elm_type->to_string() + "*";
 }
 
-acorn::Type* acorn::UnresolvedBracketType::create(PageAllocator& allocator,
-                                                Type* elm_type,
-                                                Expr* expr,
-                                                bool is_const) {
-    UnresolvedBracketType* unresolved_type = allocator.alloc_type<UnresolvedBracketType>();
-    new (unresolved_type) UnresolvedBracketType(is_const, expr, elm_type);
-    unresolved_type->contains_const = is_const;
-    return unresolved_type;
+acorn::ArrayType* acorn::ArrayType::create(PageAllocator& allocator,
+                                           Type* elm_type,
+                                           Expr* expr,
+                                           bool is_const) {
+    ArrayType* arr_type = allocator.alloc_type<ArrayType>();
+    new (arr_type) ArrayType(is_const, expr, elm_type);
+    arr_type->contains_const = is_const;
+    arr_type->contains_generics = elm_type->does_contain_generics();
+    if (!is_const) {
+        arr_type->non_const_version = arr_type;
+    }
+    arr_type->determined_length = false;
+    return arr_type;
 }
 
-acorn::ArrayType* acorn::ArrayType::create(PageAllocator& allocator, Type* elm_type,
-                                           uint32_t length, bool is_const) {
+acorn::ArrayType* acorn::ArrayType::create(PageAllocator& allocator,
+                                           Type* elm_type,
+                                           uint32_t length,
+                                           bool is_const) {
     ArrayType* arr_type = allocator.alloc_type<ArrayType>();
-    new (arr_type) ArrayType(is_const, elm_type, length);
+    new (arr_type) ArrayType(is_const, length, elm_type);
     arr_type->contains_const = is_const;
+    arr_type->contains_generics = elm_type->does_contain_generics();
+    if (!is_const) {
+        arr_type->non_const_version = arr_type;
+    }
+    arr_type->determined_length = true;
     return arr_type;
 }
 
@@ -383,6 +434,7 @@ acorn::SliceType* acorn::SliceType::create(PageAllocator& allocator, Type* elm_t
     auto slice_type = allocator.alloc_type<SliceType>();
     new (slice_type) SliceType(is_const, elm_type);
     slice_type->contains_const = is_const;
+    slice_type->contains_generics = elm_type->does_contain_generics();
     return slice_type;
 }
 
@@ -396,6 +448,7 @@ acorn::Type* acorn::AssignDeterminedArrayType::create(PageAllocator& allocator,
     auto arr_type = allocator.alloc_type<AssignDeterminedArrayType>();
     new (arr_type) AssignDeterminedArrayType(is_const, elm_type);
     arr_type->contains_const = is_const;
+    arr_type->contains_const = elm_type->does_contain_generics();
     return arr_type;
 }
 
@@ -422,6 +475,13 @@ acorn::FunctionType* acorn::FunctionType::create(PageAllocator& allocator,
     auto function_type = allocator.alloc_type<FunctionType>();
     new (function_type) FunctionType(is_const, key);
     function_type->contains_const = is_const;
+    for (Type* type : key->param_types) {
+        if (type->does_contain_generics()) {
+            function_type->contains_generics = true;
+            break;
+        }
+    }
+    function_type->contains_generics |= key->return_type->does_contain_generics();
     return function_type;
 }
 
@@ -460,10 +520,14 @@ std::string acorn::FunctionType::to_string() const {
 acorn::Type* acorn::UnresolvedCompositeType::create(PageAllocator& allocator,
                                                     Identifier name,
                                                     SourceLoc name_location,
+                                                    llvm::SmallVector<Expr*> generic_exprs,
                                                     bool is_const) {
     auto composite_type = allocator.alloc_type<UnresolvedCompositeType>();
-    new (composite_type) UnresolvedCompositeType(is_const, name, name_location);
+    new (composite_type) UnresolvedCompositeType(is_const, name, name_location, std::move(generic_exprs));
     composite_type->contains_const = is_const;
+    if (!is_const) {
+        composite_type->non_const_version = composite_type;
+    }
     return composite_type;
 }
 
@@ -513,4 +577,23 @@ acorn::InterfaceType* acorn::InterfaceType::create(PageAllocator& allocator,
 
 std::string acorn::InterfaceType::to_string() const {
     return interfacen->name.to_string().str();
+}
+
+acorn::GenericType* acorn::GenericType::create(PageAllocator& allocator, Generic* generic, bool is_const) {
+    auto generic_type = allocator.alloc_type<GenericType>();
+    new(generic_type) GenericType(generic, is_const);
+    generic_type->contains_const = is_const;
+    if (!is_const) {
+        generic_type->non_const_version = generic_type;
+    }
+    generic_type->contains_generics = true;
+    return generic_type;
+}
+
+std::string acorn::GenericType::to_string() const {
+    return generic->name.to_string().str();
+}
+
+size_t acorn::GenericType::get_generic_index() const {
+    return generic->index;
 }

@@ -67,6 +67,9 @@ namespace acorn {
         int paren_count   = 0;
         int bracket_count = 0;
 
+        llvm::SmallVector<Generic*>* func_generic_types   = nullptr;
+        llvm::SmallVector<Generic*>* struct_generic_types = nullptr;
+
         // Statement parsing
         //--------------------------------------
 
@@ -82,7 +85,7 @@ namespace acorn {
         template<typename D, bool uses_linkname>
         D* new_declaration(uint32_t modifiers, Identifier name, Token loc_token);
 
-        Func* parse_function(uint32_t modifiers, Type* type);
+        Func* parse_function(uint32_t modifiers, Type* return_type);
         Func* parse_function(uint32_t modifiers,
                              Type* return_type,
                              bool has_implicit_return_ptr,
@@ -106,6 +109,7 @@ namespace acorn {
         void check_composite_name_conflict_with_imports(Identifier name, const char* composite_type_str);
 
         uint32_t parse_modifiers();
+        llvm::SmallVector<Generic*> parse_generics();
 
         ReturnStmt*        parse_return();
         IfStmt*            parse_if();
@@ -131,9 +135,8 @@ namespace acorn {
         Type* parse_type();
         Type* parse_type_for_decl();
         Type* parse_base_type();
-        Type* construct_type_from_identifier(Token name_token, bool is_const);
-        Type* construct_unresolved_bracket_type(Type* base_type,
-                                                const llvm::SmallVector<Expr*, 8>& exprs);
+        Type* construct_type_from_identifier(Token name_token);
+        Type* construct_array_type(Type* base_type, const llvm::SmallVector<Expr*, 8>& exprs);
         Type* parse_optional_type_trailing_info(Type* type);
         Type* parse_function_type(Type* base_type);
 
@@ -155,6 +158,7 @@ namespace acorn {
         Expr* parse_postfix();
         Expr* parse_postfix(Expr* term);
         FuncCall* parse_function_call(Expr* site);
+        void parse_call_like_arguments(llvm::SmallVector<Expr*>& args, size_t& non_named_args_offset);
         Expr* parse_dot_operator(Expr* site);
         Expr* parse_memory_access(Expr* site);
         Expr* parse_term();

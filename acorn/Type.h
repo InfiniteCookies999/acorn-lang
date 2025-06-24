@@ -33,6 +33,8 @@ namespace acorn {
     class FunctionType;
     class StructType;
     class EnumType;
+    class Generic;
+    class GenericType;
 
     enum class TypeKind {
 
@@ -64,7 +66,6 @@ namespace acorn {
         Array,
         Slice,
         EmptyArray,
-        UnresolvedBracket, // Length could not be resolved during parsing.
         Null,
         AssignDeterminedArray,
         Function,
@@ -76,6 +77,8 @@ namespace acorn {
         Range,
         Auto,
         Expr, // A type that appears as part of an expression in code.
+        Generic,
+        UnresolvedGenericComposite,
         Invalid,
 
     };
@@ -93,6 +96,7 @@ namespace acorn {
 
         bool is_const() const { return vconst; }
         bool does_contain_const() const { return contains_const; }
+        bool does_contain_generics() const { return contains_generics; }
         Type* remove_all_const() const { return non_const_version; };
 
         bool is(const Type* type)     const { return type == this; }
@@ -143,6 +147,7 @@ namespace acorn {
         bool is_enum() const      { return kind == TypeKind::Enum;      }
         bool is_slice() const     { return kind == TypeKind::Slice;     }
         bool is_interface() const { return kind == TypeKind::Interface; }
+        bool is_generic() const   { return kind == TypeKind::Generic;   }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
@@ -166,6 +171,8 @@ namespace acorn {
             return container_enum_type;
         }
 
+        void get_generic_types(llvm::SmallVector<const GenericType*>& generics) const;
+
     protected:
         Type(TypeKind kind, bool is_const)
             : kind(kind), vconst(is_const) {
@@ -186,6 +193,7 @@ namespace acorn {
         // this means that it is either itself const or has an
         // element type that is const.
         bool     contains_const;
+        bool     contains_generics = false;
     };
 
     class ContainerType : public Type {
@@ -218,29 +226,18 @@ namespace acorn {
         }
     };
 
-    class UnresolvedBracketType : public ContainerType {
-    public:
-
-        static Type* create(PageAllocator& allocator,
-                            Type* elm_type,
-                            Expr* expr,
-                            bool is_const = false);
-
-        Expr* get_expr() const { return expr; }
-
-    private:
-        UnresolvedBracketType(bool is_const, Expr* expr, Type* elm_type) :
-            ContainerType(TypeKind::UnresolvedBracket, is_const, elm_type), expr(expr) {
-        }
-
-        Expr* expr;
-    };
-
     class ArrayType : public ContainerType {
     public:
 
-        static ArrayType* create(PageAllocator& allocator, Type* elm_type,
-                                 uint32_t length, bool is_const = false);
+        static ArrayType* create(PageAllocator& allocator,
+                                 Type* elm_type,
+                                 Expr* expr,
+                                 bool is_const = false);
+
+        static ArrayType* create(PageAllocator& allocator,
+                                 Type* elm_type,
+                                 uint32_t length,
+                                 bool is_const = false);
 
         uint32_t get_length() const { return length; }
 
@@ -248,12 +245,24 @@ namespace acorn {
 
         std::string to_string() const;
 
-    protected:
-        ArrayType(bool is_const, Type* elm_type, uint32_t length)
-            : ContainerType(TypeKind::Array, is_const, elm_type), length(length) {
+        Expr* get_expr() const { return expr; }
+
+        bool has_determined_length() const {
+            return determined_length;
         }
 
+    private:
+        ArrayType(bool is_const, Expr* expr, Type* elm_type) :
+            ContainerType(TypeKind::Array, is_const, elm_type), expr(expr) {
+        }
+
+        ArrayType(bool is_const, uint32_t length, Type* elm_type) :
+            ContainerType(TypeKind::Array, is_const, elm_type), length(length) {
+        }
+
+        bool determined_length = false;
         uint32_t length;
+        Expr* expr; // Set if not resolved during parsing.
     };
 
     class SliceType : public ContainerType {
@@ -283,6 +292,7 @@ namespace acorn {
 
     };
 
+    // Ex. `int[] a = [ 1, 2 ,3 ]`
     class AssignDeterminedArrayType : public ContainerType {
     public:
 
@@ -378,6 +388,7 @@ namespace acorn {
         static Type* create(PageAllocator& allocator,
                             Identifier name,
                             SourceLoc  name_location,
+                            llvm::SmallVector<Expr*> generic_exprs,
                             bool is_const = false);
 
         Identifier get_composite_name() const {
@@ -388,15 +399,24 @@ namespace acorn {
             return error_location;
         }
 
-    protected:
-        UnresolvedCompositeType(bool is_const, Identifier name, SourceLoc error_location)
-            : Type(TypeKind::UnresolvedComposite, is_const),
-              name(name),
-              error_location(error_location) {
+        llvm::SmallVector<Expr*>& get_generic_exprs() {
+            return generic_exprs;
         }
 
-        SourceLoc  error_location;
-        Identifier name;
+    protected:
+        UnresolvedCompositeType(bool is_const,
+                                Identifier name,
+                                SourceLoc error_location,
+                                llvm::SmallVector<Expr*> generic_exprs)
+            : Type(TypeKind::UnresolvedComposite, is_const),
+              name(name),
+              error_location(error_location),
+              generic_exprs(std::move(generic_exprs)) {
+        }
+
+        SourceLoc                error_location;
+        Identifier               name;
+        llvm::SmallVector<Expr*> generic_exprs;
     };
 
     class StructType : public Type {
@@ -496,6 +516,27 @@ namespace acorn {
         }
 
         Interface* interfacen;
+    };
+
+    class GenericType : public Type {
+    public:
+
+        static GenericType* create(PageAllocator& allocator, Generic* generic, bool is_const);
+
+        std::string to_string() const;
+
+        Generic* get_generic() const {
+            return generic;
+        }
+
+        size_t get_generic_index() const;
+
+    protected:
+        GenericType(Generic* generic, bool is_const = false)
+            : Type(TypeKind::Generic, is_const), generic(generic) {
+        }
+
+        Generic* generic;
     };
 }
 

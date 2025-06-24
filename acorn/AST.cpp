@@ -4,6 +4,7 @@
 #include "SourceFile.h"
 #include "Type.h"
 #include "SourceExpansion.h"
+#include "PageAllocator.h"
 
 void acorn::Decl::show_prev_declared_msg(Logger& logger) const {
     logger.print("Previously declared at: ");
@@ -114,7 +115,12 @@ std::string acorn::Func::get_decl_string() const {
     str += "(";
     size_t count = 0;
     for (Var* param : params) {
-        str += param->type->to_string();
+        Type* param_type = param->type;
+        if (is_generic()) {
+            param_type = partially_qualified_types[param->param_idx + 1];
+        }
+
+        str += param_type->to_string();
         if (count + 1 != params.size()) {
             str += ", ";
         }
@@ -159,6 +165,23 @@ acorn::Var* acorn::Func::find_parameter(Identifier name) const {
     });
     return itr != params.end() ? *itr : nullptr;
 }
+
+acorn::GenericFuncInstance* acorn::Func::get_generic_instance(PageAllocator& allocator,
+                                                              llvm::SmallVector<Type*> generic_bindings,
+                                                              llvm::SmallVector<Type*> qualified_param_types) {
+
+    // TODO (maddie): This should check if an instance already exists and if it does it shouldn't
+    // create a new one.
+
+    auto generic_instance = allocator.alloc_type<GenericFuncInstance>();
+    new (generic_instance) GenericFuncInstance();
+    generic_instance->generic_bindings      = std::move(generic_bindings);
+    generic_instance->qualified_types = std::move(qualified_param_types);
+
+    generic_instances.push_back(generic_instance);
+    return generic_instance;
+}
+
 
 acorn::Var* acorn::Struct::find_field(Identifier name) const {
     return nspace->find_variable(name);
