@@ -2453,7 +2453,7 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
         Func* called_func = initializer->called_constructor;
         gen_function_decl(called_func);
         gen_function_decl_call(called_func,
-                               initializer->loc,
+                               initializer,
                                initializer->values,
                                nullptr,
                                ll_dest_addr,
@@ -2717,7 +2717,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         }
 
         return gen_function_decl_call(called_func,
-                                      call->loc,
+                                      call,
                                       call->args,
                                       ll_dest_addr,
                                       ll_in_this,
@@ -2863,7 +2863,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg_for_implicit_ptr(Expr* ar
 }
 
 llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
-                                                        SourceLoc call_loc,
+                                                        Node* call_node,
                                                         llvm::SmallVector<Expr*>& args,
                                                         llvm::Value* ll_dest_addr,
                                                         llvm::Value* ll_in_this,
@@ -3190,13 +3190,13 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         ll_ret = builder.CreateCall(ll_func_type, ll_interface_func, ll_args);
     }
 
-    emit_dbg(di_emitter->emit_location(builder, call_loc));
+    emit_dbg(di_emitter->emit_location(builder, call_node->loc));
 
     if (!ll_ret->getType()->isVoidTy()) {
         ll_ret->setName("call.ret");
     }
 
-    gen_call_try_jump(passes_raised_error, ll_dest_addr, call_loc);
+    gen_call_try_jump(passes_raised_error, ll_dest_addr, call_node->loc);
 
     if (ll_dest_addr && !uses_aggr_param) {
         if (apply_implicit_return_ptr) {
@@ -3207,15 +3207,22 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
             auto elm_type = ptr_type->get_elm_type();
             if (elm_type->is_struct()) {
                 auto struct_type = static_cast<StructType*>(elm_type);
-                gen_copy_struct(ll_dest_addr, ll_ret, struct_type, call_loc);
+                gen_copy_struct(ll_dest_addr, ll_ret, struct_type, call_node->loc);
             } else if (elm_type->is_array()) {
                 auto arr_type = static_cast<ArrayType*>(elm_type);
-                gen_copy_array(ll_dest_addr, ll_ret, arr_type, call_loc);
+                gen_copy_array(ll_dest_addr, ll_ret, arr_type, call_node->loc);
             } else {
                 ll_ret = builder.CreateLoad(gen_type(elm_type), ll_ret);
                 builder.CreateStore(ll_ret, ll_dest_addr);
             }
         } else {
+            // Cast the return type if needed.
+            if (call_node->is(NodeKind::FuncCall)) {
+                auto call = static_cast<FuncCall*>(call_node);
+                if (call->cast_type) {
+                    ll_ret = gen_cast(call->cast_type, call, ll_ret);
+                }
+            }
             builder.CreateStore(ll_ret, ll_dest_addr);
         }
     }

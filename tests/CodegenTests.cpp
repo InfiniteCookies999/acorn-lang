@@ -2345,6 +2345,30 @@ static void generics_tests() {
 
         expect(result, std::identity()).to_be("&&");
     });
+    test("Call generic function by binding with named arg no arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics11.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
+    test("Call generic function by binding with named arg of second not first type", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics12.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
+    test("Call generic function by binding with named args out of order", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics13.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
+    test("Call generic function by binding with named args and non named args", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics14.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
 }
 
 void test_codegen() {

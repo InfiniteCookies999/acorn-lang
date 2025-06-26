@@ -206,7 +206,7 @@ namespace acorn {
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
         llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue = nullptr, bool for_call_arg = false);
         llvm::Value* gen_function_decl_call(Func* called_func,
-                                            SourceLoc call_loc,
+                                            Node* call_node,
                                             llvm::SmallVector<Expr*>& args,
                                             llvm::Value* ll_dest_addr,
                                             llvm::Value* ll_in_this,

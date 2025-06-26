@@ -5088,13 +5088,40 @@ void acorn::Sema::bind_arguments_to_function(FuncCall* call, llvm::SmallVector<T
         return;
     }
 
+    bool named_args_out_of_order = false;
+    size_t named_arg_high_idx = 0;
     bool success_binding = true;
     for (size_t i = 0; i < call->args.size(); i++) {
         auto arg = call->args[i];
         auto generic = found_func->generics[i];
 
         if (arg->is(NodeKind::NamedValue)) {
-            acorn_fatal("Not implemented yet!");
+
+            auto named_arg = static_cast<NamedValue*>(arg);
+
+            auto itr = std::ranges::find_if(found_func->generics, [name = named_arg->name](auto& generic) {
+                return generic->name == name;
+            });
+            if (itr == found_func->generics.end()) {
+                success_binding = false;
+                break;
+            }
+
+            generic = *itr;
+            arg = named_arg->assignment;
+
+            if (generic->index != i) {
+                named_args_out_of_order = true;
+            }
+            named_arg_high_idx = std::max(generic->index, named_arg_high_idx);
+        } else {
+            // Cannot determine the order of the arguments if the
+            // non-named arguments come after the named arguments
+            // and the named arguments are not in order.
+            if (named_args_out_of_order || named_arg_high_idx > i) {
+                success_binding = false;
+                break;
+            }
         }
 
         if (arg->type != context.expr_type) {
@@ -5109,10 +5136,20 @@ void acorn::Sema::bind_arguments_to_function(FuncCall* call, llvm::SmallVector<T
             continue;
         }
 
-        pre_bound_types.push_back(bind_type);
+        if (generic->index == i) {
+            pre_bound_types.push_back(bind_type);
+        } else {
+            // Ensure there is enough space.
+            pre_bound_types.resize(generic->index + 1);
+            pre_bound_types[generic->index] = bind_type;
+        }
     }
 
     if (!success_binding) {
+
+        named_args_out_of_order = false;
+        named_arg_high_idx = 0;
+
         logger.begin_error(expand(call), "Failed to bind generic types");
         logger.add_empty_line();
         for (size_t i = 0; i < call->args.size(); i++) {
@@ -5120,8 +5157,37 @@ void acorn::Sema::bind_arguments_to_function(FuncCall* call, llvm::SmallVector<T
             auto generic = found_func->generics[i];
 
             if (arg->is(NodeKind::NamedValue)) {
-                acorn_fatal("Not implemented yet!");
+
+                auto named_arg = static_cast<NamedValue*>(arg);
+
+                auto itr = std::ranges::find_if(found_func->generics, [name = named_arg->name](auto& generic) {
+                    return generic->name == name;
+                });
+                if (itr == found_func->generics.end()) {
+                    logger.add_individual_underline(arg->loc);
+                    logger.add_line("- could not find generic type '%s' for named arg", named_arg->name);
+                    break;
+                }
+
+                generic = *itr;
+                arg = named_arg->assignment;
+
+                if (generic->index != i) {
+                    named_args_out_of_order = true;
+                }
+                named_arg_high_idx = std::max(generic->index, named_arg_high_idx);
+            } else {
+                // Cannot determine the order of the arguments if the
+                // non-named arguments come after the named arguments
+                // and the named arguments are not in order.
+                if (named_args_out_of_order || named_arg_high_idx > i) {
+                    logger.add_individual_underline(expand(arg));
+                    logger.add_line("- arg %s: causes the arguments to be out of order", i + 1);
+                    logger.add_line("  either order arguments to match parameters or place before named arguments");
+                    break;
+                }
             }
+
 
             if (arg->type != context.expr_type) {
                 logger.add_individual_underline(expand(arg));
@@ -5137,6 +5203,7 @@ void acorn::Sema::bind_arguments_to_function(FuncCall* call, llvm::SmallVector<T
                 continue;
             }
         }
+
         logger.end_error(ErrCode::SemaCannotBindExprToGenericType);
         return;
     }
