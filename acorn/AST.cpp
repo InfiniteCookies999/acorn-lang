@@ -111,7 +111,19 @@ acorn::PointSourceLoc acorn::Func::get_function_first_default_param_location() c
 }
 
 std::string acorn::Func::get_decl_string() const {
-    std::string str = name.to_string().str();
+    std::string str;
+    if (is_generic()) {
+        str += "generics[";
+        for (size_t i = 0; i < generics.size(); i++) {
+            auto& generic = generics[i];
+            str += generic->type->to_string();
+            if (i + 1 != generics.size()) {
+                str += ", ";
+            }
+        }
+        str += "] ";
+    }
+    str += name.to_string().str();
     str += "(";
     size_t count = 0;
     for (Var* param : params) {

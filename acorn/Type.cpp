@@ -472,11 +472,15 @@ std::string acorn::RangeType::to_string() const {
 acorn::FunctionType* acorn::FunctionType::create(PageAllocator& allocator,
                                                  FunctionTypeKey* key,
                                                  bool is_const) {
+    // NOTE: There is no reason to set `contains_const` here if the parameter types
+    // or return type contains const because the constness of these types have no
+    // impact on enforcing const correctness.
     auto function_type = allocator.alloc_type<FunctionType>();
     new (function_type) FunctionType(is_const, key);
     function_type->contains_const = is_const;
-    for (Type* type : key->param_types) {
-        if (type->does_contain_generics()) {
+    // Check for if the type contains generics.
+    for (Type* param_type : key->param_types) {
+        if (param_type->does_contain_generics()) {
             function_type->contains_generics = true;
             break;
         }

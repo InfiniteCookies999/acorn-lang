@@ -78,7 +78,6 @@ namespace acorn {
         Auto,
         Expr, // A type that appears as part of an expression in code.
         Generic,
-        UnresolvedGenericComposite,
         Invalid,
 
     };

@@ -33,7 +33,6 @@ enum TypeId {
     Array,
     Slice,
     EmptyArray,
-    UnresolvedBracket, // Length could not be resolved during parsing.
     Null,
     AssignDeterminedArray,
     Function,
@@ -45,6 +44,7 @@ enum TypeId {
     Range,
     Auto,
     Expr, // A type that appears as part of an expression in code.
+    Generic,
     Invalid,
 
 }

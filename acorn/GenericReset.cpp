@@ -6,8 +6,6 @@ namespace acorn {
     static void reset_node(Node* node) {
 
         if (node->is_expression()) {
-            // TODO (maddie): `trivially_reassignable` has no parser/sema
-            // distinction causing it to not be able to be properly reset.
             Expr* expr = static_cast<Expr*>(node);
             switch (expr->kind) {
             // A few nodes have the type set during parsing.
@@ -18,6 +16,15 @@ namespace acorn {
                 break;
             default:
                 expr->type = nullptr;
+                break;
+            }
+            // Check for nodes which have `trivially_reassignable`
+            // set specifically during parsing.
+            switch (expr->kind) {
+            case NodeKind::BinOp:
+            case NodeKind::DotOperator:
+            case NodeKind::UnaryOp:
+                expr->trivially_reassignable = false;
                 break;
             }
             expr->cast_type = nullptr;

@@ -63,21 +63,20 @@ namespace acorn {
 
         // Limits to calculate comparison scores for which function to call.
         //
-        //     const uint32_t IMPLICIT_MISMATCHED_TYPES_LIMIT = 0;
-        static const uint32_t PREFER_NON_CONST_LIMIT                = MAX_FUNC_PARAMS * 2;
-        static const uint32_t IMPLICIT_CAST_TO_ANY_LIMIT            = PREFER_NON_CONST_LIMIT * MAX_FUNC_PARAMS * 2;
-        static const uint32_t IS_VARARGS_LIMIT                      = IMPLICIT_CAST_TO_ANY_LIMIT * 2;
-        static const uint32_t IS_GENERIC_LIMIT                      = IS_VARARGS_LIMIT * 2;
+        static const uint64_t PREFER_NON_CONST_LIMIT                = MAX_FUNC_PARAMS * 2;
+        static const uint64_t IMPLICIT_CAST_TO_ANY_LIMIT            = PREFER_NON_CONST_LIMIT * MAX_FUNC_PARAMS * 2;
+        static const uint64_t IS_VARARGS_LIMIT                      = IMPLICIT_CAST_TO_ANY_LIMIT * 2;
+        static const uint64_t IS_GENERIC_LIMIT                      = IS_VARARGS_LIMIT * 2;
 
-        static const uint32_t NON_CONST_FROM_CONST_OBJ_LIMIT        = IS_GENERIC_LIMIT * 2;
-        static const uint32_t NOT_ASSIGNABLE_TYPES_LIMIT            = NON_CONST_FROM_CONST_OBJ_LIMIT * 2;
-        static const uint32_t CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT = NOT_ASSIGNABLE_TYPES_LIMIT * MAX_FUNC_PARAMS * 2;
+        static const uint64_t NON_CONST_FROM_CONST_OBJ_LIMIT        = IS_GENERIC_LIMIT * 2;
+        static const uint64_t NOT_ASSIGNABLE_TYPES_LIMIT            = NON_CONST_FROM_CONST_OBJ_LIMIT * 2;
+        static const uint64_t CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT = NOT_ASSIGNABLE_TYPES_LIMIT * MAX_FUNC_PARAMS * 2;
 
         // These get the same value because there is no preference of one over the other.
-        static const uint32_t INCORRECT_PARAM_NAME_OR_ORD_LIMIT     = CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT * MAX_FUNC_PARAMS * 2;
-        static const uint32_t INCORRECT_NUM_ARGS_LIMIT              = CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT * MAX_FUNC_PARAMS * 2;
-        static const uint32_t CANNOT_ACCESS_PRIVATE_LIMIT           = CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT * MAX_FUNC_PARAMS * 2;
-        static const uint32_t FORWARD_VARIADIC_WITH_OTHERS_LIMIT    = CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT * MAX_FUNC_PARAMS * 2;
+        static const uint64_t INCORRECT_PARAM_NAME_OR_ORD_LIMIT     = CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT * MAX_FUNC_PARAMS * 2;
+        static const uint64_t INCORRECT_NUM_ARGS_LIMIT              = CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT * MAX_FUNC_PARAMS * 2;
+        static const uint64_t CANNOT_ACCESS_PRIVATE_LIMIT           = CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT * MAX_FUNC_PARAMS * 2;
+        static const uint64_t FORWARD_VARIADIC_WITH_OTHERS_LIMIT    = CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT * MAX_FUNC_PARAMS * 2;
 
         bool is_comptime_if_cond = false;
         bool should_request_gen_queue;
@@ -195,22 +194,29 @@ namespace acorn {
                                             ErrorSpellChecker& spell_checker,
                                             bool is_for_call);
         void check_dot_operator(DotOperator* dot, bool is_for_call);
-        void check_function_call(FuncCall* call);
+        void check_function_call(FuncCall* call,
+                                 Type* assignment_type,
+                                 llvm::SmallVector<Type*>* req_pre_bound_types = nullptr);
         void check_function_type_call(FuncCall* call, FunctionType* func_type);
         Func* check_function_decl_call(Expr* call_node,
                                        llvm::SmallVector<Expr*>& args,
                                        size_t non_named_args_offset,
                                        FuncList& candidates,
-                                       bool is_const_object);
+                                       bool is_const_object,
+                                       const llvm::SmallVector<Type*>& pre_bound_types,
+                                       Type* assignment_type);
         Func* find_best_call_candidate(FuncList& candidates,
                                        llvm::SmallVector<Expr*>& args,
                                        bool& selected_implicitly_converts_ptr_arg,
                                        bool& is_ambiguous,
                                        bool is_const_object,
+                                       const llvm::SmallVector<Type*>& pre_bound_types,
                                        llvm::SmallVector<Type*>& generic_bindings);
-        uint32_t get_function_call_score(const Func* candidate,
+        uint64_t get_function_call_score(const Func* candidate,
                                          const llvm::SmallVector<Expr*>& args,
                                          bool is_const_object);
+        void bind_arguments_to_function(FuncCall* call, llvm::SmallVector<Type*>& pre_bound_types);
+
         enum class CallCompareStatus {
             INCORRECT_ARGS,
             INCORRECT_PARAM_BY_NAME_NOT_FOUND,
@@ -223,10 +229,6 @@ namespace acorn {
             SUCCESS
         };
 
-        struct GenericArgumentBindState {
-            llvm::SmallVector<Type*>& bindings;
-        };
-
         // Tells weather or not the function is callable and gathers information
         // to indicate if calling the function would be more viable to call than
         // a different overloaded version of the function.
@@ -236,30 +238,39 @@ namespace acorn {
         CallCompareStatus compare_as_call_candidate(const Func* canidate,
                                                     const llvm::SmallVector<Expr*>& args,
                                                     const bool is_const_object,
-                                                    uint32_t& score,
+                                                    uint64_t& score,
                                                     bool& implicitly_converts_ptr_arg,
                                                     llvm::SmallVector<Type*>& generic_bindings);
-        bool compare_argument_to_generic_parameter(Type* to_type,   // Type at current level of comparison
-                                                   Type* from_type, // Type at current level of comparison
-                                                   GenericArgumentBindState& bind_state);
+        bool try_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
+                                           Type* from_type, // Type at current level of comparison
+                                           llvm::SmallVector<Type*>& bindings,
+                                           bool enforce_const = false);
 
         bool has_correct_number_of_args(const Func* candidate,
                                         const llvm::SmallVector<Expr*>& args) const;
         void display_call_mismatch_info(PointSourceLoc error_loc,
                                         Node* call_node,
                                         const FuncList& candidates,
-                                        const llvm::SmallVector<Expr*>& args);
+                                        const llvm::SmallVector<Expr*>& args,
+                                        const llvm::SmallVector<Type*>& pre_bound_types);
         // Displays information for why trying to call a function failed.
         template<typename F>
         void display_call_mismatch_info(const F* candidate,
                                         const llvm::SmallVector<Expr*>& args,
                                         bool indent,
                                         bool should_show_invidual_underlines,
-                                        Node* call_node);
+                                        Node* call_node,
+                                        const llvm::SmallVector<Type*>& pre_bound_types);
         void display_call_ambiguous_info(PointSourceLoc error_loc,
                                          FuncList& candidates,
                                          llvm::SmallVector<Expr*>& args,
-                                         bool is_const_object);
+                                         bool is_const_object,
+                                         const llvm::SmallVector<Type*>& pre_bound_types);
+        void display_call_missing_bindings_info(Expr* call_node,
+                                                Func* called_func,
+                                                const llvm::SmallVector<Type*>& generic_bindings);
+        template<unsigned N>
+        void display_ambiguous_functions(const llvm::SmallVector<Func*, N>& ambiguous_funcs);
 
         void check_cast(Cast* cast);
         void check_named_value(NamedValue* named_value);

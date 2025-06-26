@@ -2289,7 +2289,7 @@ static void generics_tests() {
         auto [err_msg, result] = run_codegen_test(src("generics/generics1.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("@%");
+        expect(result, std::identity()).to_be("@%$");
     });
     test("Call generic function with pointer to generic type", [&] {
         auto [err_msg, result] = run_codegen_test(src("generics/generics2.ac"), true);
@@ -2302,6 +2302,48 @@ static void generics_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("@%");
+    });
+    test("Call generic function with two generic types", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics4.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("#?");
+    });
+    test("Call generic function taking function which takes and returns generic type", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics5.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("*$");
+    });
+    test("Call generic function with implicit param accepts non pointer argument", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics6.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%");
+    });
+    test("Call generic function binds generic type with 'const int' ignores const since not element of container type", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics7.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@");
+    });
+    test("Call generic function by explicitly binding to type with no arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics8.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("&&");
+    });
+    test("Call generic function by explicitly binding to type with 1 arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics9.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("&&");
+    });
+    test("Call generic function by explicitly binding to 1 type but not other", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics10.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("&&");
     });
 }
 

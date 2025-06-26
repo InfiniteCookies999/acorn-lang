@@ -616,7 +616,10 @@ namespace acorn {
         //
         // The number `5223` is trivially reassignable to numeric types as long
         // as the number can fit into the respective integer size.
-        bool  trivially_reassignable = false;
+        //
+        // WARNING: careful when assigning to true during sema because if it is set
+        // to true then it needs to be reset during generic reset.
+        bool trivially_reassignable = false;
         Type* type = nullptr;
 
         // When this is non-null it indicates that the expression

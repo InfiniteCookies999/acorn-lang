@@ -2764,7 +2764,7 @@ acorn::Expr* acorn::Parser::parse_string_literal() {
     string->type = context.const_char_ptr_type;
 
 #define next_codepoint_digit(codepoint)        \
-codepoint = 16u * codepoint + hex_table[*ptr]; \
+codepoint = 16u * codepoint + static_cast<uint32_t>(hex_table[*ptr]); \
 ++ptr;
 
     auto text = cur_token.text();

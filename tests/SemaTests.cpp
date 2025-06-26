@@ -227,7 +227,7 @@ void test_sema() {
             )");
             expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);
         });
-        test("multi array to pointer, pointer has wrong element type", [&] {
+        test("Multi array to pointer, pointer has wrong element type", [&] {
             mock_sema(R"(
                 void main() {
                     const int[5][5] a = [];
@@ -235,6 +235,32 @@ void test_sema() {
                 }
             )");
             expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);
+        });
+        test("Generic function enforces const correctness for pointer to bound type", [&] {
+            mock_sema(R"(
+                generics[T]
+                void foo(T* a, T* b) {}
+
+                void main() {
+                    const int* a;
+                    int* b;
+                    foo(a, b);
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
+        });
+        test("Generic function enforces const correctness for array of bound type", [&] {
+            mock_sema(R"(
+                generics[T]
+                void foo(T* a, T[5] b) {}
+
+                void main() {
+                    const int* a;
+                    int[5] b;
+                    foo(a, b);
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
         });
     });
 }

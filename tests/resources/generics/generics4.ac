@@ -29,23 +29,36 @@ void write_val(int val) {
 
 }
 
-generics[T]
-T foo(T a, T b) {
-    return a + b;
+struct A {
+    int v1;
+    int v2;
+}
+
+struct B {
+    int v1;
+    int v2;
+}
+
+generics[AT, BT]
+int foo(AT a, BT b) {
+    int r = a.v1 + a.v2 + b;
+    return r;
 }
 
 void main() {
 
-    int v1 = foo(43, 21);
-    write_val(v1);
+    A a = A{
+        10,
+        10
+    };
+    int r1 = foo(a, 15);
+    write_val(r1);
 
-    // Use 0.5f since additions result in deterministic
-    // behavior for IEEE floating points.
-    float32 f = foo(0.5f, 0.5f);
-    int v2 = (as(int) f) + 36;
-    write_val(v2);
-
-    int v3 = foo(30, 6);
-    write_val(v3);
+    B b = B{
+        35,
+        25
+    };
+    int r2 = foo(b, 3);
+    write_val(r2);
 
 }

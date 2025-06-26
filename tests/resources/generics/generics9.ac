@@ -30,22 +30,17 @@ void write_val(int val) {
 }
 
 generics[T]
-T foo(T a, T b) {
-    return a + b;
+T foo(T a) {
+    return a;
 }
 
 void main() {
 
-    int v1 = foo(43, 21);
+    int v1 = foo(int)(38);
     write_val(v1);
 
-    // Use 0.5f since additions result in deterministic
-    // behavior for IEEE floating points.
-    float32 f = foo(0.5f, 0.5f);
-    int v2 = (as(int) f) + 36;
-    write_val(v2);
-
-    int v3 = foo(30, 6);
+    float32 v2 = foo(float32)(38.0f);
+    int v3 = as(int) v2;
     write_val(v3);
 
 }

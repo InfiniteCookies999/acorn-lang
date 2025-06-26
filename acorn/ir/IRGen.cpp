@@ -212,17 +212,19 @@ void acorn::IRGenerator::gen_function_decl(Func* func, GenericFuncInstance* gene
         }
     }
 
-    //Logger::debug("generating declaration for: %s", func->name);
+    // Logger::debug("generating declaration for: %s", func->name);
 
-    bool is_main = func == context.get_main_function();
-    if (func != context.get_main_function()) { // Have to check for main because it gets queued at the beginning of the application.
-        context.queue_gen(func, generic_instance);
-    }
-
+    // NOTE: This must remain above queue_gen as to make sure intrinsic functions do not get
+    // queued.
     if (func->has_modifier(Modifier::Native)) {
         if (func->ll_intrinsic_id != llvm::Intrinsic::not_intrinsic) {
             return; // Return early because the declaration has already been "generated" (it is intrinsic).
         }
+    }
+
+    bool is_main = func == context.get_main_function();
+    if (func != context.get_main_function()) { // Have to check for main because it gets queued at the beginning of the application.
+        context.queue_gen(func, generic_instance);
     }
 
     llvm::SmallVector<llvm::Type*> ll_param_types;
