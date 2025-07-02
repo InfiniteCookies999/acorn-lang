@@ -95,16 +95,16 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_struct_info(StructType
 
     llvm::SmallVector<llvm::Constant*> ll_values;
     ll_values.reserve(2);
-    { // const char* name
+    { // name: const char*
         auto ll_string_name = llvm::Twine("global.str.") + llvm::Twine(context.global_counter++);
         auto ll_name = builder.CreateGlobalString(structn->name.to_string(), ll_string_name);
         ll_values.push_back(ll_name);
     }
-    { // int num_fields
+    { // num_fields: int
         auto ll_num_fields = builder.getInt32(static_cast<uint32_t>(structn->fields.size()));
         ll_values.push_back(ll_num_fields);
     }
-    { // const Field* fields
+    { // fields: const Field*
 
         auto ll_type_struct_type = gen_struct_type(structn->struct_type);
         auto ll_struct_layout = context.get_ll_module().getDataLayout().getStructLayout(ll_type_struct_type);
@@ -135,15 +135,15 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_field_info(Var* field,
 
     llvm::SmallVector<llvm::Constant*> ll_values;
     ll_values.reserve(3);
-    { // const char* name
+    { // name: const char*
         auto ll_string_name = llvm::Twine("global.str.") + llvm::Twine(context.global_counter++);
         auto ll_name = builder.CreateGlobalString(field->name.to_string(), ll_string_name);
         ll_values.push_back(ll_name);
     }
-    { // const Type* type
+    { // type: const Type*
         ll_values.push_back(gen_reflect_type_info(field->type));
     }
-    { // int offset_in_bytes
+    { // offset_in_bytes: int
         ll_values.push_back(builder.getInt32(static_cast<uint32_t>(offset_in_bytes)));
     }
 
@@ -162,13 +162,13 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_enum_info(EnumType* en
 
     llvm::SmallVector<llvm::Constant*> ll_values;
     ll_values.reserve(5);
-    { // int num_values
+    { // num_values: int
         ll_values.push_back(builder.getInt32(static_cast<uint32_t>(enumn->values.size())));
     }
-    { // uint64 index_mapping_mask
+    { // index_mapping_mask: uint64
         ll_values.push_back(builder.getInt64(index_mapping_mask));
     }
-    { // uint64[2]* index_mappings
+    { // index_mappings: uint64[2]*
 
         llvm::SmallVector<llvm::Constant*> ll_buckets(num_buckets);
 
@@ -219,7 +219,7 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_enum_info(EnumType* en
 
         ll_values.push_back(ll_global_array);
     }
-    { // const char** value_names
+    { // value_names: const char**
 
         llvm::SmallVector<llvm::Constant*> ll_value_names;
         ll_value_names.reserve(enumn->values.size());
@@ -237,7 +237,7 @@ llvm::Constant* acorn::IRGenerator::gen_reflect_type_info_enum_info(EnumType* en
 
         ll_values.push_back(ll_global_names_array);
     }
-    { // const Type* index_type
+    { // index_type: const Type*
         ll_values.push_back(gen_reflect_type_info(enum_type->get_index_type()));
     }
 

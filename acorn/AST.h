@@ -577,7 +577,7 @@ namespace acorn {
         // The expression is a basic unit that may be interpreted as one of
         // several types depending on context. For example take:
         //
-        // int64 a = 5223;
+        // a: int64 = 5223;
         //
         // The number `5223` is trivially reassignable to numeric types as long
         // as the number can fit into the respective integer size.

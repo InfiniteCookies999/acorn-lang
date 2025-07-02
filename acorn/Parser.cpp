@@ -2999,6 +2999,12 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
             }
             next_token();
             break;
+        case Token::KwConst:
+            if (peek_token(0).is(Token::KwFn)) {
+                return;
+            }
+            next_token();
+            break;
         case Token::KwFn:
             switch (peek_token(0).kind) {
             case Token::Identifier:

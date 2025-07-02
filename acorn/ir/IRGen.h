@@ -287,7 +287,7 @@ namespace acorn {
         //     return;
         // }
         // // Code that may be not be reached because of the return jump.
-        // int a = 5;
+        // a: int = 5;
         // ...
         //
         void gen_branch_if_not_term(llvm::BasicBlock* ll_bb);

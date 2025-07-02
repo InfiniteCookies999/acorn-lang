@@ -434,14 +434,14 @@ namespace acorn {
         // how many characters would be cut off past the end of the right side of the error window for the
         // given line.
         //
-        //                        /-----------error window-----------\
-        //                        |                                  |
-        // /* a comment */  int a = 142.2 + 14124.2412 + 13232.555 + 32523.0
-        //                      ~~|~~~~~~                            |     |
-        //                        |                                  |-----|
-        //                        \- pivot point since the                 |- 6 characters cut off
-        //                           assignment is the point                    that is what is returned.
-        //                           of interest.
+        //                         /-----------error window-----------\
+        //                         |                                  |
+        // /* a comment */  a: int = 142.2 + 14124.2412 + 13232.555 + 32523.0
+        //                  ~~~~~~~|~~~~~~                            |     |
+        //                         |                                  |-----|
+        //                         \- pivot point since the                 |- 6 characters cut off
+        //                            assignment is the point                    that is what is returned.
+        //                            of interest.
         //
         //
         size_t calculate_right_cutoff_from_pivot(long long line_number, size_t left_pivot_distance);

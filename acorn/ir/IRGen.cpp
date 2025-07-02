@@ -163,8 +163,8 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
         // the value it must be loaded again when a rvalue is needed.
         // For example if you have:
         //
-        //    char* a
-        //    char b = *a
+        //    a: char*;
+        //    b: char = *a
         //
         // We allocate `a` in LLVM as a char* which means the original type
         // of the identifier reference to `a` is i8**. When it is loaded
@@ -174,7 +174,7 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
         // Additionally letting the unary operator load once and then loading
         // once here is suitable for situations involving storing such as:
         //
-        //     char* a;
+        //     a: char*;
         //     *a = 5;
         //
         // Since in this situation `gen_node` is called instead of this function
@@ -1237,8 +1237,8 @@ void acorn::IRGenerator::process_destructor_state(Type* type, llvm::Value* ll_ad
 //
 // Ex.
 //
-// A foo() {
-//     A a;
+// fn foo() -> A {
+//     a: A;
 //     a.j = 5;
 //     return a;
 // }
@@ -1270,13 +1270,13 @@ void acorn::IRGenerator::process_destructor_state(Type* type, llvm::Value* ll_ad
 //
 // Ex.
 //
-// A foo(bool t) {
+// fn foo(t: bool) -> A {
 //     if t {
-//         A a1;
+//         a1: A;
 //         return a1;
 //     }
 //
-//     A a2;
+//     a2: A;
 //     return a2;
 // }
 //
@@ -1317,9 +1317,9 @@ void acorn::IRGenerator::process_destructor_state(Type* type, llvm::Value* ll_ad
 //
 // Ex.
 //
-// A a; // global variable a.
+// a: A; // global variable `a`.
 //
-// A foo() {
+// fn foo() -> A {
 //     return a; // returning a non-local variable.
 // }
 //
@@ -1482,11 +1482,11 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
             //
             // Ex.
             //
-            // struct A { int64 a, b, c, d, e;  }
+            // struct A { a, b, c, d, e: int64;  }
             //
-            // A foo() {
-            //     A a; // Local to the function but actually becomes a parameter
-            //          // for returning.
+            // fn foo() -> A {
+            //     a: A; // Local to the function but actually becomes a parameter
+            //           // for returning.
             //
             //     return a;
             // }
@@ -2249,8 +2249,6 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn, Try*& prev_try) {
         // tried on because otherwise the the objects in the expression will be added for
         // destruction but these objects are dependent on the error is raised or not.
 
-        // TODO (maddie): we are not dealing with the destructor of the error itself!
-        //
         auto ll_cur_bb = builder.GetInsertBlock();
         builder.SetInsertPoint(tryn->ll_catch_bb);
         if (tryn->catch_scope) {
@@ -3698,8 +3696,8 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
 
     if (dot->is_array_length) {
         // Something like:
-        // int[5] a;
-        // int l = a.length;
+        // a: int[5];
+        // l: int = a.length;
         //
         if (dot->site->type->is_array()) {
             auto arr_type = static_cast<ArrayType*>(dot->site->type);
@@ -3718,9 +3716,9 @@ llvm::Value* acorn::IRGenerator::gen_dot_operator(DotOperator* dot) {
         //
         // Ex.
         //
-        // void foo() {}
+        // fn foo() {}
         //
-        // auto f = foo;
+        // f := foo;
         // f();
         auto func = (*dot->funcs_ref)[0];
         gen_function_decl(func);
@@ -3806,10 +3804,10 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
                     //
                     // Ex.
                     //
-                    // void main() {
-                    //     A a1;
-                    //     A a2;
-                    //     a1 = a2;  // We can garentee that a1 and a2 do not share memory.
+                    // fn main() {
+                    //     a1: A;
+                    //     a2: A;
+                    //     a1 = a2;  // We can garentee that `a1` and `a2` do not share memory.
                     // }
                     //
                     if (from_var != to_var) {

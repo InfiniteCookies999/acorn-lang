@@ -41,12 +41,12 @@ bool acorn::has_valid_constness(Type* to_type, Type* from_type) {
         if (!to_type->is_container()) {
             // This case is like:
             //
-            // const int** a;
-            // int* b = as(int*) a;
-            //      ^
-            //      `b` points to the address of the other pointer
-            //          but the other pointer isn't specified as having
-            //          a constant address, so it is fine.
+            // a: const int**;
+            // b: int* = as(int*) a;
+            //   ^
+            //   `b` points to the address of the other pointer
+            //       but the other pointer isn't specified as having
+            //       a constant address, so it is fine.
             //
             return true;
         }
