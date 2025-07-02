@@ -31,7 +31,7 @@ struct A {
         print("no const", 8);
     }
 
-    fn foo() const {
+    const fn foo() {
         print("const", 5);
     }
 }

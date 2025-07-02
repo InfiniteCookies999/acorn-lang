@@ -1057,7 +1057,7 @@ static void struct_tests() {
 
         expect(result, std::identity()).to_be("ABCD");
     });
-    /*test("Struct ret multiple loc vars (sm struct)", [&] {
+    test("Struct ret multiple loc vars (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src("structs/structs25.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
@@ -1104,7 +1104,13 @@ static void struct_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("const");
-    });*/
+    });
+    test("Global variable struct initializes default inits fields", [&] {
+        auto [err_msg, result] = run_codegen_test(src("structs/structs33.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("^_#");
+    });
 }
 
 static void member_function_tests() {

@@ -779,17 +779,16 @@ llvm::Constant* acorn::IRGenerator::gen_constant_struct_initializer(StructInitia
 
     size_t field_idx = 0;
     for (Expr* value : initializer->values) {
-        Var* field;
+        Expr* assign_value = value;
         if (value->is(NodeKind::NamedValue)) {
             auto named_val = static_cast<NamedValue*>(value);
-            field = structn->fields[named_val->mapped_idx];
             fields_set_list[named_val->mapped_idx] = true;
+            assign_value = named_val->assignment;
         } else {
-            field = structn->fields[field_idx];
             fields_set_list[field_idx] = true;
         }
 
-        ll_field_values.push_back(gen_constant_value(value));
+        ll_field_values.push_back(gen_constant_value(assign_value));
 
         ++field_idx;
     }
@@ -804,7 +803,7 @@ llvm::Constant* acorn::IRGenerator::gen_constant_struct_initializer(StructInitia
             if (field->assignment) {
                 ll_field_values.push_back(gen_constant_value(field->assignment));
             } else {
-                // TODO annoying nonsense
+                ll_field_values.push_back(gen_constant_default_value(field->type));
             }
         }
     }
