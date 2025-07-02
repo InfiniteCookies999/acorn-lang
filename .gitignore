@@ -6,7 +6,11 @@ CMakePresets.json
 
 # Any hidden files and folders
 .*
+# Exception: allow .editorconfig, and .gitattributes
+!.editorconfig
+!.gitattributes
 
+# Local testing environment
 debug-testing
 
 # Visual studio config files

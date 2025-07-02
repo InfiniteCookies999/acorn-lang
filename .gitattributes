@@ -1,0 +1,11 @@
+
+# Applying LF line endings to any text files.
+* text=auto eol=lf
+
+# Enforce all the code files are text files needing LF line endings.
+*.cpp text eol=lf
+*.h   text eol=lf
+*.ac  text eol=lf
+
+# Windows specific files use windows line endings.
+*.bat text eol=crlf

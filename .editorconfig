@@ -1,0 +1,35 @@
+# This file is responsible for providing code consistency standards across the project
+# by defining shared rules for how code should be formatted.
+#
+# See more at: https://editorconfig.org/
+root = true
+
+[*]
+end_of_line = lf
+charset = utf-8
+
+indent_style = space
+indent_size = 4
+
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.json]
+indent_size = 2
+
+[*.yml]
+indent_size = 2
+
+
+[*.md]
+# The double whitespace at the end can be used
+# to add line breaks in markdown.
+trim_trailing_whitespace = false
+
+[Makefile]
+# Thanks makefiles.
+indent_style = tab
+
+[*.bat]
+# Prevent complications on windows by using windows line endings.
+end_of_line = crlf
