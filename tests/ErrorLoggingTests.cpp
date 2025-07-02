@@ -61,6 +61,7 @@ public:
 
         acorn::initialize_float_parsing(allocator);
 
+        // Syntax is out of date but doesn't matter.
         section("Error Logging", []() {
             section("Logger::calculate_left_pivot_distance", []() {
                 test("Calculates basic pivot distance", []() {

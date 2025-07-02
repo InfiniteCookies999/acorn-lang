@@ -2573,9 +2573,9 @@ llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
 
 llvm::Value* acorn::IRGenerator::gen_number(Number* number) {
     auto type_kind = number->type->get_kind();
-    if (type_kind == TypeKind::Float64) {
+    if (type_kind == TypeKind::Double) {
         return llvm::ConstantFP::get(ll_context, llvm::APFloat(number->value_f64));
-    } else if (type_kind == TypeKind::Float32) {
+    } else if (type_kind == TypeKind::Float) {
         return llvm::ConstantFP::get(ll_context, llvm::APFloat(number->value_f32));
     }
 
@@ -4136,9 +4136,9 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
         return builder.getInt32(0);
     case TypeKind::Int64: case TypeKind::UInt64:
         return builder.getInt64(0);
-    case TypeKind::Float32:
+    case TypeKind::Float:
         return llvm::ConstantFP::get(ll_context, llvm::APFloat((float)0.0F));
-    case TypeKind::Float64:
+    case TypeKind::Double:
         return llvm::ConstantFP::get(ll_context, llvm::APFloat((double)0.0));
     case TypeKind::Bool:
         return builder.getInt1(0);
@@ -4265,8 +4265,8 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
         }
         goto NoCastFound;
     }
-    case TypeKind::Float32:
-    case TypeKind::Float64: {
+    case TypeKind::Float:
+    case TypeKind::Double: {
         if (from_type->is_float()) {
             if (to_type->get_number_of_bits() > from_type->get_number_of_bits()) {
                 // Upcasting float.
@@ -4319,6 +4319,18 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
 
     default:
     NoCastFound:
+        if (EnumType* enum_type = to_type->get_container_enum_type()) {
+            if (from_type->is_enum()) {
+
+                auto ll_index = ll_value;
+                if (enum_type->get_values_type()->is_integer()) {
+                    return ll_index;
+                }
+
+                return gen_enum_value_from_enum_array(enum_type, ll_index);
+            }
+        }
+
         acorn_fatal("gen_cast(): Failed to implement case");
         break;
     }

@@ -1,35 +1,36 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle);
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
 
-native dllimport int32 WriteFile(void*       hFile,
-                                 const void* lpBuffer,
-                                 uint32      nNumberOfBytesToWrite,
-                                 uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped);
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count);
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-void write_val(int val) {
+fn write_val(val: int) {
 
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
-    uint32 written;
-    char c = as(char) val;
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
     WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
+    c: char = as(char) val;
     write(1, &c, 1);
 #endif
 
 }
 
-void foo(int... s) {
+fn foo(s: int...) {
     write_val(s[0]);
     write_val(s[1]);
     write_val(s[2]);
@@ -40,6 +41,6 @@ void foo(int... s) {
     write_val(s[7]);
 }
 
-void main() {
+fn main() {
     foo(76, 101, 116, 115, 32, 103, 111, 33);
 }

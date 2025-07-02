@@ -1,51 +1,52 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle);
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
 
-native dllimport int32 WriteFile(void*       hFile,
-                                 const void* lpBuffer,
-                                 uint32      nNumberOfBytesToWrite,
-                                 uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped);
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count);
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-void write_val(int64 val) {
-
+fn print(s: const char*, length: int) {
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
-    uint32 written;
-    char c = as(char) val;
-    WriteFile(handle, &c, 1, &written, null);
-#elif OS_GROUP_UNIX
-    char c = as(char) val;
-    write(1, &c, 1);
-#endif
-
-}
-
-void print(const char* s, int length) {
-#if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
-    uint32 written;
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
     WriteFile(handle, s, as(uint32) length, &written, null);
 #elif OS_GROUP_UNIX
     write(1, s, as(usize) length);
 #endif
 }
 
-struct A {
-    int64 v1 = 65;
-    int64 v2 = 66;
-    int64 v3 = 67;
-    int64 v4 = 68;
+fn write_val(val: int64) {
 
-    ~A() {
+#if OS_GROUP_WINDOWS
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
+    WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    c: char = as(char) val;
+    write(1, &c, 1);
+#endif
+
+}
+
+struct A {
+    v1: int64 = 65;
+    v2: int64 = 66;
+    v3: int64 = 67;
+    v4: int64 = 68;
+
+    fn delete() {
         print("called", 6);
         v1 = 35;
         v1 = 36;
@@ -54,8 +55,8 @@ struct A {
     }
 }
 
-A foo(bool t) {
-    A a;
+fn foo(t: bool) -> A {
+    a: A;
 
     if t {
         return a;
@@ -64,13 +65,13 @@ A foo(bool t) {
     return A{};
 }
 
-void main() {
-    A a1 = foo(true);
+fn main() {
+    a1: A = foo(true);
     write_val(a1.v1);
     write_val(a1.v2);
     write_val(a1.v3);
     write_val(a1.v4);
-    A a2 = foo(false);
+    a2: A = foo(false);
     write_val(a2.v1);
     write_val(a2.v2);
     write_val(a2.v3);

@@ -1,28 +1,29 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle);
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
 
-native dllimport int32 WriteFile(void*       hFile,
-                                 const void* lpBuffer,
-                                 uint32      nNumberOfBytesToWrite,
-                                 uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped);
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count);
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
 
-const char* message = "Hello from global!";
+message: const char* = "Hello from global!";
 
-void main() {
+fn main() {
 
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
-    uint32 written;
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
     WriteFile(handle, message, 18, &written, null);
 #elif OS_GROUP_UNIX
     write(1, message, 18);

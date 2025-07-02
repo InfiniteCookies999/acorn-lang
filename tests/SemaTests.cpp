@@ -87,9 +87,9 @@ void test_sema() {
     section("sema", [&] {
         test("No find param, named args", [&] {
             mock_sema(R"(
-                void foo(int a) {}
+                fn foo(a: int) {}
 
-                void main() {
+                fn main() {
                     foo(z = 4);
                 }
             )");
@@ -98,9 +98,9 @@ void test_sema() {
         });
         test("Params no order, named args 1", [&] {
             mock_sema(R"(
-                void foo(int a, int b) {}
+                fn foo(a: int, b: int) {}
 
-                void main() {
+                fn main() {
                     foo(b = 4, 2);
                 }
             )");
@@ -109,9 +109,9 @@ void test_sema() {
         });
         test("Params no order, named args 2", [&] {
             mock_sema(R"(
-                void foo(int a, int b, int c) {}
+                fn foo(a: int, b: int, c: int) {}
 
-                void main() {
+                fn main() {
                     foo(b = 3, a = 6, 66);
                 }
             )");
@@ -119,45 +119,45 @@ void test_sema() {
             expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
         });
         test("Assign det arr expected arr assign", [&] {
-            mock_sema(R"(int[] a = 4;)");
+            mock_sema(R"(a: int[] = 4;)");
             expect_none().to_produce_error(ErrCode::SemaAssignDetArrTypeReqsArrAssignment);
         });
         test("Assign det arr wrong dimensions", [&] {
-            mock_sema(R"(int[][] a = [4];)");
+            mock_sema(R"(a: int[][] = [4];)");
             expect_none().to_produce_error(ErrCode::SemaAssignDetArrWrongDimensions);
         });
         test("Assign det arr wrong dimensions 2", [&] {
-            mock_sema(R"(int[] a = [[4]];)");
+            mock_sema(R"(a: int[] = [[4]];)");
             expect_none().to_produce_error(ErrCode::SemaIncompatibleArrayElmTypes);
         });
         test("Duplicate parameter", [&] {
-            mock_sema(R"(void foo(int a, int b, int a) {})");
+            mock_sema(R"(fn foo(a: int, b: int, a: int) {})");
             expect_none().to_produce_error(ErrCode::SemaDuplicateParamVariableDecl);
         });
         test("Circular function declaration", [&] {
             mock_sema(R"(
-                int q = foo();
+                q: int = foo();
 
-                void foo(int a = 44 + q) {}
+                fn foo(a: int = 44 + q) {}
             )");
             expect_none().to_produce_error(ErrCode::SemaCircularFuncDeclDependency);
         });
         test("Circular global declaration", [&] {
              mock_sema(R"(
-                int a = b;
-                int b = c;
-                int c = a;
+                a: int = b;
+                b: int = c;
+                c: int = a;
             )");
             expect_none().to_produce_error(ErrCode::SemaGlobalCircularDependency);
         });
         test("Const struct field assign", [&] {
             mock_sema(R"(
                 struct A {
-                    int q;
+                    q: int;
                 }
 
-                void main() {
-                    const A a = A{9};
+                fn main() {
+                    a: const A = A{9};
                     a.q = 8;
                 }
             )");
@@ -166,15 +166,15 @@ void test_sema() {
         test("Const struct field assign nested", [&] {
             mock_sema(R"(
                 struct B {
-                    int q;
+                    q: int;
                 }
 
                 struct A {
-                    B b;
+                    b: B;
                 }
 
-                void main() {
-                    const A a = A{ B{9} };
+                fn main() {
+                    a: const A = A{ B{9} };
                     a.b.q = 8;
                 }
             )");
@@ -182,11 +182,11 @@ void test_sema() {
         });
         test("Function call duplicate named arg", [&] {
             mock_sema(R"(
-                void foo(int a, int b) {
+                fn foo(a: int, b: int) {
 
                 }
 
-                void main() {
+                fn main() {
                     foo(a=44, b=44, a=77);
                 }
             )");
@@ -195,12 +195,12 @@ void test_sema() {
         test("Struct init duplicate named val", [&] {
             mock_sema(R"(
                 struct A {
-                    int v1;
-                    int v2;
+                    v1: int;
+                    v2: int;
                 }
 
-                void main() {
-                    A a = A{
+                fn main() {
+                    a: A = A{
                         v1=55,
                         v2=66,
                         v1=88
@@ -211,27 +211,27 @@ void test_sema() {
         });
         test("Const lossness in array to pointer", [&] {
             mock_sema(R"(
-                void main() {
-                    const int[5] a = [];
-                    int* p = a;
+                fn main() {
+                    a: const int[5] = [];
+                    p: int* = a;
                 }
             )");
             expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);
         });
         test("Const lossness in multi array to pointer", [&] {
             mock_sema(R"(
-                void main() {
-                    const int[5][5] a = [];
-                    int[5]* p = a;
+                fn main() {
+                    a: const int[5][5] = [];
+                    p: int[5]* = a;
                 }
             )");
             expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);
         });
         test("multi array to pointer, pointer has wrong element type", [&] {
             mock_sema(R"(
-                void main() {
-                    const int[5][5] a = [];
-                    const int* p = a;
+                fn main() {
+                    a: const int[5][5] = [];
+                    p: const int* = a;
                 }
             )");
             expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);

@@ -119,8 +119,8 @@ bool acorn::Type::is_default_foldable() const {
     case TypeKind::USize:
     case TypeKind::Char:
     case TypeKind::Char16:
-    case TypeKind::Float32:
-    case TypeKind::Float64:
+    case TypeKind::Float:
+    case TypeKind::Double:
     case TypeKind::Bool:
     case TypeKind::Pointer:
         return true;
@@ -152,8 +152,8 @@ bool acorn::Type::is_sized() const {
     case TypeKind::Bool:
     case TypeKind::Char:
     case TypeKind::Char16:
-    case TypeKind::Float32:
-    case TypeKind::Float64:
+    case TypeKind::Float:
+    case TypeKind::Double:
     case TypeKind::Pointer:
     case TypeKind::Function:
     case TypeKind::Array:
@@ -180,8 +180,8 @@ uint32_t acorn::Type::get_number_of_bits() const {
     case TypeKind::Bool:    return 8;
     case TypeKind::Char:    return 8;
     case TypeKind::Char16:  return 16;
-    case TypeKind::Float32: return 32;
-    case TypeKind::Float64: return 64;
+    case TypeKind::Float:   return 32;
+    case TypeKind::Double:  return 64;
     case TypeKind::Enum: {
         auto enum_type = static_cast<const EnumType*>(this);
         return enum_type->get_index_type()->get_number_of_bits();
@@ -218,53 +218,46 @@ std::string acorn::Type::to_string() const {
         if (is_const()) {
             s = "const " + s;
         }
-        auto contained_type_str = container_enum_type->get_values_type()->to_string();
-        return s + "[" + contained_type_str + "]";
+        return s + "$";
     }
 
 #define str(s) !is_const() ? (s) : std::string("const ") + (s);
 #define str2(s) !is_const() ? (s) : std::string("const (") + s + ")";
     switch (kind) {
-    case TypeKind::Void:      return str("void");
-    case TypeKind::Int:       return str("int");
-    case TypeKind::Int8:      return str("int8");
-    case TypeKind::Int16:     return str("int16");
-    case TypeKind::Int32:     return str("int32");
-    case TypeKind::Int64:     return str("int64");
-    case TypeKind::UInt8:     return str("uint8");
-    case TypeKind::UInt16:    return str("uint16");
-    case TypeKind::UInt32:    return str("uint32");
-    case TypeKind::UInt64:    return str("uint64");
-    case TypeKind::Invalid:   return str("invalid");
-    case TypeKind::FuncsRef:  return str("function reference");
+    case TypeKind::Void:         return str("void");
+    case TypeKind::Int:          return str("int");
+    case TypeKind::Int8:         return str("int8");
+    case TypeKind::Int16:        return str("int16");
+    case TypeKind::Int32:        return str("int32");
+    case TypeKind::Int64:        return str("int64");
+    case TypeKind::UInt8:        return str("uint8");
+    case TypeKind::UInt16:       return str("uint16");
+    case TypeKind::UInt32:       return str("uint32");
+    case TypeKind::UInt64:       return str("uint64");
+    case TypeKind::Invalid:      return str("invalid");
+    case TypeKind::FuncsRef:     return str("function reference");
     case TypeKind::NamespaceRef: return str("module reference");
-    case TypeKind::Bool:      return str("bool");
-    case TypeKind::Char:      return str("char");
-    case TypeKind::Char16:    return str("char16");
-    case TypeKind::Null:      return str("null");
-    case TypeKind::ISize:     return str("isize");
-    case TypeKind::USize:     return str("usize");
-    case TypeKind::Float32:   return str("float32");
-    case TypeKind::Float64:   return str("float64");
-    case TypeKind::EmptyArray: return str("[]");
-    case TypeKind::Expr:      return str("expr type");
-    case TypeKind::Auto: {
-        if (is_const()) {
-            return "const";
-        } else {
-            return "auto";
-        }
-    }
-    case TypeKind::Range:     return str2(static_cast<const RangeType*>(this)->to_string());
-    case TypeKind::Pointer:   return str2(static_cast<const PointerType*>(this)->to_string());
-    case TypeKind::Array:     return str2(static_cast<const ArrayType*>(this)->to_string());
-    case TypeKind::Slice: return str2(static_cast<const SliceType*>(this)->to_string());
-    case TypeKind::Function:  return str2(static_cast<const FunctionType*>(this)->to_string());
-    case TypeKind::Struct:    return str(static_cast<const StructType*>(this)->to_string());
-    case TypeKind::Enum:      return str(static_cast<const EnumType*>(this)->to_string());
+    case TypeKind::Bool:         return str("bool");
+    case TypeKind::Char:         return str("char");
+    case TypeKind::Char16:       return str("char16");
+    case TypeKind::Null:         return str("null");
+    case TypeKind::ISize:        return str("isize");
+    case TypeKind::USize:        return str("usize");
+    case TypeKind::Float:        return str("float");
+    case TypeKind::Double:       return str("double");
+    case TypeKind::EmptyArray:   return str("[]");
+    case TypeKind::Expr:         return str("expr type");
+    case TypeKind::Auto:         return str("auto");
+    case TypeKind::Range:        return str2(static_cast<const RangeType*>(this)->to_string());
+    case TypeKind::Pointer:      return str2(static_cast<const PointerType*>(this)->to_string());
+    case TypeKind::Array:        return str2(static_cast<const ArrayType*>(this)->to_string());
+    case TypeKind::Slice:        return str2(static_cast<const SliceType*>(this)->to_string());
+    case TypeKind::Function:     return str2(static_cast<const FunctionType*>(this)->to_string());
+    case TypeKind::Struct:       return str(static_cast<const StructType*>(this)->to_string());
+    case TypeKind::Enum:         return str(static_cast<const EnumType*>(this)->to_string());
+    case TypeKind::Interface:    return str(static_cast<const InterfaceType*>(this)->to_string());
     case TypeKind::AssignDeterminedArray:
-                              return str2(static_cast<const AssignDeterminedArrayType*>(this)->to_string());
-    case TypeKind::Interface: return str(static_cast<const InterfaceType*>(this)->to_string());
+                                 return str2(static_cast<const AssignDeterminedArrayType*>(this)->to_string());
     default:
         acorn_fatal_fmt("Type::to_string() missing to_string case. Kind=%s", static_cast<int>(kind));
         return "";
@@ -308,12 +301,12 @@ std::string acorn::PointerType::to_string() const {
     return elm_type->to_string() + "*";
 }
 
-acorn::Type* acorn::UnresolvedBracketType::create(PageAllocator& allocator,
+acorn::Type* acorn::UnresolvedArrayType::create(PageAllocator& allocator,
                                                 Type* elm_type,
                                                 Expr* expr,
                                                 bool is_const) {
-    UnresolvedBracketType* unresolved_type = allocator.alloc_type<UnresolvedBracketType>();
-    new (unresolved_type) UnresolvedBracketType(is_const, expr, elm_type);
+    UnresolvedArrayType* unresolved_type = allocator.alloc_type<UnresolvedArrayType>();
+    new (unresolved_type) UnresolvedArrayType(is_const, expr, elm_type);
     unresolved_type->contains_const = is_const;
     return unresolved_type;
 }
@@ -426,8 +419,7 @@ acorn::FunctionType* acorn::FunctionType::create(PageAllocator& allocator,
 }
 
 std::string acorn::FunctionType::to_string() const {
-    std::string str = key->return_type->to_string() + "$";
-    str += "(";
+    std::string str = "fn(";
     size_t count = 0;
     for (Type* type : key->param_types) {
         str += type->to_string();
@@ -443,8 +435,12 @@ std::string acorn::FunctionType::to_string() const {
         str += "...";
     }
     str += ")";
+    if (key->return_type->get_kind() != TypeKind::Void) {
+        str += " -> " + key->return_type->to_string();
+    }
+
     if (!key->raised_errors.empty()) {
-        str += "(";
+        str += " | ";
         str += "raises ";
         for (size_t i = 0; i < key->raised_errors.size(); i++) {
             str += key->raised_errors[i].name.to_string();
@@ -454,15 +450,16 @@ std::string acorn::FunctionType::to_string() const {
         }
         str += ")";
     }
+
     return str;
 }
 
 acorn::Type* acorn::UnresolvedCompositeType::create(PageAllocator& allocator,
                                                     Identifier name,
-                                                    SourceLoc name_location,
+                                                    SourceLoc error_location,
                                                     bool is_const) {
     auto composite_type = allocator.alloc_type<UnresolvedCompositeType>();
-    new (composite_type) UnresolvedCompositeType(is_const, name, name_location);
+    new (composite_type) UnresolvedCompositeType(is_const, name, error_location);
     composite_type->contains_const = is_const;
     return composite_type;
 }
@@ -498,6 +495,20 @@ acorn::EnumType* acorn::EnumType::create(PageAllocator& allocator,
 std::string acorn::EnumType::to_string() const {
     return enumn->name.to_string().str();
 }
+
+acorn::Type* acorn::UnresolvedEnumValueType::create(PageAllocator& allocator,
+                                                    Identifier enum_name,
+                                                    SourceLoc error_location,
+                                                    bool is_const) {
+    auto un_type = allocator.alloc_type<UnresolvedEnumValueType>();
+    new(un_type) UnresolvedEnumValueType(is_const, enum_name, error_location);
+    un_type->contains_const = is_const;
+    if (!is_const) {
+        un_type->non_const_version = un_type;
+    }
+    return un_type;
+}
+
 
 acorn::InterfaceType* acorn::InterfaceType::create(PageAllocator& allocator,
                                                    Interface* interfacen,

@@ -6,10 +6,10 @@
  *
  * Warning: This is not a safe function. Use with caution.
  */
-void memcpy(void* dest, const void* src, int count) {
+fn memcpy(dest: void*, src: const void*, count: int) {
     _memcpy(dest, src, as(usize) count);
 }
-private native("memcpy") void _memcpy(void* dest, const void* src, usize count);
+private native("memcpy") fn _memcpy(dest: void*, src: const void*, count: usize);
 
 /*
  * Copies `count` amount of bytes from the `src` to
@@ -18,10 +18,10 @@ private native("memcpy") void _memcpy(void* dest, const void* src, usize count);
  *
  * Warning: This is not a safe function. Use with caution.
  */
-void memmove(void* dest, const void* src, int count) {
+fn memmove(dest: void*, src: const void*, count: int) {
     _memmove(dest, src, as(usize) count);
 }
-private native("memmove") void _memmove(void* dest, const void* src, usize count);
+private native("memmove") fn _memmove(dest: void*, src: const void*, count: usize);
 
 /*
  * Sets `n` copies of the value to the dest.
@@ -30,18 +30,18 @@ private native("memmove") void _memmove(void* dest, const void* src, usize count
  *
  * Warning: This is not a safe function. Use with caution.
  */
-void memset(void* dest, int8 value, int n) {
+fn memset(dest: void*, value: int8, n: int) {
     _memset(dest, value, as(usize) n);
 }
-private native("memset") void _memset(void* dest, int8 value, usize n);
+private native("memset") fn _memset(dest: void*, value: int8, n: usize);
 
 /*
  * Allocates memory on the heap. Allocates size number of bytes.
  */
-void* malloc(int size) {
+fn malloc(size: int) -> void* {
     return _malloc(as(isize) size);
 }
-private native("malloc") void* _malloc(isize size);
+private native("malloc") fn _malloc(size: isize) -> void*;
 
 /*
  * Compares two blocks of memory `mem1` and `mem2`.
@@ -54,15 +54,15 @@ private native("malloc") void* _malloc(isize size);
  * If the first non-equivalent character in `mem2` is larger than
  * the character in `mem1` returns -1.
  */
-int memcmp(const void* mem1, const void* mem2, int n) {
+fn memcmp(mem1: const void*, mem2: const void*, n: int) -> int {
     return as(int) _memcmp(mem1, mem2, as(isize) n);
 }
 
-private native("memcmp") int32 _memcmp(const void* str1, const void* str2, isize n);
+private native("memcmp") fn _memcmp(str1: const void*, str2: const void*, n: isize) -> int32;
 
 /*
  * Given a pointer to memory on the heap this function frees up the
  * memory. Only pointers allocated with malloc should be passed
  * as an argument to this function.
  */
-native void free(void* ptr);
+native fn free(ptr: void*);

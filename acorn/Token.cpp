@@ -13,13 +13,14 @@ std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
     case Token::HexLiteral:           return "hex-literal";
     case Token::BinLiteral:           return "bin-literal";
     case Token::OctLiteral:           return "oct-literal";
-    case Token::Float32Literal:       return "float32-literal";
-    case Token::Float64Literal:       return "float64-literal";
+    case Token::FloatLiteral:         return "float32-literal";
+    case Token::DoubleLiteral:        return "float64-literal";
     case Token::StringLiteral:        return "string-literal";
     case Token::CharLiteral:          return "char-literal";
     case Token::InvalidStringLiteral: return "invalid-string-literal";
     case Token::InvalidCharLiteral:   return "invalid-char-literal";
     case Token::InvalidNumberLiteral: return "invalid-number-literal";
+    case Token::Arrow:                return "->";
     case Token::GtGt:                 return ">>";
     case Token::LtLt:                 return "<<";
     case Token::GtEq:                 return ">=";
@@ -48,7 +49,6 @@ std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
     case Token::RangeLt:              return "..<";
     case Token::DotDot:               return "..";
     case Token::DotDotDot:            return "...";
-    case Token::ColCol:               return "::";
     case Token::BackslashBackslash:   return "\\\\";
 
     default: {

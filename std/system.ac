@@ -11,7 +11,7 @@ import .unix.Timespec;
  * Stops the application from running and returns
  * the `exit_code` to the system.
  */
-void exit(int exit_code) {
+fn exit(exit_code: int) {
 #if OS_GROUP_WINDOWS
     win32.ExitProcess(as(uint32) exit_code);
 #elif OS_GROUP_UNIX
@@ -20,7 +20,7 @@ void exit(int exit_code) {
 }
 
 // Used to keep track of time.
-private int64 performance_freq;
+private performance_freq: int64;
 
 /*
  * Gets the current time in nanoseconds with high-resolution.
@@ -31,16 +31,16 @@ private int64 performance_freq;
  * However, it is not appropriate for generating timestamps as it does
  * not return absolute time.
  */
-int64 time_in_nanosecs() {
+fn time_in_nanosecs() -> int64 {
 #if OS_GROUP_WINDOWS
     if performance_freq == 0 {
         win32.QueryPerformanceFrequency(&performance_freq);
     }
-    int64 current;
+    current: int64;
     win32.QueryPerformanceCounter(&current);
-    return as(int64) ((as(float64) (current * 1E+9) / performance_freq));
+    return as(int64) ((as(double) (current * 1E+9) / performance_freq));
 #elif OS_GROUP_UNIX
-    Timespec ts;
+    ts: Timespec;
     if unix.clock_gettime(unix.CLOCK_MONOTONIC, &ts) == 0 {
         return as(int64) (ts.tv_sec * 1E+9) + (as(int64) ts.tv_nsec);
     } else {
@@ -58,21 +58,21 @@ int64 time_in_nanosecs() {
  * However, it is not appropriate for generating timestamps as it does
  * not return absolute time.
  */
-int64 time_in_millisecs() {
+fn time_in_millisecs() -> int64 {
     return time_in_nanosecs() / as(int64) 1e+6;
 }
 
 /*
  * Gets the system time since January 1, 1970, 00:00:00 (UTC).
  */
-int64 sys_time_in_millisecs() {
+fn sys_time_in_millisecs() -> int64 {
 #if OS_GROUP_WINDOWS
 
     // This represents the difference in the amount of 100-nanosecond intervals
     // between January 1, 1701 (UTC) and January 1, 1970 (UTC).
-    const int64 WINDOWS_UNIX_TIME_DIFFERENCE = 116444736000000000;
+    WINDOWS_UNIX_TIME_DIFFERENCE: int64: 116444736000000000;
 
-    int64 time;
+    time: int64;
     win32.GetSystemTimeAsFileTime(&time);
     // Gives us time in 100-nanosecond intervals since January 1, 1701 (UTC)
     // but most languages and unix use seconds since January 1, 1970, 00:00:00 (UTC).

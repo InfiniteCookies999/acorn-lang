@@ -2,36 +2,36 @@
 
 #if OS_GROUP_UNIX
 
-native void _exit(int32 status);
+native fn _exit(status: int32);
 
-native isize write(int32 fd, const void* buf, usize count);
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
-const R_OK = 4'i32;
-const W_OK = 2'i32;
-const X_OK = 1'i32;
-const F_OK = 0'i32;
+R_OK :: 4'i32;
+W_OK :: 2'i32;
+X_OK :: 1'i32;
+F_OK :: 0'i32;
 
-native int32 access(const char* pathname, int32 mode);
+native fn access(pathname: const char*, mode: int32) -> int32;
 
 struct Timespec {
     // In seconds.
 #if SYS_64 || __USE_TIME_BITS64
-  int64 tv_sec;
+  tv_sec: int64;
 #else
-  int32 tv_sec;
+  tv_sec: int32;
 #endif
 
     // TODO: The linux version of this is way more complicated
     // and probably want to do way more case situations eventually.
 #if SYS_64
-    int64 tv_nsec;
+    tv_nsec: int64;
 #else
     #if SYS_ENDIAN == SYS_BIG_ENDIAN
-        int32 _pad;
-        int32 tv_nsec;
+        _pad: int32;
+        tv_nsec: int32;
     #else
-        int32 tv_nsec;
-        int32 _pad;
+        tv_nsec: int32;
+        _pad: int32;
     #endif
 #endif
 
@@ -46,144 +46,144 @@ struct Stat {
 
         // Device.
     #if SYS_64
-        uint64 st_dev;
+        st_dev: uint64;
     #else
-        uint32 st_dev;
+        st_dev: uint32;
     #endif
 
         // File serial number.
-        uint64 st_ino;
+        st_ino: uint64;
 
         // File mode.
-        uint32 st_mode;
+        st_mode: uint32;
 
         // link count.
     #if SYS_64
-        uint64 st_nlink;
+        st_nlink: uint64;
     #else
-        uint32 st_nlink;
+        st_nlink: uint32;
     #endif
 
         // User ID of the file's owner.
-        uint32 st_uid;
+        st_uid: uint32;
         // Group ID of the file's group.
-        uint32 st_gid;
+        st_gid: uint32;
 
         // Device number, if device.
     #if SYS_64
-        uint64 st_rdev;
+        st_rdev: uint64;
     #else
-        uint32 st_rdev;
+        st_rdev: uint32;
     #endif
 
         // Size of file, in bytes.
-        int64 st_size;
+        st_size: int64;
 
         // Optimal block size for I/O.
     #if SYS_64
-        int64 st_blksize;
+        st_blksize: int64;
     #else
-        int32 st_blksize;
+        st_blksize: int32;
     #endif
 
     // Number 512-byte blocks allocated.
-    int64 st_blocks;
+    st_blocks: int64;
 
     #if __USE_XOPEN2K8
-        Timespec st_atim;
-        Timespec st_mtim;
-        Timespec st_ctim;
+        st_atim: Timespec;
+        st_mtim: Timespec;
+        st_ctim: Timespec;
     #else
         #if SYS_ENDIAN == SYS_BIG_ENDIAN
-            int64 st_atime;
-            int32 _pad0;
-            int32 st_atime_nsec;
-            int64 st_mtime;
-            int32 _pad1;
-            int32 st_mtime_nsec;
-            int64 st_ctime;
-            int32 _pad1;
-            int32 st_ctime_nsec;
+            st_atime:      int64;
+            _pad0:         int32;
+            st_atime_nsec: int32;
+            st_mtime:      int64;
+            _pad1:         int32;
+            st_mtime_nsec: int32;
+            st_ctime:      int64;
+            _pad1:         int32;
+            st_ctime_nsec: int32;
         #else
-            int64 st_atime;
-            int32 st_atime_nsec;
-            int32 _pad0;
-            int64 st_mtime;
-            int32 st_mtime_nsec;
-            int32 _pad1;
-            int64 st_ctime;
-            int32 st_ctime_nsec;
-            int32 _pad1;
+            st_atime:      int64;
+            st_atime_nsec: int32;
+            _pad0:         int32;
+            st_mtime:      int64;
+            st_mtime_nsec: int32;
+            _pad1:         int32;
+            st_ctime:      int64;
+            st_ctime_nsec: int32;
+            _pad1:         int32;
         #endif
 
         #if SYS_64
-            uint64 __glibc_reserved4;
-            uint64 __glibc_reserved5;
+            __glibc_reserved4: uint64;
+            __glibc_reserved5: uint64;
         #else
-            uint32 __glibc_reserved4;
-            uint32 __glibc_reserved5;
+            __glibc_reserved4: uint32;
+            __glibc_reserved5: uint32;
         #endif
     #endif
 #else
         // Device.
     #if SYS_64
-        uint64 st_dev;
+        st_dev: uint64;
     #else
-        uint32 st_dev;
+        st_dev: uint32;
     #endif
 
     #if !SYS_64
-        uint16 __pad1;
+        __pad1: uint16;
     #endif
 
         // File serial number.
     #if SYS_64
-        uint64 st_ino;
+        st_ino: uint64;
     #else
-        uint32 __st_ino;
+        __st_ino: uint32;
     #endif
 
         // File mode and link count.
     #if SYS_64
-        uint64 st_nlink;
-        uint32 st_mode;
+        st_nlink: uint64;
+        st_mode: uint32;
     #else
-        uint32 st_mode;
-        uint32 st_nlink;
+        st_mode: uint32;
+        st_nlink: uint32;
     #endif
 
         // User ID of the file's owner.
-        uint32 st_uid;
+        st_uid: uint32;
         // Group ID of the file's group.
-        uint32 st_gid;
+        st_gid: uint32;
 
     #if SYS_64
-        int32 __pad0;
+        __pad0: int32;
     #endif
 
         // Device number, if device.
     #if SYS_64
-        uint64 st_rdev;
+        st_rdev: uint64;
     #else
-        uint32 st_rdev;
+        st_rdev: uint32;
     #endif
 
     #if !SYS_64
-        uint16 __pad2;
+        __pad2: uint16;
     #endif
 
         // Size of file, in bytes.
-        int64 st_size;
+        st_size: int64;
 
         // Optimal block size for I/O.
     #if SYS_64
-        int64 st_blksize;
+        st_blksize: int64;
     #else
-        int32 st_blksize;
+        st_blksize: int32;
     #endif
 
         // Number 512-byte blocks allocated.
-        int64 st_blocks;
+        st_blocks: int64;
 
     #if __USE_XOPEN2K8
         /* Nanosecond resolution timestamps are stored in a format
@@ -192,114 +192,114 @@ struct Stat {
         identifier 'timespec' to appear in the <sys/stat.h> header.
         Therefore we have to handle the use of this header in strictly
         standard-compliant sources special.  */
-        Timespec st_atim;		/* Time of last access.  */
-        Timespec st_mtim;		/* Time of last modification.  */
-        Timespec st_ctim;		/* Time of last status change.  */
+        st_atim: Timespec;		/* Time of last access.  */
+        st_mtim: Timespec;		/* Time of last modification.  */
+        st_ctim: Timespec;		/* Time of last status change.  */
     #else
         #if SYS_64
-            int64  st_atime;		/* Time of last access.  */
-            uint64 st_atimensec;	/* Nscecs of last access.  */
-            int64  st_mtime;		/* Time of last modification.  */
-            uint64 st_mtimensec;	/* Nsecs of last modification.  */
-            int64 st_ctime;			/* Time of last status change.  */
-            uint64 st_ctimensec;	/* Nsecs of last status change.  */
+            st_atime:     int64;	/* Time of last access.  */
+            st_atimensec: uint64;	/* Nscecs of last access.  */
+            st_mtime:     int64;	/* Time of last modification.  */
+            st_mtimensec: uint64;	/* Nsecs of last modification.  */
+            st_ctime:     int64;    /* Time of last status change.  */
+            st_ctimensec: uint64;	/* Nsecs of last status change.  */
         #else
-            int32  st_atime;		/* Time of last access.  */
-            uint32 st_atimensec;	/* Nscecs of last access.  */
-            int32  st_mtime;		/* Time of last modification.  */
-            uint32 st_mtimensec;	/* Nsecs of last modification.  */
-            int32  st_ctime;			/* Time of last status change.  */
-            uint32 st_ctimensec;	/* Nsecs of last status change.  */
+            st_atime:     int32;	/* Time of last access.  */
+            st_atimensec: uint32;	/* Nscecs of last access.  */
+            st_mtime:     int32; 	/* Time of last modification.  */
+            st_mtimensec: uint32;	/* Nsecs of last modification.  */
+            st_ctime:     int32;	/* Time of last status change.  */
+            st_ctimensec: uint32;	/* Nsecs of last status change.  */
         #endif
     #endif
 
     #if SYS_64
-        int64[3] __glibc_reserved;
+        __glibc_reserved: int64[3];
     #else
         // TODO: We don't take into account __USE_FILE_OFFSET64
-        uint32 st_ino;
+        st_ino: uint32;
     #endif
 #endif // __USE_TIME_BITS64
 };
 
-const __S_IFMT = 0170000'u32;
+__S_IFMT :: 0170000'u32;
 
-const __S_IFDIR	 = 0040000'u32;	/* Directory.  */
-const __S_IFCHR	 = 0020000'u32;	/* Character device.  */
-const __S_IFBLK	 = 0060000'u32;	/* Block device.  */
-const __S_IFREG	 = 0100000'u32;	/* Regular file.  */
-const __S_IFIFO	 = 0010000'u32;	/* FIFO.  */
-const __S_IFLNK	 = 0120000'u32;	/* Symbolic link.  */
-const __S_IFSOCK = 0140000'u32;	/* Socket.  */
+__S_IFDIR	:: 0040000'u32;	/* Directory.  */
+__S_IFCHR	:: 0020000'u32;	/* Character device.  */
+__S_IFBLK	:: 0060000'u32;	/* Block device.  */
+__S_IFREG	:: 0100000'u32;	/* Regular file.  */
+__S_IFIFO	:: 0010000'u32;	/* FIFO.  */
+__S_IFLNK	:: 0120000'u32;	/* Symbolic link.  */
+__S_IFSOCK  :: 0140000'u32;	/* Socket.  */
 
-bool __S_ISTYPE(uint32 mode, uint32 mask) {
+fn __S_ISTYPE(mode: uint32, mask: uint32) -> bool {
     return (mode & __S_IFMT) == mask;
 }
 
-native int32 stat(const char* path, Stat* buf);
-native int32 fstat(int32 fd, Stat* buf);
+native fn stat(path: const char*, buf: Stat*) -> int32;
+native fn fstat(fd: int32, buf: Stat*) -> int32;
 
-const CLOCK_REALTIME           = 0'i32;
-const CLOCK_MONOTONIC	       = 1'i32;
-const CLOCK_PROCESS_CPUTIME_ID = 2'i32;
-const CLOCK_THREAD_CPUTIME_ID  = 3'i32;
-const CLOCK_MONOTONIC_RAW      = 4'i32;
-const CLOCK_REALTIME_COARSE    = 5'i32;
-const CLOCK_MONOTONIC_COARSE   = 6'i32;
-const CLOCK_BOOTTIME           = 7'i32;
-const CLOCK_REALTIME_ALARM     = 8'i32;
-const CLOCK_BOOTTIME_ALARM     = 9'i32;
-const CLOCK_TAI                = 11'i32;
-const TIMER_ABSTIME            = 1'i32;
+CLOCK_REALTIME           :: 0'i32;
+CLOCK_MONOTONIC	         :: 1'i32;
+CLOCK_PROCESS_CPUTIME_ID :: 2'i32;
+CLOCK_THREAD_CPUTIME_ID  :: 3'i32;
+CLOCK_MONOTONIC_RAW      :: 4'i32;
+CLOCK_REALTIME_COARSE    :: 5'i32;
+CLOCK_MONOTONIC_COARSE   :: 6'i32;
+CLOCK_BOOTTIME           :: 7'i32;
+CLOCK_REALTIME_ALARM     :: 8'i32;
+CLOCK_BOOTTIME_ALARM     :: 9'i32;
+CLOCK_TAI                :: 11'i32;
+TIMER_ABSTIME            :: 1'i32;
 
-native int32 clock_gettime(int32 clk_id, Timespec* tp);
+native fn clock_gettime(clk_id: int32, tp: Timespec*) -> int32;
 
-native int32 mkdir(const char* path, int32 mode);
+native fn mkdir(path: const char*, mode: int32) -> int32;
 
 /* open/fcntl.  */
-const O_ACCMODE     = 0003'i32;
-const O_RDONLY      =   00'i32;
-const O_WRONLY      =   01'i32;
-const O_RDWR	    =   02'i32;
-const O_CREAT	    = 0100'i32; /* Not fcntl.  */
-const O_EXCL        = 0200'i32; /* Not fcntl.  */
-const O_NOCTTY      = 0400'i32; /* Not fcntl.  */
-const O_TRUNC	    = 01000'i32; /* Not fcntl.  */
-const O_APPEND      = 02000'i32;
-const O_NONBLOCK    = 04000'i32;
-const O_NDELAY	    = O_NONBLOCK;
-const O_SYNC        = 04010000'i32;
-const O_ASYNC	    = 020000'i32;
-const __O_LARGEFILE = 0100000'i32;
+O_ACCMODE     :: 0003'i32;
+O_RDONLY      ::   00'i32;
+O_WRONLY      ::   01'i32;
+O_RDWR	      ::   02'i32;
+O_CREAT	      :: 0100'i32; /* Not fcntl.  */
+O_EXCL        :: 0200'i32; /* Not fcntl.  */
+O_NOCTTY      :: 0400'i32; /* Not fcntl.  */
+O_TRUNC	      :: 01000'i32; /* Not fcntl.  */
+O_APPEND      :: 02000'i32;
+O_NONBLOCK    :: 04000'i32;
+O_NDELAY	  :: O_NONBLOCK;
+O_SYNC        :: 04010000'i32;
+O_ASYNC	      :: 020000'i32;
+__O_LARGEFILE :: 0100000'i32;
 
-const __O_DIRECTORY = 0200000'i32;
-const __O_NOFOLLOW  = 0400000'i32;
-const __O_CLOEXEC   = 02000000'i32;
-const __O_DIRECT    = 040000'i32;
-const __O_NOATIME   = 01000000'i32;
-const __O_PATH      = 010000000'i32;
-const __O_DSYNC     = 010000'i32;
-const __O_TMPFILE   = (020000000 | __O_DIRECTORY);
+__O_DIRECTORY :: 0200000'i32;
+__O_NOFOLLOW  :: 0400000'i32;
+__O_CLOEXEC   :: 02000000'i32;
+__O_DIRECT    :: 040000'i32;
+__O_NOATIME   :: 01000000'i32;
+__O_PATH      :: 010000000'i32;
+__O_DSYNC     :: 010000'i32;
+__O_TMPFILE   :: (020000000 | __O_DIRECTORY);
 
-const S_IRUSR = 0400'u32;                /* Read by owner.  */
-const S_IWUSR = 0200'u32;                /* Write by owner.  */
-const S_IXUSR = 0100'u32;                /* Execute by owner.  */
-const S_IRWXU = S_IRUSR | S_IWUSR | S_IXUSR; /* Read, write, and execute by owner.  */
-const S_IRGRP = S_IRUSR >> 3;            /* Read by group.  */
-const S_IWGRP = S_IWUSR >> 3;            /* Write by group.  */
-const S_IXGRP = S_IXUSR >> 3;            /* Execute by group.  */
-const S_IRWXG = S_IRWXU >> 3;            /* Read, write, and execute by group.  */
-const S_IROTH = S_IRGRP >> 3;            /* Read by others.  */
-const S_IWOTH = S_IWGRP >> 3;            /* Write by others.  */
-const S_IXOTH = S_IXGRP >> 3;            /* Execute by others.  */
-const S_IRWXO = S_IRWXG >> 3;            /* Read, write, and execute by others.  */
+S_IRUSR :: 0400'u32;                /* Read by owner.  */
+S_IWUSR :: 0200'u32;                /* Write by owner.  */
+S_IXUSR :: 0100'u32;                /* Execute by owner.  */
+S_IRWXU :: S_IRUSR | S_IWUSR | S_IXUSR; /* Read, write, and execute by owner.  */
+S_IRGRP :: S_IRUSR >> 3;            /* Read by group.  */
+S_IWGRP :: S_IWUSR >> 3;            /* Write by group.  */
+S_IXGRP :: S_IXUSR >> 3;            /* Execute by group.  */
+S_IRWXG :: S_IRWXU >> 3;            /* Read, write, and execute by group.  */
+S_IROTH :: S_IRGRP >> 3;            /* Read by others.  */
+S_IWOTH :: S_IWGRP >> 3;            /* Write by others.  */
+S_IXOTH :: S_IXGRP >> 3;            /* Execute by others.  */
+S_IRWXO :: S_IRWXG >> 3;            /* Read, write, and execute by others.  */
 
-native int32 open(const char* pathname, int32 flags, ...);
+native fn open(pathname: const char*, flags: int32, ...) -> int32;
 
-native int32 close(int32 fd);
+native fn close(fd: int32) -> int32;
 
-native isize read(int32 fd, void* buf, usize count);
+native fn read(fd: int32, buf: void*, count: usize) -> isize;
 
-native int32 remove(const char* path);
+native fn remove(path: const char*) -> int32;
 
 #endif

@@ -2,34 +2,34 @@ import std;
 import std.Error;
 
 struct TestError :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "error raised!";
     }
 }
 
-void write_val(int val) {
+fn write_val(val: int) {
 
 #if OS_GROUP_WINDOWS
-    void* handle = std.GetStdHandle(-11);
-    uint32 written;
-    char c = as(char) val;
+    handle: void* = std.GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
     std.WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
+    c: char = as(char) val;
     std.write(1, &c, 1);
 #endif
 
 }
 
-int foo() raises TestError {
+fn foo() -> int | raises TestError {
     raise TestError{};
 }
 
-void main() {
-    int a = 38;
+fn main() {
+    a: int = 38;
     a = try foo() {
         std.print("caught 1");
         recover 64;

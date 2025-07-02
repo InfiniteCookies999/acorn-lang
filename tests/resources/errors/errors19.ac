@@ -1,34 +1,34 @@
 import std;
 import std.Error;
 
-void write_val(int8 val) {
+struct TestError :: *Error {
+    const fn get_name() -> const char* {
+        return "TestError";
+    }
+    const fn get_message() -> const char* {
+        return "error raised!";
+    }
+}
+
+fn write_val(val: int8) {
 
 #if OS_GROUP_WINDOWS
-    void* handle = std.GetStdHandle(-11);
-    uint32 written;
-    char c = as(char) val;
+    handle: void* = std.GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
     std.WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
+    c: char = as(char) val;
     std.write(1, &c, 1);
 #endif
 
 }
 
-struct TestError :: *Error {
-    const char* get_name() const {
-        return "TestError";
-    }
-    const char* get_message() const {
-        return "error raised!";
-    }
-}
-
 struct A {
-    int8 v;
+    v: int8;
 }
 
-A foo(bool cond) raises TestError {
+fn foo(cond: bool) -> A | raises TestError {
     if cond {
         return A{ 64 };
     }
@@ -36,9 +36,9 @@ A foo(bool cond) raises TestError {
     raise TestError{};
 }
 
-void main() {
-    A$(bool)(raises TestError) f = foo;
-    A a = try f(true);
+fn main() {
+    f: fn(bool) -> A | raises TestError = foo;
+    a: A = try f(true);
     write_val(a.v);
     try f(false);
 }

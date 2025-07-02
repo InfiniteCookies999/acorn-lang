@@ -82,9 +82,11 @@ bool acorn::Sema::find_main_function(Context& context) {
 
 acorn::Type* acorn::Sema::fixup_type(Type* type, bool is_ptr_elm_type) {
     if (type->get_kind() == TypeKind::UnresolvedBracket) {
-        return fixup_unresolved_bracket_type(type);
+        return fixup_unresolved_array_type(type);
     } else if (type->get_kind() == TypeKind::UnresolvedComposite) {
         return fixup_unresolved_composite_type(type, is_ptr_elm_type);
+    } else if (type->get_kind() == TypeKind::UnresolvedEnumValueType) {
+        return fixup_unresolved_enum_value_type(type, is_ptr_elm_type);
     } else if (type->get_kind() == TypeKind::Function) {
         return fixup_function_type(type);
     } else if (type->is_pointer()) {
@@ -145,8 +147,8 @@ acorn::Type* acorn::Sema::fixup_type(Type* type, bool is_ptr_elm_type) {
     }
 }
 
-acorn::Type* acorn::Sema::fixup_unresolved_bracket_type(Type* type) {
-    auto unresolved_type = static_cast<UnresolvedBracketType*>(type);
+acorn::Type* acorn::Sema::fixup_unresolved_array_type(Type* type) {
+    auto unresolved_type = static_cast<UnresolvedArrayType*>(type);
     Expr* expr = unresolved_type->get_expr();
 
     Type* fixed_elm_type = fixup_type(unresolved_type->get_elm_type());
@@ -158,22 +160,6 @@ acorn::Type* acorn::Sema::fixup_unresolved_bracket_type(Type* type) {
     if (!expr->type) {
         // Failed to check the length expression so returning early.
         return nullptr;
-    }
-
-    if (fixed_elm_type->is_enum() && expr->type->is(context.expr_type)) {
-        auto enum_type = static_cast<EnumType*>(fixed_elm_type);
-        Type* values_type = get_type_of_type_expr(expr);
-        if (enum_type->get_values_type()->is_not(values_type)) {
-            error(expand(expr), "Expected type '%s' for enum's value type but found '%s'",
-                  enum_type->get_values_type(), values_type)
-                .end_error(ErrCode::SemaEnumContainerTypeWrongValueType);
-            return nullptr;
-        }
-        auto fixed_type = type_table.get_enum_container_type(enum_type);
-        if (type->is_const()) {
-            return type_table.get_const_type(fixed_type);
-        }
-        return fixed_type;
     }
 
     if (!expr->type->is_integer()) {
@@ -296,6 +282,96 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
     auto unresolved_composite_type = static_cast<UnresolvedCompositeType*>(type);
 
     auto name = unresolved_composite_type->get_composite_name();
+    auto error_loc = unresolved_composite_type->get_error_location();
+
+    auto found_composite = find_composite_for_composite_type(name, error_loc);
+    if (!found_composite) {
+        return nullptr;
+    }
+
+    switch (found_composite->kind) {
+    case NodeKind::Struct: {
+        auto found_struct = static_cast<Struct*>(found_composite);
+
+        if (!ensure_struct_checked(unresolved_composite_type->get_error_location(), found_struct)) {
+            return nullptr;
+        }
+
+        Type* struct_type = found_struct->struct_type;
+        if (unresolved_composite_type->is_const()) {
+            struct_type = type_table.get_const_type(struct_type);
+        }
+
+        return struct_type;
+    }
+    case NodeKind::Enum: {
+        auto found_enum = static_cast<Enum*>(found_composite);
+
+        ensure_enum_checked(unresolved_composite_type->get_error_location(), found_enum);
+
+        Type* enum_type = found_enum->enum_type;
+        if (unresolved_composite_type->is_const()) {
+            enum_type = type_table.get_const_type(enum_type);
+        }
+
+        return enum_type;
+    }
+    case NodeKind::Interface: {
+        auto found_interface = static_cast<Interface*>(found_composite);
+
+        ensure_interface_checked(unresolved_composite_type->get_error_location(), found_interface);
+
+        Type* intr_type = found_interface->interface_type;
+        if (unresolved_composite_type->is_const()) {
+            intr_type = type_table.get_const_type(intr_type);
+        }
+
+        if (!is_ptr_elm_type) {
+            error(unresolved_composite_type->get_error_location(), "Interface types should be declared a pointer")
+                .add_line("Use type '%s*' instead", unresolved_composite_type->get_composite_name())
+                .end_error(ErrCode::SemaInterfaceMustBeDeclAsPtr);
+            return nullptr;
+        }
+
+        return intr_type;
+    }
+    default:
+        acorn_fatal("Unknown composite kind");
+        return nullptr;
+    }
+}
+
+acorn::Type* acorn::Sema::fixup_unresolved_enum_value_type(Type* type, bool is_ptr_elm_type) {
+
+    auto unresolved_enum_value_type = static_cast<UnresolvedEnumValueType*>(type);
+
+    auto name = unresolved_enum_value_type->get_enum_name();
+    auto error_loc = unresolved_enum_value_type->get_error_location();
+
+    auto found_composite = find_composite_for_composite_type(name, error_loc);
+    if (!found_composite) {
+        return nullptr;
+    }
+
+    if (found_composite->is_not(NodeKind::Enum)) {
+        error(error_loc, "Enum value type expects enum type")
+            .end_error(ErrCode::SemaEnumValueTypeExpectsEnum);
+        return nullptr;
+    }
+
+    auto found_enum = static_cast<Enum*>(found_composite);
+
+    ensure_enum_checked(error_loc, found_enum);
+
+    auto fixed_type = type_table.get_enum_container_type(found_enum->enum_type);
+    if (type->is_const()) {
+        return type_table.get_const_type(fixed_type);
+    }
+    return fixed_type;
+}
+
+acorn::Decl* acorn::Sema::find_composite_for_composite_type(Identifier name, SourceLoc error_loc) {
+
     auto found_composite = find_composite(name);
 
     if (!found_composite) {
@@ -308,7 +384,6 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
             }
         }
 
-        auto error_loc = unresolved_composite_type->get_error_location();
         auto end = error_loc.end();
 
         // HACK
@@ -363,56 +438,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
         return nullptr;
     }
 
-    switch (found_composite->kind) {
-    case NodeKind::Struct: {
-        auto found_struct = static_cast<Struct*>(found_composite);
-
-        if (!ensure_struct_checked(unresolved_composite_type->get_error_location(), found_struct)) {
-            return nullptr;
-        }
-
-        Type* struct_type = found_struct->struct_type;
-        if (unresolved_composite_type->is_const()) {
-            struct_type = type_table.get_const_type(struct_type);
-        }
-
-        return struct_type;
-    }
-    case NodeKind::Enum: {
-        auto found_enum = static_cast<Enum*>(found_composite);
-
-        ensure_enum_checked(unresolved_composite_type->get_error_location(), found_enum);
-
-        Type* enum_type = found_enum->enum_type;
-        if (unresolved_composite_type->is_const()) {
-            enum_type = type_table.get_const_type(enum_type);
-        }
-
-        return enum_type;
-    }
-    case NodeKind::Interface: {
-        auto found_interface = static_cast<Interface*>(found_composite);
-
-        ensure_interface_checked(unresolved_composite_type->get_error_location(), found_interface);
-
-        Type* intr_type = found_interface->interface_type;
-        if (unresolved_composite_type->is_const()) {
-            intr_type = type_table.get_const_type(intr_type);
-        }
-
-        if (!is_ptr_elm_type) {
-            error(unresolved_composite_type->get_error_location(), "Interface types should be declared a pointer")
-                .add_line("Use type '%s*' instead", unresolved_composite_type->get_composite_name())
-                .end_error(ErrCode::SemaInterfaceMustBeDeclAsPtr);
-            return nullptr;
-        }
-
-        return intr_type;
-    }
-    default:
-        acorn_fatal("Unknown composite kind");
-        return nullptr;
-    }
+    return found_composite;
 }
 
 acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
@@ -871,16 +897,6 @@ bool acorn::Sema::check_function_decl(Func* func) {
     if (func->has_modifier(Modifier::Readonly)) {
         error(func, "Functions cannot have readonly modifier")
             .end_error(ErrCode::SemaFuncsCannotHaveReadonlyModifier);
-    }
-
-    if (func->parsed_return_type == context.auto_type ||
-        func->parsed_return_type == context.auto_ptr_type ||
-        func->parsed_return_type == context.const_auto_type) {
-        error(func, "Functions cannot have a return type '%s'",
-              func->parsed_return_type)
-            .end_error(ErrCode::SemaFuncsCannotReturnAuto);
-        error_cleanup(func);
-        return false;
     }
 
     if (func->parsed_return_type->get_kind() == TypeKind::AssignDeterminedArray) {
@@ -1370,14 +1386,14 @@ void acorn::Sema::check_variable(Var* var) {
         }
     };
 
-    auto report_error_auto_must_have_assignment = [this, var](Type* auto_type) finline {
-        error(var, "Must have assignment to determine auto %s", auto_type)
+    auto report_error_auto_must_have_assignment = [this, var]() finline {
+        error(var, "Must have assignment to determine infered type")
                 .end_error(ErrCode::SemaMustHaveAssignmentToDetAuto);
     };
 
     if (var->parsed_type == context.auto_type || var->parsed_type == context.const_auto_type) {
         if (!var->assignment) {
-            report_error_auto_must_have_assignment(var->parsed_type);
+            report_error_auto_must_have_assignment();
             return cleanup();
         }
 
@@ -1386,6 +1402,13 @@ void acorn::Sema::check_variable(Var* var) {
         }
 
         var->type = var->assignment->type;
+        if (var->type->is_const()) {
+            // A :: 55;
+            // b := A;
+            // ^^^^^^
+            // we don't want b to be const here.
+            var->type = type_table.remove_const(var->type);
+        }
 
         if (var->parsed_type == context.const_auto_type) {
             if (var->assignment->is(NodeKind::Array)) {
@@ -1413,25 +1436,6 @@ void acorn::Sema::check_variable(Var* var) {
             } else if (!var->type->is_const()) {
                 var->type = type_table.get_const_type(var->type);
             }
-        }
-    } else if (var->parsed_type == context.auto_ptr_type) {
-        if (!var->assignment) {
-            report_error_auto_must_have_assignment(context.auto_ptr_type);
-            return cleanup();
-        }
-
-        if (!check_for_incomplete_type()) {
-            return cleanup();
-        }
-
-        var->type = var->assignment->type;
-
-        if (!var->type->is_pointer()) {
-            error(expand(var), "Variable with 'auto*' type expects assignment to be a pointer type but found '%s'",
-                  var->type)
-                .end_error(ErrCode::SemaAutoPtrExpectsPtrType);
-            var->type = nullptr;
-            return cleanup();
         }
     } else if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray) {
         // We have to handle this case as if it is speciial because
@@ -2203,6 +2207,28 @@ void acorn::Sema::check_predicate_loop(PredicateLoopStmt* loop) {
         }
     }
 
+    if (loop->cond && loop->cond->is(NodeKind::BinOp)) {
+        auto bin_op = static_cast<BinOp*>(loop->cond);
+
+        switch (bin_op->op) {
+        case '=':
+        case Token::AddEq:
+        case Token::SubEq:
+        case Token::MulEq:
+        case Token::DivEq:
+        case Token::ModEq:
+        case Token::AndEq:
+        case Token::OrEq:
+        case Token::CaretEq:
+        case Token::TildeEq:
+        case Token::LtLtEq:
+        case Token::GtGtEq:
+            error(expand(loop->cond), "Cannot assign value in a loop cond")
+                .end_error(ErrCode::SemaCannotAssignValueInLoopCond);
+            break;
+        }
+    }
+
     SemScope sem_scope = push_scope();
     check_loop_scope(loop->scope, &sem_scope);
     pop_scope();
@@ -2255,9 +2281,12 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
 
             if (var_type == context.auto_type) {
                 loop->var->type = elm_type;
-            } else if (var_type == context.auto_ptr_type) {
-                loop->var->type = type_table.get_ptr_type(elm_type);
-                loop->references_memory = true;
+                if (!loop->var_auto_ptr) {
+                    loop->var->type = elm_type;
+                } else {
+                    loop->var->type = type_table.get_ptr_type(elm_type);
+                    loop->references_memory = true;
+                }
             } else if (var_type == context.const_auto_type) {
                 loop->var->type = type_table.get_const_type(elm_type);
             } else {
@@ -2289,9 +2318,6 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
 
             if (var_type == context.auto_type) {
                 loop->var->type = value_type;
-            } else if (var_type == context.auto_ptr_type) {
-                error(loop->var, "Variable cannot be declared 'auto*' because ranges have no address")
-                    .end_error(ErrCode::SemaRangesHaveNoAddressForAuto);
             } else if (var_type == context.const_auto_type) {
                 loop->var->type = type_table.get_const_type(value_type);
             } else {
@@ -2410,13 +2436,13 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
                 number.kind = Kind::UNSIGNED_INT;
                 break;
             }
-            case TypeKind::Float32: {
+            case TypeKind::Float: {
                 auto ll_value = llvm::cast<llvm::ConstantFP>(sema.gen_constant(value));
                 number.value_f32 = ll_value->getValue().convertToFloat();
                 number.kind = Kind::FLOAT;
                 break;
             }
-            case TypeKind::Float64: {
+            case TypeKind::Double: {
                 auto ll_value = llvm::cast<llvm::ConstantFP>(sema.gen_constant(value));
                 number.value_f64 = ll_value->getValue().convertToDouble();
                 number.kind = Kind::DOUBLE;
@@ -5567,23 +5593,6 @@ void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
     check_and_verify_type(mem_access->site);
     check_and_verify_type(mem_access->index);
 
-    if (mem_access->site->type->is(context.expr_type)) {
-
-        auto expr_type = get_type_of_type_expr(mem_access->site);
-        auto unresolved_type = UnresolvedBracketType::create(context.get_allocator(), expr_type, mem_access->index);
-        auto fixed_expr_type = fixup_unresolved_bracket_type(unresolved_type);
-        if (!fixed_expr_type) {
-            return;
-        }
-
-        mem_access->type = context.expr_type;
-        mem_access->expr_type = fixed_expr_type;
-        mem_access->kind = NodeKind::TypeExpr;
-        mem_access->prev_node_kind = NodeKind::MemoryAccess;
-
-        return;
-    }
-
     mem_access->is_foldable = false;
 
     Type* access_type = mem_access->site->type;
@@ -5641,12 +5650,6 @@ void acorn::Sema::check_ternary(Ternary* ternary) {
 }
 
 void acorn::Sema::check_type_expr(TypeExpr* type_expr) {
-    if (type_expr->prev_node_kind == NodeKind::MemoryAccess) {
-        MemoryAccess* memory_access = static_cast<MemoryAccess*>(type_expr);
-        memory_access->kind = NodeKind::MemoryAccess;
-        check_memory_access(memory_access);
-        return;
-    }
     if (Type* fixed_type = fixup_type(type_expr->parsed_expr_type)) {
         type_expr->expr_type = fixed_type;
         type_expr->type = context.expr_type;
@@ -5774,28 +5777,14 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
 
     if (auto to_enum_type = to_type->get_container_enum_type()) {
         if (expr->type->is_enum()) {
-            if (expr->type->is_not(to_enum_type)) {
-                return false;
-            }
+            // from enum type to enum container type.
+            return expr->type->is_ignore_const(to_enum_type);
         } else if (auto from_enum_type = expr->type->get_container_enum_type()) {
-            if (from_enum_type->is_not(to_enum_type)) {
-                return false;
-            }
+            // from enum container type to enum container type.
+            return from_enum_type->is_ignore_const(to_enum_type);
         } else {
             return false;
         }
-    }
-
-    if (expr->type->is_enum()) {
-        if (to_type->is_ignore_const(expr->type)) {
-            return true;
-        } else if (context.is_std_any_type(to_type)) {
-            return true;
-        } else {
-            return false;
-        }
-    } else if (expr->type->get_container_enum_type()) {
-        return expr->type->is_ignore_const(to_type);
     }
 
     Type* from_type = expr->type;
@@ -5872,7 +5861,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
 
         return to_type->is(from_type);
     }
-    case TypeKind::Float32: case TypeKind::Float64: {
+    case TypeKind::Float: case TypeKind::Double: {
         if (from_type->is_float()) {
             return to_type->is(from_type);
         } else if (from_type->is_integer()) {
@@ -6101,9 +6090,6 @@ bool acorn::Sema::is_incomplete_type(Type* type) const {
     case TypeKind::Expr:
     case TypeKind::FuncsRef:
         return true;
-    case TypeKind::Pointer: {
-        return type == context.auto_ptr_type;
-    }
     default:
         return false;
     }
@@ -6126,6 +6112,7 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
     case NodeKind::SwitchStmt:
     case NodeKind::RaiseStmt:
     case NodeKind::RecoverStmt:
+    case NodeKind::VarList:
         return false;
     case NodeKind::BinOp: {
         auto bin_op = static_cast<const BinOp*>(stmt);
@@ -6159,10 +6146,6 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
         }
 
         return true;
-    }
-    case NodeKind::VarList: {
-        acorn_fatal("Variable list used as scope node");
-        return false;
     }
     default:
         return true;

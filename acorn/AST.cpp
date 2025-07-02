@@ -78,22 +78,27 @@ acorn::SourceLoc acorn::Func::get_function_const_location() const {
 }
 
 acorn::PointSourceLoc acorn::Func::get_function_first_default_param_location() const {
-    const char* eq_ptr = nullptr;
     Var* found_param = nullptr;
     for (Var* param : params) {
-        SourceLoc loc = param->loc;
-        const char* ptr = loc.ptr + loc.length;
-        while (*ptr != ',' && *ptr != '=' && *ptr == ')') {
-            ++ptr;
-        }
-        if (*ptr == ')') {
-            acorn_fatal("This function should only be called if there is a default parameter");
-        }
-        if (*ptr == '=') {
+        if (param->assignment) {
             found_param = param;
-            eq_ptr = ptr;
             break;
         }
+    }
+
+    if (!found_param) {
+        acorn_fatal("Failed to find parameter");
+        return {};
+    }
+
+    const char* eq_ptr = found_param->assignment->loc.ptr;
+    while (*eq_ptr != '=' && *eq_ptr != ':' && eq_ptr > loc.ptr) {
+        --eq_ptr;
+    }
+
+    if (eq_ptr <= loc.ptr) {
+        acorn_fatal("Should have hit = or :");
+        return {};
     }
 
     auto expanded_assignment_loc = expand(found_param->assignment);
@@ -110,7 +115,11 @@ acorn::PointSourceLoc acorn::Func::get_function_first_default_param_location() c
 }
 
 std::string acorn::Func::get_decl_string() const {
-    std::string str = name.to_string().str();
+    std::string str;
+    if (is_constant) {
+        str += "const ";
+    }
+    str += name.to_string().str();
     str += "(";
     size_t count = 0;
     for (Var* param : params) {
@@ -121,9 +130,6 @@ std::string acorn::Func::get_decl_string() const {
         ++count;
     }
     str += ")";
-    if (is_constant) {
-        str += " const";
-    }
     return str;
 }
 

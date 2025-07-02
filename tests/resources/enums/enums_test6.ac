@@ -1,29 +1,30 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle);
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
 
-native dllimport int32 WriteFile(void*       hFile,
-                                 const void* lpBuffer,
-                                 uint32      nNumberOfBytesToWrite,
-                                 uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped);
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count);
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-void write_val(int val) {
+fn write_val(val: int) {
 
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
-    uint32 written;
-    char c = as(char) val;
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
     WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
+    c: char = as(char) val;
     write(1, &c, 1);
 #endif
 
@@ -36,22 +37,22 @@ enum En {
     D = 58
 }
 
-void main() {
+fn main() {
 
-    En e1 = En.A;
-    En[int] v1 = e1 + 10;
+    e1: En = En.A;
+    v1: En$ = e1 + 10;
     write_val(as(int) v1);
 
-    En e2 = En.B;
-    En[int] v2 = e2 + 10;
+    e2: En = En.B;
+    v2: En$ = e2 + 10;
     write_val(as(int) v2);
 
-    En e3 = En.C;
-    En[int] v3 = e3 + 10;
+    e3: En = En.C;
+    v3: En$ = e3 + 10;
     write_val(as(int) v3);
 
-    En e4 = En.D;
-    En[int] v4 = e4 + 10;
+    e4: En = En.D;
+    v4: En$ = e4 + 10;
     write_val(as(int) v4);
 
 }

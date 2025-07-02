@@ -240,15 +240,15 @@ void test_parser() {
         });
         test("type parsing", [&] {
             const char* program = R"(
-                int         a1;
-                int32       a2;
-                uint32      a3;
-                int*        a4;
-                uint32*     a5;
-                const int   a6;
-                const int*  a7;
-                int**       a8;
-                const int** a9;
+                a1: int;
+                a2: int32;
+                a3: uint32;
+                a4: int*;
+                a5: uint32*;
+                a6: const int;
+                a7: const int*;
+                a8: int**;
+                a9: const int**;
             )";
             SourceFile& file = *mock_parser(program);
             auto nodes = file.get_variables()
@@ -285,10 +285,10 @@ void test_parser() {
         });
         test("function parsing", [&] {
             const char* program = R"(
-                void foo() {}
-                void foo(int a) {}
-                native dllimport void foo2();
-                void foo3(int a, int b, int c) {}
+                fn foo() {}
+                fn foo(a: int) {}
+                native dllimport fn foo2();
+                fn foo3(a: int, b: int, c: int) {}
             )";
             SourceFile& file = *mock_parser(program);
 
@@ -491,7 +491,7 @@ void test_parser() {
 
         });
         test("elm type of array must have element", [&] {
-            mock_parser("int[4][] a;");
+            mock_parser("a: int[4][];");
             expect_none().to_produce_error(ErrCode::ParseElmTypeMustHaveArrLen);
         });
         test("float 64 arithmetic", [&] {
@@ -512,15 +512,15 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(3);
 
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->float64_type);
+            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->double_type);
             expect(std::bit_cast<uint64_t>(static_cast<Number*>(nodes[0])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value1));
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->float64_type);
+            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->double_type);
             expect(std::bit_cast<uint64_t>(static_cast<Number*>(nodes[1])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value2));
 
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->float64_type);
+            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->double_type);
             expect(std::bit_cast<uint64_t>(static_cast<Number*>(nodes[2])->value_f64), to_string<uint64_t>).to_be(std::bit_cast<uint64_t>(value3));
 
         });
@@ -542,15 +542,15 @@ void test_parser() {
             expect(nodes.size(), to_string<size_t>).to_be(3);
 
             expect(nodes[0]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->float32_type);
+            expect(static_cast<Number*>(nodes[0])->type, type_to_string).to_be(context->float_type);
             expect(std::bit_cast<uint32_t>(static_cast<Number*>(nodes[0])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value1));
 
             expect(nodes[1]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->float32_type);
+            expect(static_cast<Number*>(nodes[1])->type, type_to_string).to_be(context->float_type);
             expect(std::bit_cast<uint32_t>(static_cast<Number*>(nodes[1])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value2));
 
             expect(nodes[2]->kind, node_kind_to_string).to_be(NodeKind::Number);
-            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->float32_type);
+            expect(static_cast<Number*>(nodes[2])->type, type_to_string).to_be(context->float_type);
             expect(std::bit_cast<uint32_t>(static_cast<Number*>(nodes[2])->value_f32), to_string<uint32_t>).to_be(std::bit_cast<uint32_t>(value3));
 
         });

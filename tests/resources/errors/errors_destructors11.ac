@@ -2,24 +2,24 @@ import std;
 import std.Error;
 
 struct TestError :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "error raised!";
     }
 
-    ~TestError() {
+    fn delete() {
         std.print("destructor called!");
     }
 }
 
-int foo() raises TestError {
+fn foo() -> int | raises TestError {
     raise TestError{};
 }
 
-void main() {
-    int a = try err: foo() {
+fn main() {
+    a: int = try err: foo() {
         std.print("caught error!");
         recover 55;
     };

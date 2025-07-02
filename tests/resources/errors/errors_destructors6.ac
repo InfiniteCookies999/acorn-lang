@@ -2,23 +2,23 @@ import std;
 import std.Error;
 
 struct TestError :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "error raised!";
     }
 }
 
-void write_val(int val) {
+fn write_val(val: int) {
 
 #if OS_GROUP_WINDOWS
-    void* handle = std.GetStdHandle(-11);
-    uint32 written;
-    char c = as(char) val;
+    handle: void* = std.GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
     std.WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
+    c: char = as(char) val;
     std.write(1, &c, 1);
 #endif
 
@@ -26,16 +26,16 @@ void write_val(int val) {
 
 struct A {
 
-    int f() {
+    fn f() -> int {
         return 64;
     }
 
-    ~A() {
+    fn delete () {
         std.print("deconstructor called!");
     }
 }
 
-A foo(bool b) raises TestError {
+fn foo(b: bool) -> A | raises TestError {
     if b {
         raise TestError{};
     } else {
@@ -43,15 +43,15 @@ A foo(bool b) raises TestError {
     }
 }
 
-void bar(bool b) {
-    int a = try foo(b).f() {
+fn bar(b: bool) {
+    a: int = try foo(b).f() {
         std.print("caught error!");
         return;
     };
     write_val(a);
 }
 
-void main() {
+fn main() {
     bar(false);
     std.print("...");
     bar(true);

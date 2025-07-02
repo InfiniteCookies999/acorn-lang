@@ -1,24 +1,25 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle);
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
 
-native dllimport int32 WriteFile(void*       hFile,
-                                 const void* lpBuffer,
-                                 uint32      nNumberOfBytesToWrite,
-                                 uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped);
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count);
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-void print(const char* s, int length) {
+fn print(s: const char*, length: int) {
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
-    uint32 written;
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
     WriteFile(handle, s, as(uint32) length, &written, null);
 #elif OS_GROUP_UNIX
     write(1, s, as(usize) length);
@@ -26,39 +27,39 @@ void print(const char* s, int length) {
 }
 
 struct A {
-    ~A() {
+    fn delete() {
         print("A called", 8);
     }
 }
 
 struct B {
-    ~B() {
+    fn delete() {
         print("B called", 8);
     }
 
-    C f() {
+    fn f() -> C {
         return C{};
     }
 }
 
 struct C {
-    ~C() {
+    fn delete() {
         print("C called", 8);
     }
 }
 
 struct D {
-    ~D() {
+    fn delete() {
         print("D called", 8);
     }
 }
 
-B foo() {
+fn foo() -> B {
     return B{};
 }
 
-void main() {
-    A a;
-    C c = foo().f();
-    D d;
+fn main() {
+    a: A;
+    c: C = foo().f();
+    d: D;
 }

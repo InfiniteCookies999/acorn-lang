@@ -2,36 +2,36 @@ import std;
 import std.Error;
 
 struct TestError :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "error raised!";
     }
 }
 
-void write_val(int64 val) {
+fn write_val(val: int64) {
 
 #if OS_GROUP_WINDOWS
-    void* handle = std.GetStdHandle(-11);
-    uint32 written;
-    char c = as(char) val;
+    handle: void* = std.GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
     std.WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
+    c: char = as(char) val;
     std.write(1, &c, 1);
 #endif
 
 }
 
 struct A {
-    int64 v1;
-    int64 v2;
-    int64 v3;
-    int64 v4;
+    v1: int64;
+    v2: int64;
+    v3: int64;
+    v4: int64;
 }
 
-A foo(bool b) raises TestError {
+fn foo(b: bool) -> A | raises TestError {
     if b {
         raise TestError{};
     } else {
@@ -39,8 +39,8 @@ A foo(bool b) raises TestError {
     }
 }
 
-void main() {
-    A a1 = try foo(false) {
+fn main() {
+    a1: A = try foo(false) {
         std.print("I am not called");
         return;
     };
@@ -50,7 +50,7 @@ void main() {
     write_val(a1.v3);
     write_val(a1.v4);
 
-    A a2 = try foo(true) {
+    a2: A = try foo(true) {
         std.print("error caught!");
         return;
     };

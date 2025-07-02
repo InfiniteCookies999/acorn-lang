@@ -330,7 +330,7 @@ namespace acorn {
         VarList() : Node(NodeKind::VarList) {
         }
 
-        llvm::SmallVector<Var*> list;
+        llvm::SmallVector<Var*, 2> vars;
     };
 
     struct Struct : Decl {
@@ -515,8 +515,11 @@ namespace acorn {
         }
 
         Var*       var;
+        bool       var_auto_ptr = false;
         Expr*      container;
         ScopeStmt* scope;
+        // Instead of copying the value into the variable each loop it instead
+        // stores a pointer to each element in the container.
         bool       references_memory = false;
     };
 
@@ -751,7 +754,6 @@ namespace acorn {
         TypeExpr(NodeKind kind) : Expr(kind) {
         }
 
-        NodeKind prev_node_kind = NodeKind::InvalidExpr;
         Type* parsed_expr_type;
         Type* expr_type;
     };

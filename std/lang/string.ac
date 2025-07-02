@@ -1,28 +1,28 @@
 #file(access=public)
 
-private char DEFAULT_CHAR = '\0';
+private DEFAULT_CHAR := '\0';
 
 struct String {
 
-    readonly char* buffer;
-    readonly int   length;
-    private  int   capacity;
+    readonly buffer:   char*;
+    readonly length:   int;
+    private  capacity: int;
 
     /*
      * Creates a String with a length of 0.
      */
-    String() {
+    fn new() {
         buffer = &DEFAULT_CHAR;
     }
 
-    copyobj String(const String* o) {
+    fn copyobj(o: const String*) {
         this.length   = o.length;
         this.capacity = o.capacity;
         this.buffer   = as(char*) malloc(length + 1); // +1 for null terminator.
         memcpy(this.buffer, o.buffer, length + 1);
     }
 
-    moveobj String(String* o) {
+    fn moveobj(o: String*) {
         this.length   = o.length;
         this.buffer   = o.buffer;
         this.capacity = o.capacity;
@@ -35,7 +35,7 @@ struct String {
      * Creates a String from a null terminated
      * character `buffer`.
      */
-    String(const char* buffer) {
+    fn new(buffer: const char*) {
         this.length   = strlen(buffer);
         this.capacity = this.length;
         this.buffer   = as(char*) malloc(length + 1); // +1 for null terminator.
@@ -50,7 +50,7 @@ struct String {
      * If the `buffer` is null terminated do not include the
      * null termination in the `length`.
      */
-    String(const char* buffer, int length) {
+    fn new(buffer: const char*, length: int) {
         this.length   = length;
         this.capacity = length;
         this.buffer   = as(char*) malloc(length + 1); // +1 for null terminator.
@@ -76,7 +76,7 @@ struct String {
      *                    the allocation size of the `buffer` is the
      *                    `length` passed.
      */
-    String(char* buffer, int length, bool copy_buffer) {
+    fn new(buffer: char*, length: int, copy_buffer: bool) {
         this.length   = length;
         this.capacity = length;
         if copy_buffer {
@@ -91,7 +91,7 @@ struct String {
     /*
      * The length of the String is zero.
      */
-    bool empty() const {
+    const fn empty() -> bool {
         return length == 0;
     }
 
@@ -99,7 +99,7 @@ struct String {
      * Returns a sub-string of this string which is in the range
      * of `begin_idx` and goes to the end of the string.
      */
-    String substr(int begin_idx) const {
+    const fn substr(begin_idx: int) -> String {
         return substr(begin_idx, length);
     }
 
@@ -107,14 +107,14 @@ struct String {
      * Returns a sub-string of this string which is in the range
      * of `begin_idx` and goes until `end_idx - 1`.
      */
-    String substr(int begin_idx, int end_idx) const {
+    const fn substr(begin_idx: int, end_idx: int) -> String {
         if (begin_idx < 0)
             raise OutOfBoundsError{ "begin_idx < 0" };
 
         if (end_idx > length)
             raise OutOfBoundsError{ "end_idx > length" };
 
-        int sublength = end_idx - begin_idx;
+        sublength := end_idx - begin_idx;
         if sublength == 0 {
             return String{};
         }
@@ -130,8 +130,8 @@ struct String {
      * Replaces all occurences of the `old_char` in this string
      * with the `new_char`.
      */
-    String^ replace(char old_char, char new_char) {
-        loop int i : 0..<length {
+    fn replace(old_char: char, new_char: char) -> String^ {
+        loop i in 0..<length {
             if buffer[i] == old_char {
                 buffer[i] = new_char;
             }
@@ -143,7 +143,7 @@ struct String {
      * Replaces all occurences of `sub_str` in this string
      * with the new string `replace_str`.
      */
-    String^ replace(const String^ sub_str, const String^ replace_str) {
+    fn replace(sub_str: const String^, replace_str: const String^) -> String^ {
         return replace(sub_str.buffer    , sub_str.length,
                        replace_str.buffer, replace_str.length);
     }
@@ -152,7 +152,7 @@ struct String {
      * Replaces all occurences of `sub_str` in this string
      * with the new string `replace_str`.
      */
-    String^ replace(const char* sub_str, const String^ replace_str) {
+    fn replace(sub_str: const char*, replace_str: const String^) -> String^ {
         return replace(sub_str           , strlen(sub_str),
                        replace_str.buffer, replace_str.length);
     }
@@ -161,7 +161,7 @@ struct String {
      * Replaces all occurences of `sub_str` in this string
      * with the new string `replace_str`.
      */
-    String^ replace(const String^ sub_str, const char* replace_str) {
+    fn replace(sub_str: const String^, replace_str: const char*) -> String^ {
         return replace(sub_str.buffer, sub_str.length,
                        replace_str   , strlen(replace_str));
     }
@@ -170,13 +170,13 @@ struct String {
      * Replaces all occurences of `sub_str` in this string
      * with the new string `replace_str`.
      */
-    String^ replace(const char* sub_str, const char* replace_str) {
+    fn replace(sub_str: const char*, replace_str: const char*) -> String^ {
         return replace(sub_str    , strlen(sub_str),
                        replace_str, strlen(replace_str));
     }
 
-    String^ replace(const char* sub_str    , int sub_length,
-                    const char* replace_str, int replace_length) {
+    fn replace(sub_str:     const char*, sub_length:     int,
+               replace_str: const char*, replace_length: int) -> String^ {
 
         if sub_length == 1 && replace_length == 1 {
             // Taking the faster path of replacing characters
@@ -188,37 +188,37 @@ struct String {
             return this;
         }
 
-        int[64] tmp_buffer;
-        int*    ext_buffer;
-        int     ext_buffer_capacity = 0;
-        int     index_count = 0;
+        tmp_buffer: int[64];
+        ext_buffer: int*;
+        ext_buffer_capacity := 0;
+        index_count         := 0;
 
-        char* head = this.buffer;
-        char* end  = this.buffer + this.length;
+        head: char* = this.buffer;
+        end: char*  = this.buffer + this.length;
 
         loop head + sub_length - 1 < end {
-            int remaining = as(int) (end - head);
-            int index = find_substring(head, remaining, sub_str, sub_length);
+            remaining := as(int) (end - head);
+            index := find_substring(head, remaining, sub_str, sub_length);
             if index == -1  break; // No more remaining substrings to replace.
 
             // Have to add the offset of the head since we only search for indexes
             // starting at the head but we want indexes relative to this.buffer's
             // memory since replacements take place after iterating through the
             // string.
-            int offset = as(int)(head - this.buffer);
+            offset := as(int)(head - this.buffer);
             index += offset;
             if index_count >= tmp_buffer.length {
                 // Out of temporary memory so must allocate memory!
 
-                int min_capacity = index_count+1 - tmp_buffer.length;
-                int* new_ext_buffer;
+                min_capacity := index_count+1 - tmp_buffer.length;
+                new_ext_buffer: int*;
                 if ext_buffer_capacity == 0 {
                     ext_buffer_capacity = 1;
                     new_ext_buffer = as(int*) malloc(ext_buffer_capacity * sizeof(int));
 
                     ext_buffer = new_ext_buffer;
                 } elif ext_buffer_capacity < min_capacity {
-                    int ext_buffer_length = ext_buffer_capacity;
+                    ext_buffer_length := ext_buffer_capacity;
                     ext_buffer_capacity *= 2;
                     new_ext_buffer = as(int*) malloc(ext_buffer_capacity * sizeof(int));
 
@@ -244,22 +244,22 @@ struct String {
             return this;
         }
 
-        int new_string_length = this.length + (replace_length * index_count) - (sub_length * index_count);
+        new_string_length := this.length + (replace_length * index_count) - (sub_length * index_count);
 
         // Cannot use existing capacity here because to construct the new buffer we
         // rely on the memory of the existing buffer.
-        char* new_buffer = as(char*) malloc(new_string_length + 1); // +1 for null termination.
+        new_buffer := as(char*) malloc(new_string_length + 1); // +1 for null termination.
 
-        int new_buffer_offset = 0, buffer_offset = 0;
-        loop int i : 0..<index_count {
-            int index;
+        new_buffer_offset, buffer_offset := 0, 0;
+        loop i in 0..<index_count {
+            index: int;
             if i < tmp_buffer.length {
                 index = tmp_buffer[i];
             } else {
                 index = ext_buffer[i - tmp_buffer.length];
             }
 
-            int length_before_index = index - buffer_offset;
+            length_before_index: int = index - buffer_offset;
             if length_before_index > 0 {
                 memcpy(new_buffer  + new_buffer_offset,
                        this.buffer + buffer_offset,
@@ -274,7 +274,7 @@ struct String {
         }
 
         // There still might be stuff at the end!
-        int length_before_index = length - buffer_offset;
+        length_before_index: int = length - buffer_offset;
         if length_before_index > 0 {
             memcpy(new_buffer  + new_buffer_offset,
                    this.buffer + buffer_offset,
@@ -297,7 +297,7 @@ struct String {
     /*
      * Appends the string `s` to the end of this string.
      */
-    String^ append(const String^ s) {
+    fn append(s: const String^) -> String^ {
         return append(s.buffer, s.length);
     }
 
@@ -305,7 +305,7 @@ struct String {
      * Appends the string null terminated string `s` to the end
      * of this string.
      */
-    String^ append(const char* s) {
+    fn append(s: const char*) -> String^ {
         return append(s, strlen(s));
     }
 
@@ -313,12 +313,12 @@ struct String {
      * Appends the string `s` to the end of this string for the given
      * `length`.
      */
-    String^ append(const char* s, int length) {
+    fn append(s: const char*, length: int) -> String^ {
 
         // TODO (maddie): should probably optimize by using existing capacity.
 
-        int new_string_length = this.length + length;
-        char* new_buffer = as(char*) malloc(new_string_length + 1); // +1 for null termination.
+        new_string_length := this.length + length;
+        new_buffer := as(char*) malloc(new_string_length + 1); // +1 for null termination.
 
         memcpy(new_buffer, this.buffer, this.length);
         memcpy(new_buffer + this.length, s, length);
@@ -337,14 +337,14 @@ struct String {
     /*
      * Removes all occurrences substring `s` from this String.
      */
-    String^ remove(const char* s) {
+    fn remove(s: const char*) -> String^ {
         return replace(s, "");
     }
 
     /*
      * Removes all occurrences substring `s` from this String.
      */
-    String^ remove(const String^ s) {
+    fn remove(s: const String^) -> String^ {
         return replace(s.buffer, s.length, "", 0);
     }
 
@@ -354,7 +354,7 @@ struct String {
      *
      * If `sub` is empty returns 0.
      */
-    int find(const char* sub) const {
+    const fn find(sub: const char*) -> int {
         return \find_substring(this.buffer, this.length, sub, strlen(sub));
     }
 
@@ -364,7 +364,7 @@ struct String {
      *
      * If `sub` is empty returns 0.
      */
-    int find(const String^ sub) const {
+    const fn find(sub: const String^) -> int {
         return \find_substring(this.buffer, this.length, sub.buffer, sub.length);
     }
 
@@ -372,7 +372,7 @@ struct String {
      * Finds the first occurrence of `c` in this String and
      * returns the index into this String.
      */
-    int find(char c) const {
+    const fn find(c: char) -> int {
         return \find_character(this.buffer, this.length, c);
     }
 
@@ -382,7 +382,7 @@ struct String {
      *
      * If `sub` is empty returns this.length - 1.
      */
-    int find_last(const char* sub) const {
+    const fn find_last(sub: const char*) -> int {
         return \find_last_substring(this.buffer, this.length, sub, strlen(sub));
     }
 
@@ -392,7 +392,7 @@ struct String {
      *
      * If `sub` is empty returns this.length - 1.
      */
-    int find_last(const String^ sub) const {
+    const fn find_last(sub: const String^) -> int {
         return \find_last_substring(this.buffer, this.length, sub.buffer, sub.length);
     }
 
@@ -400,15 +400,15 @@ struct String {
      * Finds the last occurrence of `c` in this String and
      * returns the index into this String.
      */
-    int find_last(char c) const {
+    const fn find_last(c: char) -> int {
         return \find_last_character(this.buffer, this.length, c);
     }
 
     /*
      * Converts all the characters in the String to lowercase.
      */
-    String^ tolower() {
-        loop int i : 0..<length {
+    fn tolower() -> String^ {
+        loop i in 0..<length {
             buffer[i] = \tolower(buffer[i]);
         }
         return this;
@@ -417,8 +417,8 @@ struct String {
     /*
      * Converts all the characters in the String to uppercase.
      */
-    String^ toupper() {
-        loop int i : 0..<length {
+    fn toupper() -> String^ {
+        loop i in 0..<length {
             buffer[i] = \toupper(buffer[i]);
         }
         return this;
@@ -427,8 +427,8 @@ struct String {
     /*
      * Returns true if this String starts with `sub` string.
      */
-    bool starts_with(const char* sub) const {
-        int sub_length = strlen(sub);
+    const fn starts_with(sub: const char*) -> bool {
+        sub_length := strlen(sub);
         if sub_length > length {
             return false;
         }
@@ -438,7 +438,7 @@ struct String {
     /*
      * Returns true if this String starts with `sub` string.
      */
-    bool starts_with(const String^ sub) const {
+    const fn starts_with(sub: const String^) -> bool {
         if sub.length > length {
             return false;
         }
@@ -448,23 +448,23 @@ struct String {
     /*
      * Returns true if this String ends with `sub` string.
      */
-    bool ends_with(const char* sub) const {
-        int sub_length = strlen(sub);
+    const fn ends_with(sub: const char*) -> bool {
+        sub_length := strlen(sub);
         if sub_length > length {
             return false;
         }
-        int offset = this.length - sub_length;
+        offset := this.length - sub_length;
         return memcmp(this.buffer + offset, sub, sub_length) == 0;
     }
 
     /*
      * Returns true if this String ends with `sub` string.
      */
-    bool ends_with(const String^ sub) const {
+    const fn ends_with(sub: const String^) -> bool {
         if sub.length > length {
             return false;
         }
-        int offset = this.length - sub.length;
+        offset := this.length - sub.length;
         return memcmp(this.buffer + offset, sub.buffer, sub.length) == 0;
     }
 
@@ -472,7 +472,7 @@ struct String {
      * Sets the length of the string to zero but keeps
      * the existing memory allocation.
      */
-    void clear() {
+    fn clear() {
         length = 0;
     }
 
@@ -483,12 +483,12 @@ struct String {
      * or '\f', but also include characters such as ascii code 24
      * for [CANCEL].
      */
-    String^ trim_leading() {
+    fn trim_leading() -> String^ {
         if length == 0 {
             return this;
         }
 
-        const char* ptr = buffer;
+        ptr := buffer;
         loop *ptr <= ' ' {
             ++ptr;
         }
@@ -498,7 +498,7 @@ struct String {
             return this;
         }
 
-        int amount_trimmed = as(int) (ptr - buffer);
+        amount_trimmed := as(int) (ptr - buffer);
         memmove(buffer, ptr, length - amount_trimmed);
         length -= amount_trimmed;
 
@@ -512,24 +512,24 @@ struct String {
      * or '\f', but also include characters such as ascii code 24
      * for [CANCEL].
      */
-    String^ trim_trailing() {
+    fn trim_trailing() -> String^ {
         if length == 0 {
             return this;
         }
 
-        const char* end = buffer + length - 1;
-        const char* ptr = end;
+        end := buffer + length - 1;
+        ptr := end;
         loop *ptr <= ' ' && ptr > buffer {
             --ptr;
         }
 
-        int amount_trimmed = as(int) (end - ptr);
+        amount_trimmed := as(int) (end - ptr);
         length -= amount_trimmed;
 
         return this;
     }
 
-    ~String() {
+    fn delete() {
         if buffer != &DEFAULT_CHAR { // Make sure it is not just referencing the global memory.
             free(buffer);
             length   = 0;
@@ -546,11 +546,11 @@ struct String {
  * @return  length of the null terminated
  *          c-string.
  */
-int strlen(const char* s) {
+fn strlen(s: const char*) -> int {
     if !s  return 0;
     return as(int) _strlen(s);
 }
-private native("strlen") isize _strlen(const char* s);
+private native("strlen") fn _strlen(s: const char*) -> isize;
 
 /*
  * Copies the contents of `source` into `dest`. Make sure the `dest` pointer
@@ -558,7 +558,7 @@ private native("strlen") isize _strlen(const char* s);
  *
  * @source Must be a null terminated c-string.
  */
-native char* strcpy(char* dest, const char* source);
+native fn strcpy(dest: char*, source: const char*) -> char*;
 
  /*
   * Compares two strings `s1` and `s2`.
@@ -572,10 +572,10 @@ native char* strcpy(char* dest, const char* source);
   * If the first non-equivalent character in `s2` is larger than
   * the character in `s1` returns -1.
   */
-int strcmp(const char* s1, const char* s2) {
+fn strcmp(s1: const char*, s2: const char*) -> int {
     return as(int) strcmp(s1, s2);
 }
-private native int32 strcmp(const char* s1, const char* s2);
+private native fn strcmp(s1: const char*, s2: const char*) -> int32;
 
  /*
   * Compares two wide character strings `s1` and `s2`.
@@ -589,10 +589,10 @@ private native int32 strcmp(const char* s1, const char* s2);
   * If the first non-equivalent character in `s2` is larger than
   * the character in `s1` returns -1.
   */
-int wide_cmp(const char16* s1, const char16* s2) {
+fn wide_cmp(s1: const char16*, s2: const char16*) -> int {
     return as(int) wcscmp(s1, s2);
 }
-private native int32 wcscmp(const char16* string1, const char16* string2);
+private native fn wcscmp(string1: const char16*, string2: const char16*) -> int32;
 
 /*
  * Converts a 64 bit unsigned integer to a string containing
@@ -601,12 +601,12 @@ private native int32 wcscmp(const char16* string1, const char16* string2);
  * @value The value to convert to a String.
  * @base  The numeric base of the value. Defaults to 10.
  */
-String to_string(uint64 value, int base = 10) {
-    const BUFFER_SIZE = 21;
-    char[BUFFER_SIZE] buffer;
+fn to_string(value: uint64, base := 10) -> String {
+    BUFFER_SIZE :: 21;
+    buffer: char[BUFFER_SIZE];
 
-    char* ptr = uint64_to_chars(value, buffer + BUFFER_SIZE - 1, base);
-    int length = as(int)(buffer + BUFFER_SIZE) - as(int)ptr;
+    ptr := uint64_to_chars(value, buffer + BUFFER_SIZE - 1, base);
+    length := as(int)(buffer + BUFFER_SIZE) - as(int)ptr;
 
     return String{ ptr, length };
 }
@@ -618,18 +618,18 @@ String to_string(uint64 value, int base = 10) {
  * @value The value to convert to a String.
  * @base  The numeric base of the value. Defaults to 10.
  */
-String to_string(int64 value, int base = 10) {
+fn to_string(value: int64, base := 10) -> String {
 
-    bool is_negative = value < 0;
+    is_negative := value < 0;
     if is_negative {
         value = -value;
     }
 
-    const BUFFER_SIZE = 21 + 1;
-    char[BUFFER_SIZE] buffer;
+    BUFFER_SIZE :: 21 + 1;
+    buffer: char[BUFFER_SIZE];
 
-    char* ptr = uint64_to_chars(as(uint64) value, buffer + BUFFER_SIZE - 1, base);
-    int length = as(int)(buffer + BUFFER_SIZE) - as(int)ptr;
+    ptr := uint64_to_chars(as(uint64) value, buffer + BUFFER_SIZE - 1, base);
+    length := as(int)(buffer + BUFFER_SIZE) - as(int)ptr;
 
     if is_negative {
         --ptr;
@@ -640,20 +640,20 @@ String to_string(int64 value, int base = 10) {
     return String{ ptr, length };
 }
 
-String to_string(int value, int base = 10) {
+fn to_string(value: int, base := 10) -> String {
     return to_string(as(int64) value, base);
 }
 
-String to_string(bool b) {
+fn to_string(b: bool) -> String {
     return b ? String{ "true" , 4 }
              : String{ "false", 5 };
 }
 
-String to_string(char c) {
+fn to_string(c: char) -> String {
     return String{ &c, 1 };
 }
 
-int find_substring(const char* s, int s_length, const char* sub, int sub_length) {
+fn find_substring(s: const char*, s_length: int, sub: const char*, sub_length: int) -> int {
     if s_length == 0 {
         return 0;
     }
@@ -664,8 +664,8 @@ int find_substring(const char* s, int s_length, const char* sub, int sub_length)
         return -1;
     }
 
-    auto head = s;
-    auto end  = s + s_length;
+    head := s;
+    end  := s + s_length;
 
     loop head + sub_length - 1 < end {
         if *head == *sub {
@@ -681,8 +681,8 @@ int find_substring(const char* s, int s_length, const char* sub, int sub_length)
     return -1;
 }
 
-int find_character(const char* s, int s_length, char c) {
-    loop int i : 0..<s_length {
+fn find_character(s: const char*, s_length: int, c: char) -> int {
+    loop i in 0..<s_length {
         if s[i] == c {
             return i;
         }
@@ -690,7 +690,7 @@ int find_character(const char* s, int s_length, char c) {
     return -1;
 }
 
-int find_last_substring(const char* s, int s_length, const char* sub, int sub_length) {
+fn find_last_substring(s: const char*, s_length: int, sub: const char*, sub_length: int) -> int {
     if s_length == 0 {
         return s_length - 1;
     }
@@ -703,8 +703,8 @@ int find_last_substring(const char* s, int s_length, const char* sub, int sub_le
 
     // We go back sub_length because we know any comparisons less than
     // sub_length are are too short.
-    auto head  = s + s_length - sub_length;
-    auto start = s;
+    head  := s + s_length - sub_length;
+    start := s;
 
     loop head >= start {
         if *head == *sub {
@@ -719,8 +719,8 @@ int find_last_substring(const char* s, int s_length, const char* sub, int sub_le
     return -1;
 }
 
-int find_last_character(const char* s, int s_length, char c) {
-    loop int i = s_length - 1; i >= 0; --i {
+fn find_last_character(s: const char*, s_length: int, c: char) -> int {
+    loop i := s_length - 1; i >= 0; --i {
         if s[i] == c {
             return i;
         }

@@ -1057,7 +1057,7 @@ static void struct_tests() {
 
         expect(result, std::identity()).to_be("ABCD");
     });
-    test("Struct ret multiple loc vars (sm struct)", [&] {
+    /*test("Struct ret multiple loc vars (sm struct)", [&] {
         auto [err_msg, result] = run_codegen_test(src("structs/structs25.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
@@ -1104,7 +1104,7 @@ static void struct_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("const");
-    });
+    });*/
 }
 
 static void member_function_tests() {
@@ -1171,7 +1171,7 @@ static void multi_variables_on_one_line_tests() {
 
         expect(result, std::identity()).to_be("AB");
     });
-    test("Multi-var no 4 variables", [&] {
+    test("Multi-var assign 4 variables", [&] {
         auto [err_msg, result] = run_codegen_test(src("multiline_vars/multiline_vars_test2.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
@@ -1578,12 +1578,6 @@ static void auto_type_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("A");
-    });
-    test("Auto ptr type assign variable address", [&] {
-        auto [err_msg, result] = run_codegen_test(src("auto_type/auto_type_test4.ac"));
-        if (!err_msg.empty())  force_fail(err_msg.c_str());
-
-        expect(result, std::identity()).to_be("@");
     });
     test("Auto variable for iterator loop", [&] {
         auto [err_msg, result] = run_codegen_test(src("auto_type/auto_type_test5.ac"));

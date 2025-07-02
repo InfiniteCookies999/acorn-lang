@@ -2,36 +2,36 @@ import std;
 import std.Error;
 
 struct TestError :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "test error msg";
     }
 }
 
-void write_val(int val) {
+fn write_val(val: int) {
 
 #if OS_GROUP_WINDOWS
-    void* handle = std.GetStdHandle(-11);
-    uint32 written;
-    char c = as(char) val;
+    handle: void* = std.GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
     std.WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
+    c: char = as(char) val;
     std.write(1, &c, 1);
 #endif
 
 }
 
 interface I {
-    void foo(bool b, int iv) raises TestError;
+    fn foo(b: bool, iv: int) | raises TestError;
 }
 
 struct A :: *I {
-    int v;
+    v: int;
 
-    void foo(bool b, int iv) raises TestError {
+    fn foo(b: bool, iv: int) | raises TestError {
         if b {
             raise TestError{};
         }
@@ -39,9 +39,9 @@ struct A :: *I {
     }
 }
 
-void main() {
-    A a;
-    I* i = &a;
+fn main() {
+    a: A;
+    i: I* = &a;
     try i.foo(false, 64);
     write_val(a.v);
     try i.foo(true, 0);

@@ -58,26 +58,26 @@ enum FileFlag :: uint32 {
 struct FileHandle {
 
 #if OS_GROUP_WINDOWS
-    void* handle;
+    handle: void*;
 #elif OS_GROUP_UNIX
-    int32 handle;
+    handle: int32;
 #endif
 
-    bool auto_close;
+    auto_close: bool;
 
 #if OS_GROUP_WINDOWS
-    FileHandle(void* handle, bool auto_close = true) {
+    fn new(handle: void*, auto_close := true) {
         this.handle = handle;
         this.auto_close = auto_close;
     }
 #elif OS_GROUP_UNIX
-    FileHandle(int32 handle, bool auto_close = true) {
+    fn new(handle: int32, auto_close := true) {
         this.handle = handle;
         this.auto_close = auto_close;
     }
 #endif
 
-    moveobj FileHandle(FileHandle* file_handle) {
+    fn moveobj(file_handle: FileHandle*) {
         this.handle     = file_handle.handle;
         this.auto_close = file_handle.auto_close;
 
@@ -89,7 +89,7 @@ struct FileHandle {
         file_handle.auto_close = false;
     }
 
-    int get_size() {
+    const fn get_size() -> int {
         // TODO: eventually it would be nice if the functionality of this
         // worked with larger file sizes. However, there are some limitations
         // to overcome when working with larger memory. One of those limitations
@@ -104,10 +104,10 @@ struct FileHandle {
 
         // TODO: error handling!
 #if OS_GROUP_WINDOWS
-        uint32 size = win32.GetFileSize(handle, null);
+        size: uint32 = win32.GetFileSize(handle, null);
         return as(int) size;
 #elif OS_GROUP_UNIX
-        Stat stats;
+        stats: Stat;
         if unix.fstat(handle, &stats) == 0 {
             return as(int) stats.st_size;
         }
@@ -115,9 +115,9 @@ struct FileHandle {
 #endif
     }
 
-    int read_buffer(char* buffer, int length) {
+    fn read_buffer(buffer: char*, length: int) -> int {
 #if OS_GROUP_WINDOWS
-        uint32 bytes_read;
+        bytes_read: uint32;
         if win32.ReadFile(handle, buffer, as(uint32) length, &bytes_read, null) == 0 {
             // TODO: proper error handling.
             module.println("failed to read buffer of file :(");
@@ -125,7 +125,7 @@ struct FileHandle {
         }
         return as(int) bytes_read;
 #elif OS_GROUP_UNIX
-        isize bytes_read = unix.read(handle, buffer, as(usize) length);
+        bytes_read: isize = unix.read(handle, buffer, as(usize) length);
         if bytes_read == -1 {
             module.println("failed to read buffer of file :(");
             return 0;
@@ -134,16 +134,16 @@ struct FileHandle {
 #endif
     }
 
-    int write_buffer(const char* buffer, int length) {
+    fn write_buffer(buffer: const char*, length: int) -> int {
 #if OS_GROUP_WINDOWS
-        uint32 bytes_written;
+        bytes_written: uint32;
         if win32.WriteFile(handle, buffer, as(uint32) length, &bytes_written, null) == 0 {
             module.println("failed to write to file handle :(");
             return 0;
         }
         return as(int) bytes_written;
 #elif OS_GROUP_UNIX
-        isize bytes_written = unix.write(handle, buffer, as(usize) length);
+        bytes_written: isize = unix.write(handle, buffer, as(usize) length);
         if bytes_written == -1 {
             module.println("failed to write to file handle :(");
             return 0;
@@ -152,13 +152,13 @@ struct FileHandle {
 #endif
     }
 
-    ~FileHandle() {
+    fn delete() {
         if auto_close {
             close();
         }
     }
 
-    void close() {
+    fn close() {
 #if OS_GROUP_WINDOWS
         win32.CloseHandle(handle);
 #elif OS_GROUP_UNIX
@@ -170,8 +170,8 @@ struct FileHandle {
 /*
  * Reads an entire file into a string.
  */
-String read(const char* path) {
-    auto handle = open(path, FileFlag.IN | FileFlag.SHARE);
+fn read(path: const char*) -> String {
+    handle := open(path, FileFlag.IN | FileFlag.SHARE);
 
 // TODO: eventually when we have proper error handling this should
 //       not be needed.
@@ -185,10 +185,10 @@ String read(const char* path) {
     }
 #endif
 
-    int size = handle.get_size();
+    size := handle.get_size();
 
-    char* buffer = as(char*) module.malloc(size + 1); // +1 for null terminator.
-    int bytes_read = handle.read_buffer(buffer, size);
+    buffer := as(char*) module.malloc(size + 1); // +1 for null terminator.
+    bytes_read := handle.read_buffer(buffer, size);
 
     if bytes_read != size {
         // TODO: proper error handling.
@@ -203,7 +203,7 @@ String read(const char* path) {
 /*
  * Reads an entire file into a string.
  */
-String read(const String^ path) {
+fn read(path: const String^) -> String {
     return read(path.buffer);
 }
 
@@ -211,9 +211,9 @@ String read(const String^ path) {
  * Returns true if the file system has a file or
  * directory at the given path.
  */
-bool exists(const char* path) {
+fn exists(path: const char*) -> bool {
 #if OS_GROUP_WINDOWS
-    uint32 attribs = win32.GetFileAttributesA(path);
+    attribs: uint32 = win32.GetFileAttributesA(path);
     return attribs != win32.INVALID_FILE_ATTRIBUTES;
 #elif OS_GROUP_UNIX
     return unix.access(path, unix.F_OK) == 0;
@@ -224,7 +224,7 @@ bool exists(const char* path) {
  * Returns true if the file system has a file or
  * directory at the given path.
  */
-bool exists(const String^ path) {
+fn exists(path: const String^) -> bool {
     return exists(path.buffer);
 }
 
@@ -232,13 +232,13 @@ bool exists(const String^ path) {
  * Returns true if the file system has a file but
  * is not a directory at the given path.
  */
-bool file_exists(const char* path) {
+fn file_exists(path: const char*) -> bool {
 #if OS_GROUP_WINDOWS
-    uint32 attribs = win32.GetFileAttributesA(path);
+    attribs: uint32 = win32.GetFileAttributesA(path);
     return attribs != win32.INVALID_FILE_ATTRIBUTES &&
           (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) == 0;
 #elif OS_GROUP_UNIX
-    Stat stats;
+    stats: Stat;
     if unix.stat(path, &stats) == 0 {
         return !unix.__S_ISTYPE(stats.st_mode, unix.__S_IFDIR);
     }
@@ -250,7 +250,7 @@ bool file_exists(const char* path) {
  * Returns true if the file system has a file but
  * is not a directory at the given path.
  */
-bool file_exists(const String^ path) {
+fn file_exists(path: const String^) -> bool {
     return file_exists(path.buffer);
 }
 
@@ -258,13 +258,13 @@ bool file_exists(const String^ path) {
  * Returns true if the file system has a directory
  * at the given path.
  */
-bool directory_exists(const char* path) {
+fn directory_exists(path: const char*) -> bool {
 #if OS_GROUP_WINDOWS
-    uint32 attribs = win32.GetFileAttributesA(path);
+    attribs: uint32 = win32.GetFileAttributesA(path);
     return attribs != win32.INVALID_FILE_ATTRIBUTES &&
           (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) != 0;
 #elif OS_GROUP_UNIX
-    Stat stats;
+    stats: Stat;
     if unix.stat(path, &stats) == 0 {
         return unix.__S_ISTYPE(stats.st_mode, unix.__S_IFDIR);
     }
@@ -276,7 +276,7 @@ bool directory_exists(const char* path) {
  * Returns true if the file system has a directory
  * at the given path.
  */
-bool directory_exists(const String^ path) {
+fn directory_exists(path: const String^) -> bool {
     return directory_exists(path.buffer);
 }
 
@@ -284,7 +284,7 @@ bool directory_exists(const String^ path) {
  * Creates the directory at the given path. Returns
  * true if created.
  */
-bool mkdir(const char* path) {
+fn mkdir(path: const char*) -> bool {
     // TODO: improve the return to indicate why it failed
     //       besides just a bool for if is succeeded or not.
     // TODO: We will also want to pass a variable for creating
@@ -301,7 +301,7 @@ bool mkdir(const char* path) {
  * Creates the directory at the given path. Returns
  * true if created.
  */
-bool mkdir(const String^ path) {
+fn mkdir(path: const String^) -> bool {
     return mkdir(path.buffer);
 }
 
@@ -312,10 +312,10 @@ bool mkdir(const String^ path) {
  * If deleting a directory the directory must be
  * empty.
  */
-bool remove(const char* path) {
+fn remove(path: const char*) -> bool {
 
 #if OS_GROUP_WINDOWS
-    uint32 attribs = win32.GetFileAttributesA(path);
+    attribs: uint32 = win32.GetFileAttributesA(path);
     if attribs == win32.INVALID_FILE_ATTRIBUTES {
         return false;
     }
@@ -335,15 +335,15 @@ bool remove(const char* path) {
  * If deleting a directory the directory must be
  * empty.
  */
-bool remove(const String^ path) {
+fn remove(path: const String^) -> bool {
     return remove(path.buffer);
 }
 
-FileHandle open(const char* path, FileFlag[uint32] flags) {
+fn open(path: const char*, flags: FileFlag$) -> FileHandle {
 #if OS_GROUP_WINDOWS
-    uint32 access_flags = 0;
-    uint32 share_flags  = 0;
-    uint32 create_flags = 0;
+    access_flags: uint32 = 0;
+    share_flags:  uint32 = 0;
+    create_flags: uint32 = 0;
 
     if flags == 0 {
         access_flags = win32.GENERIC_ALL;
@@ -377,13 +377,13 @@ FileHandle open(const char* path, FileFlag[uint32] flags) {
         create_flags |= win32.OPEN_EXISTING;
     }
 
-    void* handle = win32.CreateFileA(path,
-                                     access_flags,
-                                     share_flags,
-                                     null,
-                                     create_flags,
-                                     win32.FILE_ATTRIBUTE_NORMAL,
-                                     null);
+    handle: void* = win32.CreateFileA(path,
+                                      access_flags,
+                                      share_flags,
+                                      null,
+                                      create_flags,
+                                      win32.FILE_ATTRIBUTE_NORMAL,
+                                      null);
 
     if handle == win32.INVALID_HANDLE_VALUE {
         // TODO: Proper error handling!
@@ -396,8 +396,8 @@ FileHandle open(const char* path, FileFlag[uint32] flags) {
 
     // TODO: O_LARGEFILE -- Allow working for large file sizes.
 
-    int32 os_flags = 0;
-    uint32 os_mode = 0;
+    os_flags: int32 = 0;
+    os_mode: uint32 = 0;
 
     if (flags & FileFlag.IN) != 0 && (flags & FileFlag.OUT) != 0 {
         os_flags |= unix.O_RDWR;
@@ -420,7 +420,7 @@ FileHandle open(const char* path, FileFlag[uint32] flags) {
                   unix.S_IWGRP | unix.S_IROTH | unix.S_IWOTH;
     }
 
-    int32 handle = unix.open(path, os_flags, os_mode);
+    handle: int32 = unix.open(path, os_flags, os_mode);
     if handle == -1 {
         // TODO: proper error handling!
         module.println("Failed to open file :(");
@@ -431,6 +431,6 @@ FileHandle open(const char* path, FileFlag[uint32] flags) {
 #endif
 }
 
-FileHandle open(const String^ path, FileFlag[uint32] flags) {
+fn open(path: const String^, flags: FileFlag$) -> FileHandle {
     return open(path.buffer, flags);
 }
