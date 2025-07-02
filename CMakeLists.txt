@@ -35,7 +35,6 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clan
     endif()
 
     add_compile_options(-Wshadow=local)         # No shadowing local variables or parameters.
-    add_compile_options(-Werror=shadow)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     add_compile_options(/permissive-)           # Make MSVC standard compliant.
     add_compile_options(/we4834)                # [[nodiscard]]

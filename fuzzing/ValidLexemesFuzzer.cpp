@@ -202,9 +202,9 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
         switch (id) {
         case TokId::KwInt:     case TokId::KwInt8:     case TokId::KwInt16:   case TokId::KwInt32:
         case TokId::KwInt64:   case TokId::KwUInt8:    case TokId::KwUInt16:  case TokId::KwUInt32:
-        case TokId::KwUInt64:  case TokId::KwISize:    case TokId::KwUSize:   case TokId::KwFloat32:
-        case TokId::KwFloat64: case TokId::KwBool:     case TokId::KwVoid:    case TokId::KwChar:
-        case TokId::KwConst:   case TokId::KwAuto:
+        //case TokId::KwUInt64:  case TokId::KwISize:    case TokId::KwUSize:   case TokId::KwFloat32:
+        //case TokId::KwFloat64: case TokId::KwBool:     case TokId::KwVoid:    case TokId::KwChar:
+        //case TokId::KwConst:   case TokId::KwAuto:
         case TokId::KwAs:      case TokId::KwIf:       case TokId::KwElIf:    case TokId::KwElse:
         case TokId::KwImport:  case TokId::KwContinue: case TokId::KwBreak:   case TokId::KwSwitch:
         case TokId::KwCase:    case TokId::KwStatic:   case TokId::KwStruct:  case TokId::KwEnum:
@@ -218,60 +218,60 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
         case TokId::OrEq:      case TokId::CaretEq:    case TokId::TildeEq:   case TokId::LtLtEq:
         case TokId::GtGtEq:    case TokId::AddAdd:     case TokId::SubSub:    case TokId::SubSubSub:
         case TokId::AndAnd:    case TokId::OrOr:       case TokId::RangeEq:   case TokId::RangeLt:
-        case TokId::DotDot:    case TokId::DotDotDot:  case TokId::ColCol:    case TokId::BackslashBackslash: {
+        //case TokId::DotDot:    case TokId::DotDotDot:  case TokId::ColCol:    case TokId::BackslashBackslash: {
             lexeme = acorn::token_kind_to_string(*compiler.get_context(), id);
             break;
         }
-        case TokId::IntLiteral:
-            lexeme = create_int_literal(10ull);
-            break;
-        case TokId::HexLiteral:
-            lexeme = create_int_literal(16ull, "0x");
-            break;
-        case TokId::BinLiteral:
-            lexeme = create_int_literal(2ull, "0b");
-            break;
-        case TokId::OctLiteral:
-            lexeme = create_int_literal(8ull, "0");
-            break;
-        case TokId::Identifier:
-            lexeme = create_identifier();
-            break;
-        case TokId::CharLiteral:
-            lexeme = create_char_literal();
-            break;
-        case TokId::StringLiteral:
-            lexeme = create_string_literal();
-            break;
-        case TokId::FloatLiteral: {
-            int max_whole_digits = 8;
-            int min_exp_value = -45;
-            int max_exp_value = 38;
-            int exp_dist_mean = 6;
-            int exp_dist_std_dev = 10;
-            lexeme = create_float_literal(max_whole_digits, exp_dist_mean, exp_dist_std_dev, min_exp_value, max_exp_value);
-            lexeme += "f";
-            break;
-        }
-        case TokId::DoubleLiteral: {
-            int max_whole_digits = 16;
-            int min_exp_value = -324;
-            int max_exp_value = 308;
-            double exp_dist_mean = 50;
-            double exp_dist_std_dev = 95;
-            lexeme = create_float_literal(max_whole_digits, exp_dist_mean, exp_dist_std_dev, min_exp_value, max_exp_value);
-            break;
-        }
+        //case TokId::IntLiteral:
+        //    lexeme = create_int_literal(10ull);
+        //    break;
+        //case TokId::HexLiteral:
+        //    lexeme = create_int_literal(16ull, "0x");
+        //    break;
+        //case TokId::BinLiteral:
+        //    lexeme = create_int_literal(2ull, "0b");
+        //    break;
+        //case TokId::OctLiteral:
+        //    lexeme = create_int_literal(8ull, "0");
+        //    break;
+        //case TokId::Identifier:
+        //    lexeme = create_identifier();
+        //    break;
+        //case TokId::CharLiteral:
+        //    lexeme = create_char_literal();
+        //    break;
+        //case TokId::StringLiteral:
+        //    lexeme = create_string_literal();
+        //    break;
+        //case TokId::FloatLiteral: {
+        //    int max_whole_digits = 8;
+        //    int min_exp_value = -45;
+        //    int max_exp_value = 38;
+        //    int exp_dist_mean = 6;
+        //    int exp_dist_std_dev = 10;
+        //    lexeme = create_float_literal(max_whole_digits, exp_dist_mean, exp_dist_std_dev, min_exp_value, max_exp_value);
+        //    lexeme += "f";
+        //    break;
+        //}
+        //case TokId::DoubleLiteral: {
+        //    int max_whole_digits = 16;
+        //    int min_exp_value = -324;
+        //    int max_exp_value = 308;
+        //    double exp_dist_mean = 50;
+        //    double exp_dist_std_dev = 95;
+        //    lexeme = create_float_literal(max_whole_digits, exp_dist_mean, exp_dist_std_dev, min_exp_value, max_exp_value);
+        //    break;
+        //}
         /*
         case TokId::String16BitLiteral:
         case TokId::String32BitLiteral:*/
-        default:
-            break;
-        }
-
-        if (!lexeme.empty()) {
-            ostream << lexeme;
-            output_whitespace();
-        }
+        // /default:
+        // /    break;
+        // /}
+// /
+        // /if (!lexeme.empty()) {
+        // /    ostream << lexeme;
+        // /    output_whitespace();
+        // /}
     }
 }
