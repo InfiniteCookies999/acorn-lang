@@ -1,57 +1,58 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle);
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
 
-native dllimport int32 WriteFile(void*       hFile,
-                                 const void* lpBuffer,
-                                 uint32      nNumberOfBytesToWrite,
-                                 uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped);
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count);
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-void print_char(char c) {
+fn print_char(c: char) {
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
-    uint32 written;
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
     WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
     write(1, &c, 1);
 #endif
 }
 
-const char* get_str() {
+fn get_str() -> const char* {
     return "hello world";
 }
 
-void main() {
+fn main() {
     {
-        const char* ptr = "hello world";
-        char c = *ptr;
+        ptr: const char* = "hello world";
+        c: char = *ptr;
         print_char(c);
     }
     {
-        const char* ptr = "hello world";
-        char c = *(ptr + 4);
+        ptr: const char* = "hello world";
+        c: char = *(ptr + 4);
         print_char(c);
     }
     {
-        char c = *get_str();
+        c: char = *get_str();
         print_char(c);
     }
     {
-        const char* ptr = "hello world!";
-        char c = *as(const char*) ptr;
+        ptr: const char* = "hello world!";
+        c: char = *as(const char*) ptr;
         print_char(c);
     }
     {
-        const char* ptr = "hello world!";
-        char c = *as(const char*) (ptr + 4);
+        ptr: const char* = "hello world!";
+        c: char = *as(const char*) (ptr + 4);
         print_char(c);
     }
 }

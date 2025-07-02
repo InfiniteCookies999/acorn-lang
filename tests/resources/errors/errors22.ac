@@ -2,27 +2,27 @@ import std;
 import std.Error;
 
 struct TestError :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "test error msg";
     }
 }
 
 interface I {
-    void foo() raises TestError;
+    fn foo() | raises TestError;
 }
 
 struct A :: *I {
-    void foo() raises TestError {
+    fn foo() | raises TestError {
         std.print("foo called!");
         raise TestError{};
     }
 }
 
-void main() {
-    A a;
-    I* i = &a;
+fn main() {
+    a: A;
+    i: I* = &a;
     try i.foo();
 }

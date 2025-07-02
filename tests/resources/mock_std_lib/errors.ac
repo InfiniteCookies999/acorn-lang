@@ -2,19 +2,19 @@
 
 interface Error {
 
-    const char* get_name() const;
+    const fn get_name() -> const char*;
 
-    const char* get_message() const;
+    const fn get_message() -> const char*;
 
 }
 
 #if OS_GROUP_WINDOWS
-native dllimport void ExitProcess(uint32 uExitCode);
+native dllimport fn ExitProcess(uExitCode: uint32);
 #elif OS_GROUP_UNIX
-native void _exit(int32 status);
+native fn _exit(status: int32);
 #endif
 
-void exit(int exit_code) {
+fn exit(exit_code: int) {
 #if OS_GROUP_WINDOWS
     ExitProcess(as(uint32) exit_code);
 #elif OS_GROUP_UNIX
@@ -22,7 +22,7 @@ void exit(int exit_code) {
 #endif
 }
 
-void abort(Error* error) {
+fn abort(error: Error*) {
     print(error.get_message());
     exit(0);
 }

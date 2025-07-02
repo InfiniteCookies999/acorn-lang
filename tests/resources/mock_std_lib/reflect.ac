@@ -17,6 +17,6 @@ struct EnumTypeInfo {
 }
 
 struct Any {
-    const Type* type;
-    const void* ptr;
+    type: const Type*;
+    ptr: const void*;
 }

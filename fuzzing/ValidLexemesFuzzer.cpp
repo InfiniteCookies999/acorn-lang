@@ -243,7 +243,7 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
         case TokId::StringLiteral:
             lexeme = create_string_literal();
             break;
-        case TokId::Float32Literal: {
+        case TokId::FloatLiteral: {
             int max_whole_digits = 8;
             int min_exp_value = -45;
             int max_exp_value = 38;
@@ -253,7 +253,7 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
             lexeme += "f";
             break;
         }
-        case TokId::Float64Literal: {
+        case TokId::DoubleLiteral: {
             int max_whole_digits = 16;
             int min_exp_value = -324;
             int max_exp_value = 308;

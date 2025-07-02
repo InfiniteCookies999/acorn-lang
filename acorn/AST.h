@@ -330,7 +330,7 @@ namespace acorn {
         VarList() : Node(NodeKind::VarList) {
         }
 
-        llvm::SmallVector<Var*> list;
+        llvm::SmallVector<Var*, 2> vars;
     };
 
     struct Struct : Decl {
@@ -515,8 +515,11 @@ namespace acorn {
         }
 
         Var*       var;
+        bool       var_auto_ptr = false;
         Expr*      container;
         ScopeStmt* scope;
+        // Instead of copying the value into the variable each loop it instead
+        // stores a pointer to each element in the container.
         bool       references_memory = false;
     };
 
@@ -574,7 +577,7 @@ namespace acorn {
         // The expression is a basic unit that may be interpreted as one of
         // several types depending on context. For example take:
         //
-        // int64 a = 5223;
+        // a: int64 = 5223;
         //
         // The number `5223` is trivially reassignable to numeric types as long
         // as the number can fit into the respective integer size.
@@ -751,7 +754,6 @@ namespace acorn {
         TypeExpr(NodeKind kind) : Expr(kind) {
         }
 
-        NodeKind prev_node_kind = NodeKind::InvalidExpr;
         Type* parsed_expr_type;
         Type* expr_type;
     };

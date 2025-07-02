@@ -64,26 +64,26 @@ public:
         section("Error Logging", []() {
             section("Logger::calculate_left_pivot_distance", []() {
                 test("Calculates basic pivot distance", []() {
-                    const char* program = "    int a = 4124124;";
+                    const char* program = "        a: int = 4124124;";
 
                     auto file = create_mock_file(program);
 
-                    auto location = create_location(program, "a = 4124124");
+                    auto location = create_location(program, "a: int = 4124124");
                     file->logger.begin_error(location, "");
 
                     size_t pivot_distance = file->logger.calculate_left_pivot_distance(1, location.ptr);
                     expect(pivot_distance, to_string<size_t>).to_be(8);
                 });
                 test("Calculate pivot distance containg tabs and unicode", []() {
-                    const char* program = "🚀\t int 😀\ta = 4124124;";
+                    const char* program = "🚀\t /**/ 😀\ta: int = 4124124;";
 
                     auto file = create_mock_file(program);
 
-                    auto location = create_location(program, "a = 4124124");
+                    auto location = create_location(program, "a: int = 4124124");
                     file->logger.begin_error(location, "");
 
                     size_t pivot_distance = file->logger.calculate_left_pivot_distance(1, location.ptr);
-                    expect(pivot_distance, to_string<size_t>).to_be(17);
+                    expect(pivot_distance, to_string<size_t>).to_be(18);
                 });
                 test("Calculate pivot distance of zero", []() {
                     const char* program = "a = 4124124;";
@@ -99,7 +99,7 @@ public:
             });
             section("Logger::calculate_right_cutoff_from_pivot", []() {
                 test("Line too short to cutoff to the right", []() {
-                    const char* program = "int a = 1412412.3223;";
+                    const char* program = "a: int = 1412412.3223;";
 
                     auto file = create_mock_file(program);
 
@@ -110,7 +110,7 @@ public:
                     expect(offset, to_string<size_t>).to_be(0);
                 });
                 test("Line error too short to cutoff to the right", []() {
-                    const char* program = "int a = 1412412.3223; // this is not part of the cutoff even though it is a lot of characters";
+                    const char* program = "a: int = 1412412.3223; // this is not part of the cutoff even though it is a lot of characters";
 
                     auto file = create_mock_file(program);
 
@@ -121,47 +121,47 @@ public:
                     expect(offset, to_string<size_t>).to_be(0);
                 });
                 test("Calculates the amount of cutoff characters past the right of window", []() {
-                    const char* program = "int a = 412134'u64 + 23521421'u64 + 78012809212'u64 + 563421746'u64 + 25434124'u64; // hello!";
+                    const char* program = "a: int = 412134'u64 + 23521421'u64 + 78012809212'u64 + 563421746'u64 + 25434124'u64; // hello!";
 
                     auto file = create_mock_file(program);
 
                     auto location = create_location(program, "= 412134'u64 + 23521421'u64 + 78012809212'u64 + 563421746'u64 + 25434124'u64");
                     file->logger.begin_error(location, "");
 
-                    size_t offset = file->logger.calculate_right_cutoff_from_pivot(1, 6);
+                    size_t offset = file->logger.calculate_right_cutoff_from_pivot(1, 7);
                     expect(offset, to_string<size_t>).to_be(36);
                 });
                 test("Calculates the amount of cutoff characters past the right of window with tabs and unicode", []() {
-                    const char* program = "int a = 412134'u64 \t+ 23521421'u64 +🚀\t + 78012809212'u64 \t + 563421746'u64 + 🚀🚀 + 25434124'u64; // hello!";
+                    const char* program = "a: int = 412134'u64 \t+ 23521421'u64 +🚀\t + 78012809212'u64 \t + 563421746'u64 + 🚀🚀 + 25434124'u64; // hello!";
 
                     auto file = create_mock_file(program);
 
                     auto location = create_location(program, "= 412134'u64 \t+ 23521421'u64 +🚀\t + 78012809212'u64 \t + 563421746'u64 + 🚀🚀 + 25434124'u64");
                     file->logger.begin_error(location, "");
 
-                    size_t offset = file->logger.calculate_right_cutoff_from_pivot(1, 6);
+                    size_t offset = file->logger.calculate_right_cutoff_from_pivot(1, 7);
                     expect(offset, to_string<size_t>).to_be(60);
                 });
                 test("Calculates zero for the amount of characters past the right of window because right on boundry", []() {
-                    const char* program = "int a = 412134'u64 + 23521421'u64 + 780180'u64; // These are not cutoff! >_<";
+                    const char* program = "a: int = 412134'u64 + 23521421'u64 + 780180'u64; // These are not cutoff! >_<";
 
                     auto file = create_mock_file(program);
 
                     auto location = create_location(program, "= 412134'u64 + 23521421'u64 + 780180'u64");
                     file->logger.begin_error(location, "");
 
-                    size_t offset = file->logger.calculate_right_cutoff_from_pivot(1, 6);
+                    size_t offset = file->logger.calculate_right_cutoff_from_pivot(1, 7);
                     expect(offset, to_string<size_t>).to_be(0);
                 });
                 test("Calculates one for the amount of characters past the right of window because right after boundry", []() {
-                    const char* program = "int a = 412134'u64 + 23521421'u64 + 7802180'u64; // These are not cutoff! >_<";
+                    const char* program = "a: int = 412134'u64 + 23521421'u64 + 7802180'u64; // These are not cutoff! >_<";
 
                     auto file = create_mock_file(program);
 
                     auto location = create_location(program, "= 412134'u64 + 23521421'u64 + 7802180'u64");
                     file->logger.begin_error(location, "");
 
-                    size_t offset = file->logger.calculate_right_cutoff_from_pivot(1, 6);
+                    size_t offset = file->logger.calculate_right_cutoff_from_pivot(1, 7);
                     expect(offset, to_string<size_t>).to_be(1);
                 });
                 test("Line error too short to cutoff to the right for error starting at beginning of line", []() {
@@ -178,27 +178,27 @@ public:
             });
             section("Logger::calculate_spare_left_characters", []() {
                 test("Calculates spare characters to be the pivot distance since there is no left cutoff", []() {
-                    const char* program = "int a = 1412412.3223; // this is not part of the cutoff even though it is a lot of characters";
+                    const char* program = "a: int = 1412412.3223; // this is not part of the cutoff even though it is a lot of characters";
 
                     auto file = create_mock_file(program);
 
                     auto location = create_location(program, "= 1412412.3223");
                     file->logger.begin_error(location, "");
 
-                    size_t spare_count = file->logger.calculate_spare_left_characters(1, 0, 6);
+                    size_t spare_count = file->logger.calculate_spare_left_characters(1, 0, 7);
 
-                    expect(spare_count, to_string<size_t>).to_be(6);
+                    expect(spare_count, to_string<size_t>).to_be(7);
 
                 });
                 test("Calculates spare characters to be the distance between the cutoff and the pivot distance", []() {
-                    const char* program = "int a = 1412412.3223; // this is not part of the cutoff even though it is a lot of characters";
+                    const char* program = "a: int = 1412412.3223; // this is not part of the cutoff even though it is a lot of characters";
 
                     auto file = create_mock_file(program);
 
                     auto location = create_location(program, "= 1412412.3223");
                     file->logger.begin_error(location, "");
 
-                    size_t spare_count = file->logger.calculate_spare_left_characters(1, 3, 6);
+                    size_t spare_count = file->logger.calculate_spare_left_characters(1, 4, 7);
 
                     expect(spare_count, to_string<size_t>).to_be(3);
 

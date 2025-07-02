@@ -1,27 +1,28 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle);
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
 
-native dllimport int32 WriteFile(void*       hFile,
-                                 const void* lpBuffer,
-                                 uint32      nNumberOfBytesToWrite,
-                                 uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped);
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count);
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-void write_val(const char* c) {
+fn write_val(c: const char*) {
 
-    char c2 = *c;
+    c2: char = *c;
 
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
-    uint32 written;
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
     WriteFile(handle, &c2, 1, &written, null);
 #elif OS_GROUP_UNIX
     write(1, &c2, 1);
@@ -29,9 +30,9 @@ void write_val(const char* c) {
 
 }
 
-void main() {
-    const char* ptr   = "hello!";
-    const char* start = ptr;
+fn main() {
+    ptr: const char*   = "hello!";
+    start: const char* = ptr;
 
     write_val(ptr);
 
@@ -50,7 +51,7 @@ void main() {
     ptr += 4;
     write_val(ptr);
 
-    isize length = ptr - start;
+    length: isize = ptr - start;
     ptr -= length;
     write_val(ptr);
 

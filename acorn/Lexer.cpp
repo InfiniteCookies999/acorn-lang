@@ -126,9 +126,12 @@ case c1:                                        \
     two_tok('^', '=', Token::CaretEq);
     two_tok('~', '=', Token::TildeEq);
     two_tok('!', '=', Token::ExEq);
-    two_tok(':', ':', Token::ColCol);
     two_tok('\\', '\\', Token::BackslashBackslash);
 
+    case ':': {
+        ++ptr;
+        return new_token(ptr - 1, 1, ':');
+    }
     case '&': {
         ++ptr;
         if (*ptr == '=') {
@@ -166,7 +169,10 @@ case c1:                                        \
     }
     case '-': {
         ++ptr;
-        if (*ptr == '=') {
+        if (*ptr == '>') {
+            ++ptr;
+            return new_token(ptr - 2, 2, Token::Arrow);
+        } else if (*ptr == '=') {
             ++ptr;
             return new_token(ptr - 2, 2, Token::SubEq);
         } else if (*ptr == '-') {
@@ -500,11 +506,11 @@ acorn::Token acorn::Lexer::finish_int_number(tokkind kind, const char* start) {
 }
 
 acorn::Token acorn::Lexer::finish_float_number(const char* start, bool has_errors) {
-    tokkind kind = Token::Float64Literal;;
+    tokkind kind = Token::DoubleLiteral;;
 
     if (*ptr == 'f') {
         ++ptr;
-        kind = Token::Float32Literal;
+        kind = Token::FloatLiteral;
     } else if (*ptr == 'd') {
         ++ptr;
     }

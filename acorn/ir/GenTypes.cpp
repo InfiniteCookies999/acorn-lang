@@ -33,9 +33,9 @@ llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Mod
     case TypeKind::USize: case TypeKind::ISize:
         return gen_ptrsize_int_type(ll_context, ll_module);
     case TypeKind::Bool: return llvm::Type::getInt1Ty(ll_context);
-    case TypeKind::Float32:
+    case TypeKind::Float:
         return llvm::Type::getFloatTy(ll_context);
-    case TypeKind::Float64:
+    case TypeKind::Double:
         return llvm::Type::getDoubleTy(ll_context);
     case TypeKind::Array: {
         auto arr_type = static_cast<ArrayType*>(type);

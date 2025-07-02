@@ -53,8 +53,8 @@ namespace acorn {
         Char,
         Char16,
 
-        Float32,
-        Float64,
+        Float,
+        Double,
 
         Void,
         Bool,
@@ -71,6 +71,7 @@ namespace acorn {
         UnresolvedComposite,
         Struct,
         Enum,
+        UnresolvedEnumValueType,
         Interface,
         EnumContainer,
         Range,
@@ -102,7 +103,7 @@ namespace acorn {
         }
 
         bool is_number() const {
-            return kind >= TypeKind::Int && kind <= TypeKind::Float64;
+            return kind >= TypeKind::Int && kind <= TypeKind::Double;
         }
 
         bool is_integer() const {
@@ -111,11 +112,11 @@ namespace acorn {
 
         bool is_signed() const {
             return (kind >= TypeKind::Int && kind <= TypeKind::ISize) ||
-                    kind == TypeKind::Float32 || kind == TypeKind::Float64;
+                    kind == TypeKind::Float || kind == TypeKind::Double;
         }
 
         bool is_float() const {
-            return kind == TypeKind::Float32 || kind == TypeKind::Float64;
+            return kind == TypeKind::Float || kind == TypeKind::Double;
         }
 
         bool is_unsigned() const {
@@ -218,7 +219,7 @@ namespace acorn {
         }
     };
 
-    class UnresolvedBracketType : public ContainerType {
+    class UnresolvedArrayType : public ContainerType {
     public:
 
         static Type* create(PageAllocator& allocator,
@@ -229,7 +230,7 @@ namespace acorn {
         Expr* get_expr() const { return expr; }
 
     private:
-        UnresolvedBracketType(bool is_const, Expr* expr, Type* elm_type) :
+        UnresolvedArrayType(bool is_const, Expr* expr, Type* elm_type) :
             ContainerType(TypeKind::UnresolvedBracket, is_const, elm_type), expr(expr) {
         }
 
@@ -377,7 +378,7 @@ namespace acorn {
 
         static Type* create(PageAllocator& allocator,
                             Identifier name,
-                            SourceLoc  name_location,
+                            SourceLoc  error_location,
                             bool is_const = false);
 
         Identifier get_composite_name() const {
@@ -475,6 +476,31 @@ namespace acorn {
         Type* index_type;
         Type* values_type = nullptr;
         Enum* enumn;
+    };
+
+    class UnresolvedEnumValueType : public Type {
+    public:
+
+        static Type* create(PageAllocator& allocator,
+                            Identifier enum_name,
+                            SourceLoc name_location,
+                            bool is_const = false);
+
+        Identifier get_enum_name() const {
+            return enum_name;
+        }
+
+        SourceLoc get_error_location() const {
+            return error_location;
+        }
+
+    protected:
+        UnresolvedEnumValueType(bool is_const, Identifier enum_name, SourceLoc error_location)
+            : Type(TypeKind::UnresolvedEnumValueType, is_const), enum_name(enum_name), error_location(error_location) {
+        }
+
+        SourceLoc  error_location;
+        Identifier enum_name;
     };
 
     class InterfaceType : public Type {

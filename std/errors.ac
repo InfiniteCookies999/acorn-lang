@@ -7,76 +7,76 @@ interface Error {
     /*
      * The name of the struct which implement's the Error.
      */
-    const char* get_name() const;
+    const fn get_name() -> const char*;
 
     /*
      * An informational message to explain why the error happened.
      */
-    const char* get_message() const;
+    const fn get_message() -> const char*;
 
 }
 
 #aborts
 struct UnreachableError :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "UnreachableError";
     }
 
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "unreachable code";
     }
 }
 
 #aborts
 struct OutOfBoundsError :: *Error {
-    String msg;
+    msg: String;
 
-    OutOfBoundsError(const char* msg) {
+    fn new(msg: const char*) {
         this.msg = String{ msg };
     }
 
-    OutOfBoundsError(String msg) {
+    fn new(msg: String) {
         this.msg = moveobj(msg);
     }
 
-    const char* get_name()    const { return "OutOfBoundsError"; }
-    const char* get_message() const { return msg.buffer; }
+    const fn get_name()    -> const char* { return "OutOfBoundsError"; }
+    const fn get_message() -> const char* { return msg.buffer; }
 }
 
 #aborts
 struct StateError :: *Error {
-    String msg;
+    msg: String;
 
-    StateError(const char* msg) {
+    fn new(msg: const char*) {
         this.msg = String{ msg };
     }
 
-    StateError(String msg) {
+    fn new(msg: String) {
         this.msg = moveobj(msg);
     }
 
-    const char* get_name()    const { return "StateError"; }
-    const char* get_message() const { return msg.buffer; }
+    const fn get_name()    -> const char* { return "StateError"; }
+    const fn get_message() -> const char* { return msg.buffer; }
 }
 
 struct IOError :: *Error {
-    String msg;
+    msg: String;
 
-    IOError(const char* msg) {
+    fn new(msg: const char*) {
         this.msg = String{ msg };
     }
 
-    IOError(String msg) {
+    fn new(msg: String) {
         this.msg = moveobj(msg);
     }
 
-    const char* get_name()    const { return "IOError"; }
-    const char* get_message() const { return msg.buffer; }
+    const fn get_name()    -> const char* { return "IOError"; }
+    const fn get_message() -> const char* { return msg.buffer; }
 }
 
-void abort(Error* error) {
-    const char* error_name = error.get_name();
-    const char* message = error.get_message();
+fn abort(error: Error*) {
+    error_name := error.get_name();
+    message := error.get_message();
     module.print(error_name);
     module.print(": ");
     module.print(message);

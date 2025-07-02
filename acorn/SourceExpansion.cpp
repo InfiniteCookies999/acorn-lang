@@ -47,8 +47,8 @@ if (e1 > e) { e = e1; }           \
             break;
         }
         case NodeKind::Cast: {
-            // Include the closing )
             auto cast = static_cast<Cast*>(node);
+            // Include the value being cast on.
             get(cast->value);
             break;
         }
@@ -115,14 +115,6 @@ if (e1 > e) { e = e1; }           \
             break;
         }
         case NodeKind::TypeExpr: {
-            TypeExpr* type_expr = static_cast<TypeExpr*>(node);
-            if (type_expr->prev_node_kind == NodeKind::MemoryAccess) {
-                MemoryAccess* mem_access = static_cast<MemoryAccess*>(node);
-                get(mem_access->site);
-                get(mem_access->index);
-                // Include the closing ]
-                go_until(e, '[', ']');
-            }
             break;
         }
         case NodeKind::Reflect: {

@@ -22,8 +22,8 @@ enum TypeId {
     Char,
     Char16,
 
-    Float32,
-    Float64,
+    Float,
+    Double,
 
     Void,
     Bool,
@@ -40,6 +40,7 @@ enum TypeId {
     UnresolvedComposite,
     Struct,
     Enum,
+    UnresolvedEnumValueType,
     Interface,
     EnumContainer,
     Range,
@@ -50,33 +51,33 @@ enum TypeId {
 }
 
 struct FieldTypeInfo {
-    const char* name;
-    const Type* type;
-    int         offset_in_bytes;
+    name:            const char*;
+    type:            const Type*;
+    offset_in_bytes: int;
 }
 
 struct StructTypeInfo {
-    const char*          name;
-    int                  num_fields;
-    const FieldTypeInfo* fields;
+    name:       const char*;
+    num_fields: int;
+    fields:     const FieldTypeInfo*;
 }
 
 struct EnumTypeInfo {
-    int          num_values;
-    uint64       index_mapping_mask;
-    uint64[2]*   index_mappings;
-    const char** value_names;
-    const Type*  index_type;
+    num_values:         int;
+    index_mapping_mask: uint64;
+    index_mappings:     uint64[2]*;
+    value_names:        const char**;
+    index_type:         const Type*;
 
-    uint64 get_enum_offset(uint64 index) const {
+    const fn get_enum_offset(index: uint64) -> uint64 {
 
         // Linear probe over the hashed values to find the
         // actual offset that the index refers to in the enum.
-        uint64 hash = index & index_mapping_mask;
-        uint64 bucket_index = hash;
+        hash: uint64 = index & index_mapping_mask;
+        bucket_index: uint64 = hash;
 
         loop {
-            const uint64[2]* bucket = index_mappings + bucket_index;
+            bucket: const uint64[2]* = index_mappings + bucket_index;
             if (*bucket)[0] == index {
                 // Still have to check for -1 because it is possible the user wanted
                 // to store a -1 index value in the enum and -1 is used for empty keys.
@@ -92,41 +93,41 @@ struct EnumTypeInfo {
         return 0;
     }
 
-    const char* get_value_name(uint64 index) const {
-        uint64 offset = get_enum_offset(index);
+    const fn get_value_name(index: uint64) -> const char* {
+        offset: uint64 = get_enum_offset(index);
         return value_names[offset];
     }
 }
 
 struct Type {
 
-    TypeId id;
-    int    size_in_bytes;
+    id:            TypeId;
+    size_in_bytes: int;
 
     // Element type of pointers, arrays, and slices.
-    const Type*           elm_type;
+    elm_type:      const Type*;
     // If the type is an array this is the length.
-    int                   array_length;
-    const StructTypeInfo* struct_info;
-    const EnumTypeInfo*   enum_info;
+    array_length:  int;
+    struct_info:   const StructTypeInfo*;
+    enum_info:     const EnumTypeInfo*;
 
-    bool is_integer() const {
+    const fn is_integer() -> bool {
         return id <= TypeId.USize;
     }
 
-    bool is_number() const {
-        return is_integer() || id == TypeId.Float32 || id == TypeId.Float64;
+    const fn is_number() -> bool {
+        return is_integer() || id == TypeId.Float || id == TypeId.Double;
     }
 
-    bool is_signed() const {
+    const fn is_signed() -> bool {
         return id <= TypeId.ISize;
     }
 
-    bool is_any_pointer() const {
+    const fn is_any_pointer() -> bool {
         return id == TypeId.Pointer || id == TypeId.Function || id == TypeId.Null;
     }
 
-    bool is_string() const {
+    const fn is_string() -> bool {
         if id == TypeId.Pointer {
             return elm_type.id == TypeId.Char;
         } elif id == TypeId.Struct {

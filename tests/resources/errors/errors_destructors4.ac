@@ -2,22 +2,22 @@ import std;
 import std.Error;
 
 struct TestError :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "error raised!";
     }
 }
 
 struct A {
-    int8 v;
-    ~A() {
+    v: int8;
+    fn delete() {
         std.print("deconstructor called!");
     }
 }
 
-A foo(bool b) raises TestError {
+fn foo(b: bool) -> A | raises TestError {
     if b {
         raise TestError{};
     } else {
@@ -25,7 +25,7 @@ A foo(bool b) raises TestError {
     }
 }
 
-void main() {
+fn main() {
     try foo(false) {
         return;
     };

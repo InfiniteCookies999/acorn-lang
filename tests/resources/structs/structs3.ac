@@ -1,42 +1,43 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle);
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
 
-native dllimport int32 WriteFile(void*       hFile,
-                                 const void* lpBuffer,
-                                 uint32      nNumberOfBytesToWrite,
-                                 uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped);
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count);
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-void write_val(int val) {
+fn write_val(val: uint64) {
 
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
-    uint32 written;
-    char c = as(char) val;
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
     WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
+    c: char = as(char) val;
     write(1, &c, 1);
 #endif
 
 }
 
 struct A {
-    uint64 val1;
-    uint64 val2;
-    uint64 val3;
+    val1: uint64;
+    val2: uint64;
+    val3: uint64;
 }
 
-A foo(bool b) {
-    A a;
+fn foo(b: bool) -> A {
+    a: A;
     a.val1 = 105;
     a.val2 = 106;
     a.val3 = 107;
@@ -47,9 +48,9 @@ A foo(bool b) {
     return a;
 }
 
-void main() {
-    A a = foo(true);
-    write_val(as(int) a.val1);
-    write_val(as(int) a.val2);
-    write_val(as(int) a.val3);
+fn main() {
+    a: A = foo(true);
+    write_val(a.val1);
+    write_val(a.val2);
+    write_val(a.val3);
 }

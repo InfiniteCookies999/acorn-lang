@@ -2,23 +2,23 @@ import std;
 import std.Error;
 
 struct TestError :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "error raised!";
     }
 }
 
-void foo() raises TestError {
+fn foo() | raises TestError {
     raise TestError{};
 }
 
-void bar() raises TestError {
+fn bar() | raises TestError {
     try foo();
 }
 
-void main() {
+fn main() {
     try err: bar() {
         std.print("caught error!");
         std.print(err.get_message());

@@ -24,6 +24,6 @@
  * do this when working with `Any`.
  */
 public struct Any {
-    const Type* type;
-    const void* ptr;
+    type: const Type*;
+    ptr:  const void*;
 }

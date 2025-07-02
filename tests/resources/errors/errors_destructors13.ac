@@ -2,28 +2,28 @@ import std;
 import std.Error;
 
 struct TestError1 :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError1";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "error raised!";
     }
 
-    ~TestError1() {
+    fn delete() {
         std.print("destructor called 1!");
     }
 }
 
 struct TestError2 :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError2";
     }
-    const char* get_message() const {
-        return "error raised!";
+    const fn get_message() -> const char* {
+        return "raised error!";
     }
 }
 
-void foo(bool b) raises TestError1, TestError2 {
+fn foo(b: bool) | raises TestError1, TestError2 {
     if b {
         raise TestError1{};
     } else {
@@ -31,7 +31,7 @@ void foo(bool b) raises TestError1, TestError2 {
     }
 }
 
-void main() {
+fn main() {
     try err: foo(true) {
         std.print("caught error!");
     };

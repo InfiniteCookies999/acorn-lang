@@ -2,29 +2,29 @@ import std;
 import std.Error;
 
 struct TestError1 :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError1";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "test error msg 1";
     }
 }
 
 struct TestError2 :: *Error {
-    int64 a;
-    int64 b;
-    int64 c;
-    int64 d;
+    a: int64;
+    b: int64;
+    c: int64;
+    d: int64;
 
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError2";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "test error msg 2";
     }
 }
 
-void foo(bool b) raises TestError1, TestError2 {
+fn foo(b: bool) | raises TestError1, TestError2 {
     std.print("foo called!");
     if b {
         raise TestError1{};
@@ -33,21 +33,21 @@ void foo(bool b) raises TestError1, TestError2 {
     }
 }
 
-void write_val(int64 val) {
+fn write_val(val: int64) {
 
 #if OS_GROUP_WINDOWS
-    void* handle = std.GetStdHandle(-11);
-    uint32 written;
-    char c = as(char) val;
+    handle: void* = std.GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
     std.WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    char c = as(char) val;
+    c: char = as(char) val;
     std.write(1, &c, 1);
 #endif
 
 }
 
-void main() {
+fn main() {
     try err: foo(true) {
         std.print("caught error!");
         std.print(err.get_message());
@@ -55,7 +55,7 @@ void main() {
     try err: foo(false) {
         std.print("caught error!");
         std.print(err.get_message());
-        TestError2* e2 = as(TestError2*) err;
+        e2: TestError2* = as(TestError2*) err;
         write_val(e2.a);
         write_val(e2.b);
         write_val(e2.c);

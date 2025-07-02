@@ -1,73 +1,74 @@
 
 #if OS_GROUP_WINDOWS
 
-native dllimport void* GetStdHandle(uint32 nStdHandle);
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
 
-native dllimport int32 WriteFile(void*       hFile,
-                                 const void* lpBuffer,
-                                 uint32      nNumberOfBytesToWrite,
-                                 uint32*     lpNumberOfBytesWritten,
-                                 void*       lpOverlapped);
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
 
 #elif OS_GROUP_UNIX
 
-native isize write(int32 fd, const void* buf, usize count);
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-void print(const char* s, int length) {
+fn print(s: const char*, length: int) {
 #if OS_GROUP_WINDOWS
-    void* handle = GetStdHandle(-11);
-    uint32 written;
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
     WriteFile(handle, s, as(uint32) length, &written, null);
 #elif OS_GROUP_UNIX
     write(1, s, as(usize) length);
 #endif
 }
 
-void main() {
+fn main() {
 
-    bool a1 = false;
-    bool b1 = true;
-    bool c1 = true;
+    a1: bool = false;
+    b1: bool = true;
+    c1: bool = true;
 
-    bool cond1 = a1 && b1 && c1;
+    cond1: bool = a1 && b1 && c1;
     if cond1 {
         print("False1", 6);
     }
 
-    bool a2 = true;
-    bool b2 = false;
-    bool c2 = true;
+    a2: bool = true;
+    b2: bool = false;
+    c2: bool = true;
 
-    bool cond2 = a2 && b2 && c2;
+    cond2: bool = a2 && b2 && c2;
     if cond2 {
         print("False2", 6);
     }
 
-    bool a3 = true;
-    bool b3 = true;
-    bool c3 = false;
+    a3: bool = true;
+    b3: bool = true;
+    c3: bool = false;
 
-    bool cond3 = a3 && b3 && c3;
+    cond3: bool = a3 && b3 && c3;
     if cond3 {
         print("False3", 6);
     }
 
-    bool a4 = false;
-    bool b4 = false;
-    bool c4 = false;
+    a4: bool = false;
+    b4: bool = false;
+    c4: bool = false;
 
-    bool cond4 = a4 && b4 && c4;
+    cond4: bool = a4 && b4 && c4;
     if cond4 {
         print("False4", 6);
     }
 
-    bool a5 = true;
-    bool b5 = true;
-    bool c5 = true;
+    a5: bool = true;
+    b5: bool = true;
+    c5: bool = true;
 
-    bool cond5 = a5 && b5 && c5;
+    cond5: bool = a5 && b5 && c5;
     if cond5 {
         print("True", 5);
     }

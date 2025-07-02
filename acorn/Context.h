@@ -52,8 +52,8 @@ namespace acorn {
         Type* uint64_type;
         Type* isize_type;
         Type* usize_type;
-        Type* float32_type;
-        Type* float64_type;
+        Type* float_type;
+        Type* double_type;
         Type* bool_type;
         Type* char_type;
         Type* char16_type;
@@ -69,7 +69,6 @@ namespace acorn {
         Type* const_void_ptr_type;
         Type* empty_array_type;
         Type* auto_type;
-        Type* auto_ptr_type;
         Type* const_auto_type;
         Type* expr_type;
 
@@ -92,6 +91,10 @@ namespace acorn {
         Identifier value_identifier;
         Identifier error_interface_identifier;
         Identifier get_name_function_identifier;
+        Identifier new_identifier;
+        Identifier moveobj_identifier;
+        Identifier copyobj_identifier;
+        Identifier delete_identifier;
 
         ImportStmt* std_string_struct_import;
         Enum*       std_type_id_enum;

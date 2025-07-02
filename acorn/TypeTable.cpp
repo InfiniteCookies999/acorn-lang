@@ -106,8 +106,8 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         break;
     }
     case TypeKind::UnresolvedBracket: {
-        auto un_arr_type = static_cast<UnresolvedBracketType*>(type);
-        new_type = UnresolvedBracketType::create(allocator, un_arr_type->get_elm_type(), un_arr_type->get_expr(), is_const);
+        auto un_arr_type = static_cast<UnresolvedArrayType*>(type);
+        new_type = UnresolvedArrayType::create(allocator, un_arr_type->get_elm_type(), un_arr_type->get_expr(), is_const);
         break;
     }
     case TypeKind::UnresolvedComposite: {
@@ -115,6 +115,14 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = UnresolvedCompositeType::create(allocator,
                                                    un_composite_type->get_composite_name(),
                                                    un_composite_type->get_error_location(),
+                                                   is_const);
+        break;
+    }
+    case TypeKind::UnresolvedEnumValueType: {
+        auto un_enum_value_type = static_cast<UnresolvedEnumValueType*>(type);
+        new_type = UnresolvedEnumValueType::create(allocator,
+                                                   un_enum_value_type->get_enum_name(),
+                                                   un_enum_value_type->get_error_location(),
                                                    is_const);
         break;
     }

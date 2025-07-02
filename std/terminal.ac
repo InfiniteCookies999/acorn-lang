@@ -8,25 +8,25 @@ import .reflect.StructTypeInfo;
 import .reflect.EnumTypeInfo;
 import .reflect.TypeId;
 
-void print(const char* s, int length) {
+fn print(s: const char*, length: int) {
 #if OS_GROUP_WINDOWS
-    void* handle = win32.GetStdHandle(-11);
-    uint32 num_written;
+    handle: void* = win32.GetStdHandle(-11);
+    num_written: uint32;
     win32.WriteFile(handle, s, as(uint32) length, &num_written, null);
 #elif OS_GROUP_UNIX
     unix.write(1, s, as(usize) length);
 #endif
 }
 
-void print(const char* s) {
+fn print(s: const char*) {
     print(s, strlen(s));
 }
 
-void print(const String^ s) {
+fn print(s: const String^) {
     print(s.buffer, s.length);
 }
 
-void print(int value, int base=10) {
+fn print(value: int, base := 10) {
     if value < 0 {
         print("-");
         value = -value;
@@ -35,17 +35,17 @@ void print(int value, int base=10) {
     print(as(uint64) value, base);
 }
 
-void print(uint64 value, int base=10) {
+fn print(value: uint64, base := 10) {
 
-    const BUFFER_SIZE = 21;
-    char[BUFFER_SIZE] buffer = ---;
-    char* ptr = uint64_to_chars(value, buffer + BUFFER_SIZE - 1, base);
+    BUFFER_SIZE :: 21;
+    buffer: char[BUFFER_SIZE] = ---;
+    ptr := uint64_to_chars(value, buffer + BUFFER_SIZE - 1, base);
 
-    int length = as(int) ((buffer + BUFFER_SIZE) - ptr);
+    length := as(int) ((buffer + BUFFER_SIZE) - ptr);
     print(ptr, length);
 }
 
-void print(int64 value, int base=10) {
+fn print(value: int64, base := 10) {
     if value < 0 {
         print('-');
         value = -value;
@@ -54,11 +54,11 @@ void print(int64 value, int base=10) {
     print(as(uint64) value, base);
 }
 
-void print(char c) {
+fn print(c: char) {
     print(&c, 1);
 }
 
-void print(bool b) {
+fn print(b: bool) {
     if b {
         print("true", 4);
     } else {
@@ -66,16 +66,16 @@ void print(bool b) {
     }
 }
 
-void print(Any value) {
+fn print(value: Any) {
     print_any(value.ptr, value.type);
 }
 
-void print(const char* fmt, Any... args) {
-    int arg_index = 0;
-    loop auto ptr = fmt; *ptr != '\0'; {
+fn print(fmt: const char*, args: Any...) {
+    arg_index := 0;
+    loop ptr := fmt; *ptr != '\0'; {
         if *ptr == '%' && *(ptr+1) == 's' {
             ptr += 2;
-            Any arg = args[arg_index++];
+            arg: Any = args[arg_index++];
             print(arg);
         } else {
             print(*ptr);
@@ -84,15 +84,15 @@ void print(const char* fmt, Any... args) {
     }
 }
 
-void print(const void* ptr) {
+fn print(ptr: const void*) {
 
-    const BUFFER_SIZE = sizeof(void*) * 2 + 2;
-    char[BUFFER_SIZE] buffer = ---;
+    BUFFER_SIZE :: sizeof(void*) * 2 + 2;
+    buffer: char[BUFFER_SIZE] = ---;
 
-    auto buffer_end = buffer + buffer.length - 1;
-    auto int_ptr_start = uint64_to_chars(as(uint64) ptr, buffer_end, base=16);
+    buffer_end := buffer + buffer.length - 1;
+    int_ptr_start := uint64_to_chars(as(uint64) ptr, buffer_end, base=16);
 
-    int zeros_length = as(int) (int_ptr_start - as(const char*) buffer);
+    zeros_length := as(int) (int_ptr_start - as(const char*) buffer);
     memset(buffer, '0', zeros_length);
     buffer[1] = 'x';
 
@@ -100,7 +100,7 @@ void print(const void* ptr) {
 
 }
 
-private void print_any(const void* ptr, const Type* type) {
+private fn print_any(ptr: const void*, type: const Type*) {
     switch type.id {
     case Int:     print(as(int64)  *as(const int*)    ptr);
     case Int8:    print(as(int64)  *as(const int8*)   ptr);
@@ -135,8 +135,8 @@ private void print_any(const void* ptr, const Type* type) {
         }
     case Slice:
 
-        int length = *as(const int*)(ptr + sizeof(void*));
-        auto elements = *as(const (const void*)*) ptr;
+        length := *as(const int*)(ptr + sizeof(void*));
+        elements := *as(const (const void*)*) ptr;
 
         print_array_like_value(elements, type.elm_type, length);
 
@@ -145,12 +145,12 @@ private void print_any(const void* ptr, const Type* type) {
     }
 }
 
-private void print_array_like_value(const void* array, const Type* elm_type, int length) {
+private fn print_array_like_value(array: const void*, elm_type: const Type*, length: int) {
     print('[');
 
-    int elm_byte_size = elm_type.size_in_bytes;
-    loop int i : 0..<length {
-        const void* offset_into_array = array + (i * elm_byte_size);
+    elm_byte_size: int = elm_type.size_in_bytes;
+    loop i in 0..<length {
+        offset_into_array: const void* = array + (i * elm_byte_size);
 
         if elm_type.is_string()  print('"');
         print_any(offset_into_array, elm_type);
@@ -164,16 +164,16 @@ private void print_array_like_value(const void* array, const Type* elm_type, int
     print(']');
 }
 
-private void print_struct(const void* ptr, const StructTypeInfo* struct_info) {
+private fn print_struct(ptr: const void*, struct_info: const StructTypeInfo*) {
     print(struct_info.name);
     print("{ ");
 
-    loop int i : 0..<struct_info.num_fields {
-        auto field_info = struct_info.fields + i;
+    loop i in 0..<struct_info.num_fields {
+        field_info := struct_info.fields + i;
         print(field_info.name);
         print("=");
 
-        const void* field_data = ptr + field_info.offset_in_bytes;
+        field_data: const void* = ptr + field_info.offset_in_bytes;
 
         if field_info.type.is_string()  print('"');
         print_any(field_data, field_info.type);
@@ -187,8 +187,8 @@ private void print_struct(const void* ptr, const StructTypeInfo* struct_info) {
     print(" }");
 }
 
-private void print_enum(const void* ptr, const EnumTypeInfo* enum_info) {
-    uint64 index;
+private fn print_enum(ptr: const void*, enum_info: const EnumTypeInfo*) {
+    index: uint64;
     switch enum_info.index_type.id {
     case Int:     index = as(uint64) *as(const int*)    ptr;
     case Int8:    index = as(uint64) *as(const int8*)   ptr;
@@ -205,59 +205,59 @@ private void print_enum(const void* ptr, const EnumTypeInfo* enum_info) {
     case Char16:  index = as(uint64) *as(const char16*) ptr;
     }
 
-    const char* name = enum_info.get_value_name(index);
+    name := enum_info.get_value_name(index);
     print(name);
 }
 
 // -- println functions
 //
 
-void println(const void* ptr) {
+fn println(ptr: const void*) {
     print(ptr);
     print("\n");
 }
 
-void println(const char* s) {
+fn println(s: const char*) {
     print(s);
     print("\n");
 }
 
-void println(int value, int base=10) {
+fn println(value: int, base := 10) {
     print(value, base);
     print("\n");
 }
 
-void println(uint64 value, int base=10) {
+fn println(value: uint64, base := 10) {
     print(value, base);
     print("\n");
 }
 
-void println(int64 value, int base=10) {
+fn println(value: int64, base := 10) {
     print(value, base);
     print("\n");
 }
 
-void println(char c) {
+fn println(c: char) {
     print(c);
     print("\n");
 }
 
-void println(bool b) {
+fn println(b: bool) {
     print(b);
     print("\n");
 }
 
-void println(const String^ s) {
+fn println(s: const String^) {
     print(s);
     print("\n");
 }
 
-void println(Any any) {
+fn println(any: Any) {
     print(any);
     print("\n");
 }
 
-void println(const char* fmt, Any... args) {
+fn println(fmt: const char*, args: Any...) {
     print(fmt, args);
     print("\n");
 }

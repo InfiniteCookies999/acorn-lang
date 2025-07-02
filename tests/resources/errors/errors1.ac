@@ -3,14 +3,14 @@ import std.Error;
 
 #aborts
 struct TestError :: *Error {
-    const char* get_name() const {
+    const fn get_name() -> const char* {
         return "TestError";
     }
-    const char* get_message() const {
+    const fn get_message() -> const char* {
         return "error raised!";
     }
 }
 
-void main() {
+fn main() {
     raise TestError{};
 }

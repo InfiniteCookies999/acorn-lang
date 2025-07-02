@@ -132,9 +132,11 @@ namespace acorn {
         void check_node(Node* node);
 
         Type* fixup_type(Type* type, bool is_ptr_elm_type = false);
-        Type* fixup_unresolved_bracket_type(Type* type);
+        Type* fixup_unresolved_array_type(Type* type);
         Type* fixup_assign_det_arr_type(Type* type, Var* var);
         Type* fixup_unresolved_composite_type(Type* type, bool is_ptr_elm_type);
+        Type* fixup_unresolved_enum_value_type(Type* type, bool is_ptr_elm_type);
+        Decl* find_composite_for_composite_type(Identifier name, SourceLoc error_loc);
         Type* fixup_function_type(Type* type);
 
         // Statement checking
