@@ -146,6 +146,7 @@ X(SemaCannotStaticImportStruct                , 20091)
 X(SemaParentModuleImportExpectModuleIdent     , 20092)
 X(SemaCannotAssignIncompleteTypeToAuto        , 20093)
 X(SemaMustHaveAssignmentToDetAuto             , 20094)
+X(SemaGenericFuncBindCallNoArguments          , 20095)
 
 X(SemaCannotCastIncompleteType                , 20097)
 X(SemaCannotGetSizeOfUnsizedType              , 20098)
@@ -235,6 +236,15 @@ X(SemaGenericFuncsCannotHaveDllimport         , 20184)
 X(SemaGenericCallHasUnboundTypes              , 20185)
 X(SemaMainFunctionCannotBeGeneric             , 20186)
 X(SemaVariadicArgumentsCannotUseImplicitPtrs  , 20187)
+
+X(SemaExpectedGenericFuncToBindGenericTypes   , 20190)
+X(SemaGenericFuncBindCallWrongNumTypes        , 20191)
+X(SemaFailedToBindGenerics                    , 20192)
+
+X(SemaExpectedArgToBeTypeExprForGenericBind   , 20194)
+X(SemaCannotBindIncompleteType                , 20195)
+X(SemaAmbiguousGenericCallBind                , 20196)
+X(SemaExpectedFunctionToBindGenerics          , 20197)
 
 X(NumericOverflow                             , 40000)
 X(NumericUnderflow                            , 40001)

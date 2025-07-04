@@ -1775,6 +1775,10 @@ bool acorn::Sema::do_functions_match(const Func* func1, const Func* func2) {
         return false;
     }
 
+    if (func1->generics.size() != func2->generics.size()) {
+        return false;
+    }
+
     return true;
 }
 
@@ -2195,6 +2199,8 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
         } else {
             show_error(context.void_type);
         }
+    } else if (ret->value) {
+        create_cast(ret->value, cur_func->return_type);
     }
 }
 
@@ -3111,7 +3117,8 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
                                                            initializer->values,
                                                            initializer->non_named_vals_offset,
                                                            structn->constructors,
-                                                           false);
+                                                           false,
+                                                           {});
         if (!found_constructor) {
             return;
         }
@@ -4333,39 +4340,43 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
     }
     case IdentRef::FuncsKind: {
 
-        if (is_for_call) {
-            ref->type = context.funcs_ref_type;
-            return;
-        }
+        if (!is_for_call) {
 
-        // Cannot simply check this here when making a function call because
-        // of function overloading and the call operator being able to choose
-        // which function is best based on context.
-        auto func = (*ref->funcs_ref)[0];
-        if (func->structn) {
-            auto dot = static_cast<DotOperator*>(ref);
-            if (dot->site->is_not(NodeKind::TypeExpr)) {
-                auto struct_name = func->structn->name.to_string().str();
-                auto func_name   = ref->ident.to_string().str();
-                auto example_str = struct_name + "." + func_name;
-                error(expand(ref), "Must access member function references by type not object")
-                    .add_line("Use: '%s' instead", example_str)
-                    .end_error(ErrCode::SemaCannotAccessFuncsRefFromObj);
-                return;
+            // Cannot simply check this here when making a function call because
+            // of function overloading and the call operator being able to choose
+            // which function is best based on context.
+            auto func = (*ref->funcs_ref)[0];
+            if (func->structn) {
+                auto dot = static_cast<DotOperator*>(ref);
+                if (dot->site->is_not(NodeKind::TypeExpr)) {
+                    auto struct_name = func->structn->name.to_string().str();
+                    auto func_name   = ref->ident.to_string().str();
+                    auto example_str = struct_name + "." + func_name;
+                    error(expand(ref), "Must access member function references by type not object")
+                        .add_line("Use: '%s' instead", example_str)
+                        .end_error(ErrCode::SemaCannotAccessFuncsRefFromObj);
+                    return;
+                }
             }
+
+
+            // TODO: In the future we will want to allow for selecting for
+            // overloaded functions somehow.
+
+            auto param_types = func->params | std::views::transform([](Var* param) { return param->type; })
+                                            | std::ranges::to<llvm::SmallVector<Type*>>();
+
+            ref->type = type_table.get_function_type(func->return_type,
+                                                     std::move(param_types),
+                                                     func->raised_errors,
+                                                     func->uses_native_varargs);
+            ref->is_foldable = false;
+
+            break;
         }
 
-        // TODO: In the future we will want to allow for selecting for
-        // overloaded functions somehow.
 
-        auto param_types = func->params | std::views::transform([](Var* param) { return param->type; })
-                                        | std::ranges::to<llvm::SmallVector<Type*>>();
-
-        ref->type = type_table.get_function_type(func->return_type,
-                                                 std::move(param_types),
-                                                 func->raised_errors,
-                                                 func->uses_native_varargs);
-        ref->is_foldable = false;
+        ref->type = context.funcs_ref_type;
         break;
     }
     case IdentRef::UniversalKind: {
@@ -4396,8 +4407,12 @@ void acorn::Sema::check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool 
         auto& logger = error(expand(ref), "Could not find %s '%s'", is_for_call ? "function" : "identifier", ref->ident);
         check_ident_ref<true>(ref, search_nspace, is_for_call, is_dot_op_site);
         logger.end_error(!is_for_call ? ErrCode::SemaNoFindIdentRef : ErrCode::SemaNoFindFuncIdentRef);
-        break;
+        return;
     }
+    }
+
+    if (ref->binds_generics) {
+        check_generic_bind_function_call(static_cast<GenericBindFuncCall*>(ref));
     }
 }
 
@@ -4512,21 +4527,21 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             auto intr_type = static_cast<InterfaceType*>(elm_type);
             auto interfacen = intr_type->get_interface();
 
-            interface_functions.clear();
+            temp_ref_functions.clear();
 
             for (auto func : interfacen->functions) {
                 if (func->name == dot->ident) {
-                    interface_functions.push_back(func);
+                    temp_ref_functions.push_back(func);
                 }
             }
 
-            if (interface_functions.empty()) {
+            if (temp_ref_functions.empty()) {
                 error(expand(dot), "Could not find function '%s'", dot->ident)
                     .end_error(ErrCode::SemaNoFindFuncIdentRef);
                 return;
             }
 
-            dot->set_funcs_ref(&interface_functions);
+            dot->set_funcs_ref(&temp_ref_functions);
             dot->type = context.funcs_ref_type;
 
         } else {
@@ -4627,7 +4642,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     bool is_funcs_ref = true;
     if (call->site->is(NodeKind::IdentRef)) {
 
-        IdentRef* ref = static_cast<IdentRef*>(call->site);
+        auto ref = static_cast<IdentRef*>(call->site);
         check_ident_ref(ref, nspace, true);
         yield_if(ref);
 
@@ -4635,11 +4650,8 @@ void acorn::Sema::check_function_call(FuncCall* call) {
             is_funcs_ref = false;
         }
     } else if (call->site->is(NodeKind::DotOperator)) {
-        // This is very similar to check to IdentRef but it is too much
-        // small differences to abstract in any meaningfull way as far
-        // as I can tell.
 
-        DotOperator* ref = static_cast<DotOperator*>(call->site);
+        auto ref = static_cast<DotOperator*>(call->site);
         check_dot_operator(ref, true);
         yield_if(ref);
 
@@ -4649,7 +4661,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     } else {
         check_and_verify_type(call->site);
 
-        is_funcs_ref = false;
+        is_funcs_ref = call->site->type == context.funcs_ref_type;
     }
 
     if (call->site->type->is_function()) {
@@ -4684,11 +4696,18 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
 
     IdentRef* ref = static_cast<IdentRef*>(call->site);
+    llvm::SmallVector<Type*> pre_bound_types;
+    if (ref->binds_generics) {
+        auto generic_bind_call = static_cast<GenericBindFuncCall*>(ref);
+        pre_bound_types = std::move(generic_bind_call->bound_types);
+    }
+
     auto called_func = check_function_decl_call(call,
                                                 call->args,
                                                 call->non_named_args_offset,
                                                 *ref->funcs_ref,
-                                                is_const_object);
+                                                is_const_object,
+                                                pre_bound_types);
     if (!called_func) {
         return;
     }
@@ -4704,6 +4723,173 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
 }
 
+void acorn::Sema::check_generic_bind_function_call(GenericBindFuncCall* call) {
+
+    if (call->type != context.funcs_ref_type) {
+        call->type = nullptr;
+        error(expand(call), "Expected function in order to bind generics")
+            .end_error(ErrCode::SemaExpectedFunctionToBindGenerics);
+    }
+
+    if (!call->is_funcs_ref()) {
+        acorn_fatal("Not handling other cases yet");
+    }
+
+    if (call->args.empty()) {
+        error(expand(call), "Expected generic arguments")
+            .end_error(ErrCode::SemaGenericFuncBindCallNoArguments);
+        call->type = nullptr;
+        return;
+    }
+
+    bool args_have_errors = false, uses_named_values = false;
+    for (Expr* arg : call->args) {
+
+        check_node(arg);
+        Expr* arg_value = arg;
+        if (arg->is(NodeKind::NamedValue)) {
+            uses_named_values = true;
+            auto named_value = static_cast<NamedValue*>(arg);
+            arg_value = named_value->assignment;
+        }
+
+        if (!arg->type) args_have_errors = true;
+
+        if (arg_value->type != context.expr_type) {
+            args_have_errors = true;
+            error(expand(arg_value), "Expected argument to be a type expression")
+                .end_error(ErrCode::SemaExpectedArgToBeTypeExprForGenericBind);
+        }
+
+        Type* bind_type = get_type_of_type_expr(arg_value);
+
+        if (is_incomplete_type(bind_type)) {
+            args_have_errors = true;
+            error(expand(arg_value), "Cannot bind incomplete type")
+                .end_error(ErrCode::SemaCannotBindIncompleteType);
+        }
+
+    }
+    if (args_have_errors) {
+        call->type = nullptr;
+        return;
+    }
+
+    llvm::SmallVector<Func*, 8> candidates;
+    size_t generic_func_count = 0;
+    for (Func* func : *call->funcs_ref) {
+        if (func->is_generic()) {
+            ++generic_func_count;
+            if (call->args.size() <= func->generics.size()) {
+                candidates.push_back(func);
+            }
+        }
+    }
+
+    if (generic_func_count == 0) {
+        error(expand(call), "Expected generic function in order to bind generics")
+            .end_error(ErrCode::SemaExpectedGenericFuncToBindGenericTypes);
+        call->type = nullptr;
+        return;
+    }
+
+    if (candidates.empty()) {
+        error(expand(call), "Too many generic arguments")
+            .end_error(ErrCode::SemaGenericFuncBindCallWrongNumTypes);
+        call->type = nullptr;
+        return;
+    }
+
+    if (uses_named_values) {
+        temp_ref_functions.clear();
+        for (Func* candidate : candidates) {
+            if (compare_generic_bind_candidate_with_named_args(call, candidate, call->bound_types)) {
+                temp_ref_functions.push_back(candidate);
+            }
+        }
+        if (temp_ref_functions.empty()) {
+            Logger& logger = error(expand(call), "Failed to bind generic arguments");
+            for (Func* candidate : candidates) {
+                logger.add_empty_line();
+                logger.add_line("Could not match: '%s'", candidate->get_decl_string());
+                display_generic_bind_named_args_fail_info(call, candidate);
+            }
+            logger.end_error(ErrCode::SemaFailedToBindGenerics);
+            call->type = nullptr;
+            return;
+        }
+
+        if (temp_ref_functions.size() > 1) {
+            auto& logger = error(expand(call), "Ambiguous choice between generic functions:")
+                .remove_period()
+                .add_empty_line();
+            display_ambiguous_functions(temp_ref_functions);
+            logger.end_error(ErrCode::SemaAmbiguousGenericCallBind);
+            call->type = nullptr;
+            return;
+        }
+    } else {
+        temp_ref_functions = std::move(candidates);
+
+        for (Expr* arg : call->args) {
+            Type* bind_type = get_type_of_type_expr(arg);
+            call->bound_types.push_back(bind_type);
+        }
+    }
+}
+
+bool acorn::Sema::compare_generic_bind_candidate_with_named_args(GenericBindFuncCall* call,
+                                                                 Func* candidate,
+                                                                 llvm::SmallVector<Type*>& bound_types) {
+
+    bool named_args_out_of_order = false;
+    size_t named_arg_high_idx = 0;
+    for (size_t i = 0; i < call->args.size(); i++) {
+
+        auto arg      = call->args[i];
+        auto genericn = candidate->generics[i];
+
+        if (arg->is(NodeKind::NamedValue)) {
+
+            auto named_arg = static_cast<NamedValue*>(arg);
+
+            auto itr = std::ranges::find_if(candidate->generics, [name = named_arg->name](auto& genericn) {
+                return genericn->name == name;
+            });
+            if (itr == candidate->generics.end()) {
+                return false;
+            }
+
+            genericn = *itr;
+            arg = named_arg->assignment;
+
+            if (genericn->index != i) {
+                named_args_out_of_order = true;
+            }
+            named_arg_high_idx = std::max(genericn->index, named_arg_high_idx);
+        } else {
+            // Cannot determine the order of the arguments if the
+            // non-named arguments come after the named arguments
+            // and the named arguments are not in order.
+            if (named_args_out_of_order || named_arg_high_idx > i) {
+                return false;
+            }
+        }
+
+        Type* bind_type = get_type_of_type_expr(arg);
+
+        if (genericn->index == i) {
+            bound_types.push_back(bind_type);
+        } else {
+            // Ensure there is enough space.
+            bound_types.resize(genericn->index + 1);
+            bound_types[genericn->index] = bind_type;
+        }
+    }
+
+    return true;
+}
+
 void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_type) {
     auto& param_types = func_type->get_param_types();
     bool uses_native_varargs = func_type->uses_native_varargs();
@@ -4711,7 +4897,7 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
     auto display_error = [this, call, func_type]() finline {
         logger.begin_error(expand(call), "Invalid call to function type: %s", func_type);
         logger.add_empty_line();
-        display_call_mismatch_info(func_type, call->args, false, true, call);
+        display_call_mismatch_info(func_type, call->args, false, true, call, {});
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
     };
 
@@ -4773,7 +4959,8 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                                    llvm::SmallVector<Expr*>& args,
                                                    size_t non_named_args_offset,
                                                    FuncList& candidates,
-                                                   bool is_const_object) {
+                                                   bool is_const_object,
+                                                   const llvm::SmallVector<Type*>& pre_bound_types) {
 
     // Make sure the function declarations for the canidates have been checked.
     for (Func* canidate : candidates) {
@@ -4849,13 +5036,14 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                                 selected_implicitly_converts_ptr_arg,
                                                 is_ambiguous,
                                                 is_const_object,
-                                                generic_bindings);
+                                                generic_bindings,
+                                                pre_bound_types);
     if (!called_func) {
-        display_call_mismatch_info(expand(call_node), call_node, candidates, args);
+        display_call_mismatch_info(expand(call_node), call_node, candidates, args, pre_bound_types);
         return nullptr;
     }
     if (is_ambiguous) {
-        display_call_ambiguous_info(expand(call_node), candidates, args, is_const_object);
+        display_call_ambiguous_info(expand(call_node), candidates, args, is_const_object, pre_bound_types);
         return nullptr;
     }
 
@@ -4958,7 +5146,8 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
 
 uint64_t acorn::Sema::get_function_call_score(const Func* candidate,
                                               const llvm::SmallVector<Expr*>& args,
-                                              bool is_const_object) {
+                                              bool is_const_object,
+                                              const llvm::SmallVector<Type*>& pre_bound_types) {
 
     uint64_t score = 0;
     bool implicitly_converts_ptr_arg = 0;
@@ -4973,6 +5162,7 @@ uint64_t acorn::Sema::get_function_call_score(const Func* candidate,
                                                         implicitly_converts_ptr_arg,
                                                         generic_bindings);
     } else {
+        generic_bindings.insert(generic_bindings.begin(), pre_bound_types.begin(), pre_bound_types.end());
         generic_bindings.resize(candidate->generics.size());
         status = compare_as_call_candidate<true, true>(candidate,
                                                        args,
@@ -5006,7 +5196,8 @@ acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
                                                    bool& selected_implicitly_converts_ptr_arg,
                                                    bool& is_ambiguous,
                                                    bool is_const_object,
-                                                   llvm::SmallVector<Type*>& generic_bindings) {
+                                                   llvm::SmallVector<Type*>& generic_bindings,
+                                                   const llvm::SmallVector<Type*>& pre_bound_types) {
 
     Func* selected = nullptr;
     uint64_t best_score = std::numeric_limits<uint64_t>::max();
@@ -5029,6 +5220,11 @@ acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
                 continue;
             }
         } else {
+              candidate_generic_bindings.insert(
+                candidate_generic_bindings.begin(),
+                pre_bound_types.begin(),
+                pre_bound_types.end()
+            );
             candidate_generic_bindings.resize(candidate->generics.size());
             auto status = compare_as_call_candidate<false, true>(candidate,
                                                                  args,
@@ -5299,7 +5495,8 @@ bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const
 void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
                                              Node* call_node,
                                              const FuncList& candidates,
-                                             const llvm::SmallVector<Expr*>& args) {
+                                             const llvm::SmallVector<Expr*>& args,
+                                             const llvm::SmallVector<Type*>& pre_bound_types) {
 
     const char* func_type_str = candidates[0]->is_constructor ? "constructor" : "function";
 
@@ -5309,14 +5506,14 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
 
         logger.begin_error(error_loc, "Invalid call to %s: '%s'", func_type_str, canidate->get_decl_string());
         logger.add_empty_line();
-        display_call_mismatch_info(canidate, args, false, true, call_node);
+        display_call_mismatch_info(canidate, args, false, true, call_node, pre_bound_types);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
 
     } else {
 
         llvm::SmallVector<std::pair<uint64_t, const Func*>> candidates_and_scores;
         for (const Func* candidate : candidates) {
-            uint64_t score = get_function_call_score(candidate, args, false);
+            uint64_t score = get_function_call_score(candidate, args, false, pre_bound_types);
             candidates_and_scores.push_back(std::make_pair(score, candidate));
         }
         std::ranges::sort(candidates_and_scores, [](const auto& lhs, const auto& rhs) {
@@ -5327,7 +5524,7 @@ void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
         for (auto& [_, candidate] : candidates_and_scores | std::views::take(context.get_max_call_err_funcs())) {
             logger.add_empty_line();
             logger.add_line("Could not match: '%s'", candidate->get_decl_string());
-            display_call_mismatch_info(candidate, args, true, false, call_node);
+            display_call_mismatch_info(candidate, args, true, false, call_node, pre_bound_types);
         }
         int64_t remaining = static_cast<int64_t>(candidates.size()) - static_cast<int64_t>(context.get_max_call_err_funcs());
         if (remaining > 0) {
@@ -5344,7 +5541,8 @@ void acorn::Sema::display_call_mismatch_info(const F* candidate,
                                              const llvm::SmallVector<Expr*>& args,
                                              bool indent,
                                              bool should_show_invidual_underlines,
-                                             Node* call_node) {
+                                             Node* call_node,
+                                             const llvm::SmallVector<Type*>& pre_bound_types) {
 
 #define err_line(n, fmt, ...) \
 add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_ARGS__);
@@ -5567,7 +5765,7 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
     named_arg_high_idx = 0;
     llvm::SmallVector<Type*> generic_bindings;
     if constexpr (is_func_decl) {
-        //generic_bindings.insert(generic_bindings.begin(), pre_bound_types.begin(), pre_bound_types.end());
+        generic_bindings.insert(generic_bindings.begin(), pre_bound_types.begin(), pre_bound_types.end());
         generic_bindings.resize(candidate->generics.size());
     }
 
@@ -5759,7 +5957,8 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
 void acorn::Sema::display_call_ambiguous_info(PointSourceLoc error_loc,
                                               FuncList& candidates,
                                               llvm::SmallVector<Expr*>& args,
-                                              bool is_const_object) {
+                                              bool is_const_object,
+                                              const llvm::SmallVector<Type*>& pre_bound_types) {
 
     llvm::SmallVector<Func*, 16> ambiguous_funcs;
     Func* selected = nullptr;
@@ -5783,6 +5982,7 @@ void acorn::Sema::display_call_ambiguous_info(PointSourceLoc error_loc,
                 continue;
             }
         } else {
+            generic_bindings.insert(generic_bindings.begin(), pre_bound_types.begin(), pre_bound_types.end());
             generic_bindings.resize(candidate->generics.size());
             auto status = compare_as_call_candidate<false, true>(candidate,
                                                                  args,
@@ -5806,11 +6006,8 @@ void acorn::Sema::display_call_ambiguous_info(PointSourceLoc error_loc,
     }
 
     logger.begin_error(error_loc, "Ambiguous function call. Functions:").remove_period();
-    for (Func* ambiguous_func : ambiguous_funcs) {
-        logger.add_line([ambiguous_func](Logger& l) {
-            l.print(ambiguous_func->get_decl_string());
-        });
-    }
+    logger.add_empty_line();
+    display_ambiguous_functions(ambiguous_funcs);
     logger.end_error(ErrCode::SemaAmbiguousFuncCall);
 
 }
@@ -5837,6 +6034,64 @@ void acorn::Sema::display_call_missing_bindings_info(Expr* call_node,
     error(expand(call_node), "Call to generic function does not bind all types")
         .add_line("Missing bindings for: %s", missing_bound_types_str)
         .end_error(ErrCode::SemaGenericCallHasUnboundTypes);
+}
+
+template<unsigned N>
+void acorn::Sema::display_ambiguous_functions(const llvm::SmallVector<Func*, N>& ambiguous_funcs) {
+    for (size_t i = 0; i < ambiguous_funcs.size(); i++) {
+        auto ambiguous_func = ambiguous_funcs[i];
+
+        logger.add_line([ambiguous_func](auto& logger) {
+            logger.print("Defined at: ");
+            ambiguous_func->show_location_msg(logger);
+        }).remove_period();
+
+        logger.add_line("  '%s'", ambiguous_func->get_decl_string())
+            .remove_period();
+        logger.add_empty_line();
+    }
+}
+
+void acorn::Sema::display_generic_bind_named_args_fail_info(GenericBindFuncCall* call, Func* func) {
+
+    bool named_args_out_of_order = false;
+    size_t named_arg_high_idx = 0;
+    for (size_t i = 0; i < call->args.size(); i++) {
+        auto arg = call->args[i];
+        auto genericn = func->generics[i];
+
+        if (arg->is(NodeKind::NamedValue)) {
+
+            auto named_arg = static_cast<NamedValue*>(arg);
+
+            auto itr = std::ranges::find_if(func->generics, [name = named_arg->name](auto& genericn) {
+                return genericn->name == name;
+            });
+            if (itr == func->generics.end()) {
+                logger.add_individual_underline(arg->loc);
+                logger.add_line("  - could not find generic '%s' for named arg", named_arg->name);
+                break;
+            }
+
+            genericn = *itr;
+            arg = named_arg->assignment;
+
+            if (genericn->index != i) {
+                named_args_out_of_order = true;
+            }
+            named_arg_high_idx = std::max(genericn->index, named_arg_high_idx);
+        } else {
+            // Cannot determine the order of the arguments if the
+            // non-named arguments come after the named arguments
+            // and the named arguments are not in order.
+            if (named_args_out_of_order || named_arg_high_idx > i) {
+                logger.add_individual_underline(expand(arg));
+                logger.add_line("  - arg %s: causes the arguments to be out of order", i + 1);
+                logger.add_line("    either order arguments to match parameters or place before named arguments");
+                break;
+            }
+        }
+    }
 }
 
 bool acorn::Sema::try_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison

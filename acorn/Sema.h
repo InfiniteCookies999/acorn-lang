@@ -59,7 +59,7 @@ namespace acorn {
         Enum*      cur_enum       = nullptr;
         Interface* cur_interface  = nullptr;
 
-        FuncList interface_functions;
+        FuncList temp_ref_functions;
 
         // Limits to calculate comparison scores for which function to call.
         //
@@ -197,21 +197,28 @@ namespace acorn {
                                             bool is_for_call);
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
+        void check_generic_bind_function_call(GenericBindFuncCall* call);
+        bool compare_generic_bind_candidate_with_named_args(GenericBindFuncCall* call,
+                                                            Func* func,
+                                                            llvm::SmallVector<Type*>& bound_types);
         void check_function_type_call(FuncCall* call, FunctionType* func_type);
         Func* check_function_decl_call(Expr* call_node,
                                        llvm::SmallVector<Expr*>& args,
                                        size_t non_named_args_offset,
                                        FuncList& candidates,
-                                       bool is_const_object);
+                                       bool is_const_object,
+                                       const llvm::SmallVector<Type*>& pre_bound_types);
         Func* find_best_call_candidate(FuncList& candidates,
                                        llvm::SmallVector<Expr*>& args,
                                        bool& selected_implicitly_converts_ptr_arg,
                                        bool& is_ambiguous,
                                        bool is_const_object,
-                                       llvm::SmallVector<Type*>& generic_bindings);
+                                       llvm::SmallVector<Type*>& generic_bindings,
+                                       const llvm::SmallVector<Type*>& pre_bound_types);
         uint64_t get_function_call_score(const Func* candidate,
                                          const llvm::SmallVector<Expr*>& args,
-                                         bool is_const_object);
+                                         bool is_const_object,
+                                         const llvm::SmallVector<Type*>& pre_bound_types);
         enum class CallCompareStatus {
             INCORRECT_ARGS,
             INCORRECT_PARAM_BY_NAME_NOT_FOUND,
@@ -241,21 +248,27 @@ namespace acorn {
         void display_call_mismatch_info(PointSourceLoc error_loc,
                                         Node* call_node,
                                         const FuncList& candidates,
-                                        const llvm::SmallVector<Expr*>& args);
+                                        const llvm::SmallVector<Expr*>& args,
+                                        const llvm::SmallVector<Type*>& pre_bound_types);
         // Displays information for why trying to call a function failed.
         template<typename F>
         void display_call_mismatch_info(const F* candidate,
                                         const llvm::SmallVector<Expr*>& args,
                                         bool indent,
                                         bool should_show_invidual_underlines,
-                                        Node* call_node);
+                                        Node* call_node,
+                                        const llvm::SmallVector<Type*>& pre_bound_types);
         void display_call_ambiguous_info(PointSourceLoc error_loc,
                                          FuncList& candidates,
                                          llvm::SmallVector<Expr*>& args,
-                                         bool is_const_object);
+                                         bool is_const_object,
+                                         const llvm::SmallVector<Type*>& pre_bound_types);
         void display_call_missing_bindings_info(Expr* call_node,
                                                 Func* called_func,
                                                 const llvm::SmallVector<Type*>& generic_bindings);
+        template<unsigned N>
+        void display_ambiguous_functions(const llvm::SmallVector<Func*, N>& ambiguous_funcs);
+        void display_generic_bind_named_args_fail_info(GenericBindFuncCall* call, Func* func);
         bool try_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
                                            Type* from_type, // Type at current level of comparison
                                            llvm::SmallVector<Type*>& bindings,

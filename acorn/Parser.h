@@ -144,6 +144,8 @@ namespace acorn {
         Expr* parse_expr_trail();
         Expr* parse_expr_trail(Expr* lhs);
         Expr* parse_function_call(Expr* site);
+        Expr* parse_generic_function_bind_call();
+        void  parse_function_call_args(llvm::SmallVector<Expr*>& args, size_t& non_named_args_offset);
         Expr* parse_term();
 
         Number* parse_int_literal();

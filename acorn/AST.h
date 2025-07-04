@@ -704,6 +704,7 @@ namespace acorn {
         }
 
         Identifier ident;
+        bool binds_generics = false;
 
         enum class RelativeEnforcement {
             File,
@@ -792,6 +793,15 @@ namespace acorn {
 
         PointSourceLoc expand_access_only() const;
 
+    };
+
+    struct GenericBindFuncCall : IdentRef {
+        GenericBindFuncCall() : IdentRef(NodeKind::IdentRef) {
+        }
+
+        size_t non_named_args_offset = -1;
+        llvm::SmallVector<Expr*> args;
+        llvm::SmallVector<Type*> bound_types;
     };
 
     struct TypeExpr : Expr {

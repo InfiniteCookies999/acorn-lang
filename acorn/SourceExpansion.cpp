@@ -36,12 +36,6 @@ if (e1 > e) { e = e1; }           \
         case NodeKind::FuncCall: {
             FuncCall* call = static_cast<FuncCall*>(node);
             get(call->site);
-            if (!call->args.empty()) {
-                auto loc = expand(call->args.back());
-                e = loc.ptr + loc.length;
-            } else {
-                e = call->loc.ptr + call->loc.length;
-            }
             // Include the closing )
             go_until(e, '(', ')');
             break;
@@ -131,8 +125,17 @@ if (e1 > e) { e = e1; }           \
             get(tryn->caught_expr);
             break;
         }
+        case NodeKind::IdentRef: {
+            IdentRef* ref = static_cast<IdentRef*>(node);
+            if (ref->binds_generics) {
+                GenericBindFuncCall* call = static_cast<GenericBindFuncCall*>(ref);
+                // Include the closing )
+                go_until(e, '(', ')');
+            }
+            break;
+        }
+
         case NodeKind::Number:
-        case NodeKind::IdentRef:
         case NodeKind::String:
         case NodeKind::Null:
         case NodeKind::Bool:

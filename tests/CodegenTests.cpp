@@ -2357,6 +2357,48 @@ static void generics_tests() {
 
         expect(result, std::identity()).to_be("k");
     });
+    test("Call generic function by explicitly binding to type with no arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics13.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("&&");
+    });
+    test("Call generic function by explicitly binding to type with 1 arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics14.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("&&");
+    });
+    test("Call generic function by explicitly binding to 1 type but not other", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics15.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("&&");
+    });
+    test("Call generic function by binding with named arg no arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics16.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
+    test("Call generic function by binding with named arg of second not first type", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics17.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
+    test("Call generic function by binding with named args out of order", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics18.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
+    test("Call generic function by binding with named args and non named args", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generics19.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
 }
 
 void test_codegen() {

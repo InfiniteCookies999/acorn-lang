@@ -2173,15 +2173,27 @@ acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
 }
 
 acorn::Expr* acorn::Parser::parse_function_call(Expr* site) {
-
     FuncCall* call = new_node<FuncCall>(cur_token);
     call->site = site;
+    parse_function_call_args(call->args, call->non_named_args_offset);
+    return call;
+}
+
+acorn::Expr* acorn::Parser::parse_generic_function_bind_call() {
+    GenericBindFuncCall* call = new_node<GenericBindFuncCall>(cur_token);
+    call->binds_generics = true;
+    call->ident = Identifier::get(cur_token.text());
+    next_token();
+    next_token(); // Consuming '!' token.
+    parse_function_call_args(call->args, call->non_named_args_offset);
+    return call;
+}
+
+void acorn::Parser::parse_function_call_args(llvm::SmallVector<Expr*>& args, size_t& non_named_args_offset) {
 
     next_token(); // Consuming '(' token.
-
     bool prev_allow_struct_initializer = allow_struct_initializer;
     allow_struct_initializer = true;
-
     ++paren_count;
     if (cur_token.is_not(')')) {
         bool more_args = false, full_reported = false;
@@ -2197,15 +2209,15 @@ acorn::Expr* acorn::Parser::parse_function_call(Expr* site) {
 
                 named_arg->assignment = parse_expr();
 
-                if (call->non_named_args_offset == -1) {
-                    call->non_named_args_offset = call->args.size();
+                if (non_named_args_offset == -1) {
+                    non_named_args_offset = args.size();
                 }
             } else {
                 arg = parse_expr();
             }
 
-            if (call->args.size() != MAX_FUNC_PARAMS) {
-                call->args.push_back(arg);
+            if (args.size() != MAX_FUNC_PARAMS) {
+                args.push_back(arg);
             } else if (!full_reported) {
                 logger.begin_error(expand(arg), "Exceeded maximum number of function arguments. Max: %s",
                                    MAX_FUNC_PARAMS)
@@ -2220,11 +2232,8 @@ acorn::Expr* acorn::Parser::parse_function_call(Expr* site) {
         } while (more_args);
     }
     --paren_count;
-
     allow_struct_initializer = prev_allow_struct_initializer;
-
     expect(')', "for function call");
-    return call;
 }
 
 acorn::Expr* acorn::Parser::parse_term() {
@@ -2269,6 +2278,10 @@ acorn::Expr* acorn::Parser::parse_term() {
         auto peek1 = peek_token(1);
         if (peek_if_expr_is_type(peek0, peek1)) {
             return parse_type_expr();
+        }
+
+        if (peek0.is('!') && peek1.is('(')) {
+            return parse_expr_trail(parse_generic_function_bind_call());
         }
 
         IdentRef* ref = new_node<IdentRef>(cur_token);
