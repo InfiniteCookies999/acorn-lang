@@ -1,0 +1,44 @@
+
+#if OS_GROUP_WINDOWS
+
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
+
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
+
+#elif OS_GROUP_UNIX
+
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
+
+#endif
+
+fn write_val(val: int) {
+
+#if OS_GROUP_WINDOWS
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
+    WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    c: char = as(char) val;
+    write(1, &c, 1);
+#endif
+
+}
+
+generics[T]
+fn foo(a: T) -> int {
+    s: int = sizeof(T);
+    return s;
+}
+
+fn main() {
+    s1: int = foo(55'u32);
+    write_val(s1 + 60);
+    s2: int = foo(44.3);
+    write_val(s2 + 56);
+}

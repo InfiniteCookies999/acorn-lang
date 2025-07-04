@@ -131,6 +131,11 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = AssignDeterminedArrayType::create(allocator, assign_det_arr_type->get_elm_type(), is_const);
         break;
     }
+    case TypeKind::Generic: {
+        auto generic_type = static_cast<GenericType*>(type);
+        new_type = GenericType::create(allocator, generic_type->get_generic(), is_const);
+        break;
+    }
     default:
         new_type = Type::create(allocator, type->get_kind(), is_const);
         break;

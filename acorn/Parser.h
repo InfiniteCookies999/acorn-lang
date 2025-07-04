@@ -85,7 +85,7 @@ namespace acorn {
 
         Node* parse_statement();
 
-        Func*      parse_function(uint32_t modifiers, bool is_const);
+        Func*      parse_function(uint32_t modifiers, bool is_const, llvm::SmallVector<Generic*> generics = {});
         VarList*   parse_variable_list(uint32_t modifiers);
         Var*       parse_variable(uint32_t modifiers, bool may_parse_implicit_ptr = false);
         Struct*    parse_struct(uint32_t modifiers);
@@ -94,6 +94,7 @@ namespace acorn {
         void       check_composite_name_conflict_with_imports(Identifier name, const char* composite_type_str);
         void       parse_raised_errors(llvm::SmallVector<RaisedError>& raised_errors);
         uint32_t   parse_modifiers();
+        void       parse_generics(llvm::SmallVector<acorn::Generic*>& generics);
 
         ScopeStmt*  parse_scope(const char* closing_for = nullptr);
         ReturnStmt* parse_return();

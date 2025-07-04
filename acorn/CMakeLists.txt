@@ -1,4 +1,4 @@
-﻿
+
 # Find variables related to LLVM install.
 find_package(LLVM REQUIRED CONFIG)
 
@@ -19,7 +19,7 @@ add_library (acorn   "Logger.h" "Logger.cpp" "Lexer.h" "Lexer.cpp" "Source.h" "T
                      "Timer.h" "Timer.cpp"  "link/Linking.h" "link/Linking.cpp" "Util.cpp" "CodeGen.h" "CodeGen.cpp"
                      "ProcessExec.h" "ProcessExec.cpp" "TypeTable.h" "TypeTable.cpp" "Errors.h" "ErrorCodesDef.inc" "Errors.cpp"
                      "Namespace.h" "Namespace.cpp" "SourceFile.cpp" "FloatParsing.h" "FloatParsing.cpp" "ir/DebugGen.h" "ir/DebugGen.cpp"
-                     "SpellChecking.h" "SpellChecking.cpp"  "ir/GenReflection.cpp" "RaisedError.h" "SystemFiles.cpp" "ir/GenConstants.cpp"     )
+                     "SpellChecking.h" "SpellChecking.cpp"  "ir/GenReflection.cpp" "RaisedError.h" "SystemFiles.cpp" "ir/GenConstants.cpp"       "GenericReset.h" "GenericReset.cpp")
 # We add these include directories to the target so that targets that use the library also have
 # access to the source files.
 target_include_directories (acorn PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

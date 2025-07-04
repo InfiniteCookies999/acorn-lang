@@ -26,6 +26,7 @@ namespace acorn {
     struct Struct;
     struct Enum;
     struct Interface;
+    struct Generic;
     class ContainerType;
     class PointerType;
     class ArrayType;
@@ -33,6 +34,7 @@ namespace acorn {
     class FunctionType;
     class StructType;
     class EnumType;
+    class GenericType;
 
     enum class TypeKind {
 
@@ -77,6 +79,7 @@ namespace acorn {
         Range,
         Auto,
         Expr, // A type that appears as part of an expression in code.
+        Generic,
         Invalid,
 
     };
@@ -92,9 +95,10 @@ namespace acorn {
 
         TypeKind get_kind() const { return kind; }
 
-        bool is_const() const { return vconst; }
-        bool does_contain_const() const { return contains_const; }
-        Type* remove_all_const() const { return non_const_version; };
+        bool is_const()              const { return vconst;            }
+        bool does_contain_const()    const { return contains_const;    }
+        bool does_contain_generics() const { return contains_generics; }
+        Type* remove_all_const()     const { return non_const_version; };
 
         bool is(const Type* type)     const { return type == this; }
         bool is_not(const Type* type) const { return type != this; }
@@ -135,15 +139,16 @@ namespace acorn {
 
         bool is_default_foldable() const;
 
-        bool is_pointer() const   { return kind == TypeKind::Pointer;   }
-        bool is_array() const     { return kind == TypeKind::Array;     }
-        bool is_bool() const      { return kind == TypeKind::Bool;      }
-        bool is_range() const     { return kind == TypeKind::Range;     }
-        bool is_function() const  { return kind == TypeKind::Function;  }
-        bool is_struct() const    { return kind == TypeKind::Struct;    }
-        bool is_enum() const      { return kind == TypeKind::Enum;      }
-        bool is_slice() const     { return kind == TypeKind::Slice;     }
+        bool is_pointer()   const { return kind == TypeKind::Pointer;   }
+        bool is_array()     const { return kind == TypeKind::Array;     }
+        bool is_bool()      const { return kind == TypeKind::Bool;      }
+        bool is_range()     const { return kind == TypeKind::Range;     }
+        bool is_function()  const { return kind == TypeKind::Function;  }
+        bool is_struct()    const { return kind == TypeKind::Struct;    }
+        bool is_enum()      const { return kind == TypeKind::Enum;      }
+        bool is_slice()     const { return kind == TypeKind::Slice;     }
         bool is_interface() const { return kind == TypeKind::Interface; }
+        bool is_generic()   const { return kind == TypeKind::Generic;   }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
@@ -167,6 +172,8 @@ namespace acorn {
             return container_enum_type;
         }
 
+        void get_generic_types(llvm::SmallVector<const GenericType*>& generics) const;
+
     protected:
         Type(TypeKind kind, bool is_const)
             : kind(kind), vconst(is_const) {
@@ -187,6 +194,8 @@ namespace acorn {
         // this means that it is either itself const or has an
         // element type that is const.
         bool     contains_const;
+        // True if this type is generic or contains a type that is generic.
+        bool     contains_generics = false;
     };
 
     class ContainerType : public Type {
@@ -522,6 +531,32 @@ namespace acorn {
         }
 
         Interface* interfacen;
+    };
+
+    class GenericType : public Type {
+    public:
+
+        static GenericType* create(PageAllocator& allocator, Generic* generic, bool is_const);
+
+        std::string to_string() const;
+
+        Generic* get_generic() const {
+            return generic;
+        }
+
+        size_t get_generic_index() const;
+
+        void bind_type(Type* type) { bound_type = type; }
+
+        Type* get_bound_type() const { return bound_type; }
+
+    protected:
+        GenericType(Generic* generic, bool is_const = false)
+            : Type(TypeKind::Generic, is_const), generic(generic) {
+        }
+
+        Generic* generic;
+        Type* bound_type;
     };
 }
 

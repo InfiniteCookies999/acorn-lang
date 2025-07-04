@@ -75,7 +75,7 @@ void test_sema() {
         for (Decl* decl : context->get_unchecked()) {
             Sema sema(*context, mock_file, mock_file->logger);
             if (decl->is(NodeKind::Func)) {
-                sema.check_function(static_cast<Func*>(decl));
+                sema.check_function(static_cast<Func*>(decl), nullptr);
             } else if (decl->is(NodeKind::Var)) {
                 sema.check_variable(static_cast<Var*>(decl));
             }
@@ -235,6 +235,45 @@ void test_sema() {
                 }
             )");
             expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);
+        });
+        test("Generic function with `T=int` bound violates assigning `const int*` to `T*`", [&] {
+            mock_sema(R"(
+                generics[T]
+                fn foo(a: T*, b: T*) {}
+
+                fn main() {
+                    a: int*;
+                    b: const int*;
+                    foo(a, b);
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
+        });
+        test("Generic function with `T=int*` bound violates assigning `const int**` to `T**`", [&] {
+            mock_sema(R"(
+                generics[T]
+                fn foo(a: T*, b: T*) {}
+
+                fn main() {
+                    a: int**;
+                    b: const int**;
+                    foo(a, b);
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
+        });
+        test("Generic function with `T=const int` bound violates assigning `const (int*)*` to `T**`", [&] {
+            mock_sema(R"(
+                generics[T]
+                fn foo(a: T, b: T**) {}
+
+                fn main() {
+                    a: const int = 2;
+                    b: const (int*)*;
+                    foo(a, b);
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
         });
     });
 }

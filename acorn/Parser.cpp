@@ -117,7 +117,9 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
         }
 
         if (func->name != Identifier::Invalid) {
-            context.add_unchecked_decl(func);
+            if (!func->is_generic()) {
+                context.add_unchecked_decl(func);
+            }
             file->add_function(func);
         }
 
@@ -149,7 +151,7 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
     auto process_var = [structn](Var* var) finline {
         if (var->name != Identifier::Invalid) {
             structn->nspace->add_variable(var);
-            var->field_idx = structn->fields.size();
+            var->field_idx = static_cast<uint32_t>(structn->fields.size());
             structn->fields.push_back(var);
             var->structn = structn;
         }
@@ -203,7 +205,9 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
                 structn->nspace->add_function(func);
                 func->structn = structn;
             }
-            context.add_unchecked_decl(func);
+            if (!func->is_generic()) {
+                context.add_unchecked_decl(func);
+            }
         }
     } else {
         modl.mark_bad_scope(ScopeLocation::Struct, node, logger);
@@ -404,6 +408,23 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
     case Token::KwFn:
         return parse_function(0, false);
+    case Token::KwGenerics: {
+        llvm::SmallVector<Generic*> generics;
+        parse_generics(generics);
+
+        uint32_t modifiers = parse_modifiers();
+        if (cur_token.is(Token::KwFn)) {
+            return parse_function(modifiers, false, std::move(generics));
+        } else if (cur_token.is(Token::KwConst) && peek_token(0).is(Token::KwFn)) {
+            next_token(); // Consuming 'const' token.
+            return parse_function(modifiers, true, std::move(generics));
+        } else {
+            error(cur_token, "Expected declaration")
+                .end_error(ErrCode::ParseExpectedDeclaration);
+            skip_recovery();
+            return nullptr;
+        }
+    }
     case Token::KwConst: {
         if (peek_token(0).is(Token::KwFn)) {
             next_token(); // Consuming 'const' token.
@@ -494,12 +515,13 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
 }
 
-acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const) {
+acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const, llvm::SmallVector<Generic*> generics) {
 
     expect(Token::KwFn);
 
     Func* func = new_declaration<Func, true>(modifiers, cur_token);
     func->is_constant = is_const;
+    func->generics    = std::move(generics);
 
     // Check for constructor.
     switch (cur_token.kind) {
@@ -989,6 +1011,32 @@ uint32_t acorn::Parser::parse_modifiers() {
     return modifiers;
 }
 
+void acorn::Parser::parse_generics(llvm::SmallVector<acorn::Generic*>& generics) {
+
+    next_token(); // Consuming 'generics' token.
+
+    expect('[');
+    bool more_generics = false;
+    do {
+
+        auto genericn = new_node<Generic>(cur_token);
+        genericn->name = expect_identifier("for generic type name");
+
+        if (genericn->name != Identifier::Invalid) {
+            genericn->type = GenericType::create(allocator, genericn, false);
+        }
+
+        genericn->index = generics.size();
+        generics.push_back(genericn);
+
+        more_generics = cur_token.is(',');
+        if (more_generics) {
+            next_token();
+        }
+    } while (more_generics);
+    expect(']');
+}
+
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
 
     ScopeStmt* scope = new_node<ScopeStmt>(cur_token);
@@ -1386,6 +1434,19 @@ return t;                                \
         auto name = Identifier::get(cur_token.text());
         next_token();
         if (cur_token.is_not('$')) {
+            if (cur_func && cur_func->is_generic()) {
+                auto itr = std::ranges::find_if(cur_func->generics, [name](auto genericn) {
+                    return genericn->name == name;
+                });
+                if (itr != cur_func->generics.end()) {
+                    Type* generic_type = (*itr)->type;
+                    if (is_const) {
+                        generic_type = type_table.get_const_type(generic_type);
+                    }
+                    return generic_type;
+                }
+            }
+
             auto unresolved_type = UnresolvedCompositeType::create(allocator, name, name_token.loc);
             if (is_const) {
                 unresolved_type = type_table.get_const_type(unresolved_type);
@@ -1813,14 +1874,14 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         return calc(lval % rval);
     }
     case Token::LtLt: {
-        if (rval < 0 || rval == 0 || (rval - 1) > to_type->get_number_of_bits()) {
+        if (rval < 0 || rval == 0 || ((rval - 1) > (T)to_type->get_number_of_bits())) {
             // These are shift error cases handled during sema.
             return new_binary_op(op, lhs, rhs);
         }
         return calc(lval << rval);
     }
     case Token::GtGt: {
-        if (rval < 0 || rval == 0 || (rval - 1) > to_type->get_number_of_bits()) {
+        if (rval < 0 || rval == 0 || (rval - 1) > (T)to_type->get_number_of_bits()) {
             // These are shift error cases handled during sema.
             return new_binary_op(op, lhs, rhs);
         }
@@ -1848,7 +1909,7 @@ acorn::Expr* acorn::Parser::fold_float(Token op, Number* lhs, Number* rhs, Type*
         // Going to treat the lhs as the result of the evaluation since
         // it is already a number and can just be reused.
 
-        if (to_type == context.float_type) {
+        if constexpr (std::is_same_v<float, T>) {
             lhs->value_f32 = result;
         } else {
             lhs->value_f64 = result;
@@ -2624,8 +2685,8 @@ acorn::Expr* acorn::Parser::parse_string_literal() {
     auto string = new_node<String>(cur_token);
     string->type = type_table.get_ptr_type(type_table.get_const_type(context.char_type));
 
-#define next_codepoint_digit(codepoint)        \
-codepoint = 16u * codepoint + hex_table[*ptr]; \
+#define next_codepoint_digit(codepoint)                               \
+codepoint = 16u * codepoint + static_cast<uint32_t>(hex_table[*ptr]); \
 ++ptr;
 
     auto text = cur_token.text();
@@ -2637,7 +2698,7 @@ codepoint = 16u * codepoint + hex_table[*ptr]; \
                 ++ptr; // skip past u
 
                 uint32_t codepoint = 0;
-                codepoint = hex_table[*ptr];
+                codepoint = static_cast<uint32_t>(hex_table[*ptr]);
                 ++ptr;
                 next_codepoint_digit(codepoint);
                 next_codepoint_digit(codepoint);
@@ -2648,7 +2709,7 @@ codepoint = 16u * codepoint + hex_table[*ptr]; \
                 ++ptr; // skip past U
 
                 uint32_t codepoint = 0;
-                codepoint = hex_table[*ptr];
+                codepoint = static_cast<uint32_t>(hex_table[*ptr]);
                 ++ptr;
                 next_codepoint_digit(codepoint);
                 next_codepoint_digit(codepoint);

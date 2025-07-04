@@ -4,6 +4,7 @@
 #include "SourceFile.h"
 #include "Type.h"
 #include "SourceExpansion.h"
+#include "GenericReset.h"
 
 void acorn::Decl::show_prev_declared_msg(Logger& logger) const {
     logger.print("Previously declared at: ");
@@ -67,14 +68,17 @@ acorn::SourceLoc acorn::Decl::get_modifier_location(uint32_t modifier) const {
 
 acorn::SourceLoc acorn::Func::get_function_const_location() const {
     SourceLoc loc = this->loc;
-    const char* start_ptr = loc.ptr + loc.length;
-    go_until(start_ptr, '(', ')');
-    // Skip over whitespace until we reach 'const' keyword.
-    while (is_whitespace(*start_ptr)) {
-        ++start_ptr;
+    const char* ptr = loc.ptr;
+    while (ptr - 5 >= file->buffer.content) {
+        if (memcmp(ptr - 5, "const", 5) == 0) {
+            break;
+        }
+        --ptr;
     }
-
-    return SourceLoc::from_ptrs(start_ptr, start_ptr + 5);
+    if (memcmp(ptr - 5, "const", 5) != 0) {
+        acorn_fatal("Expected to find const for function");
+    }
+    return SourceLoc::from_ptrs(ptr - 5, ptr);
 }
 
 acorn::PointSourceLoc acorn::Func::get_function_first_default_param_location() const {
@@ -116,6 +120,18 @@ acorn::PointSourceLoc acorn::Func::get_function_first_default_param_location() c
 
 std::string acorn::Func::get_decl_string() const {
     std::string str;
+    if (is_generic()) {
+        str += "generics[";
+        size_t generic_count = 0;
+        for (Generic* genericn : generics) {
+            str += genericn->type->to_string();
+            if (generic_count + 1 != generics.size()) {
+                str += ", ";
+            }
+            ++generic_count;
+        }
+        str += "] ";
+    }
     if (is_constant) {
         str += "const ";
     }
@@ -123,11 +139,30 @@ std::string acorn::Func::get_decl_string() const {
     str += "(";
     size_t count = 0;
     for (Var* param : params) {
-        str += param->type->to_string();
-        if (count + 1 != params.size()) {
+        bool is_last = count + 1 == params.size();
+        if (is_last && uses_varargs) {
+            auto slice_type = static_cast<SliceType*>(param->type);
+            auto elm_type = slice_type->get_elm_type();
+            str += elm_type->to_string() + "...";
+        } else {
+            if (param->has_implicit_ptr) {
+                auto ptr_type = static_cast<PointerType*>(param->type);
+                auto elm_type = ptr_type->get_elm_type();
+                str += elm_type->to_string() + "^";
+            } else {
+                str += param->type->to_string();
+            }
+        }
+        if (!is_last) {
             str += ", ";
         }
         ++count;
+    }
+    if (uses_native_varargs) {
+        if (!params.empty()) {
+            str += ", ";
+        }
+        str += "...";
     }
     str += ")";
     return str;
@@ -164,6 +199,44 @@ acorn::Var* acorn::Func::find_parameter(Identifier name) const {
         return param->name == name;
     });
     return itr != params.end() ? *itr : nullptr;
+}
+
+acorn::GenericFuncInstance* acorn::Func::get_generic_instance(PageAllocator& allocator,
+                                                              llvm::SmallVector<Type*> generic_bindings,
+                                                              llvm::SmallVector<Type*> qualified_param_types) {
+    // Check to see if the instance already exists.
+    for (auto* instance : generic_instances) {
+        if (instance->generic_bindings == generic_bindings) {
+            return instance;
+        }
+    }
+
+    auto generic_instance = allocator.alloc_type<GenericFuncInstance>();
+    new (generic_instance) GenericFuncInstance();
+    generic_instance->generic_bindings = std::move(generic_bindings);
+    generic_instance->qualified_types  = std::move(qualified_param_types);
+
+    generic_instances.push_back(generic_instance);
+    return generic_instance;
+}
+
+void acorn::Func::bind_generic_instance(GenericFuncInstance* generic_instance) {
+
+    // Reset the current state of the function to be able to process the function
+    // in sema/irgen as if it was just parsed.
+    reset_generic_function(this);
+
+    // Bind the types bound to this instance of the generic function.
+    return_type = generic_instance->qualified_types[0];
+    for (size_t i = 0; i < params.size(); i++) {
+        auto qualified_type = generic_instance->qualified_types[i + 1];
+        params[i]->type = qualified_type;
+    }
+
+    for (size_t i = 0; i < generics.size(); i++) {
+        Type* type_to_bind = generic_instance->generic_bindings[i];
+        generics[i]->type->bind_type(type_to_bind);
+    }
 }
 
 acorn::Var* acorn::Struct::find_field(Identifier name) const {

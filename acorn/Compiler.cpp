@@ -268,7 +268,7 @@ void acorn::Compiler::sema_and_irgen() {
             .end_error(ErrCode::GlobalCouldNotFindEntryPointFunc);
         return;
     }
-    context.queue_gen(context.get_main_function());
+    context.queue_gen(context.get_main_function(), nullptr);
 
     // Check to make sure that there are no duplicate declarations within
     // any namespaces.
@@ -310,12 +310,12 @@ void acorn::Compiler::sema_and_irgen() {
     }
     ir_timer.stop();
 
-    auto check_decl = [this](Decl* decl) finline {
+    auto check_decl = [this](Decl* decl, GenericInstance* generic_instance) finline {
         sema_timer.start();
 
         Sema sema(context, decl->file, decl->get_logger());
         if (decl->is(NodeKind::Func)) {
-            sema.check_function(static_cast<Func*>(decl));
+            sema.check_function(static_cast<Func*>(decl), static_cast<GenericFuncInstance*>(generic_instance));
         } else if (decl->is(NodeKind::Var)) {
             auto var = static_cast<Var*>(decl);
             if (!var->has_been_checked) {
@@ -344,11 +344,23 @@ void acorn::Compiler::sema_and_irgen() {
     };
 
     while (!context.decl_queue_empty()) {
-        Node* decl = context.decl_queue_next();
+        DeclGen decl_gen      = context.decl_queue_next();
+        Node* decl            = decl_gen.decl;
+        auto generic_instance = decl_gen.generic_instance;
+
+        if (generic_instance) {
+            if (decl->is(NodeKind::Func)) {
+                auto func = static_cast<Func*>(decl);
+                auto func_generic_instance = static_cast<GenericFuncInstance*>(generic_instance);
+                func->bind_generic_instance(func_generic_instance);
+            } else {
+                acorn_fatal("Unknown node kind to bind generics to");
+            }
+        }
 
         // Semantic analysis.
         if (decl->is_not(NodeKind::ImplicitFunc)) {
-            check_decl(static_cast<Decl*>(decl));
+            check_decl(static_cast<Decl*>(decl), generic_instance);
         }
 
         // Code generation.
@@ -357,7 +369,7 @@ void acorn::Compiler::sema_and_irgen() {
 
         IRGenerator generator(context);
         if (decl->is(NodeKind::Func)) {
-            generator.gen_function(static_cast<Func*>(decl));
+            generator.gen_function(static_cast<Func*>(decl), static_cast<GenericFuncInstance*>(generic_instance));
         } else if (decl->is(NodeKind::Var)) {
             generator.gen_global_variable(static_cast<Var*>(decl));
         } else if (decl->is(NodeKind::ImplicitFunc)) {
@@ -378,7 +390,7 @@ void acorn::Compiler::sema_and_irgen() {
     // Checking any declarations that were not checked.
     //
     for (Decl* decl : context.get_unchecked()) {
-        check_decl(decl);
+        check_decl(decl, nullptr);
     }
 
     if (context.has_errors()) {

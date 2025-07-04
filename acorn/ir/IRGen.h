@@ -21,7 +21,7 @@ namespace acorn {
 
         IRGenerator(Context& context);
 
-        void gen_function(Func* func);
+        void gen_function(Func* func, GenericFuncInstance* generic_instance);
         void gen_global_variable(Var* var);
         void gen_implicit_function(ImplicitFunc* implicit_func);
         void add_return_to_global_init_function();
@@ -135,12 +135,12 @@ namespace acorn {
         size_t get_interface_offset(Struct* structn, Interface* interfacen);
         Func* get_mapped_interface_func(Func* interface_func, const FuncList& funcs);
 
-        void gen_function_decl(Func* func);
-        llvm::Type* gen_function_return_type(Func* func, bool is_main);
-        void gen_function_body(Func* func);
+        void gen_function_decl(Func* func, GenericFuncInstance* generic_instance);
+        llvm::Type* gen_function_return_type(Func* func, GenericFuncInstance* generic_instance, bool is_main);
+        void gen_function_body(Func* func, GenericFuncInstance* generic_instance);
         void gen_variable_address(Var* var, llvm::Type* ll_alloc_type);
         llvm::AllocaInst* gen_alloca(llvm::Type* ll_alloc_type, llvm::Twine ll_name);
-        llvm::Type* gen_function_param_type(Var* param) const;
+        llvm::Type* gen_function_param_type(Var* param, GenericFuncInstance* generic_instance) const;
 
         void gen_global_variable_decl(Var* var);
         void gen_global_variable_body(Var* var);
@@ -212,7 +212,8 @@ namespace acorn {
                                             llvm::Value* ll_dest_addr,
                                             llvm::Value* ll_in_this,
                                             bool apply_implicit_return_ptr,
-                                            bool for_call_arg);
+                                            bool for_call_arg,
+                                            GenericFuncInstance* generic_instance);
         llvm::Value* gen_function_call_arg(Expr* arg);
         llvm::Value* gen_function_call_arg_for_implicit_ptr(Expr* arg);
         llvm::Value* gen_function_type_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue, bool for_call_arg);
@@ -319,7 +320,7 @@ namespace acorn {
         llvm::Function* gen_void_function_decl(llvm::Twine ll_name);
 
         llvm::AllocaInst* gen_unseen_alloca(Type* type, llvm::Twine ll_name);
-        llvm::AllocaInst* gen_unseen_alloca(Type* type, llvm::Type* ll_type, llvm::Twine ll_name);
+        llvm::AllocaInst* gen_unseen_alloca(llvm::Type* ll_type, llvm::Twine ll_name);
 
         bool is_pointer_lvalue(Expr* expr);
 
