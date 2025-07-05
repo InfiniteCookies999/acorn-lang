@@ -115,6 +115,8 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = UnresolvedCompositeType::create(allocator,
                                                    un_composite_type->get_composite_name(),
                                                    un_composite_type->get_error_location(),
+                                                   un_composite_type->get_generic_args(),
+                                                   un_composite_type->get_non_named_generic_args_offset(),
                                                    is_const);
         break;
     }

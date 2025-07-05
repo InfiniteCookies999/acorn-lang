@@ -323,8 +323,8 @@ void acorn::Compiler::sema_and_irgen() {
             }
         } else if (decl->is(NodeKind::Struct)) {
             auto structn = static_cast<Struct*>(decl);
-            if (!structn->has_been_checked) {
-                sema.check_struct(structn);
+            if (!structn->non_generic_struct_type->has_been_checked) {
+                sema.check_struct(structn, structn->non_generic_struct_type);
             }
         } else if (decl->is(NodeKind::Enum)) {
             auto enumn = static_cast<Enum*>(decl);
@@ -820,7 +820,7 @@ void acorn::Compiler::find_std_lib_declarations() {
         }
         if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.type_struct_identifier)) {
             context.std_type_struct = structn;
-            context.const_std_type_ptr = type_table.get_ptr_type(type_table.get_const_type(structn->struct_type));
+            context.const_std_type_ptr = type_table.get_ptr_type(type_table.get_const_type(structn->non_generic_struct_type));
         }
         if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.struct_type_info_struct_identifier)) {
             context.std_struct_type_info_struct = structn;
@@ -833,7 +833,7 @@ void acorn::Compiler::find_std_lib_declarations() {
         }
         if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.any_struct_identifier)) {
             context.std_any_struct = structn;
-            context.std_any_struct_type = structn->struct_type;
+            context.std_any_struct_type = structn->non_generic_struct_type;
         }
     } else {
         Logger::global_error(context, "Failed to find standard library namespace 'reflect'")

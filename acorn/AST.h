@@ -4,6 +4,7 @@
 #include "Identifier.h"
 #include "Token.h"
 #include "RaisedError.h"
+#include "GenericAST.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/DenseSet.h>
 
@@ -157,7 +158,6 @@ namespace acorn {
         }
 
         bool generated = false;
-        bool is_being_checked = false;
 
         SourceFile* file;
         Identifier  name;
@@ -192,32 +192,14 @@ namespace acorn {
 
     };
 
-    struct GenericInstance {
-    };
-
-    struct GenericFuncInstance : GenericInstance {
-        llvm::SmallVector<Type*> generic_bindings;
-        // Parameters have their types fully qualified so that future
-        // calls to the generic function know how to properly call the
-        // function.
-        //
-        // TODO (maddie): do we really need this? IR gen seems to rely
-        // very little on it outside of some stuff to do with variadics
-        // and generating the function declaration.
-        // ^^ it is also used to initialize the parameters atm.
-        //
-        // Index 0 is the return type.
-        llvm::SmallVector<Type*> qualified_types;
-
-        llvm::Function* ll_func = nullptr;
-    };
-
     struct Func : Decl {
         Func() : Decl(NodeKind::Func) {
         }
 
         // If not null then the function is a member function.
         Struct* structn = nullptr;
+        // The struct type of the parent struct.
+        StructType* struct_type = nullptr;
 
         // If not null then the function is a function of an
         // interface. Note, this is different than a function that
@@ -324,7 +306,7 @@ namespace acorn {
             VTableInit
         } implicit_kind;
 
-        Struct* structn;
+        StructType* struct_type;
     };
 
     struct Var : Decl {
@@ -350,6 +332,7 @@ namespace acorn {
 
         Expr* assignment = nullptr;
 
+        bool is_being_checked          = false;
         bool has_been_checked          = false;
         bool is_foldable               = false;
         bool has_implicit_ptr          = false;
@@ -376,7 +359,7 @@ namespace acorn {
         Struct() : Decl(NodeKind::Struct) {
         }
 
-        StructType* struct_type;
+        StructType* non_generic_struct_type = nullptr;
 
         Namespace* nspace;
         // Ordered list of the fields.
@@ -400,6 +383,11 @@ namespace acorn {
             bool       is_dynamic;
         };
 
+        // generic data
+        //
+        llvm::SmallVector<Generic*>    generics;
+        llvm::SmallVector<StructType*> generic_instances;
+
         llvm::SmallVector<UnresolvedExtension> unresolved_extensions;
         llvm::SmallVector<InterfaceExtension>  interface_extensions;
 
@@ -409,28 +397,17 @@ namespace acorn {
         Func*                    destructor          = nullptr;
         llvm::SmallVector<Func*> constructors;
 
-        llvm::Function* ll_default_constructor = nullptr;
-        llvm::Function* ll_destructor          = nullptr;
-        llvm::Function* ll_copy_constructor    = nullptr;
-        llvm::Function* ll_move_constructor    = nullptr;
-        llvm::Function* ll_init_vtable_func    = nullptr;
-
-        bool has_been_checked        = false;
-        bool has_errors              = false;
-        bool fields_have_assignments = false;
-        bool needs_default_call      = false;
-        bool needs_destruction       = false;
-        bool needs_copy_call         = false;
-        bool needs_move_call         = false;
-        bool fields_need_destruction = false;
-        bool fields_need_copy_call   = false;
-        bool fields_need_move_call   = false;
-        bool uses_vtable             = false;
-        bool aborts_error            = false;
-        bool is_default_foldable     = true;
+        bool aborts_error = false;
 
         Var* find_field(Identifier name) const;
         const InterfaceExtension* find_interface_extension(Identifier name) const;
+
+        bool is_generic() const { return !generics.empty(); }
+
+        StructType* get_generic_instance(PageAllocator& allocator,
+                                         llvm::SmallVector<Type*> generic_bindings);
+
+        void bind_generic_instance(StructType* generic_struct_type);
 
     };
 
@@ -452,6 +429,7 @@ namespace acorn {
         // When the values are not simply integers then the values
         // are placed into a global array.
         llvm::Value* ll_array = nullptr;
+        bool is_being_checked = false;
         bool has_been_checked = false;
 
     };
@@ -460,6 +438,7 @@ namespace acorn {
         Interface() : Decl(NodeKind::Interface) {
         }
 
+        bool is_being_checked = false;
         bool has_been_checked = false;
         InterfaceType* interface_type;
 
@@ -853,7 +832,6 @@ namespace acorn {
         }
 
         size_t non_named_vals_offset = 0;
-        Struct* structn;
         IdentRef* ref;
         Func* called_constructor = nullptr;
         llvm::SmallVector<Expr*> values;
@@ -935,11 +913,11 @@ namespace acorn {
         bool passes_error_along = false;
         bool generating_expr = false;
 
-        llvm::SmallVector<Struct*> caught_errors;
-        Var*                       caught_var = nullptr;
-        ScopeStmt*                 catch_scope = nullptr;
-        Expr*                      caught_expr;
-        Node*                      catch_recoveree = nullptr;
+        llvm::SmallVector<StructType*> caught_errors;
+        Var*                           caught_var = nullptr;
+        ScopeStmt*                     catch_scope = nullptr;
+        Expr*                          caught_expr;
+        Node*                          catch_recoveree = nullptr;
 
         llvm::Value* ll_error;
         llvm::BasicBlock* ll_catch_bb;

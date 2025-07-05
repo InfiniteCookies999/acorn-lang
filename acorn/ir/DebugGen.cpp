@@ -23,7 +23,7 @@ void acorn::DebugInfoEmitter::emit_function(Func* func) {
 
     llvm::DIScope* di_scope;
     if (func->structn) {
-        di_scope = emit_type(func->structn->struct_type);
+        di_scope = emit_type(func->struct_type);
     } else {
         di_scope = di_unit->getFile();
     }
@@ -36,7 +36,7 @@ void acorn::DebugInfoEmitter::emit_function(Func* func) {
 
     // Needs to know about the 'this' pointer type.
     if (func->structn) {
-        auto this_type = context.type_table.get_ptr_type(func->structn->struct_type);
+        auto this_type = context.type_table.get_ptr_type(func->struct_type);
         auto di_this_type = builder.createObjectPointerType(emit_type(this_type));
         di_func_types.push_back(di_this_type);
     }
@@ -79,7 +79,7 @@ void acorn::DebugInfoEmitter::emit_function_end(Func* func) {
 void acorn::DebugInfoEmitter::emit_struct_this_variable(llvm::Value* ll_this, Func* func, llvm::IRBuilder<>& ir_builder) {
     auto di_scope = func->ll_func->getSubprogram();
 
-    auto struct_type = func->structn->struct_type;
+    auto struct_type = func->struct_type;
     auto this_type = context.type_table.get_ptr_type(struct_type);
 
     auto di_variable = builder.createParameterVariable(

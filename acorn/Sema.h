@@ -41,7 +41,7 @@ namespace acorn {
 
         void check_function(Func* func, GenericInstance* generic_instance);
         void check_variable(Var* var);
-        void check_struct(Struct* structn);
+        void check_struct(Struct* structn, StructType* struct_type);
         void check_enum(Enum* enumn);
         void check_interface(Interface* interfacen);
 
@@ -125,7 +125,7 @@ namespace acorn {
         template<bool check_only_non_default_value_params>
         static bool do_functions_match(const Func* func1, const Func* func2);
 
-        void check_struct_interface_extension(Struct* structn,
+        void check_struct_interface_extension(StructType* struct_type,
                                               Interface* interfacen,
                                               const Struct::UnresolvedExtension& extension);
         bool do_interface_functions_matches(Func* interface_func, Func* func);
@@ -198,8 +198,11 @@ namespace acorn {
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
         void check_generic_bind_function_call(GenericBindFuncCall* call);
-        bool compare_generic_bind_candidate_with_named_args(GenericBindFuncCall* call,
-                                                            Func* func,
+        void check_generic_bind_arguments(const llvm::SmallVector<Expr*>& args,
+                                          bool& args_have_errors,
+                                          bool& uses_named_values);
+        bool compare_generic_bind_candidate_with_named_args(const llvm::SmallVector<Expr*>& args,
+                                                            const llvm::SmallVector<Generic*>& generics,
                                                             llvm::SmallVector<Type*>& bound_types);
         void check_function_type_call(FuncCall* call, FunctionType* func_type);
         Func* check_function_decl_call(Expr* call_node,
@@ -268,7 +271,8 @@ namespace acorn {
                                                 const llvm::SmallVector<Type*>& generic_bindings);
         template<unsigned N>
         void display_ambiguous_functions(const llvm::SmallVector<Func*, N>& ambiguous_funcs);
-        void display_generic_bind_named_args_fail_info(GenericBindFuncCall* call, Func* func);
+        void display_generic_bind_named_args_fail_info(const llvm::SmallVector<Expr*>& args,
+                                                       const llvm::SmallVector<Generic*>& generics);
         bool try_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
                                            Type* from_type, // Type at current level of comparison
                                            llvm::SmallVector<Type*>& bindings,
@@ -283,7 +287,7 @@ namespace acorn {
         void check_reflect(Reflect* reflect);
 
         void ensure_global_variable_checked(SourceLoc error_loc, Var* var);
-        bool ensure_struct_checked(SourceLoc error_loc, Struct* structn);
+        bool ensure_struct_checked(SourceLoc error_loc, StructType* struct_type);
         void ensure_enum_checked(SourceLoc error_loc, Enum* enumn);
         void ensure_interface_checked(SourceLoc error_loc, Interface* interfacen);
 

@@ -50,9 +50,9 @@ namespace acorn {
         DebugInfoEmitter*  di_emitter;
         bool               should_emit_debug_info;
 
-        Func*           cur_func;
-        Struct*         cur_struct;
-        llvm::Function* ll_cur_func;
+        Func*             cur_func;
+        llvm::StructType* ll_cur_struct_type;
+        llvm::Function*   ll_cur_func;
         // If there are multiple returns this is a block that
         // multiple return statements will jump to.
         llvm::BasicBlock* ll_ret_block;
@@ -125,11 +125,11 @@ namespace acorn {
 
         bool encountered_return = false;
 
-        void gen_implicit_default_constructor(Struct* structn);
-        void gen_implicit_destructor(Struct* structn);
-        void gen_implicit_copy_constructor(Struct* structn);
-        void gen_implicit_move_constructor(Struct* structn);
-        void gen_implicit_vtable_init_function(Struct* structn);
+        void gen_implicit_default_constructor(StructType* struct_type);
+        void gen_implicit_destructor(StructType* struct_type);
+        void gen_implicit_copy_constructor(StructType* struct_type);
+        void gen_implicit_move_constructor(StructType* struct_type);
+        void gen_implicit_vtable_init_function(StructType* struct_type);
         llvm::Value* gen_global_vtable(Struct* structn, llvm::ArrayType*& ll_arr_type);
         size_t get_vtable_offset(Struct* structn, Interface* interfacen);
         size_t get_interface_offset(Struct* structn, Interface* interfacen);
@@ -256,9 +256,9 @@ namespace acorn {
         llvm::BasicBlock* gen_bblock(const char* name, llvm::Function* ll_func = nullptr);
         void insert_bblock_at_end(llvm::BasicBlock* ll_bb);
 
-        llvm::Function* gen_no_param_member_function_decl(Struct* structn, llvm::Twine name);
-        void gen_call_default_constructor(llvm::Value* ll_address, Struct* structn, SourceLoc loc);
-        void gen_call_to_init_vtable(llvm::Value* ll_address, Struct* structn);
+        llvm::Function* gen_no_param_member_function_decl(llvm::Twine name);
+        void gen_call_default_constructor(llvm::Value* ll_address, StructType* struct_type, SourceLoc loc);
+        void gen_call_to_init_vtable(llvm::Value* ll_address, StructType* struct_type);
 
         void gen_abstract_array_loop(Type* base_type,
                                      llvm::Value* ll_arr_start_ptr,
@@ -326,13 +326,15 @@ namespace acorn {
 
         llvm::Type* try_get_optimized_int_type(Type* type) const;
 
-        ImplicitFunc* create_implicit_function(ImplicitFunc::ImplicitKind implicit_kind, Struct* structn);
+        ImplicitFunc* create_implicit_function(ImplicitFunc::ImplicitKind implicit_kind, StructType* struct_type);
 
-        void copy_struct_field_constructor(Var* field,
+        void copy_struct_field_constructor(Type* field_type,
+                                           Var* field,
                                            llvm::Value* ll_to_struct_address,
                                            llvm::Value* ll_from_struct_address,
                                            llvm::Type* ll_struct_type);
-        void try_move_then_copy_struct_field_constructor(Var* field,
+        void try_move_then_copy_struct_field_constructor(Type* field_type,
+                                                         Var* field,
                                                          llvm::Value* ll_to_struct_address,
                                                          llvm::Value* ll_from_struct_address,
                                                          llvm::Type* ll_struct_type);
@@ -347,32 +349,33 @@ namespace acorn {
                             SourceLoc loc);
         void gen_call_copy_constructor(llvm::Value* ll_to_address,
                                        llvm::Value* ll_from_address,
-                                       Struct* structn,
+                                       StructType* struct_type,
                                        SourceLoc loc);
         void gen_call_array_copy_constructors(llvm::Value* ll_to_address,
                                               llvm::Value* ll_from_address,
                                               ArrayType* arr_type,
-                                              Struct* structn,
+                                              StructType* struct_type,
                                               SourceLoc loc);
 
         void gen_call_array_move_constructors(llvm::Value* ll_to_address,
                                               llvm::Value* ll_from_address,
                                               ArrayType* arr_type,
-                                              Struct* structn,
+                                              StructType* struct_type,
                                               SourceLoc loc);
         void gen_call_move_constructor(llvm::Value* ll_to_address,
                                        llvm::Value* ll_from_address,
-                                       Struct* structn,
+                                       StructType* struct_type,
                                        SourceLoc loc);
 
         void gen_abstract_double_array_loop(llvm::Value* ll_to_address,
                                             llvm::Value* ll_from_address,
                                             ArrayType* arr_type,
-                                            Struct* structn,
                                             const std::function<void(llvm::Value*, llvm::Value*)>& gen_cb,
                                             Node* lvalue = nullptr);
 
         llvm::GlobalVariable* gen_foldable_global_variable(IdentRef* ref);
+
+        finline void iterate_field_types(StructType* struct_type, const std::function<void(Type*, Var*)>& cb);
 
         void iterate_over_range_values(BinOp* range, const std::function<void(uint64_t)>& cb);
 

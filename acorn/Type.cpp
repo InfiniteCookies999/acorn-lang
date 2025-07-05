@@ -126,13 +126,12 @@ bool acorn::Type::is_default_foldable() const {
         return true;
     case TypeKind::Struct: {
         auto struct_type = static_cast<const StructType*>(this);
-        auto field_struct = struct_type->get_struct();
-        return field_struct->is_default_foldable;
+        return struct_type->default_foldable;
     }
     case TypeKind::Array: {
         auto arr_type = static_cast<const ArrayType*>(this);
-        auto elm_type = arr_type->get_elm_type();
-        return elm_type->is_default_foldable();
+        auto base_type = arr_type->get_base_type();
+        return base_type->is_default_foldable();
     }
     default:
         return false;
@@ -192,18 +191,16 @@ uint32_t acorn::Type::get_number_of_bits() const {
     }
 }
 
-bool acorn::Type::needs_destruction() const {
+bool acorn::Type::does_needs_destruction() const {
     if (kind == TypeKind::Struct) {
         auto struct_type = static_cast<const StructType*>(this);
-        auto structn = struct_type->get_struct();
-        return structn->needs_destruction;
+        return struct_type->needs_destruction;
     } else if (kind == TypeKind::Array) {
         auto arr_type = static_cast<const ArrayType*>(this);
         auto base_type = arr_type->get_base_type();
         if (base_type->is_struct()) {
             auto struct_type = static_cast<const StructType*>(base_type);
-            auto structn = struct_type->get_struct();
-            return structn->needs_destruction;
+            return struct_type->needs_destruction;
         }
     }
 
@@ -351,8 +348,10 @@ acorn::Type* acorn::UnresolvedArrayType::create(PageAllocator& allocator,
     return unresolved_type;
 }
 
-acorn::ArrayType* acorn::ArrayType::create(PageAllocator& allocator, Type* elm_type,
-                                           uint32_t length, bool is_const) {
+acorn::ArrayType* acorn::ArrayType::create(PageAllocator& allocator,
+                                           Type* elm_type,
+                                           uint32_t length,
+                                           bool is_const) {
     ArrayType* arr_type = allocator.alloc_type<ArrayType>();
     new (arr_type) ArrayType(is_const, elm_type, length);
     arr_type->contains_const = is_const;
@@ -509,9 +508,15 @@ std::string acorn::FunctionType::to_string() const {
 acorn::Type* acorn::UnresolvedCompositeType::create(PageAllocator& allocator,
                                                     Identifier name,
                                                     SourceLoc error_location,
+                                                    llvm::SmallVector<Expr*> generic_args,
+                                                    size_t non_named_generic_args_offsets,
                                                     bool is_const) {
     auto composite_type = allocator.alloc_type<UnresolvedCompositeType>();
-    new (composite_type) UnresolvedCompositeType(is_const, name, error_location);
+    new (composite_type) UnresolvedCompositeType(is_const,
+                                                 name,
+                                                 error_location,
+                                                 std::move(generic_args),
+                                                 non_named_generic_args_offsets);
     composite_type->contains_const = is_const;
     return composite_type;
 }

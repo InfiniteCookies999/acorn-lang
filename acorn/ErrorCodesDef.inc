@@ -245,6 +245,8 @@ X(SemaExpectedArgToBeTypeExprForGenericBind   , 20194)
 X(SemaCannotBindIncompleteType                , 20195)
 X(SemaAmbiguousGenericCallBind                , 20196)
 X(SemaExpectedFunctionToBindGenerics          , 20197)
+X(SemaTypeDoesNotTakeGenerics                 , 20198)
+X(SemaExpectedGenericArgsForGenericType       , 20199)
 
 X(NumericOverflow                             , 40000)
 X(NumericUnderflow                            , 40001)

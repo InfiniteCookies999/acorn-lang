@@ -226,6 +226,8 @@ void acorn::Func::bind_generic_instance(GenericFuncInstance* generic_instance) {
     // in sema/irgen as if it was just parsed.
     reset_generic_function(this);
 
+    struct_type = generic_instance->struct_type;
+
     // Bind the types bound to this instance of the generic function.
     return_type = generic_instance->qualified_types[0];
     for (size_t i = 0; i < params.size(); i++) {
@@ -248,6 +250,28 @@ const acorn::Struct::InterfaceExtension* acorn::Struct::find_interface_extension
         return extension.interfacen->name == name;;
     });
     return itr != interface_extensions.end() ? itr : nullptr;
+}
+
+acorn::StructType* acorn::Struct::get_generic_instance(PageAllocator& allocator,
+                                                       llvm::SmallVector<Type*> generic_bindings) {
+    // Check to see if the instance already exists.
+    for (auto* instance : generic_instances) {
+        if (instance->generic_bindings == generic_bindings) {
+            return instance;
+        }
+    }
+
+    auto struct_type = StructType::create(allocator, this);
+    struct_type->generic_bindings = std::move(generic_bindings);
+    generic_instances.push_back(struct_type);
+    return struct_type;
+}
+
+void acorn::Struct::bind_generic_instance(StructType* generic_struct_type) {
+    for (size_t i = 0; i < generics.size(); i++) {
+        Type* type_to_bind = generic_struct_type->generic_bindings[i];
+        generics[i]->type->bind_type(type_to_bind);
+    }
 }
 
 acorn::PointSourceLoc acorn::ImportStmt::get_key_location(bool center_by_last) const {

@@ -196,7 +196,6 @@ namespace acorn {
             for (Expr* value : initializer->values) {
                 reset_node(value);
             }
-            initializer->structn = nullptr;
             initializer->called_constructor = nullptr;
             break;
         }

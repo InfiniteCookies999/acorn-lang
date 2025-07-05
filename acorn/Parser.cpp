@@ -126,12 +126,21 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
         if (func->name == context.main_identifier) {
             context.add_canidate_main_function(func);
         }
-    } else if (node->is(NodeKind::Struct) || node->is(NodeKind::Enum) || node->is(NodeKind::Interface)) {
+    } else if (node->is(NodeKind::Struct)) {
 
-        auto structn = static_cast<Decl*>(node);
+        auto structn = static_cast<Struct*>(node);
         if (structn->name != Identifier::Invalid) {
-            context.add_unchecked_decl(structn);
+            if (!structn->is_generic()) {
+                context.add_unchecked_decl(structn);
+            }
             file->add_composite(structn);
+        }
+    } else if (node->is(NodeKind::Enum) || node->is(NodeKind::Interface)) {
+
+        auto composite = static_cast<Decl*>(node);
+        if (composite->name != Identifier::Invalid) {
+            context.add_unchecked_decl(composite);
+            file->add_composite(composite);
         }
     } else if (node->is(NodeKind::Var)) {
         process_variable(static_cast<Var*>(node));
@@ -175,7 +184,6 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
                 }
 
                 structn->destructor = func;
-                structn->needs_destruction = true;
                 func->structn = structn;
             } else if (func->is_copy_constructor) {
                 if (structn->copy_constructor) {
@@ -185,7 +193,6 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
 
                 structn->copy_constructor = func;
                 func->structn = structn;
-                structn->needs_copy_call = true;
             } else if (func->is_move_constructor) {
                 if (structn->move_constructor) {
                     structn->duplicate_struct_func_infos.push_back(
@@ -194,7 +201,6 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
 
                 structn->move_constructor = func;
                 func->structn = structn;
-                structn->needs_move_call = true;
             } else if (func->is_constructor) {
                 if (func->params.empty()) {
                     structn->default_constructor = func;
@@ -418,6 +424,8 @@ acorn::Node* acorn::Parser::parse_statement() {
         } else if (cur_token.is(Token::KwConst) && peek_token(0).is(Token::KwFn)) {
             next_token(); // Consuming 'const' token.
             return parse_function(modifiers, true, std::move(generics));
+        } else if (cur_token.is(Token::KwStruct)) {
+            return parse_struct(modifiers, std::move(generics));
         } else {
             error(cur_token, "Expected declaration")
                 .end_error(ErrCode::ParseExpectedDeclaration);
@@ -771,15 +779,19 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, bool may_parse_imp
     return var;
 }
 
-acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers) {
+acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers, llvm::SmallVector<Generic*> generics) {
 
     next_token(); // Consuming 'struct' token.
 
     Struct* structn = new_declaration<Struct, false>(modifiers, cur_token);
     structn->name = expect_identifier("for struct declaration");
     structn->nspace = allocator.alloc_type<Namespace>();
+    structn->generics = std::move(generics);
+
     new (structn->nspace) Namespace(modl, ScopeLocation::Struct);
-    structn->struct_type = StructType::create(allocator, structn);
+    if (!structn->is_generic()) {
+        structn->non_generic_struct_type = StructType::create(context.get_allocator(), structn);
+    }
 
     check_composite_name_conflict_with_imports(structn->name, "struct");
 
@@ -1434,6 +1446,11 @@ return t;                                \
         auto name = Identifier::get(cur_token.text());
         next_token();
         if (cur_token.is_not('$')) {
+            llvm::SmallVector<Expr*> generic_args;
+            size_t non_named_generic_args_offsets = -1;
+
+            // TODO (maddie): make parsing better when it comes to encountering a generic type
+            // followed by a '(' token.
             if (cur_func && cur_func->is_generic()) {
                 auto itr = std::ranges::find_if(cur_func->generics, [name](auto genericn) {
                     return genericn->name == name;
@@ -1445,9 +1462,29 @@ return t;                                \
                     }
                     return generic_type;
                 }
+            } else if (cur_struct && cur_struct->is_generic()) {
+                auto itr = std::ranges::find_if(cur_struct->generics, [name](auto genericn) {
+                    return genericn->name == name;
+                });
+                if (itr != cur_struct->generics.end()) {
+                    Type* generic_type = (*itr)->type;
+                    if (is_const) {
+                        generic_type = type_table.get_const_type(generic_type);
+                    }
+                    return generic_type;
+                }
             }
 
-            auto unresolved_type = UnresolvedCompositeType::create(allocator, name, name_token.loc);
+            if (cur_token.is('(')) {
+                parse_function_call_args(generic_args, non_named_generic_args_offsets);
+
+            }
+
+            auto unresolved_type = UnresolvedCompositeType::create(allocator,
+                                                                   name,
+                                                                   name_token.loc,
+                                                                   std::move(generic_args),
+                                                                   non_named_generic_args_offsets);
             if (is_const) {
                 unresolved_type = type_table.get_const_type(unresolved_type);
             }
@@ -2139,7 +2176,7 @@ acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
             if (peek_if_expr_is_type(cur_token, peek_token(0))) {
                 auto ref = static_cast<IdentRef*>(term);
 
-                auto type = UnresolvedCompositeType::create(allocator, ref->ident, ref->loc, false);
+                auto type = UnresolvedCompositeType::create(allocator, ref->ident, ref->loc, {}, -1, false);
 
                 type = construct_array_type(type, indexes);
                 type = parse_trailing_type_info(type);
@@ -2151,7 +2188,7 @@ acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
                 SourceLoc end_loc   = prev_token.loc;
 
                 SourceLoc type_location = SourceLoc::from_ptrs(start_loc.ptr,
-                                                                end_loc.ptr + end_loc.length);
+                                                               end_loc.ptr + end_loc.length);
                 type_expr->loc = type_location;
                 return type_expr;
             }

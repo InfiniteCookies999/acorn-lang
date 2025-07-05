@@ -11,6 +11,7 @@
 #include "Identifier.h"
 #include "Source.h"
 #include "RaisedError.h"
+#include "GenericAST.h"
 
 namespace llvm {
     class StructType;
@@ -164,7 +165,7 @@ namespace acorn {
         uint32_t get_number_of_bits() const;
 
         // True if the type needs to have it's destructor called.
-        bool needs_destruction() const;
+        bool does_needs_destruction() const;
 
         std::string to_string() const;
 
@@ -388,6 +389,8 @@ namespace acorn {
         static Type* create(PageAllocator& allocator,
                             Identifier name,
                             SourceLoc  error_location,
+                            llvm::SmallVector<Expr*> generic_args,
+                            size_t non_named_generic_args_offsets,
                             bool is_const = false);
 
         Identifier get_composite_name() const {
@@ -398,18 +401,34 @@ namespace acorn {
             return error_location;
         }
 
+        const llvm::SmallVector<Expr*>& get_generic_args() const {
+            return generic_args;
+        }
+
+        size_t get_non_named_generic_args_offset() const {
+            return non_named_generic_args_offsets;
+        }
+
     protected:
-        UnresolvedCompositeType(bool is_const, Identifier name, SourceLoc error_location)
+        UnresolvedCompositeType(bool is_const,
+                                Identifier name,
+                                SourceLoc error_location,
+                                llvm::SmallVector<Expr*> generic_args,
+                                size_t non_named_generic_args_offsets)
             : Type(TypeKind::UnresolvedComposite, is_const),
               name(name),
-              error_location(error_location) {
+              error_location(error_location),
+              generic_args(std::move(generic_args)),
+              non_named_generic_args_offsets(non_named_generic_args_offsets) {
         }
 
         SourceLoc  error_location;
         Identifier name;
+        llvm::SmallVector<Expr*> generic_args;
+        size_t non_named_generic_args_offsets = 0;
     };
 
-    class StructType : public Type {
+    class StructType : public Type, public GenericStructInstance {
     public:
 
         static StructType* create(PageAllocator& allocator,
