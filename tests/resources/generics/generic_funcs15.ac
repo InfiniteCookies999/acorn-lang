@@ -30,18 +30,18 @@ fn write_val(val: int) {
 
 }
 
-generics[X, Y, T, U]
-fn foo(x: X, y: Y, a: T, b: U) -> U {
-    return x + y + a + b;
+generics(T, U)
+fn foo(a: T, b: U) -> T {
+    return a + b;
 }
 
 fn main() {
 
-    v1: int = foo!(int, int, U=int, T=int)(5, 7, 28, 3);
+    v1: int = foo!(int)(30, 8);
     write_val(v1);
 
-    v2: float = foo!(float, int, U=float, T=int)(5.0f, 7, 28, 3.0f);
-    v3: int = as(int)v2;
+    v2: float = foo!(float)(30.0f, 8);
+    v3: int = as(int) v2;
     write_val(v3);
 
 }

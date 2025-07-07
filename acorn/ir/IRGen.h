@@ -209,6 +209,7 @@ namespace acorn {
         llvm::Value* gen_function_decl_call(Func* called_func,
                                             SourceLoc call_loc,
                                             llvm::SmallVector<Expr*>& args,
+                                            llvm::SmallVector<Expr*>& indeterminate_inferred_default_args,
                                             llvm::Value* ll_dest_addr,
                                             llvm::Value* ll_in_this,
                                             bool apply_implicit_return_ptr,

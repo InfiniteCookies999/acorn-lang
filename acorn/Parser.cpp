@@ -126,12 +126,21 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
         if (func->name == context.main_identifier) {
             context.add_canidate_main_function(func);
         }
-    } else if (node->is(NodeKind::Struct) || node->is(NodeKind::Enum) || node->is(NodeKind::Interface)) {
+    } else if (node->is(NodeKind::Struct)) {
 
-        auto structn = static_cast<Decl*>(node);
+        auto structn = static_cast<Struct*>(node);
         if (structn->name != Identifier::Invalid) {
-            context.add_unchecked_decl(structn);
+            if (!structn->is_generic) {
+                context.add_unchecked_decl(structn);
+            }
             file->add_composite(structn);
+        }
+    } else if (node->is(NodeKind::Enum) || node->is(NodeKind::Interface)) {
+
+        auto composite = static_cast<Decl*>(node);
+        if (composite->name != Identifier::Invalid) {
+            context.add_unchecked_decl(composite);
+            file->add_composite(composite);
         }
     } else if (node->is(NodeKind::Var)) {
         process_variable(static_cast<Var*>(node));
@@ -409,21 +418,27 @@ acorn::Node* acorn::Parser::parse_statement() {
     case Token::KwFn:
         return parse_function(0, false);
     case Token::KwGenerics: {
-        llvm::SmallVector<Generic*> generics;
-        parse_generics(generics);
+        size_t prev_size = cur_generics.size();
+        parse_generics(cur_generics);
 
+        Node* node = nullptr;
         uint32_t modifiers = parse_modifiers();
         if (cur_token.is(Token::KwFn)) {
-            return parse_function(modifiers, false, std::move(generics));
+            node = parse_function(modifiers, false);
         } else if (cur_token.is(Token::KwConst) && peek_token(0).is(Token::KwFn)) {
             next_token(); // Consuming 'const' token.
-            return parse_function(modifiers, true, std::move(generics));
+            node = parse_function(modifiers, true);
+        } else if (cur_token.is(Token::KwStruct)) {
+            node = parse_struct(modifiers);
         } else {
             error(cur_token, "Expected declaration")
                 .end_error(ErrCode::ParseExpectedDeclaration);
             skip_recovery();
-            return nullptr;
         }
+
+        // Remove old ones.
+        cur_generics.resize(prev_size);
+        return node;
     }
     case Token::KwConst: {
         if (peek_token(0).is(Token::KwFn)) {
@@ -507,6 +522,13 @@ acorn::Node* acorn::Parser::parse_statement() {
         skip_recovery();
         return nullptr;
     }
+    case '.': {
+        error(cur_token, "Expected an expression")
+            .end_error(ErrCode::ParseExpectedExpression);
+        next_token();
+        skip_recovery();
+        return nullptr;
+    }
     default: {
         Expr* stmt = parse_assignment_and_expr();
         expect(';');
@@ -515,13 +537,13 @@ acorn::Node* acorn::Parser::parse_statement() {
     }
 }
 
-acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const, llvm::SmallVector<Generic*> generics) {
+acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const) {
 
     expect(Token::KwFn);
 
     Func* func = new_declaration<Func, true>(modifiers, cur_token);
     func->is_constant = is_const;
-    func->generics    = std::move(generics);
+    func->generics    = cur_generics;
 
     // Check for constructor.
     switch (cur_token.kind) {
@@ -764,7 +786,11 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, bool may_parse_imp
             var->assignment = parse_try();
             var->assignment->tryn->catch_recoveree = var;
         } else {
+            // only assign here because we only want the current variable around to determine
+            // if the assignment contains generic information.
+            cur_var = var;
             var->assignment = parse_expr();
+            cur_var = nullptr;
         }
     }
 
@@ -775,11 +801,20 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers) {
 
     next_token(); // Consuming 'struct' token.
 
-    Struct* structn = new_declaration<Struct, false>(modifiers, cur_token);
+    Struct* structn;
+    if (cur_generics.empty()) {
+        structn = new_declaration<Struct, false>(modifiers, cur_token);
+        structn->struct_type = StructType::create(allocator, structn);
+    } else {
+        auto generic_struct = new_declaration<UnboundGenericStruct, false>(modifiers, cur_token);
+        generic_struct->generics = cur_generics;
+        structn = generic_struct;
+        structn->is_generic = true;
+    }
+
     structn->name = expect_identifier("for struct declaration");
     structn->nspace = allocator.alloc_type<Namespace>();
     new (structn->nspace) Namespace(modl, ScopeLocation::Struct);
-    structn->struct_type = StructType::create(allocator, structn);
 
     check_composite_name_conflict_with_imports(structn->name, "struct");
 
@@ -1015,7 +1050,7 @@ void acorn::Parser::parse_generics(llvm::SmallVector<acorn::Generic*>& generics)
 
     next_token(); // Consuming 'generics' token.
 
-    expect('[');
+    expect('(');
     bool more_generics = false;
     do {
 
@@ -1034,7 +1069,7 @@ void acorn::Parser::parse_generics(llvm::SmallVector<acorn::Generic*>& generics)
             next_token();
         }
     } while (more_generics);
-    expect(']');
+    expect(')');
 }
 
 acorn::ScopeStmt* acorn::Parser::parse_scope(const char* closing_for) {
@@ -1434,17 +1469,30 @@ return t;                                \
         auto name = Identifier::get(cur_token.text());
         next_token();
         if (cur_token.is_not('$')) {
-            if (cur_func && cur_func->is_generic()) {
-                auto itr = std::ranges::find_if(cur_func->generics, [name](auto genericn) {
-                    return genericn->name == name;
-                });
-                if (itr != cur_func->generics.end()) {
-                    Type* generic_type = (*itr)->type;
+            // TODO (maddie): we want to be able to do generic types that take generic types
+            // and do partial binding.
+            if (!cur_generics.empty() && cur_token.is_not('(')) {
+                if (Type* generic_type = find_generic_type(name)) {
                     if (is_const) {
                         generic_type = type_table.get_const_type(generic_type);
                     }
                     return generic_type;
                 }
+            }
+
+            if (cur_token.is('(')) {
+                llvm::SmallVector<Expr*> bound_exprs;
+                size_t non_named_generic_args_offsets = -1;
+                parse_function_call_args(bound_exprs, non_named_generic_args_offsets);
+                auto unresolved_type = UnresolvedGenericCompositeType::create(allocator,
+                                                                              name,
+                                                                              name_token.loc,
+                                                                              std::move(bound_exprs),
+                                                                              non_named_generic_args_offsets);
+                if (is_const) {
+                    unresolved_type = type_table.get_const_type(unresolved_type);
+                }
+                return unresolved_type;
             }
 
             auto unresolved_type = UnresolvedCompositeType::create(allocator, name, name_token.loc);
@@ -1650,7 +1698,7 @@ acorn::Expr* acorn::Parser::parse_expr() {
     }
 }
 
-acorn::Expr* acorn::Parser::parse_try() {
+acorn::Expr* acorn::Parser::parse_try(Var* tried_on_var) {
 
     Try* tryn = new_node<Try>(cur_token);
 
@@ -1665,7 +1713,12 @@ acorn::Expr* acorn::Parser::parse_try() {
         next_token(); // Consume the ':' token.
     }
 
+    allow_struct_initializer = false;
+    cur_var = tried_on_var;
     Expr* caught_expr = parse_expr();
+    cur_var = nullptr;
+    allow_struct_initializer = true;
+
     tryn->caught_expr = caught_expr;
     caught_expr->tryn = tryn;
 
@@ -2090,7 +2143,32 @@ acorn::Expr* acorn::Parser::parse_expr_trail() {
 
 acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
     if (cur_token.is('(')) {
-        return parse_expr_trail(parse_function_call(term));
+        FuncCall* call = parse_function_call(term);
+        if (allow_struct_initializer && cur_token.is('{') && call->site->is(NodeKind::IdentRef)) {
+            return parse_expr_trail(parse_struct_initializer(call));
+        }
+
+        if (term->is(NodeKind::IdentRef) && peek_if_expr_is_type(cur_token, peek_token(0))) {
+            auto ref = static_cast<IdentRef*>(call->site);
+            auto un_composite_type = UnresolvedGenericCompositeType::create(context.get_allocator(),
+                                                                            ref->ident,
+                                                                            ref->loc,
+                                                                            std::move(call->args),
+                                                                            call->non_named_args_offset);
+            Type* type = parse_trailing_type_info(un_composite_type);
+            TypeExpr* type_expr = new_node<TypeExpr>(ref->loc);
+            type_expr->parsed_expr_type = type;
+
+            SourceLoc start_loc = ref->loc;
+            SourceLoc end_loc = prev_token.loc;
+
+            SourceLoc type_location = SourceLoc::from_ptrs(start_loc.ptr,
+                                                           end_loc.ptr + end_loc.length);
+            type_expr->loc = type_location;
+            return type_expr;
+        }
+
+        return parse_expr_trail(call);
     } else if (cur_token.is('.')) {
         auto dot = new_node<DotOperator>(cur_token);
         next_token(); // Consuming '.' token.
@@ -2135,11 +2213,22 @@ acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
             --bracket_count;
         }
 
-        if (term->is(NodeKind::IdentRef)) {
+        if (term->is(NodeKind::IdentRef) || term->is(NodeKind::FuncCall)) {
             if (peek_if_expr_is_type(cur_token, peek_token(0))) {
-                auto ref = static_cast<IdentRef*>(term);
-
-                auto type = UnresolvedCompositeType::create(allocator, ref->ident, ref->loc, false);
+                Type* type;
+                IdentRef* ref;
+                if (term->is(NodeKind::IdentRef)) {
+                    ref = static_cast<IdentRef*>(term);
+                    type = UnresolvedCompositeType::create(allocator, ref->ident, ref->loc, false);
+                } else {
+                    auto call = static_cast<FuncCall*>(term);
+                    ref = static_cast<IdentRef*>(call->site);
+                    type = UnresolvedGenericCompositeType::create(context.get_allocator(),
+                                                                  ref->ident,
+                                                                  ref->loc,
+                                                                  std::move(call->args),
+                                                                  call->non_named_args_offset);
+                }
 
                 type = construct_array_type(type, indexes);
                 type = parse_trailing_type_info(type);
@@ -2151,7 +2240,7 @@ acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
                 SourceLoc end_loc   = prev_token.loc;
 
                 SourceLoc type_location = SourceLoc::from_ptrs(start_loc.ptr,
-                                                                end_loc.ptr + end_loc.length);
+                                                               end_loc.ptr + end_loc.length);
                 type_expr->loc = type_location;
                 return type_expr;
             }
@@ -2172,7 +2261,7 @@ acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
     return term;
 }
 
-acorn::Expr* acorn::Parser::parse_function_call(Expr* site) {
+acorn::FuncCall* acorn::Parser::parse_function_call(Expr* site) {
     FuncCall* call = new_node<FuncCall>(cur_token);
     call->site = site;
     parse_function_call_args(call->args, call->non_named_args_offset);
@@ -2276,7 +2365,7 @@ acorn::Expr* acorn::Parser::parse_term() {
 
         auto peek0 = peek_token(0);
         auto peek1 = peek_token(1);
-        if (peek_if_expr_is_type(peek0, peek1)) {
+        if (peek_if_expr_is_type(peek0, peek1) || peek0.is('$')) {
             return parse_type_expr();
         }
 
@@ -2284,8 +2373,17 @@ acorn::Expr* acorn::Parser::parse_term() {
             return parse_expr_trail(parse_generic_function_bind_call());
         }
 
+        auto ident = Identifier::get(cur_token.text());
+        if (!cur_generics.empty()) {
+            if (Type* generic_type = find_generic_type(ident)) {
+                if (peek_token(0).is_not('{')) {
+                    return parse_type_expr();
+                }
+            }
+        }
+
         IdentRef* ref = new_node<IdentRef>(cur_token);
-        ref->ident = Identifier::get(cur_token.text());
+        ref->ident = ident;
 
         next_token(); // Consuming the identifier.
 
@@ -2339,6 +2437,9 @@ acorn::Expr* acorn::Parser::parse_term() {
             case TypeKind::Int8:                           num->value_s8  = -num->value_s8;  return num;
             case TypeKind::Float:                          num->value_f32 = -num->value_f32; return num;
             case TypeKind::Double:                         num->value_f64 = -num->value_f64; return num;
+            default:
+                // Just let sema handle it because it is a arch. dep. type.
+                break;
             }
         } else if (unary_token.kind == '~' && expr->is(NodeKind::Number) &&
                    expr->type->is_integer()) {
@@ -2353,6 +2454,9 @@ acorn::Expr* acorn::Parser::parse_term() {
             case TypeKind::Int32:  case TypeKind::Int:    num->value_s32 = ~num->value_s32; return num;
             case TypeKind::Int16:                         num->value_s16 = ~num->value_s16; return num;
             case TypeKind::Int8:                          num->value_s8  = ~num->value_s8;  return num;
+            default:
+                // Just let sema handle it because it is a arch. dep. type.
+                break;
             }
         }
 
@@ -2895,10 +2999,10 @@ acorn::Expr* acorn::Parser::parse_array() {
     return arr;
 }
 
-acorn::Expr* acorn::Parser::parse_struct_initializer(IdentRef* ref) {
+acorn::Expr* acorn::Parser::parse_struct_initializer(Expr* site) {
 
     auto initializer = new_node<StructInitializer>(cur_token);
-    initializer->ref = ref;
+    initializer->site = site;
 
     next_token(); // Consuming '{' token.
 
@@ -3009,6 +3113,19 @@ bool acorn::Parser::expect(tokkind kind, const char* for_msg) {
     }
 }
 
+acorn::Type* acorn::Parser::find_generic_type(Identifier name) const {
+    auto itr = std::ranges::find_if(cur_generics, [name](auto genericn) {
+        return genericn->name == name;
+    });
+    if (itr != cur_generics.end()) {
+        if (cur_var) {
+            cur_var->assignment_contains_generics = true;
+        }
+        return (*itr)->type;
+    }
+    return nullptr;
+}
+
 acorn::Identifier acorn::Parser::expect_identifier(const char* for_msg) {
     if (cur_token.is(Token::Identifier)) {
         Identifier identifier = Identifier::get(cur_token.text());
@@ -3036,7 +3153,6 @@ bool acorn::Parser::peek_if_expr_is_type(Token tok0, Token tok1) {
         case ']': // end of array expression.
         case ';':
         case '*':
-        case '$':
             return true;
         default:
             break;

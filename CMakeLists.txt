@@ -1,4 +1,4 @@
-﻿# CMakeList.txt : Top-level CMake project file, do global configuration
+# CMakeList.txt : Top-level CMake project file, do global configuration
 # and include sub-projects here.
 #
 cmake_minimum_required (VERSION 3.8)
@@ -35,6 +35,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clan
     endif()
 
     add_compile_options(-Wshadow=local)         # No shadowing local variables or parameters.
+    add_compile_options(-Werror=switch)         # Force completion of switch statements with enums.
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     add_compile_options(/permissive-)           # Make MSVC standard compliant.
     add_compile_options(/we4834)                # [[nodiscard]]
@@ -43,6 +44,7 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     add_compile_options(/we4067)                # No extra tokens at end of preprocessor
     add_compile_options(/we4456)                # No shadowing local variables.
     add_compile_options(/we4457)                # No shadowing local parameters.
+    add_compile_options(/we4062)                # Force completion of switch statements with enums.
 endif()
 
 # Setting output directories for when using GNU or Clang compilers.

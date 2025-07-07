@@ -55,6 +55,7 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       auto_type(Type::create(allocator, TypeKind::Auto)),
       const_auto_type(type_table.get_const_type(auto_type)),
       expr_type(Type::create(allocator, TypeKind::Expr)),
+      indeterminate_type(Type::create(allocator, TypeKind::Inderminate)),
 
       main_identifier(Identifier::get("main")),
       length_identifier(Identifier::get("length")),

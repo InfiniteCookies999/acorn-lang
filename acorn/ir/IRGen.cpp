@@ -339,7 +339,7 @@ void acorn::IRGenerator::gen_function_decl(Func* func, GenericFuncInstance* gene
 llvm::Type* acorn::IRGenerator::gen_function_return_type(Func* func, GenericFuncInstance* generic_instance, bool is_main) {
     auto return_type = func->return_type;
     if (generic_instance) {
-        return_type = generic_instance->qualified_types[0];
+        return_type = generic_instance->qualified_decl_types[0];
     }
 
     if (is_main) {
@@ -662,7 +662,7 @@ llvm::AllocaInst* acorn::IRGenerator::gen_alloca(llvm::Type* ll_alloc_type, llvm
 llvm::Type* acorn::IRGenerator::gen_function_param_type(Var* param, GenericFuncInstance* generic_instance) const {
     Type* param_type = param->type;
     if (generic_instance) {
-        param_type = generic_instance->qualified_types[param->param_idx + 1];
+        param_type = generic_instance->qualified_decl_types[param->param_idx + 1];
     }
 
     if (param_type->is_array()) {
@@ -2448,17 +2448,17 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
     }
 
     if (initializer->called_constructor) {
-
         Func* called_func = initializer->called_constructor;
-        gen_function_decl(called_func, nullptr);
+        gen_function_decl(called_func, initializer->generic_called_instance);
         gen_function_decl_call(called_func,
                                initializer->loc,
                                initializer->values,
+                               initializer->indeterminate_inferred_default_values,
                                nullptr,
                                ll_dest_addr,
                                false,
                                for_call_arg,
-                               nullptr);
+                               initializer->generic_called_instance);
         return ll_dest_addr;
     }
 
@@ -2714,6 +2714,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         return gen_function_decl_call(called_func,
                                       call->loc,
                                       call->args,
+                                      call->indeterminate_inferred_default_args,
                                       ll_dest_addr,
                                       ll_in_this,
                                       call->implicitly_converts_return,
@@ -2860,6 +2861,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg_for_implicit_ptr(Expr* ar
 llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
                                                         SourceLoc call_loc,
                                                         llvm::SmallVector<Expr*>& args,
+                                                        llvm::SmallVector<Expr*>& indeterminate_inferred_default_args,
                                                         llvm::Value* ll_dest_addr,
                                                         llvm::Value* ll_in_this,
                                                         bool apply_implicit_return_ptr,
@@ -2953,7 +2955,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
                 auto last_param = called_func->params.back();
                 last_param_type = last_param->type;
             } else {
-                last_param_type = generic_instance->qualified_types.back();
+                last_param_type = generic_instance->qualified_decl_types.back();
             }
 
             auto slice_type = static_cast<SliceType*>(last_param_type);
@@ -3024,7 +3026,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
             auto last_param = called_func->params.back();
             last_param_type = last_param->type;
         } else {
-            last_param_type = generic_instance->qualified_types.back();
+            last_param_type = generic_instance->qualified_decl_types.back();
         }
 
         auto slice_type = static_cast<SliceType*>(last_param_type);
@@ -3093,10 +3095,16 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
         }
 
         size_t param_idx = called_func->default_params_offset;
+        size_t indeterminate_default_arg_count = 0;
         for (size_t i = start; i < ll_num_args; i++) {
             if (ll_args[i] == nullptr) {
-                Expr* arg = params[param_idx]->assignment;
-                ll_args[i] = gen_function_call_arg(arg);
+                Var* param = params[param_idx];
+                if (!param->assignment_contains_generics) {
+                    ll_args[i] = gen_function_call_arg(param->assignment);
+                } else {
+                    Expr* arg = indeterminate_inferred_default_args[indeterminate_default_arg_count++];
+                    ll_args[i] = gen_function_call_arg(arg);
+                }
             }
             ++param_idx;
         }

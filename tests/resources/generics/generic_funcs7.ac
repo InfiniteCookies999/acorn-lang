@@ -16,27 +16,37 @@ native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-fn print(s: const char*, length: int) {
+fn write_val(val: int) {
+
 #if OS_GROUP_WINDOWS
     handle: void* = GetStdHandle(-11);
     written: uint32;
-    WriteFile(handle, s, as(uint32) length, &written, null);
+    c: char = as(char) val;
+    WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    write(1, s, as(usize) length);
+    c: char = as(char) val;
+    write(1, &c, 1);
 #endif
+
 }
 
-struct A {
-    fn foo() {
-        print("no const", 8);
-    }
-
-    const fn foo() {
-        print("const", 5);
-    }
+generics(T)
+fn foo(a: T, b: T) -> T {
+    return a + b;
 }
 
 fn main() {
-    a: const A = A{};
-    a.foo();
+    {
+        a: const int = 18;
+        b: int = 18;
+        r: int = foo(a, b);
+        write_val(r);
+    }
+
+    {
+        a: int = 18;
+        b: const int = 18;
+        r: int = foo(a, b);
+        write_val(r);
+    }
 }

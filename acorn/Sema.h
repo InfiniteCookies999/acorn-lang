@@ -39,7 +39,7 @@ namespace acorn {
 
         bool check_comptime_cond(Expr* cond, const char* comptime_type_str);
 
-        void check_function(Func* func, GenericInstance* generic_instance);
+        void check_function(Func* func);
         void check_variable(Var* var);
         void check_struct(Struct* structn);
         void check_enum(Enum* enumn);
@@ -79,8 +79,7 @@ namespace acorn {
         static const uint64_t CANNOT_ACCESS_PRIVATE_LIMIT           = CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT * MAX_FUNC_PARAMS * 2;
         static const uint64_t FORWARD_VARIADIC_WITH_OTHERS_LIMIT    = CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT * MAX_FUNC_PARAMS * 2;
 
-        bool is_comptime_if_cond = false;
-        bool should_request_gen_queue;
+        bool is_comptime_if_cond     = false;
 
         // How many nested loops currently within.
         int loop_depth = 0;
@@ -142,6 +141,15 @@ namespace acorn {
         Type* fixup_unresolved_array_type(Type* type);
         Type* fixup_assign_det_arr_type(Type* type, Var* var);
         Type* fixup_unresolved_composite_type(Type* type, bool is_ptr_elm_type);
+        Type* fixup_unresolved_generic_composite_type(Type* type, bool is_ptr_elm_type);
+        Type* fixup_unresolved_generic_composite_type(Decl* found_composite,
+                                                      SourceLoc error_loc,
+                                                      const llvm::SmallVector<Expr*>& bound_exprs);
+        bool get_bound_types_for_generic_type(Decl* found_composite,
+                                              SourceLoc error_loc,
+                                              const llvm::SmallVector<Expr*>& bound_exprs,
+                                              llvm::SmallVector<Type*>& bound_types);
+
         Type* fixup_unresolved_enum_value_type(Type* type, bool is_ptr_elm_type);
         Decl* find_composite_for_composite_type(Identifier name, SourceLoc error_loc);
         Type* fixup_function_type(Type* type);
@@ -188,7 +196,11 @@ namespace acorn {
                                              Type* rhs_type) const;
         void check_unary_op(UnaryOp* unary_op);
         template<bool is_spell_checking = false>
-        void check_ident_ref(IdentRef* ref, Namespace* search_nspace, bool is_for_call, bool is_dot_op_site = false);
+        void check_ident_ref(IdentRef* ref,
+                             Namespace* search_nspace,
+                             StructType* search_struct_type,
+                             bool is_for_call,
+                             bool is_dot_op_site = false);
         void spellcheck_variables_for_ident(const llvm::SmallVector<Var*>& variables,
                                             ErrorSpellChecker& spell_checker,
                                             bool is_for_call);
@@ -198,16 +210,20 @@ namespace acorn {
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
         void check_generic_bind_function_call(GenericBindFuncCall* call);
-        bool compare_generic_bind_candidate_with_named_args(GenericBindFuncCall* call,
-                                                            Func* func,
+        bool compare_generic_bind_candidate_with_named_args(const llvm::SmallVector<Expr*>& args,
+                                                            const llvm::SmallVector<Generic*>& generics,
                                                             llvm::SmallVector<Type*>& bound_types);
+        bool check_generic_bind_arguments(const llvm::SmallVector<Expr*>& args,
+                                          bool& uses_named_values);
         void check_function_type_call(FuncCall* call, FunctionType* func_type);
         Func* check_function_decl_call(Expr* call_node,
                                        llvm::SmallVector<Expr*>& args,
                                        size_t non_named_args_offset,
                                        FuncList& candidates,
                                        bool is_const_object,
-                                       const llvm::SmallVector<Type*>& pre_bound_types);
+                                       const llvm::SmallVector<Type*>& pre_bound_types,
+                                       Struct* generic_parent_struct,
+                                       Struct*& fully_bound_parent_struct);
         Func* find_best_call_candidate(FuncList& candidates,
                                        llvm::SmallVector<Expr*>& args,
                                        bool& selected_implicitly_converts_ptr_arg,
@@ -219,6 +235,7 @@ namespace acorn {
                                          const llvm::SmallVector<Expr*>& args,
                                          bool is_const_object,
                                          const llvm::SmallVector<Type*>& pre_bound_types);
+        Expr* try_create_bound_expr_for_variable_with_indetermite_type(Var* param);
         enum class CallCompareStatus {
             INCORRECT_ARGS,
             INCORRECT_PARAM_BY_NAME_NOT_FOUND,
@@ -268,7 +285,8 @@ namespace acorn {
                                                 const llvm::SmallVector<Type*>& generic_bindings);
         template<unsigned N>
         void display_ambiguous_functions(const llvm::SmallVector<Func*, N>& ambiguous_funcs);
-        void display_generic_bind_named_args_fail_info(GenericBindFuncCall* call, Func* func);
+        void display_generic_bind_named_args_fail_info(const llvm::SmallVector<Expr*>& args,
+                                                       const llvm::SmallVector<Generic*>& generics);
         bool try_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
                                            Type* from_type, // Type at current level of comparison
                                            llvm::SmallVector<Type*>& bindings,

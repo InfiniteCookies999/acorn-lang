@@ -30,23 +30,12 @@ fn write_val(val: int) {
 
 }
 
-generics[T]
-fn foo(a: T, b: T) -> T {
-    return a + b;
+generics(T)
+fn foo(a: T...) -> T {
+    return a[0] + a[1] + a[2];
 }
 
 fn main() {
-    {
-        a: const int = 18;
-        b: int = 18;
-        r: int = foo(a, b);
-        write_val(r);
-    }
-
-    {
-        a: int = 18;
-        b: const int = 18;
-        r: int = foo(a, b);
-        write_val(r);
-    }
+    r: int = foo(50, 50, 7);
+    write_val(r);
 }

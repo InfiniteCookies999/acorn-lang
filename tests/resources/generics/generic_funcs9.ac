@@ -30,23 +30,16 @@ fn write_val(val: int) {
 
 }
 
-generics[T]
-fn foo(a: T, b: T) -> T {
-    return a + b;
+generics(T)
+fn foo(a: T, b: T**) -> T {
+    return a + **b;
 }
 
 fn main() {
-
-    v1: int = foo(43, 21);
-    write_val(v1);
-
-    // Use 0.5f since additions result in deterministic
-    // behavior for IEEE floating points.
-    f: float = foo(0.5f, 0.5f);
-    v2: int = (as(int) f) + 36;
-    write_val(v2);
-
-    v3: int = foo(30, 6);
-    write_val(v3);
-
+    a: const int = 18;
+    b1: int = 18;
+    b2: int* = &b1;
+    b: const int** = &b2;
+    r: int = foo(a, b);
+    write_val(r);
 }

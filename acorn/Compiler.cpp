@@ -310,12 +310,12 @@ void acorn::Compiler::sema_and_irgen() {
     }
     ir_timer.stop();
 
-    auto check_decl = [this](Decl* decl, GenericInstance* generic_instance) finline {
+    auto check_decl = [this](Decl* decl) finline {
         sema_timer.start();
 
         Sema sema(context, decl->file, decl->get_logger());
         if (decl->is(NodeKind::Func)) {
-            sema.check_function(static_cast<Func*>(decl), static_cast<GenericFuncInstance*>(generic_instance));
+            sema.check_function(static_cast<Func*>(decl));
         } else if (decl->is(NodeKind::Var)) {
             auto var = static_cast<Var*>(decl);
             if (!var->has_been_checked) {
@@ -360,7 +360,7 @@ void acorn::Compiler::sema_and_irgen() {
 
         // Semantic analysis.
         if (decl->is_not(NodeKind::ImplicitFunc)) {
-            check_decl(static_cast<Decl*>(decl), generic_instance);
+            check_decl(static_cast<Decl*>(decl));
         }
 
         // Code generation.
@@ -390,7 +390,7 @@ void acorn::Compiler::sema_and_irgen() {
     // Checking any declarations that were not checked.
     //
     for (Decl* decl : context.get_unchecked()) {
-        check_decl(decl, nullptr);
+        check_decl(decl);
     }
 
     if (context.has_errors()) {

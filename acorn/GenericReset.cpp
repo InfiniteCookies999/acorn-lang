@@ -25,6 +25,8 @@ namespace acorn {
             case NodeKind::UnaryOp:
                 expr->trivially_reassignable = false;
                 break;
+            default:
+                break;
             }
             expr->cast_type = nullptr;
             expr->is_foldable = true;
@@ -188,11 +190,13 @@ namespace acorn {
             call->called_func = nullptr;
             call->generic_instance = nullptr;
             call->implicitly_converts_return = false;
+            call->type_for_type_expr = nullptr;
+            call->indeterminate_inferred_default_args.clear();
             break;
         }
         case NodeKind::StructInitializer: {
             auto initializer = static_cast<StructInitializer*>(node);
-            reset_node(initializer->ref);
+            reset_node(initializer->site);
             for (Expr* value : initializer->values) {
                 reset_node(value);
             }
@@ -287,6 +291,8 @@ void acorn::reset_generic_function(Func* func) {
     //
     // It is currently being
     func->vars_to_alloc.clear();
+
+    func->structn = nullptr;
 
     func->return_type = nullptr;
     for (Var* param : func->params) {

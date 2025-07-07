@@ -94,7 +94,7 @@ if (e1 > e) { e = e1; }           \
             // Include the closing }
             go_until(e, '{', '}');
             StructInitializer* initializer = static_cast<StructInitializer*>(node);
-            get(initializer->ref);
+            get(initializer->site);
             break;
         }
         case NodeKind::MoveObj: {

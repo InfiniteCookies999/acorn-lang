@@ -13,8 +13,8 @@ static bool is_digit(char c) {
 
 static bool is_hexidecimal(char c) {
     return (c >= '0' && c <= '9') ||
-           (c >= 'a' && c <= 'z') ||
-           (c >= 'A' && c <= 'Z');
+           (c >= 'a' && c <= 'f') ||
+           (c >= 'A' && c <= 'F');
 }
 
 static bool is_octal(char c) {

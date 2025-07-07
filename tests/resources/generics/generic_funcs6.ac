@@ -30,7 +30,7 @@ fn write_val(val: int) {
 
 }
 
-generics[T]
+generics(T)
 fn foo(a: T^, b: T) -> T {
     return *a + b;
 }

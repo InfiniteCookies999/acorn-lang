@@ -248,6 +248,7 @@ std::string acorn::Type::to_string() const {
     case TypeKind::EmptyArray:   return str("[]");
     case TypeKind::Expr:         return str("expr type");
     case TypeKind::Auto:         return str("auto");
+    case TypeKind::Inderminate:  return str("indeterminate");
     case TypeKind::Range:        return str2(static_cast<const RangeType*>(this)->to_string());
     case TypeKind::Pointer:      return str2(static_cast<const PointerType*>(this)->to_string());
     case TypeKind::Array:        return str2(static_cast<const ArrayType*>(this)->to_string());
@@ -516,6 +517,22 @@ acorn::Type* acorn::UnresolvedCompositeType::create(PageAllocator& allocator,
     return composite_type;
 }
 
+acorn::Type* acorn::UnresolvedGenericCompositeType::create(PageAllocator& allocator,
+                                                           Identifier name,
+                                                           SourceLoc  error_location,
+                                                           llvm::SmallVector<Expr*> bound_exprs,
+                                                           size_t non_named_generic_args_offsets,
+                                                           bool is_const) {
+    auto composite_type = allocator.alloc_type<UnresolvedGenericCompositeType>();
+    new (composite_type) UnresolvedGenericCompositeType(is_const,
+                                                        name,
+                                                        error_location,
+                                                        std::move(bound_exprs),
+                                                        non_named_generic_args_offsets);
+    composite_type->contains_const = is_const;
+    return composite_type;
+}
+
 acorn::StructType* acorn::StructType::create(PageAllocator& allocator,
                                              Struct* structn,
                                              bool is_const) {
@@ -529,7 +546,19 @@ acorn::StructType* acorn::StructType::create(PageAllocator& allocator,
 }
 
 std::string acorn::StructType::to_string() const {
-    return structn->name.to_string().str();
+    std::string str = structn->name.to_string().str();
+    if (structn->is_generic) {
+        auto struct_instance = static_cast<GenericStructInstance*>(structn);
+        str += "(";
+        for (size_t i = 0; i < struct_instance->bound_types.size(); i++) {
+            str += struct_instance->bound_types[i]->to_string();
+            if (i + 1 != struct_instance->bound_types.size()) {
+                str += ", ";
+            }
+        }
+        str += ")";
+    }
+    return str;
 }
 
 acorn::EnumType* acorn::EnumType::create(PageAllocator& allocator,

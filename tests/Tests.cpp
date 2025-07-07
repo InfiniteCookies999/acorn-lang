@@ -8,6 +8,11 @@
 #include "CodegenTests.h"
 #include "ErrorLoggingTests.h"
 
+template<typename T>
+struct A {
+
+};
+
 int main() {
 
     acorn::set_terminal_codepoint_to_utf8();

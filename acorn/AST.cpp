@@ -5,6 +5,7 @@
 #include "Type.h"
 #include "SourceExpansion.h"
 #include "GenericReset.h"
+#include "DeepCopyAST.h"
 
 void acorn::Decl::show_prev_declared_msg(Logger& logger) const {
     logger.print("Previously declared at: ");
@@ -202,19 +203,21 @@ acorn::Var* acorn::Func::find_parameter(Identifier name) const {
 }
 
 acorn::GenericFuncInstance* acorn::Func::get_generic_instance(PageAllocator& allocator,
-                                                              llvm::SmallVector<Type*> generic_bindings,
-                                                              llvm::SmallVector<Type*> qualified_param_types) {
+                                                              llvm::SmallVector<Type*> bound_types,
+                                                              llvm::SmallVector<Type*> qualified_param_types,
+                                                              Struct* parent_struct) {
     // Check to see if the instance already exists.
     for (auto* instance : generic_instances) {
-        if (instance->generic_bindings == generic_bindings) {
+        if (instance->bound_types == bound_types) {
             return instance;
         }
     }
 
     auto generic_instance = allocator.alloc_type<GenericFuncInstance>();
     new (generic_instance) GenericFuncInstance();
-    generic_instance->generic_bindings = std::move(generic_bindings);
-    generic_instance->qualified_types  = std::move(qualified_param_types);
+    generic_instance->bound_types = std::move(bound_types);
+    generic_instance->qualified_decl_types  = std::move(qualified_param_types);
+    generic_instance->structn = parent_struct;
 
     generic_instances.push_back(generic_instance);
     return generic_instance;
@@ -226,16 +229,14 @@ void acorn::Func::bind_generic_instance(GenericFuncInstance* generic_instance) {
     // in sema/irgen as if it was just parsed.
     reset_generic_function(this);
 
-    // Bind the types bound to this instance of the generic function.
-    return_type = generic_instance->qualified_types[0];
-    for (size_t i = 0; i < params.size(); i++) {
-        auto qualified_type = generic_instance->qualified_types[i + 1];
-        params[i]->type = qualified_type;
-    }
+    this->generic_instance = generic_instance;
+    this->structn = generic_instance->structn;
 
-    for (size_t i = 0; i < generics.size(); i++) {
-        Type* type_to_bind = generic_instance->generic_bindings[i];
-        generics[i]->type->bind_type(type_to_bind);
+    // Bind the types bound to this instance of the generic function.
+    return_type = generic_instance->qualified_decl_types[0];
+    for (size_t i = 0; i < params.size(); i++) {
+        auto qualified_type = generic_instance->qualified_decl_types[i + 1];
+        params[i]->type = qualified_type;
     }
 }
 
@@ -248,6 +249,25 @@ const acorn::Struct::InterfaceExtension* acorn::Struct::find_interface_extension
         return extension.interfacen->name == name;;
     });
     return itr != interface_extensions.end() ? itr : nullptr;
+}
+
+acorn::GenericStructInstance* acorn::UnboundGenericStruct::get_generic_instance(PageAllocator& allocator, llvm::SmallVector<Type*> bound_types) {
+    // Check to see if the instance already exists.
+    for (auto* instance : generic_instances) {
+        if (instance->bound_types == bound_types) {
+            return instance;
+        }
+    }
+
+    auto new_struct_instance = deep_copy_struct(allocator, this);
+    new_struct_instance->is_struct_instance_copy = true;
+    new_struct_instance->bound_types = std::move(bound_types);
+    generic_instances.push_back(new_struct_instance);
+
+    auto new_struct_type = StructType::create(allocator, new_struct_instance);
+    new_struct_instance->struct_type = new_struct_type;
+
+    return new_struct_instance;
 }
 
 acorn::PointSourceLoc acorn::ImportStmt::get_key_location(bool center_by_last) const {

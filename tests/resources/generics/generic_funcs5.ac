@@ -30,25 +30,28 @@ fn write_val(val: int) {
 
 }
 
+generics(T)
+fn foo(f: fn(T) -> T , v: T) -> T {
+    return f(v);
+}
 
-generics[T]
-fn foo(a: T*, b: T) -> T {
-    return *a + b;
+fn bar1(v: int) -> int {
+    return v + 4;
+}
+
+fn bar2(v: float) -> float {
+    return v + 0.5f;
 }
 
 fn main() {
 
-    a0: int = 43;
-    a1: int* = &a0;
-    v1: int = foo(a1, 21);
-    write_val(v1);
+    r1: int = foo(bar1, 38);
+    write_val(r1);
 
     // Use 0.5f since additions result in deterministic
     // behavior for IEEE floating points.
-    f0: float = 0.5f;
-    f1: float* = &f0;
-    f: float = foo(f1, 0.5f);
-    v2: int = (as(int) f) + 36;
-    write_val(v2);
+    r2: float = foo(bar2, 0.5f);
+    r3: int = (as(int) r2) + 35;
+    write_val(r3);
 
 }

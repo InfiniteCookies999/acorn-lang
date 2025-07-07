@@ -66,11 +66,12 @@ namespace acorn {
         Array,
         Slice,
         EmptyArray,
-        UnresolvedBracket, // Length could not be resolved during parsing.
+        UnresolvedArray, // Length could not be resolved during parsing.
         Null,
         AssignDeterminedArray,
         Function,
         UnresolvedComposite,
+        UnresolvedGenericComposite,
         Struct,
         Enum,
         UnresolvedEnumValueType,
@@ -80,6 +81,7 @@ namespace acorn {
         Auto,
         Expr, // A type that appears as part of an expression in code.
         Generic,
+        Inderminate,
         Invalid,
 
     };
@@ -240,7 +242,7 @@ namespace acorn {
 
     private:
         UnresolvedArrayType(bool is_const, Expr* expr, Type* elm_type) :
-            ContainerType(TypeKind::UnresolvedBracket, is_const, elm_type), expr(expr) {
+            ContainerType(TypeKind::UnresolvedArray, is_const, elm_type), expr(expr) {
         }
 
         Expr* expr;
@@ -405,8 +407,47 @@ namespace acorn {
               error_location(error_location) {
         }
 
+        UnresolvedCompositeType(TypeKind kind, bool is_const, Identifier name, SourceLoc error_location)
+            : Type(kind, is_const),
+              name(name),
+              error_location(error_location) {
+        }
+
         SourceLoc  error_location;
         Identifier name;
+    };
+
+    class UnresolvedGenericCompositeType : public UnresolvedCompositeType {
+    public:
+
+        static Type* create(PageAllocator& allocator,
+                            Identifier name,
+                            SourceLoc  error_location,
+                            llvm::SmallVector<Expr*> bound_exprs,
+                            size_t non_named_generic_args_offsets,
+                            bool is_const = false);
+
+        const llvm::SmallVector<Expr*>& get_bound_exprs() const {
+            return bound_exprs;
+        }
+
+        size_t get_non_named_generic_args_offsets() const {
+            return non_named_generic_args_offsets;
+        }
+
+    private:
+        UnresolvedGenericCompositeType(bool is_const,
+                                       Identifier name,
+                                       SourceLoc error_location,
+                                       llvm::SmallVector<Expr*> bound_exprs,
+                                       size_t non_named_generic_args_offsets)
+            : UnresolvedCompositeType(TypeKind::UnresolvedGenericComposite, is_const, name, error_location),
+              bound_exprs(std::move(bound_exprs)),
+              non_named_generic_args_offsets(non_named_generic_args_offsets) {
+        }
+
+        llvm::SmallVector<Expr*> bound_exprs;
+        size_t non_named_generic_args_offsets;
     };
 
     class StructType : public Type {
@@ -546,17 +587,12 @@ namespace acorn {
 
         size_t get_generic_index() const;
 
-        void bind_type(Type* type) { bound_type = type; }
-
-        Type* get_bound_type() const { return bound_type; }
-
     protected:
         GenericType(Generic* generic, bool is_const = false)
             : Type(TypeKind::Generic, is_const), generic(generic) {
         }
 
         Generic* generic;
-        Type* bound_type;
     };
 }
 

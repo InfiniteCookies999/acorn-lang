@@ -30,18 +30,25 @@ fn write_val(val: int) {
 
 }
 
-generics[T]
-fn foo() -> T {
-    return as(T) 38;
+generics(T)
+struct A {
+    v1: T;
+    v2: T;
+
+    fn new(v1: T, v2: T) {
+        this.v1 = v1;
+        this.v2 = v2;
+    }
 }
 
 fn main() {
 
-    v1: int = foo!(int)();
-    write_val(v1);
+    a1: A(int) = A(int){ 64, 80 };
+    write_val(a1.v1);
+    write_val(a1.v2);
 
-    v2: float = foo!(float)();
-    v3: int = as(int) v2;
-    write_val(v3);
+    a2: A(float) = A(float){ 64.0f, 80.0f };
+    write_val(as(int) a2.v1);
+    write_val(as(int) a2.v2);
 
 }

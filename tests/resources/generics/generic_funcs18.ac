@@ -30,36 +30,18 @@ fn write_val(val: int) {
 
 }
 
-struct A {
-    v1: int;
-    v2: int;
-}
-
-struct B {
-    v1: int;
-    v2: int;
-}
-
-generics[AT, BT]
-fn foo(a: AT, b: BT) -> int {
-    r: int = a.v1 + a.v2 + b;
-    return r;
+generics(T, U)
+fn foo(a: T, b: U) -> U {
+    return a + b;
 }
 
 fn main() {
 
-    a: A = A{
-        10,
-        10
-    };
-    r1: int = foo(a, 15);
-    write_val(r1);
+    v1: int = foo!(U=int, T=int)(40, 3);
+    write_val(v1);
 
-    b: B = B{
-        35,
-        25
-    };
-    r2: int = foo(b, 3);
-    write_val(r2);
+    v2: float = foo!(U=float, T=int)(40, 3.0f);
+    v3: int = as(int)v2;
+    write_val(v3);
 
 }

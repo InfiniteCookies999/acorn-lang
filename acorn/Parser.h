@@ -51,7 +51,9 @@ namespace acorn {
 
         Func*      cur_func      = nullptr;
         Struct*    cur_struct    = nullptr;
+        Var*       cur_var = nullptr;
         Interface* cur_interface = nullptr;
+        llvm::SmallVector<Generic*> cur_generics;
 
         // Linkage name set by the native modifier.
         llvm::StringRef linkname;
@@ -85,7 +87,7 @@ namespace acorn {
 
         Node* parse_statement();
 
-        Func*      parse_function(uint32_t modifiers, bool is_const, llvm::SmallVector<Generic*> generics = {});
+        Func*      parse_function(uint32_t modifiers, bool is_const);
         VarList*   parse_variable_list(uint32_t modifiers);
         Var*       parse_variable(uint32_t modifiers, bool may_parse_implicit_ptr = false);
         Struct*    parse_struct(uint32_t modifiers);
@@ -128,7 +130,7 @@ namespace acorn {
 
         Expr* parse_assignment_and_expr();
         Expr* parse_expr();
-        Expr* parse_try();
+        Expr* parse_try(Var* tried_on_var = nullptr);
 
         Expr*                   parse_binary_expr(Expr* lhs);
         Expr*                   new_binary_op(Token op_tok, Expr* lhs, Expr* rhs);
@@ -141,12 +143,12 @@ namespace acorn {
         Expr* report_overflow(Token op, Expr* lhs, Expr* rhs, Type* to_type);
         Expr* report_underflow(Token op, Expr* lhs, Expr* rhs, Type* to_type);
 
-        Expr* parse_expr_trail();
-        Expr* parse_expr_trail(Expr* lhs);
-        Expr* parse_function_call(Expr* site);
-        Expr* parse_generic_function_bind_call();
-        void  parse_function_call_args(llvm::SmallVector<Expr*>& args, size_t& non_named_args_offset);
-        Expr* parse_term();
+        Expr*     parse_expr_trail();
+        Expr*     parse_expr_trail(Expr* lhs);
+        FuncCall* parse_function_call(Expr* site);
+        Expr*     parse_generic_function_bind_call();
+        void      parse_function_call_args(llvm::SmallVector<Expr*>& args, size_t& non_named_args_offset);
+        Expr*     parse_term();
 
         Number* parse_int_literal();
         Number* parse_hex_literal();
@@ -168,7 +170,7 @@ namespace acorn {
                                          int          ptr_offset);
 
         Expr* parse_array();
-        Expr* parse_struct_initializer(IdentRef* ref);
+        Expr* parse_struct_initializer(Expr* site);
         Expr* parse_type_expr();
 
         // Utility functions
@@ -185,6 +187,9 @@ namespace acorn {
         // Expect the current token to be of kind and if it is it consumes
         // it.
         bool expect(tokkind kind, const char* for_msg = nullptr);
+
+        // Search the current generics list of the generic type.
+        Type* find_generic_type(Identifier name) const;
 
         // Expect the current token to be an identifier and construct
         // an identifier object if it is. It then consumes the token.

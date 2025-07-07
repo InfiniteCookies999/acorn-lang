@@ -152,6 +152,9 @@ namespace acorn {
         GenericType* type;
     };
 
+    struct GenericInstance {
+    };
+
     struct Decl : Node {
         Decl(NodeKind kind) : Node(kind) {
         }
@@ -192,22 +195,16 @@ namespace acorn {
 
     };
 
-    struct GenericInstance {
-    };
-
     struct GenericFuncInstance : GenericInstance {
-        llvm::SmallVector<Type*> generic_bindings;
+        llvm::SmallVector<Type*> bound_types;
         // Parameters have their types fully qualified so that future
         // calls to the generic function know how to properly call the
         // function.
         //
-        // TODO (maddie): do we really need this? IR gen seems to rely
-        // very little on it outside of some stuff to do with variadics
-        // and generating the function declaration.
-        // ^^ it is also used to initialize the parameters atm.
-        //
         // Index 0 is the return type.
-        llvm::SmallVector<Type*> qualified_types;
+        llvm::SmallVector<Type*> qualified_decl_types;
+
+        Struct* structn = nullptr;
 
         llvm::Function* ll_func = nullptr;
     };
@@ -233,6 +230,10 @@ namespace acorn {
         // then the `mapped_interface_func` is the function of the interface
         // that is implemented.
         Func* mapped_interface_func = nullptr;
+
+        // If this is a generic function then this is the currently bound
+        // generic instance.
+        GenericFuncInstance* generic_instance = nullptr;
 
         Type* parsed_return_type;
         Type* return_type;
@@ -305,8 +306,9 @@ namespace acorn {
         bool is_generic() const { return !generics.empty(); }
 
         GenericFuncInstance* get_generic_instance(PageAllocator& allocator,
-                                                  llvm::SmallVector<Type*> generic_bindings,
-                                                  llvm::SmallVector<Type*> qualified_param_types);
+                                                  llvm::SmallVector<Type*> bound_types,
+                                                  llvm::SmallVector<Type*> qualified_param_types,
+                                                  Struct* parent_struct);
 
         void bind_generic_instance(GenericFuncInstance* generic_instance);
 
@@ -336,6 +338,7 @@ namespace acorn {
 
         llvm::StringRef linkname;
 
+        // TODO (maddie): we can probably get rid of this.
         Struct* structn;
 
         uint32_t param_idx = NotParam;
@@ -350,10 +353,11 @@ namespace acorn {
 
         Expr* assignment = nullptr;
 
-        bool has_been_checked          = false;
-        bool is_foldable               = false;
-        bool has_implicit_ptr          = false;
-        bool should_default_initialize = true;
+        bool has_been_checked             = false;
+        bool is_foldable                  = false;
+        bool has_implicit_ptr             = false;
+        bool should_default_initialize    = true;
+        bool assignment_contains_generics = false;
 
         // If the variable is foldable then this contains the
         // generated value of the variable.
@@ -428,9 +432,29 @@ namespace acorn {
         bool uses_vtable             = false;
         bool aborts_error            = false;
         bool is_default_foldable     = true;
+        bool is_generic              = false;
+        // DUMMY variable for debugging.
+        bool is_struct_instance_copy = false;
 
         Var* find_field(Identifier name) const;
         const InterfaceExtension* find_interface_extension(Identifier name) const;
+
+    };
+
+    struct GenericStructInstance : Struct, GenericInstance {
+        GenericStructInstance() : Struct() {}
+
+        llvm::SmallVector<Type*> bound_types;
+    };
+
+    struct UnboundGenericStruct : Struct {
+        UnboundGenericStruct() : Struct() {
+        }
+
+        llvm::SmallVector<Generic*>               generics;
+        llvm::SmallVector<GenericStructInstance*> generic_instances;
+
+        GenericStructInstance* get_generic_instance(PageAllocator& allocator, llvm::SmallVector<Type*> bound_types);
 
     };
 
@@ -841,9 +865,11 @@ namespace acorn {
         Expr*                site;
         Func*                called_func;
         GenericFuncInstance* generic_instance = nullptr;
+        Type*                type_for_type_expr = nullptr;
 
         size_t non_named_args_offset = -1;
         llvm::SmallVector<Expr*> args;
+        llvm::SmallVector<Expr*> indeterminate_inferred_default_args;
         bool implicitly_converts_return = false;
 
     };
@@ -854,9 +880,11 @@ namespace acorn {
 
         size_t non_named_vals_offset = 0;
         Struct* structn;
-        IdentRef* ref;
+        Expr*  site;
         Func* called_constructor = nullptr;
+        GenericFuncInstance* generic_called_instance = nullptr;
         llvm::SmallVector<Expr*> values;
+        llvm::SmallVector<Expr*> indeterminate_inferred_default_values;
     };
 
     struct String : Expr {

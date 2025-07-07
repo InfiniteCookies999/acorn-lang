@@ -30,16 +30,20 @@ fn write_val(val: int) {
 
 }
 
-generics[T]
-fn foo(a: T, b: T**) -> T {
-    return a + **b;
+generics(T)
+struct A {
+    v1: T = 64;
+    v2: T = 80;
 }
 
 fn main() {
-    a: const int = 18;
-    b1: int = 18;
-    b2: int* = &b1;
-    b: const int** = &b2;
-    r: int = foo(a, b);
-    write_val(r);
+
+    a1: A(int);
+    write_val(a1.v1);
+    write_val(a1.v2);
+
+    a2: A(float);
+    write_val(as(int) a2.v1);
+    write_val(as(int) a2.v2);
+
 }
