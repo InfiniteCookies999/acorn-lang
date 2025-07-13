@@ -187,8 +187,8 @@ namespace acorn {
         llvm::Value* gen_ident_reference(IdentRef* ref);
         llvm::Value* gen_binary_op(BinOp* bin_op);
         llvm::Value* gen_assignment_op(Expr* lhs, Expr* rhs);
-        llvm::Value* gen_apply_and_assign_op(tokkind op, SourceLoc loc, Type* rtype, Expr* lhs, Expr* rhs);
-        llvm::Value* gen_numeric_binary_op(tokkind op, Type* rtype,
+        llvm::Value* gen_apply_and_assign_op(TokenKind op, SourceLoc loc, Type* rtype, Expr* lhs, Expr* rhs);
+        llvm::Value* gen_numeric_binary_op(TokenKind op, Type* rtype,
                                            Expr* lhs, Expr* rhs,
                                            llvm::Value* ll_lhs, llvm::Value* ll_rhs);
         llvm::Value* gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_rhs);

@@ -32,7 +32,7 @@ fn write_val(val: int) {
 
 fn main() {
     a: int[5] = [ 114, 97, 109, 101, 110 ];
-    loop v: int in a {
+    loop (v: int in a) {
         write_val(v);
     }
 }

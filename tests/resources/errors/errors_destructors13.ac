@@ -24,7 +24,7 @@ struct TestError2 :: *Error {
 }
 
 fn foo(b: bool) | raises TestError1, TestError2 {
-    if b {
+    if (b) {
         raise TestError1{};
     } else {
         raise TestError2{};
@@ -32,11 +32,11 @@ fn foo(b: bool) | raises TestError1, TestError2 {
 }
 
 fn main() {
-    try err: foo(true) {
+    try err: (foo(true)) {
         std.print("caught error!");
     };
     std.print("...");
-    try err: foo(false) {
+    try err: (foo(false)) {
         std.print("caught error!");
     };
     std.print("end!");

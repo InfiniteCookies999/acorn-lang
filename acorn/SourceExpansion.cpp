@@ -127,7 +127,7 @@ if (e1 > e) { e = e1; }           \
         }
         case NodeKind::IdentRef: {
             IdentRef* ref = static_cast<IdentRef*>(node);
-            if (ref->binds_generics) {
+            if (ref->explicitly_binds_generics) {
                 GenericBindFuncCall* call = static_cast<GenericBindFuncCall*>(ref);
                 // Include the closing )
                 go_until(e, '(', ')');

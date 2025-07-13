@@ -18,7 +18,7 @@ struct A {
 }
 
 fn foo(b: bool) -> A | raises TestError {
-    if b {
+    if (b) {
         raise TestError{};
     } else {
         return A{ 64 };
@@ -26,11 +26,11 @@ fn foo(b: bool) -> A | raises TestError {
 }
 
 fn main() {
-    try foo(false) {
+    try (foo(false)) {
         return;
     };
     std.print("...");
-    try foo(true) {
+    try (foo(true)) {
         std.print("caught error!");
         return;
     };

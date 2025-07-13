@@ -31,7 +31,7 @@ fn write(c: char) {
 fn main() {
     a: int = 0;
     loop {
-        if a == 5 {
+        if (a == 5) {
             break;
         }
 

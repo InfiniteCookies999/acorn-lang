@@ -30,14 +30,14 @@ fn write(c: char) {
 
 fn main() {
     a: int = 0;
-    loop a < 5 {
+    loop (a < 5) {
         a = a + 1;
 
-        if a == 1 {
+        if (a == 1) {
             write('b');
             continue;
         }
-        if a == 3 {
+        if (a == 3) {
             write('b');
             continue;
         }

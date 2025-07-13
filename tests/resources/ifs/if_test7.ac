@@ -35,11 +35,11 @@ fn get_false() -> const int* {
 }
 
 fn main() {
-    if tof: const int* = get_false() {
+    if (tof: const int* = get_false()) {
         print("False Case", 10);
     }
 
-    if tof: const int* = get_true() {
+    if (tof: const int* = get_true()) {
         print("True Case", 9);
     }
 }

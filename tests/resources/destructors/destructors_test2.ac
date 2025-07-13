@@ -33,7 +33,7 @@ struct A {
 }
 
 fn foo(b: bool) {
-    if b {
+    if (b) {
         return;
     }
 

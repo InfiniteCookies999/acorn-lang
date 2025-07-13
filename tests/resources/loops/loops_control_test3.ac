@@ -33,8 +33,8 @@ fn write_val(val: int) {
 fn main() {
     a: int[10] = [ 114, 97, 109, 101, 110, 33, 33, 33, 33, 33 ];
     count: int = 0;
-    loop v: int in a {
-        if count == 5 {
+    loop (v: int in a) {
+        if (count == 5) {
             break;
         }
 

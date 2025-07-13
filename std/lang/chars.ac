@@ -26,13 +26,13 @@ DIGIT_TO_BASE64_TABLE :: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 fn uint64_to_chars(value: uint64, end_of_buffer: char*, base: int) -> char* {
     ptr := end_of_buffer;
 
-    if value == 0 {
+    if (value == 0) {
         *ptr = '0';
         return ptr;
     }
 
     b := as(uint64) base;
-    loop value != 0 {
+    loop (value != 0) {
         digit: uint64 = value % b;
         value /= b;
 

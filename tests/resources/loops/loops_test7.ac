@@ -31,7 +31,7 @@ fn write_val(val: int) {
 }
 
 fn main() {
-    loop v: int in [ 114, 97, 109, 101, 110 ] {
+    loop (v: int in [ 114, 97, 109, 101, 110 ]) {
         write_val(v);
     }
 }

@@ -51,7 +51,7 @@ namespace acorn {
 
         Func*      cur_func      = nullptr;
         Struct*    cur_struct    = nullptr;
-        Var*       cur_var = nullptr;
+        Var*       cur_var       = nullptr;
         Interface* cur_interface = nullptr;
         llvm::SmallVector<Generic*> cur_generics;
 
@@ -63,7 +63,6 @@ namespace acorn {
 
         // If true still parsing imports at the top of the file.
         bool parsing_import_tops      = true;
-        bool allow_struct_initializer = true;
 
         // Statement processing
         //--------------------------------------
@@ -186,7 +185,7 @@ namespace acorn {
 
         // Expect the current token to be of kind and if it is it consumes
         // it.
-        bool expect(tokkind kind, const char* for_msg = nullptr);
+        bool expect(TokenKind kind, const char* for_msg = nullptr);
 
         // Search the current generics list of the generic type.
         Type* find_generic_type(Identifier name) const;
@@ -206,7 +205,7 @@ namespace acorn {
 
         template<typename T>
         T* new_node(Token token) {
-            return new_node<T>(token.loc);
+            return new_node<T>(token.get_location());
         }
 
         template<typename T>
@@ -227,7 +226,7 @@ namespace acorn {
 
         template<typename... TArgs>
         [[nodiscard]] Logger& error(Token error_token, const char* fmt, TArgs&&... args) {
-            return error(error_token.loc, fmt, std::forward<TArgs>(args)...);
+            return error(error_token.get_location(), fmt, std::forward<TArgs>(args)...);
         }
 
     };

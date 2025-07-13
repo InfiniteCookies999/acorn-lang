@@ -32,7 +32,7 @@ fn write_val(val: int32) {
 
 fn foo(b: bool) -> int32[8] {
     a: int32[8] = [ 76, 101, 116, 115, 32, 103, 111, 33 ];
-    if b {
+    if (b) {
         return a;
     }
     return a;

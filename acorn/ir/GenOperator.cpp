@@ -140,7 +140,7 @@ llvm::Value* acorn::IRGenerator::gen_assignment_op(Expr* lhs, Expr* rhs) {
     return ll_address;
 }
 
-llvm::Value* acorn::IRGenerator::gen_apply_and_assign_op(tokkind op, SourceLoc loc, Type* rtype, Expr* lhs, Expr* rhs) {
+llvm::Value* acorn::IRGenerator::gen_apply_and_assign_op(TokenKind op, SourceLoc loc, Type* rtype, Expr* lhs, Expr* rhs) {
 
     emit_dbg(di_emitter->set_store_node(lhs));
 
@@ -172,7 +172,7 @@ llvm::Value* acorn::IRGenerator::gen_apply_and_assign_op(tokkind op, SourceLoc l
 // defined behavior for arithmetic. NSW does not guarantee defined behavior
 // but it does provide better performance which is the trade-off.
 //
-llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, Type* rtype,
+llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(TokenKind op, Type* rtype,
                                                        Expr* lhs, Expr* rhs,
                                                        llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
 

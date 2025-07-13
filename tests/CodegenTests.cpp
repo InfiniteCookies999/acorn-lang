@@ -2417,12 +2417,24 @@ static void generics_tests() {
 
         expect(result, std::identity()).to_be("@P@P");
     });
-    test("Create generic from constructor call", [&] {
+    test("Create generic struct from constructor call", [&] {
         auto [err_msg, result] = run_codegen_test(src("generics/generic_structs4.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("@P@P");
-    }, true);
+    });
+    test("Call function of generic struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs5.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@P@P");
+    });
+    test("Call generic function of generic struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs6.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@P@P");
+    });
 }
 
 void test_codegen() {

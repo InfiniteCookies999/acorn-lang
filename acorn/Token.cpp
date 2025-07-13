@@ -4,7 +4,7 @@
 
 #include "Context.h"
 
-std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
+std::string acorn::token_kind_to_string(TokenKind kind, Context& context) {
     switch (kind) {
     case Token::Invalid:              return "invalid";
     case Token::EOB:                  return "eob";
@@ -65,12 +65,4 @@ std::string acorn::token_kind_to_string(Context& context, tokkind kind) {
         return "Unknown (Internal error)";
     }
     }
-}
-
-std::string acorn::to_string(Context& context, Token token) {
-    return token_kind_to_string(context, token.kind);
-}
-
-std::string acorn::to_lexical_string(Context& context, Token token) {
-    return "{" + to_string(context, token) + ", " + token.text().str() + "}";
 }

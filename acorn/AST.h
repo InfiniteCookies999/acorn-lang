@@ -244,7 +244,7 @@ namespace acorn {
         //
         llvm::SmallVector<Generic*>             generics;
         llvm::SmallVector<GenericFuncInstance*> generic_instances;
-        // Index 0 is the return type.
+        // Index 0 is the return type, rest are parameter types.
         llvm::SmallVector<Type*> partially_qualified_types;
 
 
@@ -681,7 +681,7 @@ namespace acorn {
         BinOp() : Expr(NodeKind::BinOp) {
         }
 
-        tokkind op;
+        TokenKind op;
 
         Expr* lhs;
         Expr* rhs;
@@ -691,8 +691,8 @@ namespace acorn {
         UnaryOp() : Expr(NodeKind::UnaryOp) {
         }
 
-        tokkind op;
-        Expr*   expr;
+        TokenKind op;
+        Expr*     expr;
     };
 
     struct Number : Expr {
@@ -728,7 +728,7 @@ namespace acorn {
         }
 
         Identifier ident;
-        bool binds_generics = false;
+        bool explicitly_binds_generics = false;
 
         enum class RelativeEnforcement {
             File,

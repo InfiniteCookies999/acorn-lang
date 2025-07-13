@@ -58,7 +58,7 @@ struct A {
 fn foo(t: bool) -> A {
     a: A;
 
-    if t {
+    if (t) {
         return a;
     }
 

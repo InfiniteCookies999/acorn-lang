@@ -33,7 +33,7 @@ struct A {
 }
 
 fn foo(b: bool) -> A | raises TestError {
-    if b {
+    if (b) {
         raise TestError{};
     } else {
         return A{ 64 };
@@ -41,13 +41,13 @@ fn foo(b: bool) -> A | raises TestError {
 }
 
 fn main() {
-    v1: int = try foo(false).v {
+    v1: int = try (foo(false).v) {
         std.print("caught error!");
         recover 94;
     };
     write_val(v1);
     std.print("...");
-    v2: int = try foo(true).v { // it should not destroy A in this case!
+    v2: int = try (foo(true).v) { // it should not destroy A in this case!
         std.print("caught error!");
         recover 94;
     };

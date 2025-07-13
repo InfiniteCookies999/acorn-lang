@@ -35,7 +35,7 @@ fn bar2() {
 }
 
 fn foo(t: bool) {
-    if t {
+    if (t) {
         return bar1();
     }
 

@@ -27,15 +27,15 @@ fn print(s: const char*, length: int) {
 }
 
 fn main() {
-    if true {
+    if (true) {
         print("True Case", 9);
-    } elif true {
+    } elif (true) {
         print("Elif Case", 9);
     }
 
-    if false {
+    if (false) {
         print("False Case", 10);
-    } elif true {
+    } elif (true) {
         print("Elif Case", 9);
     }
 }

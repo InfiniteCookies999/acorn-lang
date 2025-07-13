@@ -152,7 +152,7 @@ namespace acorn {
         case NodeKind::IdentRef: {
             auto ref = static_cast<IdentRef*>(node);
             ref->found_kind = IdentRef::NoneKind;
-            if (ref->binds_generics) {
+            if (ref->explicitly_binds_generics) {
                 auto call = static_cast<GenericBindFuncCall*>(ref);
                 call->bound_types.clear();
                 for (Expr* arg : call->args) {

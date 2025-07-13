@@ -25,7 +25,7 @@ fn write_val(val: int) {
 }
 
 fn foo(cond: bool) -> int | raises TestError {
-    if cond {
+    if (cond) {
         return 64;
     }
 
@@ -34,7 +34,7 @@ fn foo(cond: bool) -> int | raises TestError {
 
 fn main() {
     f: fn(bool) -> int | raises TestError = foo;
-    value: int = try f(true);
+    value: int = try (f(true));
     write_val(value);
-    try f(false);
+    try (f(false));
 }

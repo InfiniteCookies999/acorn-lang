@@ -20,7 +20,7 @@ static llvm::Module* ll_test_model = new llvm::Module("Test Module", ll_context)
 static PageAllocator allocator(4096);
 
 static Context* context;
-
+/*
 static std::string node_kind_to_string(NodeKind kind) {
     return std::to_string(static_cast<unsigned>(kind));
 }
@@ -41,10 +41,10 @@ template<typename K, typename V>
 auto get_second(const std::pair<K, V>& pair) -> V {
     return pair.second;
 }
-
+*/
 void test_parser() {
 
-    context = allocator.alloc_type<Context>();
+    /*context = allocator.alloc_type<Context>();
     new (context) Context(ll_context, *ll_test_model, allocator);
     context->set_max_error_count(999999);
     context->set_stand_alone();

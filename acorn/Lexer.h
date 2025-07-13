@@ -42,28 +42,15 @@ namespace acorn {
 
         Token next_word();
 
-        Token next_number(const char* start);
-        Token finish_int_number(tokkind kind, const char* start);
-        Token finish_float_number(const char* start, bool has_errors);
+        Token next_number(const char* beg);
+        Token finish_int_number(TokenKind kind, const char* beg);
+        Token finish_float_number(const char* beg, bool has_errors);
 
         bool skip_unicode_seq_digits(size_t n);
         Token next_string();
         Token next_char();
 
         Token next_comptime();
-
-        inline Token new_token(const char* start, uint16_t length, tokkind c) noexcept {
-            return Token(c, SourceLoc{ start, length });
-        }
-
-        inline Token new_token_and_eat(tokkind c) noexcept {
-            return Token(c, SourceLoc{ ptr++, 1 });
-        }
-
-        inline Token new_token(tokkind kind, const char* start) {
-            uint16_t length = static_cast<uint16_t>(ptr - start);
-            return Token(kind, SourceLoc{ start, length });
-        }
 
         template<typename... TArgs>
         [[nodiscard]] Logger& error(const char* fmt, TArgs&&... args) {

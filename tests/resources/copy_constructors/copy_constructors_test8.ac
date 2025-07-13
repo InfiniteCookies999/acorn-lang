@@ -45,7 +45,7 @@ fn foo(t: bool) -> A {
     a2: A;
     a2.m = "called2 ";
 
-    if t {
+    if (t) {
         return a1;
     }
 

@@ -33,13 +33,13 @@ fn write_val(val: int) {
 fn main() {
     a: int[5] = [ 114, 97, 109, 101, 110 ];
     count: int = 0;
-    loop v: int in a {
+    loop (v: int in a) {
         count = count + 1;
-        if count == 1 {
+        if (count == 1) {
             write_val(70);
             continue;
         }
-        if count == 3 {
+        if (count == 3) {
             write_val(66);
             continue;
         }

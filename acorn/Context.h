@@ -175,10 +175,10 @@ namespace acorn {
         }
 
         // Returns Token::Invalid if not a keyword.
-        tokkind get_keyword_kind(llvm::StringRef word) const;
+        TokenKind get_keyword_kind(llvm::StringRef word) const;
 
         // Given a token kind it returns the string representation of the keyword.
-        llvm::StringRef get_keyword_from_kind(tokkind kind) const {
+        llvm::StringRef get_keyword_from_kind(TokenKind kind) const {
             return inv_keyword_mapping.find(kind)->second;
         }
 
@@ -293,11 +293,11 @@ namespace acorn {
         llvm::SmallVector<DeclGen, 1024> decls_gen_queue;
         llvm::SmallVector<Decl*, 1024>   unchecked_gen_queue;
 
-        llvm::StringMap<tokkind>                 keyword_mapping;
-        llvm::DenseMap<tokkind, llvm::StringRef> inv_keyword_mapping; // Inverse of keyword_mapping.
-        llvm::DenseMap<tokkind, int>             precedence;
-        llvm::DenseMap<Identifier, Expr*>        universal_constants;
-        llvm::StringMap<ReflectKind>             reflect_identifiers;
+        llvm::StringMap<TokenKind>                 keyword_mapping;
+        llvm::DenseMap<TokenKind, llvm::StringRef> inv_keyword_mapping; // Inverse of keyword_mapping.
+        llvm::DenseMap<TokenKind, int>             precedence;
+        llvm::DenseMap<Identifier, Expr*>          universal_constants;
+        llvm::StringMap<ReflectKind>               reflect_identifiers;
 
     };
 }

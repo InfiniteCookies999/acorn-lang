@@ -340,7 +340,7 @@ void acorn::Context::add_canidate_main_function(Func* main_func) {
     canidate_main_funcs.push_back(main_func);
 }
 
-acorn::tokkind acorn::Context::get_keyword_kind(llvm::StringRef word) const {
+acorn::TokenKind acorn::Context::get_keyword_kind(llvm::StringRef word) const {
     auto itr = keyword_mapping.find(word);
     if (itr != keyword_mapping.end()) {
         return itr->second;

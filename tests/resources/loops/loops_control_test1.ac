@@ -30,8 +30,8 @@ fn write(c: char) {
 
 fn main() {
     a: int = 0;
-    loop a < 100 {
-        if a == 5 {
+    loop (a < 100) {
+        if (a == 5) {
             break;
         }
 

@@ -108,7 +108,7 @@ struct FileHandle {
         return as(int) size;
 #elif OS_GROUP_UNIX
         stats: Stat;
-        if unix.fstat(handle, &stats) == 0 {
+        if (unix.fstat(handle, &stats) == 0) {
             return as(int) stats.st_size;
         }
         return 0;
@@ -118,7 +118,7 @@ struct FileHandle {
     fn read_buffer(buffer: char*, length: int) -> int {
 #if OS_GROUP_WINDOWS
         bytes_read: uint32;
-        if win32.ReadFile(handle, buffer, as(uint32) length, &bytes_read, null) == 0 {
+        if (win32.ReadFile(handle, buffer, as(uint32) length, &bytes_read, null) == 0) {
             // TODO: proper error handling.
             module.println("failed to read buffer of file :(");
             return 0;
@@ -126,7 +126,7 @@ struct FileHandle {
         return as(int) bytes_read;
 #elif OS_GROUP_UNIX
         bytes_read: isize = unix.read(handle, buffer, as(usize) length);
-        if bytes_read == -1 {
+        if (bytes_read == -1) {
             module.println("failed to read buffer of file :(");
             return 0;
         }
@@ -137,14 +137,14 @@ struct FileHandle {
     fn write_buffer(buffer: const char*, length: int) -> int {
 #if OS_GROUP_WINDOWS
         bytes_written: uint32;
-        if win32.WriteFile(handle, buffer, as(uint32) length, &bytes_written, null) == 0 {
+        if (win32.WriteFile(handle, buffer, as(uint32) length, &bytes_written, null) == 0) {
             module.println("failed to write to file handle :(");
             return 0;
         }
         return as(int) bytes_written;
 #elif OS_GROUP_UNIX
         bytes_written: isize = unix.write(handle, buffer, as(usize) length);
-        if bytes_written == -1 {
+        if (bytes_written == -1) {
             module.println("failed to write to file handle :(");
             return 0;
         }
@@ -153,7 +153,7 @@ struct FileHandle {
     }
 
     fn delete() {
-        if auto_close {
+        if (auto_close) {
             close();
         }
     }
@@ -176,11 +176,11 @@ fn read(path: const char*) -> String {
 // TODO: eventually when we have proper error handling this should
 //       not be needed.
 #if OS_GROUP_WINDOWS
-    if !handle.handle {
+    if (!handle.handle) {
         return String{ "" };
     }
 #elif OS_GROUP_UNIX
-    if handle.handle == -1 {
+    if (handle.handle == -1) {
         return String{ "" };
     }
 #endif
@@ -190,7 +190,7 @@ fn read(path: const char*) -> String {
     buffer := as(char*) module.malloc(size + 1); // +1 for null terminator.
     bytes_read := handle.read_buffer(buffer, size);
 
-    if bytes_read != size {
+    if (bytes_read != size) {
         // TODO: proper error handling.
         module.println("Read the incorrect number of bytes from file :(");
         return String{ "" };
@@ -239,7 +239,7 @@ fn file_exists(path: const char*) -> bool {
           (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) == 0;
 #elif OS_GROUP_UNIX
     stats: Stat;
-    if unix.stat(path, &stats) == 0 {
+    if (unix.stat(path, &stats) == 0) {
         return !unix.__S_ISTYPE(stats.st_mode, unix.__S_IFDIR);
     }
     return false;
@@ -265,7 +265,7 @@ fn directory_exists(path: const char*) -> bool {
           (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) != 0;
 #elif OS_GROUP_UNIX
     stats: Stat;
-    if unix.stat(path, &stats) == 0 {
+    if (unix.stat(path, &stats) == 0) {
         return unix.__S_ISTYPE(stats.st_mode, unix.__S_IFDIR);
     }
     return false;
@@ -316,10 +316,10 @@ fn remove(path: const char*) -> bool {
 
 #if OS_GROUP_WINDOWS
     attribs: uint32 = win32.GetFileAttributesA(path);
-    if attribs == win32.INVALID_FILE_ATTRIBUTES {
+    if (attribs == win32.INVALID_FILE_ATTRIBUTES) {
         return false;
     }
-    if (attribs & win32.FILE_ATTRIBUTE_DIRECTORY) != 0 {
+    if ((attribs & win32.FILE_ATTRIBUTE_DIRECTORY) != 0) {
         return win32.RemoveDirectoryA(path) != 0;
     }
     return win32.DeleteFileA(path) != 0;
@@ -345,26 +345,26 @@ fn open(path: const char*, flags: FileFlag$) -> FileHandle {
     share_flags:  uint32 = 0;
     create_flags: uint32 = 0;
 
-    if flags == 0 {
+    if (flags == 0) {
         access_flags = win32.GENERIC_ALL;
     }
 
-    if (flags & FileFlag.IN) != 0 {
+    if ((flags & FileFlag.IN) != 0) {
         access_flags |= win32.GENERIC_READ;
     }
 
-    if (flags & FileFlag.APPEND) != 0 {
+    if ((flags & FileFlag.APPEND) != 0) {
         access_flags |= win32.FILE_APPEND_DATA;
-    } elif (flags & FileFlag.OUT) != 0 {
+    } elif ((flags & FileFlag.OUT) != 0) {
         access_flags |= win32.GENERIC_WRITE;
     }
 
-    if (flags & FileFlag.SHARE) != 0 {
+    if ((flags & FileFlag.SHARE) != 0) {
         share_flags |= win32.FILE_SHARE_READ;
     }
 
-    if (flags & FileFlag.CREATE) != 0 {
-        if (flags & FileFlag.APPEND) != 0 {
+    if ((flags & FileFlag.CREATE) != 0) {
+        if ((flags & FileFlag.APPEND) != 0) {
             create_flags |= win32.OPEN_ALWAYS;
         } else {
             // Windows is weird and none of the create options allow us to simply
@@ -385,7 +385,7 @@ fn open(path: const char*, flags: FileFlag$) -> FileHandle {
                                       win32.FILE_ATTRIBUTE_NORMAL,
                                       null);
 
-    if handle == win32.INVALID_HANDLE_VALUE {
+    if (handle == win32.INVALID_HANDLE_VALUE) {
         // TODO: Proper error handling!
         module.println("Failed to open file :(");
         return FileHandle{ null };
@@ -399,21 +399,21 @@ fn open(path: const char*, flags: FileFlag$) -> FileHandle {
     os_flags: int32 = 0;
     os_mode: uint32 = 0;
 
-    if (flags & FileFlag.IN) != 0 && (flags & FileFlag.OUT) != 0 {
+    if ((flags & FileFlag.IN) != 0 && (flags & FileFlag.OUT) != 0) {
         os_flags |= unix.O_RDWR;
-    } elif (flags & FileFlag.IN) != 0 {
+    } elif ((flags & FileFlag.IN) != 0) {
         os_flags |= unix.O_RDONLY;
-    } elif (flags & FileFlag.OUT) != 0 {
+    } elif ((flags & FileFlag.OUT) != 0) {
         os_flags |= unix.O_WRONLY;
     }
 
-    if (flags & FileFlag.APPEND) != 0 {
+    if ((flags & FileFlag.APPEND) != 0) {
         os_flags |= unix.O_APPEND;
     } else {
         os_flags |= unix.O_TRUNC;
     }
 
-    if (flags & FileFlag.CREATE) != 0 {
+    if ((flags & FileFlag.CREATE) != 0) {
         os_flags |= unix.O_CREAT;
         // 0666
         os_mode = unix.S_IRUSR | unix.S_IWUSR | unix.S_IRGRP |
@@ -421,7 +421,7 @@ fn open(path: const char*, flags: FileFlag$) -> FileHandle {
     }
 
     handle: int32 = unix.open(path, os_flags, os_mode);
-    if handle == -1 {
+    if (handle == -1) {
         // TODO: proper error handling!
         module.println("Failed to open file :(");
         return FileHandle{ -1 };

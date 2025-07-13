@@ -31,7 +31,7 @@ fn main() {
     a: int = 4;
     b: int = 4;
 
-    switch a {
+    switch (a) {
     case 1:
         print("case 1", 6);
     case 2:

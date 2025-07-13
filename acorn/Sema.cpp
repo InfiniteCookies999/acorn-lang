@@ -86,564 +86,6 @@ bool acorn::Sema::find_main_function(Context& context) {
     return false;
 }
 
-acorn::Type* acorn::Sema::fixup_type(Type* type, bool is_ptr_elm_type) {
-    if (type->get_kind() == TypeKind::UnresolvedArray) {
-        return fixup_unresolved_array_type(type);
-    } else if (type->get_kind() == TypeKind::UnresolvedComposite) {
-        return fixup_unresolved_composite_type(type, is_ptr_elm_type);
-    } else if (type->get_kind() == TypeKind::UnresolvedGenericComposite) {
-        return fixup_unresolved_generic_composite_type(type, is_ptr_elm_type);
-    } else if (type->get_kind() == TypeKind::UnresolvedEnumValueType) {
-        return fixup_unresolved_enum_value_type(type, is_ptr_elm_type);
-    } else if (type->get_kind() == TypeKind::Function) {
-        return fixup_function_type(type);
-    } else if (type->is_pointer()) {
-
-        auto ptr_type = static_cast<PointerType*>(type);
-        auto elm_type = ptr_type->get_elm_type();
-        auto fixed_elm_type = fixup_type(elm_type, true);
-        if (!fixed_elm_type) {
-            return nullptr;
-        }
-
-        if (fixed_elm_type == elm_type) {
-            return ptr_type;
-        } else {
-            Type* fixed_ptr_type = type_table.get_ptr_type(fixed_elm_type);
-            if (ptr_type->is_const()) {
-                return type_table.get_const_type(fixed_ptr_type);
-            }
-            return fixed_ptr_type;
-        }
-    } else if (type->is_slice()) {
-
-        auto slice_type = static_cast<SliceType*>(type);
-        auto elm_type = slice_type->get_elm_type();
-        auto fixed_elm_type = fixup_type(elm_type);
-        if (!fixed_elm_type) {
-            return nullptr;
-        }
-
-        if (fixed_elm_type == elm_type) {
-            return slice_type;
-        } else {
-            Type* fixed_slice_type = type_table.get_slice_type(fixed_elm_type);
-            if (slice_type->is_const()) {
-                return type_table.get_const_type(fixed_slice_type);
-            }
-            return fixed_slice_type;
-        }
-    } else if (type->is_array()) {
-        auto arr_type = static_cast<ArrayType*>(type);
-        auto elm_type = arr_type->get_elm_type();
-        auto fixed_elm_type = fixup_type(elm_type);
-        if (!fixed_elm_type) {
-            return nullptr;
-        }
-
-        if (fixed_elm_type == elm_type) {
-            return arr_type;
-        } else {
-            Type* fixed_arr_type = type_table.get_arr_type(fixed_elm_type, arr_type->get_length());
-            if (arr_type->is_const()) {
-                return type_table.get_const_type(fixed_arr_type);
-            }
-            return fixed_arr_type;
-        }
-    } else if (type->is_generic()) {
-        return fixup_generic_type(type);
-    } else {
-        return type;
-    }
-}
-
-acorn::Type* acorn::Sema::fixup_unresolved_array_type(Type* type) {
-    auto unresolved_type = static_cast<UnresolvedArrayType*>(type);
-    Expr* expr = unresolved_type->get_expr();
-
-    Type* fixed_elm_type = fixup_type(unresolved_type->get_elm_type());
-    if (!fixed_elm_type) {
-        return nullptr;
-    }
-
-    check_node(expr);
-    if (!expr->type) {
-        // Failed to check the length expression so returning early.
-        return nullptr;
-    }
-
-    if (!expr->type->is_integer()) {
-        error(expand(expr), "Array length must be an integer type")
-            .end_error(ErrCode::SemaArrayLengthNotInteger);
-        return nullptr;
-    }
-
-    if (expr->type->get_number_of_bits() > 32) {
-        error(expand(expr), "Array length must be less than or equal to a 32 bit integer")
-            .end_error(ErrCode::SemaArrayLengthTooLargeType);
-        return nullptr;
-    }
-
-    if (!expr->is_foldable) {
-        error(expand(expr), "Array length must be able to be determined at compile time")
-            .end_error(ErrCode::SemaArrayLengthNotComptime);
-        return nullptr;
-    }
-
-    if (auto ll_length = gen_constant(expr)) {
-        auto ll_int_length = llvm::cast<llvm::ConstantInt>(ll_length);
-        uint32_t length = static_cast<uint32_t>(ll_int_length->getZExtValue());
-
-        if (length == 0) {
-            error(expand(expr), "Array length cannot be zero")
-                .end_error(ErrCode::SemaArrayLengthZero);
-            return nullptr;
-        }
-
-        if (expr->type->is_signed() && static_cast<int32_t>(length) < 0) {
-            error(expand(expr), "Array length cannot be negative")
-                .end_error(ErrCode::SemaArrayLengthNegative);
-            return nullptr;
-        }
-
-        // Everything is okay we can create a new array out of it!
-        auto fixed_type = type_table.get_arr_type(fixed_elm_type, length);
-        if (type->is_const()) {
-            return type_table.get_const_type(fixed_type);
-        }
-        return fixed_type;
-    }
-
-    return nullptr;
-}
-
-acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
-
-    auto from_type = var->assignment->type;
-    auto assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(type);
-
-    if (from_type->get_kind() != TypeKind::Array) {
-        error(expand(var), "Expected array type for '%s', but found '%s'",
-                type, from_type)
-            .end_error(ErrCode::SemaAssignDetArrTypeReqsArrAssignment);
-        return nullptr;
-    }
-
-    auto arr_type = static_cast<ArrayType*>(from_type);
-
-    auto elm_type = assign_det_arr_type->get_elm_type();
-    auto from_elm_type = arr_type->get_elm_type();
-
-    llvm::SmallVector<uint32_t, 8> arr_lengths;
-    arr_lengths.push_back(arr_type->get_length());
-
-    auto report_dimensions_error = [this, var, type, from_type]() finline {
-        error(expand(var), "Wrong array dimensions for '%s', found '%s'",
-                type, from_type)
-            .end_error(ErrCode::SemaAssignDetArrWrongDimensions);
-    };
-
-    ContainerType* ctr_type = assign_det_arr_type;
-    while (elm_type->get_kind() == TypeKind::AssignDeterminedArray  ||
-           elm_type->get_kind() == TypeKind::Array) {
-        if (from_elm_type->get_kind() != TypeKind::Array) {
-            report_dimensions_error();
-            return nullptr;
-        }
-
-        ctr_type = static_cast<ContainerType*>(elm_type);
-        elm_type = ctr_type->get_elm_type();
-
-        arr_type = static_cast<ArrayType*>(from_elm_type);
-        from_elm_type = arr_type->get_elm_type();
-
-        if (ctr_type->is_array()) {
-            auto to_arr_type = static_cast<ArrayType*>(ctr_type);
-            if (to_arr_type->get_length() != arr_type->get_length()) {
-                // Return the given type so it says the types could not
-                // be assigned to each other.
-                return type;
-            }
-        }
-
-        arr_lengths.push_back(arr_type->get_length());
-    }
-
-    if (from_elm_type->get_kind() == TypeKind::Array) {
-        report_dimensions_error();
-        return nullptr;
-    }
-
-    Type* fixed_type = fixup_type(elm_type);
-    if (!fixed_type) {
-        return nullptr;
-    }
-
-    for (auto itr = arr_lengths.rbegin(); itr != arr_lengths.rend(); ++itr) {
-        uint32_t arr_length = *itr;
-        fixed_type = type_table.get_arr_type(fixed_type, arr_length);
-    }
-
-    return fixed_type;
-}
-
-acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_ptr_elm_type) {
-
-    auto unresolved_composite_type = static_cast<UnresolvedCompositeType*>(type);
-
-    auto name = unresolved_composite_type->get_composite_name();
-    auto error_loc = unresolved_composite_type->get_error_location();
-
-    auto found_composite = find_composite_for_composite_type(name, error_loc);
-    if (!found_composite) {
-        return nullptr;
-    }
-
-    switch (found_composite->kind) {
-    case NodeKind::Struct: {
-        auto found_struct = static_cast<Struct*>(found_composite);
-
-        if (found_struct->is_generic) {
-            error(error_loc, "Expected generic arguments for generic type")
-                .end_error(ErrCode::SemaExpectedGenericArgsForGenericType);
-            return nullptr;
-        }
-
-        if (!ensure_struct_checked(unresolved_composite_type->get_error_location(), found_struct)) {
-            return nullptr;
-        }
-
-        Type* struct_type = found_struct->struct_type;
-        if (unresolved_composite_type->is_const()) {
-            struct_type = type_table.get_const_type(struct_type);
-        }
-
-        return struct_type;
-    }
-    case NodeKind::Enum: {
-        auto found_enum = static_cast<Enum*>(found_composite);
-
-        ensure_enum_checked(unresolved_composite_type->get_error_location(), found_enum);
-
-        Type* enum_type = found_enum->enum_type;
-        if (unresolved_composite_type->is_const()) {
-            enum_type = type_table.get_const_type(enum_type);
-        }
-
-        return enum_type;
-    }
-    case NodeKind::Interface: {
-        auto found_interface = static_cast<Interface*>(found_composite);
-
-        ensure_interface_checked(unresolved_composite_type->get_error_location(), found_interface);
-
-        Type* intr_type = found_interface->interface_type;
-        if (unresolved_composite_type->is_const()) {
-            intr_type = type_table.get_const_type(intr_type);
-        }
-
-        if (!is_ptr_elm_type) {
-            error(unresolved_composite_type->get_error_location(), "Interface types should be declared a pointer")
-                .add_line("Use type '%s*' instead", unresolved_composite_type->get_composite_name())
-                .end_error(ErrCode::SemaInterfaceMustBeDeclAsPtr);
-            return nullptr;
-        }
-
-        return intr_type;
-    }
-    default:
-        acorn_fatal("Unknown composite kind");
-        return nullptr;
-    }
-}
-
-acorn::Type* acorn::Sema::fixup_unresolved_generic_composite_type(Type* type, bool is_ptr_elm_type) {
-
-    auto unresolved_composite_type = static_cast<UnresolvedGenericCompositeType*>(type);
-
-    auto name = unresolved_composite_type->get_composite_name();
-    auto error_loc = unresolved_composite_type->get_error_location();
-
-    auto found_composite = find_composite_for_composite_type(name, error_loc);
-    if (!found_composite) {
-        return nullptr;
-    }
-
-    const llvm::SmallVector<Expr*>& bound_exprs = unresolved_composite_type->get_bound_exprs();
-
-    Type* struct_type = fixup_unresolved_generic_composite_type(found_composite, error_loc, bound_exprs);;
-    if (type->is_const()) {
-        return type_table.get_const_type(struct_type);
-    }
-    return struct_type;
-}
-
-acorn::Type* acorn::Sema::fixup_unresolved_generic_composite_type(Decl* found_composite,
-                                                                  SourceLoc error_loc,
-                                                                  const llvm::SmallVector<Expr*>& bound_exprs) {
-
-
-
-    // TODO (maddie): with is generic types nonsense and generally having to fixup the type information of the bound
-    // types then setting if this type contains generics.
-
-    llvm::SmallVector<Type*> bound_types;
-    if (!get_bound_types_for_generic_type(found_composite, error_loc, bound_exprs, bound_types)) {
-        return nullptr;
-    }
-
-    auto found_generic_struct = static_cast<UnboundGenericStruct*>(found_composite);
-
-    if (bound_exprs.size() < found_generic_struct->generics.size()) {
-        error(error_loc, "Too few generic arguments for struct. Got %s but expected %s",
-              bound_exprs.size(), found_generic_struct->generics.size())
-            .end_error(ErrCode::SemaTooFewGenericArgumentsForStruct);
-        return nullptr;
-    }
-
-    auto new_struct = found_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
-
-    if (!ensure_struct_checked(error_loc, new_struct)) {
-        return nullptr;
-    }
-
-
-
-    return new_struct->struct_type;
-}
-
-bool acorn::Sema::get_bound_types_for_generic_type(Decl* found_composite,
-                                                   SourceLoc error_loc,
-                                                   const llvm::SmallVector<Expr*>& bound_exprs,
-                                                   llvm::SmallVector<Type*>& bound_types) {
-    // TODO (maddie): expand error location so things make more sense in error logging.
-
-    if (bound_exprs.empty()) {
-        error(error_loc, "Expected generic arguments for generic type")
-            .end_error(ErrCode::SemaExpectedGenericArgsForGenericType);
-        return false;
-    }
-
-    bool uses_named_args_values;
-    if (found_composite->kind != NodeKind::Struct) {
-        error(error_loc, "Type does not take generic arguments")
-            .end_error(ErrCode::SemaTypeDoesNotTakeGenerics);
-        return false;
-    }
-
-    auto found_struct = static_cast<Struct*>(found_composite);
-
-    if (!found_struct->is_generic) {
-        error(error_loc, "Type does not take generic arguments")
-            .end_error(ErrCode::SemaTypeDoesNotTakeGenerics);
-        return false;
-    }
-
-    auto found_generic_struct = static_cast<UnboundGenericStruct*>(found_struct);
-
-    auto& generics = found_generic_struct->generics;
-
-    if (bound_exprs.size() > found_generic_struct->generics.size()) {
-        error(error_loc, "Too many generic arguments for struct. Got %s but expected %s",
-              bound_exprs.size(), found_generic_struct->generics.size())
-            .end_error(ErrCode::SemaTooManyGenericArgumentsForStruct);
-        return false;
-    }
-
-    if (!check_generic_bind_arguments(bound_exprs, uses_named_args_values)) {
-        return false;
-    }
-
-    if (uses_named_args_values) {
-        if (compare_generic_bind_candidate_with_named_args(bound_exprs, generics, bound_types)) {
-            // binds the types during the call.
-        } else {
-            Logger& logger = error(error_loc, "Failed to bind generic arguments");
-            logger.add_empty_line();
-            display_generic_bind_named_args_fail_info(bound_exprs, generics);
-            logger.end_error(ErrCode::SemaFailedToBindGenerics);
-            return false;
-        }
-    } else {
-        for (Expr* arg : bound_exprs) {
-            Type* bind_type = get_type_of_type_expr(arg);
-            bound_types.push_back(bind_type);
-        }
-    }
-
-    return true;
-}
-
-acorn::Type* acorn::Sema::fixup_unresolved_enum_value_type(Type* type, bool is_ptr_elm_type) {
-
-    auto unresolved_enum_value_type = static_cast<UnresolvedEnumValueType*>(type);
-
-    auto name = unresolved_enum_value_type->get_enum_name();
-    auto error_loc = unresolved_enum_value_type->get_error_location();
-
-    auto found_composite = find_composite_for_composite_type(name, error_loc);
-    if (!found_composite) {
-        return nullptr;
-    }
-
-    if (found_composite->is_not(NodeKind::Enum)) {
-        error(error_loc, "Enum value type expects enum type")
-            .end_error(ErrCode::SemaEnumValueTypeExpectsEnum);
-        return nullptr;
-    }
-
-    auto found_enum = static_cast<Enum*>(found_composite);
-
-    ensure_enum_checked(error_loc, found_enum);
-
-    auto fixed_type = type_table.get_enum_container_type(found_enum->enum_type);
-    if (type->is_const()) {
-        return type_table.get_const_type(fixed_type);
-    }
-    return fixed_type;
-}
-
-acorn::Decl* acorn::Sema::find_composite_for_composite_type(Identifier name, SourceLoc error_loc) {
-
-    auto found_composite = find_composite(name);
-
-    if (!found_composite) {
-        ErrorSpellChecker spell_checker(context.should_show_spell_checking());
-        spell_checker.add_searches(file->get_namespace()->get_composites());
-        spell_checker.add_searches(file->get_composites());
-        for (auto& [import_key, importn] : file->get_imports()) {
-            if (importn->is_imported_composite()) {
-                spell_checker.add_search(import_key);
-            }
-        }
-
-        auto end = error_loc.end();
-
-        // HACK
-        //
-        // Checking if the user possibly mistyped common mistakes that happen when
-        // writing code to assume it was a parsing mistake instead.
-
-        auto try_detect_multiply_parse_error = [this, &spell_checker, name]
-            (const char* end, SourceLoc error_loc) finline {
-            if (*end == '*') {
-                auto star_loc = end;
-                ++end;
-                while (is_whitespace(*end))  ++end;
-                if (*end == ';' || *end == ']' || *end == ')') {
-                    // could be something like `int a = b *;` in which case we will tell the
-                    // user that it expected an expression instead.
-
-                    logger.begin_error(error_loc, "Tried to interpret '%s' as a type but may be part of an incomplete expression",
-                                       name);
-                    SourceLoc arrow_loc = {
-                        .ptr = star_loc,
-                        .length = 1
-                    };
-                    logger.add_arrow_msg_alongside("expression after multiply?", arrow_loc);
-                    spell_checker.search(logger, name);
-                    logger.end_error(ErrCode::ParseExpectedExpression);
-                    return true;
-                }
-            }
-
-            return false;
-        };
-
-        while (true) {
-            while (is_whitespace(*end))  ++end;
-            if (try_detect_multiply_parse_error(end, error_loc)) {
-                return nullptr;
-            } else if (*end == '[') {
-                go_until(end, '[', ']');
-                if (try_detect_multiply_parse_error(end, error_loc)) {
-                    return nullptr;
-                }
-            } else {
-                // Did not detect that the user tried to type an expression instead.
-                break;
-            }
-        }
-
-        logger.begin_error(error_loc, "Could not find struct, enum, or interface type '%s'", name);
-        spell_checker.search(logger, name);
-        logger.end_error(ErrCode::SemaCouldNotFindStructType);
-        return nullptr;
-    }
-
-    return found_composite;
-}
-
-acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
-    auto func_type = static_cast<FunctionType*>(type);
-
-    llvm::SmallVector<Type*, 8> fixed_param_types;
-    llvm::SmallVector<RaisedError> fixed_raised_errors;
-    fixed_raised_errors.reserve(func_type->get_raised_errors().size());
-    bool type_needed_fixing = false;
-
-    auto ret_type = func_type->get_return_type();
-    auto fixed_ret_type = fixup_type(ret_type);
-    if (!fixed_ret_type) {
-        return nullptr;
-    }
-
-    if (fixed_ret_type != ret_type) {
-        type_needed_fixing = true;
-    }
-
-    for (auto param_type : func_type->get_param_types()) {
-        auto fixed_param_type = fixup_type(param_type);
-        if (!fixed_param_type) {
-            return nullptr;
-        }
-
-        fixed_param_types.push_back(fixed_param_type);
-        if (fixed_param_type != param_type) {
-            type_needed_fixing = true;
-        }
-    }
-
-    type_needed_fixing |= !func_type->get_raised_errors().empty();
-
-    for (auto& raised_error : func_type->get_raised_errors()) {
-        if (!check_raised_error(raised_error)) {
-            return nullptr;
-        }
-        fixed_raised_errors.push_back(raised_error);
-        raised_error.structn = nullptr;
-    }
-
-    if (type_needed_fixing) {
-        return type_table.get_function_type(fixed_ret_type,
-                                            std::move(fixed_param_types),
-                                            std::move(fixed_raised_errors),
-                                            func_type->uses_native_varargs());
-    }
-
-    return type;
-}
-
-acorn::Type* acorn::Sema::fixup_generic_type(Type* type) {
-    auto generic_type = static_cast<GenericType*>(type);
-    if (func_call_generic_bindings) {
-        size_t generic_index = generic_type->get_generic_index();
-        return (*func_call_generic_bindings)[generic_index];
-    } else if (cur_func && cur_func->is_generic()) {
-        // Get the bound type of the current generic state.
-        size_t generic_index = generic_type->get_generic_index();
-        return cur_func->generic_instance->bound_types[generic_index];
-    } else if (cur_struct && cur_struct->is_generic) {
-        auto generic_instance = static_cast<GenericStructInstance*>(cur_struct);
-        size_t generic_index = generic_type->get_generic_index();
-        return generic_instance->bound_types[generic_index];
-    }
-    return type;
-}
-
-// Statement checking
-//--------------------------------------
-
 void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& context) {
     nspace->set_duplicates_checked();
 
@@ -761,7 +203,7 @@ void acorn::Sema::report_redeclaration(const Decl* decl1, const Decl* decl2, con
                        .end_error(error_code);
 }
 
-void acorn::Sema::check_nodes_wrong_scopes(Module& modl) {
+void acorn::Sema::report_nodes_wrong_scopes(Module& modl) {
 
     auto report = []<typename T>(Logger& logger,
                                  T loc,
@@ -978,6 +420,631 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
     }
 
     report_invalid_import();
+}
+
+
+// Declaration checking
+//--------------------------------------
+
+void acorn::Sema::check_function(Func* func) {
+
+    // The function is a member function so need to check the fields first
+    // in case they are referenced.
+    //
+    // Note: we cannot check this in `check_function_decl` because otherwise
+    // the struct may attempt to use the precomputed information of the function's
+    // declaration to determine things such as if it matches an interface function
+    // but then its declaration would not have been checked.
+    if (func->structn) {
+        if (!ensure_struct_checked(func->loc, func->structn)) {
+            return;
+        }
+    }
+
+    if (func->has_modifier(Modifier::Native)) {
+        return;
+    }
+
+    if (func->interfacen) {
+        return;
+    }
+
+    // -- debug
+    // Logger::debug("checking function: %s", func->name);
+
+    cur_func   = func;
+    cur_struct = func->structn;
+
+    SemScope sem_scope = push_scope();
+    for (Var* param : func->params) {
+        cur_scope->variables.push_back(param);
+    }
+
+    check_scope(func->scope, &sem_scope);
+    pop_scope();
+    if (!sem_scope.all_paths_return && func->return_type->is_not(context.void_type)) {
+        error(func, "Not all function paths return")
+            .end_error(ErrCode::SemaNotAllFuncPathReturn);
+    }
+
+    bool uses_implicit_return = func->scope->empty();
+    if (func->return_type->is(context.void_type) && !uses_implicit_return) {
+        auto last_stmt = func->scope->back();
+        if (last_stmt->is_not(NodeKind::ReturnStmt)) {
+            uses_implicit_return = true;
+        }
+    }
+
+    if (uses_implicit_return) {
+        ++func->num_returns;
+    }
+}
+
+void acorn::Sema::check_variable(Var* var) {
+
+    auto cleanup = [this, var]() finline {
+        var->is_being_checked = false;
+        cur_global_var = nullptr;
+        if (cur_scope) {
+            cur_scope->cur_try = nullptr;
+        }
+    };
+
+    check_modifier_incompatibilities(var);
+    if (var->has_modifier(Modifier::Readonly) && !var->is_field()) {
+        error(var, "Only fields can have readonly modifier")
+            .end_error(ErrCode::SemaOnlyFieldsCanHaveReadonlyModifier);
+    }
+
+    // This must go up top before returning due to any errors because otherwise
+    // future variables will not be able to find the reference of the variable
+    // leading to bad error messages.
+    bool needs_added_to_local_scope = !var->is_global && !var->is_param() && !var->is_field();
+    if (needs_added_to_local_scope) {
+        add_variable_to_local_scope(var);
+    }
+
+    // Reporting errors if the variable is local to a function and has
+    // modifiers.
+    if (!var->is_global && !var->is_field() && var->modifiers) {
+        for (uint32_t mod = Modifier::Start; mod != Modifier::End; mod *= 2) {
+            if (var->modifiers & mod) {
+                error(var->get_modifier_location(mod), "Modifier cannot apply to local variable")
+                    .end_error(ErrCode::SemaLocalVarHasModifiers);
+            }
+        }
+    }
+
+    if (var->is_global) {
+        cur_global_var = var;
+    }
+    var->is_being_checked = true;
+    var->has_been_checked = true; // Set early to prevent circular checking.
+
+
+    // Check the assignment.
+    //
+    if (var->assignment) {
+        if (var->assignment->tryn) {
+            if (var->is_param()) {
+                error(var->assignment->tryn->loc, "Parameters cannot use try expression")
+                    .still_give_main_location_priority()
+                    .add_individual_underline(var->loc)
+                    .end_error(ErrCode::SemaParamsCannotUseTry);
+                return cleanup();
+            } else if (var->is_field()) {
+                error(var->assignment->tryn->loc, "Fields cannot use try expression")
+                    .still_give_main_location_priority()
+                    .add_individual_underline(var->loc)
+                    .end_error(ErrCode::SemaFieldsCAnnotUseTry);
+                return cleanup();
+            }
+
+            cur_scope->cur_try = var->assignment->tryn;
+        }
+
+        TypeKind type_kind = var->parsed_type->get_kind();
+        // Check an array assignment taking into account the type of the variable.
+        if (var->assignment->is(NodeKind::Array) &&
+            type_kind == TypeKind::Array || type_kind == TypeKind::UnresolvedArray
+            ) {
+
+            // TODO: Optimization: The type is being fixed here and below.
+            var->type = fixup_type(var->parsed_type);
+            if (!var->type) {
+                return cleanup();
+            }
+
+            auto arr_type = static_cast<ArrayType*>(var->type);
+            check_array(static_cast<Array*>(var->assignment), arr_type->get_elm_type());
+        }
+        // Check instances like:  `a: int[] = [1,2,3,4];`
+        else if (var->assignment->is(NodeKind::Array) &&
+                 type_kind == TypeKind::AssignDeterminedArray) {
+
+            auto assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(var->parsed_type);
+
+            // TODO: Optimization: The type is being fixed here and below.
+            auto fixed_elm_type = fixup_type(assign_det_arr_type->get_elm_type());
+            if (!fixed_elm_type) {
+                return cleanup();
+            }
+
+            auto arr_type = static_cast<ArrayType*>(var->type);
+            check_array(static_cast<Array*>(var->assignment), fixed_elm_type);
+        } else if (var->assignment->is(NodeKind::MoveObj)) {
+            check_moveobj(static_cast<MoveObj*>(var->assignment), true);
+        } else {
+            check_node(var->assignment);
+        }
+
+        if (!var->assignment->type) {
+            return cleanup();
+        }
+
+        if (var->assignment->tryn) {
+            check_try(var->assignment->tryn, true);
+        }
+    }
+
+    if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray && !var->assignment) {
+        error(var, "Must have assignment to determine array type's length")
+            .end_error(ErrCode::SemaVarRequiresAssignForDetArrType);
+        return cleanup();
+    }
+
+
+    // If the variable uses type inference then resolving the type based on the assignment.
+    //
+    if (var->parsed_type == context.auto_type || var->parsed_type == context.const_auto_type) {
+        if (!var->assignment) {
+            error(var, "Must have assignment to determine infered type")
+                .end_error(ErrCode::SemaMustHaveAssignmentToDetAuto);
+            return cleanup();
+        }
+
+        switch (var->assignment->type->get_kind()) {
+        case TypeKind::Void:
+        case TypeKind::NamespaceRef:
+        case TypeKind::EmptyArray:
+        case TypeKind::Null:
+        case TypeKind::Interface:
+        case TypeKind::Expr:
+            error(expand(var), "Cannot assign incomplete type '%s' to variable with inferred type",
+                  var->assignment->type)
+                .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
+            return cleanup();
+        case TypeKind::Range:
+            error(expand(var), "Cannot assign type 'range' to variable with inferred type",
+                  var->assignment->type)
+                .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
+            return cleanup();
+        default:
+            break;
+        }
+
+        var->type = var->assignment->type;
+        if (var->type->is_const()) {
+            // A :: 55;
+            // b := A;
+            // ^^^^^^
+            // we don't want b to be const here.
+            var->type = type_table.remove_const(var->type);
+        }
+
+        // Apply const at all depths.
+        if (var->parsed_type == context.const_auto_type) {
+            // TODO (maddie): is this not missing const being applied at all
+            // depths for pointers?
+            if (var->assignment->is(NodeKind::Array)) {
+                auto arr_type = static_cast<ArrayType*>(var->type);
+
+                llvm::SmallVector<uint32_t, 8> lengths;
+                Type* elm_type = nullptr;
+                while (true) {
+                    elm_type = arr_type->get_elm_type();
+                    lengths.push_back(arr_type->get_length());
+
+                    if (!elm_type->is_array()) {
+                        break;
+                    }
+                    arr_type = static_cast<ArrayType*>(elm_type);
+                }
+
+                auto base_type = type_table.get_const_type(elm_type);
+                auto new_arr_type = type_table.get_arr_type(base_type, lengths.back());
+                for (auto itr = lengths.rbegin() + 1; itr != lengths.rend(); ++itr) {
+                    new_arr_type = type_table.get_arr_type(new_arr_type, *itr);
+                }
+                var->type = type_table.get_const_type(new_arr_type);
+
+            } else if (!var->type->is_const()) {
+                var->type = type_table.get_const_type(var->type);
+            }
+        }
+    } else if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray) {
+        // We have to handle this case as if it is speciial because
+        // in no other instance other than variable assignments is the
+        // applicable.
+        var->type = fixup_assign_det_arr_type(var->parsed_type, var);
+    } else {
+        var->type = fixup_type(var->parsed_type);
+    }
+
+    if (!var->type) {
+        // Failed to fixup the type so returning early.
+        return cleanup();
+    }
+
+    var->is_foldable = var->type->is_number() &&
+                       var->type->is_const() &&
+                       var->assignment && var->assignment->is_foldable;
+
+    // Make sure to keep this below the code that checks if the variable is
+    // foldable!
+    if (needs_added_to_local_scope) {
+        if (!var->is_foldable) {
+            cur_func->vars_to_alloc.push_back(var);
+        }
+    }
+
+    if (var->type->is(context.void_type)) {
+        error(var, "Variables cannot have type 'void'")
+            .end_error(ErrCode::SemaVariableCannotHaveVoidType);
+        return cleanup();
+    }
+
+    if (!var->assignment && !var->has_modifier(Modifier::Native) && !var->is_param()) {
+        if (var->type->is_const()) {
+            error(var, "Variables declared 'const' must be assigned a value")
+                .end_error(ErrCode::SemaVariableConstNoValue);
+            return cleanup();
+        } else if (var->type->is_array()) {
+            auto arr_type = static_cast<ArrayType*>(var->type);
+            auto base_type = arr_type->get_base_type();
+            if (base_type->is_const()) {
+                error(var, "Variables with constant array must be assigned a value")
+                    .end_error(ErrCode::SemaVariableConstNoValue);
+                return cleanup();
+            }
+        }
+    }
+
+    // !! WARNING: If this code ever changes to not call `is_asignable_to` when
+    // the variable has been declared `auto` then extra work must be done to
+    // ensure things such as accessing of function references that are private.
+    if (var->assignment && !is_assignable_to(var->type, var->assignment)) {
+        bool is_assignable_to = false;
+
+        if (var->assignment->is(NodeKind::FuncCall)) {
+            FuncCall* call = static_cast<FuncCall*>(var->assignment);
+            if (may_implicitly_convert_return_ptr(var->type, call)) {
+                is_assignable_to = true;
+                call->implicitly_converts_return = true;
+            }
+        }
+
+        if (!is_assignable_to) {
+            error(expand(var), get_type_mismatch_error(var->type, var->assignment).c_str())
+                .end_error(ErrCode::SemaVariableTypeMismatch);
+        }
+    } else if (var->assignment) {
+        create_cast(var->assignment, var->type);
+    }
+
+    return cleanup();
+}
+
+void acorn::Sema::check_struct(Struct* structn) {
+
+    // -- Debug
+    // Logger::debug("checking struct: %s", structn->name);
+
+    check_modifiers_for_composite(structn, "Structs");
+
+    cur_struct = structn;
+
+    structn->is_being_checked = true;
+    structn->has_been_checked = true; // Set early to prevent circular checking.
+
+    for (size_t i = 0; i < structn->unresolved_extensions.size(); i++) {
+        auto& extension = structn->unresolved_extensions[i];
+
+        // Check for duplicates.
+        for (long long j = static_cast<long long>(i - 1); j >= 0; j--) {
+            auto& other_extension = structn->unresolved_extensions[j];
+            if (extension.name == other_extension.name) {
+                error(extension.error_loc, "Duplicate extension '%s'", extension.name)
+                    .end_error(ErrCode::SemaDuplicateExtension);
+                break;
+            }
+        }
+
+        if (auto composite = find_composite(extension.name)) {
+            if (composite->is_not(NodeKind::Interface)) {
+                error(extension.error_loc, "Cannot extend from type '%s'", composite->name)
+                    .end_error(ErrCode::SemaCannotExtendFromType);
+                continue;
+            }
+
+            if (extension.is_dynamic) {
+                structn->uses_vtable = true;
+            }
+
+            auto interfacen = static_cast<Interface*>(composite);
+            structn->interface_extensions.push_back({ interfacen, extension.is_dynamic });
+            check_struct_interface_extension(structn, interfacen, extension);
+
+        } else {
+            error(extension.error_loc, "Could not find extension '%s'", extension.name)
+                .end_error(ErrCode::SemaCouldNotFindExtension);
+        }
+    }
+
+    auto process_field_struct_type_state = [this, structn](SourceLoc field_loc, StructType* field_struct_type) finline {
+        auto field_struct = field_struct_type->get_struct();
+
+        structn->needs_destruction       |= field_struct->needs_destruction;
+        structn->fields_need_destruction |= field_struct->needs_destruction;
+
+        structn->needs_copy_call       |= field_struct->needs_copy_call;
+        structn->fields_need_copy_call |= field_struct->needs_copy_call;
+
+        structn->needs_move_call       |= field_struct->needs_move_call;
+        structn->fields_need_move_call |= field_struct->needs_move_call;
+
+        structn->needs_default_call |= field_struct->needs_default_call;
+
+        if (field_struct->is_being_checked) {
+            display_circular_dep_error(field_loc,
+                                       cur_struct,
+                                       "Circular struct dependency results in infinite storage requirement for struct",
+                                       ErrCode::SemaCircularStructDeclDependency);
+            structn->has_errors = true;
+        }
+    };
+
+    uint32_t ll_field_count = 0;
+
+    if (structn->uses_vtable) {
+        structn->is_default_foldable = false;
+        for (auto& extension : structn->interface_extensions) {
+            if (!extension.is_dynamic) continue;
+            ++ll_field_count;
+        }
+    }
+
+    if (!structn->constructors.empty()) {
+        structn->is_default_foldable = false;
+    }
+
+    for (Var* field : structn->fields) {
+
+        field->ll_field_idx = ll_field_count;
+        ++ll_field_count;
+
+        if (field->has_modifier(Modifier::Native)) {
+            error(field->get_modifier_location(Modifier::Native), "Field cannot have native modifier")
+                .end_error(ErrCode::SemaFieldHasNativeModifier);
+        }
+        if (field->has_modifier(Modifier::DllImport)) {
+            error(field->get_modifier_location(Modifier::DllImport), "Field cannot have dllimport modifier")
+                .end_error(ErrCode::SemaFieldHasDllimportModifier);
+        }
+
+        check_variable(field);
+
+        if (!field->type) {
+            structn->has_errors = true;
+        } else {
+            if (field->type->is_struct()) {
+                process_field_struct_type_state(field->loc, static_cast<StructType*>(field->type));
+            } else if (field->type->is_array()) {
+                auto arr_type = static_cast<ArrayType*>(field->type);
+                auto base_type = arr_type->get_base_type();
+                if (base_type->is_struct()) {
+                    process_field_struct_type_state(field->loc, static_cast<StructType*>(base_type));
+                }
+            }
+        }
+
+        if (field->assignment) {
+            if (field->type) {
+                structn->is_default_foldable &= field->assignment->is_foldable;
+            }
+
+            structn->fields_have_assignments = true;
+        } else if (field->type) {
+            structn->is_default_foldable &= field->type->is_default_foldable();
+        }
+    }
+
+    structn->needs_default_call |= structn->fields_have_assignments || structn->default_constructor;
+
+
+    // !!!! No longer need to treat the struct as if it has been checked since the rest of Sema only cares
+    // if the struct's fields have been checked not if the struct's functions have been. It is now safe to
+    // continue on to checking information about the struct's member functions.
+    //
+    cur_struct = nullptr;
+    structn->is_being_checked = false;
+
+    if (structn->destructor) {
+        if (structn->destructor->has_checked_declaration || check_function_decl(structn->destructor)) {
+            if (!structn->destructor->params.empty()) {
+                error(structn->destructor, "Destructors should not have any parameters")
+                    .end_error(ErrCode::SemaDestructorsCannotHaveParams);
+            }
+        }
+    }
+    auto check_move_or_copy_has_correct_param_type = [this, structn](Func* constructor,
+                                                                     Type* base_type,
+                                                                     bool is_copy) finline {
+        if (constructor->has_checked_declaration || check_function_decl(constructor)) {
+            // TODO (maddie): can this not result in circular dependencies? Should this not be checking
+            // if the constructor has errors before continuing?
+            auto struct_ptr_type = type_table.get_ptr_type(base_type);
+            if (constructor->params.size() != 1) {
+                error(constructor,
+                      "%s constructor should have one parameter of type '%s'",
+                      is_copy ? "Copy" : "Move", struct_ptr_type)
+                    .end_error(ErrCode::SemaCopyConstructorExpectsOneParam);
+            } else {
+                auto param1 = constructor->params[0];
+                if (param1->type->is_not(struct_ptr_type)) {
+                    error(param1,
+                          "%s constructor parameter should be of type '%s'",
+                          is_copy ? "Copy" : "Move", struct_ptr_type)
+                        .end_error(is_copy ? ErrCode::SemaCopyConstructorExpectedStructPtrType
+                                           : ErrCode::SemaMoveConstructorExpectedStructPtrType);
+                }
+            }
+        }
+    };
+    if (structn->copy_constructor) {
+        auto const_struct_type = type_table.get_const_type(structn->struct_type);
+        check_move_or_copy_has_correct_param_type(structn->copy_constructor, const_struct_type, true);
+    }
+    if (structn->move_constructor) {
+        check_move_or_copy_has_correct_param_type(structn->move_constructor, structn->struct_type, false);
+    }
+}
+
+void acorn::Sema::check_enum(Enum* enumn) {
+
+    // -- Debug
+    // Logger::debug("Checking enum: %s", enumn->name);
+
+    check_modifiers_for_composite(enumn, "Enums");
+
+    enumn->has_been_checked = true;
+    enumn->is_being_checked = true;
+
+    uint64_t defualt_index = 0;
+    Type* values_type = enumn->enum_type->get_values_type();
+
+    // TODO: check to make sure the explicit values type is a foldable type?
+    bool has_explicit_values_type = values_type != nullptr;
+
+    if (has_explicit_values_type) {
+        if (is_incomplete_type(values_type)) {
+            error(enumn, "Value type '%s' is an incomplete type", values_type)
+                .end_error(ErrCode::SemaEnumValuesTypeIncomplete);
+            return;
+        }
+    }
+
+    size_t   count = 0;
+    uint64_t index_counter = 0;
+    bool has_non_assigning = false;
+    bool has_conflicting_values_type = false;
+    for (auto& value : enumn->values) {
+
+        for (size_t i = 0; i < count; i++) {
+            if (value.name == enumn->values[i].name) {
+                error(value.name_loc, "Name '%s' already defined in enum", value.name)
+                    .end_error(ErrCode::SemaDuplicateEnumValueName);
+                break;
+            }
+        }
+
+        if (value.assignment) {
+            check_node(value.assignment);
+
+            if (value.assignment->type) {
+                bool assignment_is_integer = value.assignment->type->is_integer();
+
+                if (!value.assignment->is_foldable) {
+                    error(expand(value.assignment), "Values of enum expected to be determined at compile time")
+                        .end_error(ErrCode::SemaEnumValuesNotFoldable);
+                } else if (value.assignment->type->is_integer()) {
+                    if (auto ll_const = gen_constant(value.assignment)) {
+                        auto ll_integer = llvm::cast<llvm::ConstantInt>(ll_const);
+                        value.index = ll_integer->getZExtValue();
+                        index_counter = value.index;
+
+                        if (count == 0) {
+                            defualt_index = ll_integer->getZExtValue();
+                        }
+                    }
+                } else {
+                    value.index = index_counter;
+                }
+
+                if (values_type) {
+                    if (!is_assignable_to(values_type, value.assignment)) {
+                        if (has_explicit_values_type) {
+                            error(expand(value.assignment), "Enum value expected to be type '%s' but found '%s'",
+                                  values_type, value.assignment->type)
+                                .end_error(ErrCode::SemaEnumValueWrongType);
+                        } else {
+                            has_conflicting_values_type = true;
+                            error(expand(value.assignment), "Incompatible types for enum '%s'. First found '%s' but now '%s'",
+                                  enumn->name, values_type, value.assignment->type)
+                            .end_error(ErrCode::SemaIncompatibleEnumValueTypes);
+                        }
+                    }
+                } else {
+                    values_type = value.assignment->type;
+                }
+            }
+        } else {
+            has_non_assigning = true;
+
+            // No assignment so set it to be equal to one past the last value.
+            value.index = index_counter;
+        }
+
+        ++index_counter;
+        ++count;
+    }
+
+    if (has_non_assigning && !has_conflicting_values_type &&
+        values_type && !values_type->is_integer()) {
+        // Must always assign to all enum slots if the
+        for (auto& value : enumn->values) {
+            if (!value.assignment) {
+                error(value.name_loc, "Enum values require assignment when the value type of the enum is '%s'",
+                      values_type)
+                    .end_error(ErrCode::SemaEnumValueNoAssignment);
+            }
+        }
+    }
+
+    enumn->enum_type->set_default_index(defualt_index);
+    enumn->enum_type->set_values_type(values_type);
+    if (values_type && values_type->is_integer()) {
+        enumn->enum_type->set_index_type(values_type);
+    } else {
+        enumn->enum_type->set_index_type(context.int_type);
+    }
+
+    enumn->enum_type->set_values_type(!values_type ? context.int_type : values_type);
+    enumn->is_being_checked = false;
+
+}
+
+void acorn::Sema::check_interface(Interface* interfacen) {
+
+    interfacen->has_been_checked = true;
+    interfacen->is_being_checked = true;
+
+    check_modifiers_for_composite(interfacen, "interface");
+
+    for (auto func : interfacen->functions) {
+        if (func->modifiers != 0) {
+            for (uint32_t mod = Modifier::Start; mod != Modifier::End; mod *= 2) {
+                if (func->has_modifier(mod)) {
+                    error(func->get_modifier_location(mod), "Interface functions cannot have modifiers")
+                        .end_error(ErrCode::SemaInterfaceFuncNoHaveModifier);
+                }
+            }
+        }
+
+        check_function_decl(func);
+    }
+
+    interfacen->is_being_checked = false;
 }
 
 bool acorn::Sema::check_function_decl(Func* func) {
@@ -1300,600 +1367,157 @@ bool acorn::Sema::check_function_decl(Func* func) {
     return !func->has_errors;
 }
 
-void acorn::Sema::check_node(Node* node) {
-    switch (node->kind) {
-    case NodeKind::Var:
-        return check_variable(static_cast<Var*>(node));
-    case NodeKind::IdentRef:
-        return check_ident_ref(static_cast<IdentRef*>(node), nspace, nullptr, false);
-    case NodeKind::DotOperator:
-        return check_dot_operator(static_cast<DotOperator*>(node), false);
-    case NodeKind::ReturnStmt:
-        return check_return(static_cast<ReturnStmt*>(node));
-    case NodeKind::IfStmt: {
-        bool ignore1, ignore2;
-        return check_if(static_cast<IfStmt*>(node), ignore1, ignore2);
-    }
-    case NodeKind::BinOp:
-        return check_binary_op(static_cast<BinOp*>(node));
-    case NodeKind::UnaryOp:
-        return check_unary_op(static_cast<UnaryOp*>(node));
-    case NodeKind::FuncCall:
-        return check_function_call(static_cast<FuncCall*>(node));
-    case NodeKind::Cast:
-        return check_cast(static_cast<Cast*>(node));
-    case NodeKind::NamedValue:
-        return check_named_value(static_cast<NamedValue*>(node));
-    case NodeKind::Number:
-    case NodeKind::Bool:
-    case NodeKind::String:
-    case NodeKind::Null:
-        break;
-    case NodeKind::ScopeStmt:
-        return check_scope(static_cast<ScopeStmt*>(node));
-    case NodeKind::Array:
-        return check_array(static_cast<Array*>(node), nullptr);
-    case NodeKind::MemoryAccess:
-        return check_memory_access(static_cast<MemoryAccess*>(node));
-    case NodeKind::PredicateLoopStmt:
-        return check_predicate_loop(static_cast<PredicateLoopStmt*>(node));
-    case NodeKind::RangeLoopStmt:
-        return check_range_loop(static_cast<RangeLoopStmt*>(node));
-    case NodeKind::IteratorLoopStmt:
-        return check_iterator_loop(static_cast<IteratorLoopStmt*>(node));
-    case NodeKind::BreakStmt:
-    case NodeKind::ContinueStmt:
-        return check_loop_control(static_cast<LoopControlStmt*>(node));
-    case NodeKind::SwitchStmt:
-        return check_switch(static_cast<SwitchStmt*>(node));
-    case NodeKind::RaiseStmt:
-        return check_raise(static_cast<RaiseStmt*>(node));
-    case NodeKind::RecoverStmt:
-        return check_recover(static_cast<RecoverStmt*>(node));
-    case NodeKind::StructInitializer:
-        return check_struct_initializer(static_cast<StructInitializer*>(node));
-    case NodeKind::This:
-        return check_this(static_cast<This*>(node));
-    case NodeKind::SizeOf:
-        return check_sizeof(static_cast<SizeOf*>(node));
-    case NodeKind::MoveObj:
-        return check_moveobj(static_cast<MoveObj*>(node), false);
-    case NodeKind::Ternary:
-        return check_ternary(static_cast<Ternary*>(node));
-    case NodeKind::TypeExpr:
-        return check_type_expr(static_cast<TypeExpr*>(node));
-    case NodeKind::Reflect:
-        return check_reflect(static_cast<Reflect*>(node));
-    default:
-        acorn_fatal("check_node(): missing case");
-    }
-}
-
-bool acorn::Sema::check_comptime_cond(Expr* cond, const char* comptime_type_str) {
-    is_comptime_if_cond = true;
-    check_node(cond);
-    if (!cond->type) {
-        return false;
-    }
-
-    if (!cond->is_foldable) {
-        error(expand(cond), "Directive %s expects the condition to be determined at compile time", comptime_type_str)
-            .end_error(ErrCode::SemaNotComptimeCompute);
-        return false;
-    }
-
-    if (!is_condition(cond->type)) {
-        return false;
-    }
-
-    auto ll_cond = llvm::cast<llvm::ConstantInt>(gen_constant(cond));
-    if (!ll_cond) {
-        return false;
-    }
-    return !ll_cond->isZero();
-}
-
-void acorn::Sema::check_function(Func* func) {
-
-    // The function is a member function so need to check the fields first
-    // in case they are referenced.
-    //
-    // Note: we cannot check this in `check_function_decl` because otherwise
-    // the struct may attempt to use the precomputed information of the function's
-    // declaration to determine things such as if it matches an interface function
-    // but then its declaration would not have been checked.
-    if (func->structn) {
-        if (!ensure_struct_checked(func->loc, func->structn)) {
-            return;
-        }
-    }
-
-    if (func->has_modifier(Modifier::Native)) {
-        return;
-    }
-
-    if (func->interfacen) {
-        return;
-    }
-
-    Struct* prev_struct;
-    if (func->structn) {
-        prev_struct = cur_struct;
-        cur_struct = func->structn;
-    }
-
-    // -- debug
-    // Logger::debug("checking function: %s", func->name);
-
-    cur_func = func;
-
-    SemScope sem_scope = push_scope();
-    for (Var* param : func->params) {
-        cur_scope->variables.push_back(param);
-    }
-
-    check_scope(func->scope, &sem_scope);
-    pop_scope();
-    if (!sem_scope.all_paths_return && func->return_type->is_not(context.void_type)) {
-        error(func, "Not all function paths return")
-            .end_error(ErrCode::SemaNotAllFuncPathReturn);
-    }
-
-    bool uses_implicit_return = func->scope->empty();
-    if (func->return_type->is(context.void_type) && !uses_implicit_return) {
-        auto last_stmt = func->scope->back();
-        if (last_stmt->is_not(NodeKind::ReturnStmt)) {
-            uses_implicit_return = true;
-        }
-    }
-
-    if (uses_implicit_return) {
-        ++func->num_returns;
-    }
-
-    if (func->structn) {
-        cur_struct = prev_struct;
-    }
-}
-
-void acorn::Sema::check_variable(Var* var) {
-
-    auto cleanup = [this, var]() finline {
-        var->is_being_checked = false;
-        cur_global_var = nullptr;
-        if (cur_scope) {
-            cur_scope->cur_try = nullptr;
-        }
-    };
-
-    check_modifier_incompatibilities(var);
-    if (var->has_modifier(Modifier::Readonly) && !var->is_field()) {
-        error(var, "Only fields can have readonly modifier")
-            .end_error(ErrCode::SemaOnlyFieldsCanHaveReadonlyModifier);
-    }
-
-    // This must go up top before returning due to any errors because otherwise
-    // future variables will not be able to find the reference of the variable
-    // leading to bad error messages.
-    bool needs_added_to_local_scope = !var->is_global && !var->is_param() && !var->is_field();
-    if (needs_added_to_local_scope) {
-        add_variable_to_local_scope(var);
-    }
-
-    // Reporting errors if the variable is local to a function and has
-    // modifiers.
-    if (!var->is_global && !var->is_field() && var->modifiers) {
-        for (uint32_t mod = Modifier::Start; mod != Modifier::End; mod *= 2) {
-            if (var->modifiers & mod) {
-                error(var->get_modifier_location(mod), "Modifier cannot apply to local variable")
-                    .end_error(ErrCode::SemaLocalVarHasModifiers);
-            }
-        }
-    }
-
-    if (var->is_global) {
-        cur_global_var = var;
-    }
-    var->is_being_checked = true;
-    var->has_been_checked = true; // Set early to prevent circular checking.
-
-
-
-    if (var->assignment) {
-        if (var->assignment->tryn) {
-            if (var->is_param()) {
-                error(var->assignment->tryn->loc, "Parameters cannot use try expression")
-                    .still_give_main_location_priority()
-                    .add_individual_underline(var->loc)
-                    .end_error(ErrCode::SemaParamsCannotUseTry);
-                return cleanup();
-            } else if (var->is_field()) {
-                error(var->assignment->tryn->loc, "Fields cannot use try expression")
-                    .still_give_main_location_priority()
-                    .add_individual_underline(var->loc)
-                    .end_error(ErrCode::SemaFieldsCAnnotUseTry);
-                return cleanup();
-            }
-
-            cur_scope->cur_try = var->assignment->tryn;
-        }
-
-        TypeKind type_kind = var->parsed_type->get_kind();
-        if (var->assignment->is(NodeKind::Array) &&
-            type_kind == TypeKind::Array ||
-            type_kind == TypeKind::UnresolvedArray
-            ) {
-
-            // TODO: Optimization: The type is being fixed here and below.
-            var->type = fixup_type(var->parsed_type);
-            if (!var->type) {
-                return cleanup();
-            }
-
-            // Still have to check for an array because it is possible the type is
-            // an enum container type or a class type with generic arguments.
-            if (var->type->is_array()) {
-                auto arr_type = static_cast<ArrayType*>(var->type);
-                check_array(static_cast<Array*>(var->assignment), arr_type->get_elm_type());
-            } else {
-                check_node(var->assignment);
-            }
-        } else if (var->assignment->is(NodeKind::Array) &&
-                   type_kind == TypeKind::AssignDeterminedArray) {
-
-            auto assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(var->parsed_type);
-
-            // TODO: Optimization: The type is being fixed here and below.
-            auto fixed_elm_type = fixup_type(assign_det_arr_type->get_elm_type());
-            if (!fixed_elm_type) {
-                return cleanup();
-            }
-
-            auto arr_type = static_cast<ArrayType*>(var->type);
-            check_array(static_cast<Array*>(var->assignment), fixed_elm_type);
-        } else if (var->assignment->is(NodeKind::MoveObj)) {
-            check_moveobj(static_cast<MoveObj*>(var->assignment), true);
-        } else {
-            check_node(var->assignment);
-        }
-
-        if (!var->assignment->type) {
-            return cleanup();
-        }
-
-        if (var->assignment->tryn) {
-            check_try(var->assignment->tryn, true);
-        }
-    }
-
-    if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray && !var->assignment) {
-        error(var, "Must have assignment to determine array type's length")
-            .end_error(ErrCode::SemaVarRequiresAssignForDetArrType);
-        return cleanup();
-    }
-
-    auto check_for_incomplete_type = [this, var]() finline {
-        switch (var->assignment->type->get_kind()) {
-        case TypeKind::Void:
-        case TypeKind::NamespaceRef:
-        case TypeKind::EmptyArray:
-        case TypeKind::Null:
-        case TypeKind::Interface:
-        case TypeKind::Expr:
-            error(expand(var), "Cannot assign incomplete type '%s' to variable with inferred type",
-                  var->assignment->type)
-                .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
+bool acorn::Sema::check_raised_error(RaisedError& raised_error) {
+    if (auto composite = find_composite(raised_error.name)) {
+        if (composite->is_not(NodeKind::Struct)) {
+            error(raised_error.error_loc, "Raised error '%s' must be an error struct", raised_error.name)
+                .end_error(ErrCode::SemaRaisedErrorNotStruct);
             return false;
-        case TypeKind::Range:
-            error(expand(var), "Cannot assign type 'range' to variable with inferred type",
-                  var->assignment->type)
-                .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
+        }
+
+        auto structn = static_cast<Struct*>(composite);
+        if (!ensure_struct_checked(raised_error.error_loc, structn)) {
             return false;
-        default:
-            return true;
-        }
-    };
-
-    auto report_error_auto_must_have_assignment = [this, var]() finline {
-        error(var, "Must have assignment to determine infered type")
-                .end_error(ErrCode::SemaMustHaveAssignmentToDetAuto);
-    };
-
-    if (var->parsed_type == context.auto_type || var->parsed_type == context.const_auto_type) {
-        if (!var->assignment) {
-            report_error_auto_must_have_assignment();
-            return cleanup();
         }
 
-        if (!check_for_incomplete_type()) {
-            return cleanup();
-        }
-
-        var->type = var->assignment->type;
-        if (var->type->is_const()) {
-            // A :: 55;
-            // b := A;
-            // ^^^^^^
-            // we don't want b to be const here.
-            var->type = type_table.remove_const(var->type);
-        }
-
-        if (var->parsed_type == context.const_auto_type) {
-            if (var->assignment->is(NodeKind::Array)) {
-                auto arr_type = static_cast<ArrayType*>(var->type);
-
-                llvm::SmallVector<uint32_t, 8> lengths;
-                Type* elm_type = nullptr;
-                while (true) {
-                    elm_type = arr_type->get_elm_type();
-                    lengths.push_back(arr_type->get_length());
-
-                    if (!elm_type->is_array()) {
-                        break;
-                    }
-                    arr_type = static_cast<ArrayType*>(elm_type);
-                }
-
-                auto base_type = type_table.get_const_type(elm_type);
-                auto new_arr_type = type_table.get_arr_type(base_type, lengths.back());
-                for (auto itr = lengths.rbegin() + 1; itr != lengths.rend(); ++itr) {
-                    new_arr_type = type_table.get_arr_type(new_arr_type, *itr);
-                }
-                var->type = type_table.get_const_type(new_arr_type);
-
-            } else if (!var->type->is_const()) {
-                var->type = type_table.get_const_type(var->type);
-            }
-        }
-    } else if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray) {
-        // We have to handle this case as if it is speciial because
-        // in no other instance other than variable assignments is the
-        // applicable.
-        var->type = fixup_assign_det_arr_type(var->parsed_type, var);
-    } else {
-        var->type = fixup_type(var->parsed_type);
-    }
-
-    if (!var->type) {
-        // Failed to fixup the type so returning early.
-        return cleanup();
-    }
-
-    var->is_foldable = var->type->is_number() &&
-                       var->type->is_const() &&
-                       var->assignment && var->assignment->is_foldable;
-
-    // Make sure to keep this below the code that checks if the variable is
-    // foldable!
-    if (needs_added_to_local_scope) {
-        if (!var->is_foldable) {
-            cur_func->vars_to_alloc.push_back(var);
-        }
-    }
-
-    if (var->type->is(context.void_type)) {
-        error(var, "Variables cannot have type 'void'")
-            .end_error(ErrCode::SemaVariableCannotHaveVoidType);
-        return cleanup();
-    }
-
-    if (!var->assignment && !var->has_modifier(Modifier::Native) && !var->is_param()) {
-        if (var->type->is_const()) {
-            error(var, "Variables declared 'const' must be assigned a value")
-                .end_error(ErrCode::SemaVariableConstNoValue);
-            return cleanup();
-        } else if (var->type->is_array()) {
-            auto arr_type = static_cast<ArrayType*>(var->type);
-            auto base_type = arr_type->get_base_type();
-            if (base_type->is_const()) {
-                error(var, "Variables with constant array must be assigned a value")
-                    .end_error(ErrCode::SemaVariableConstNoValue);
-                return cleanup();
-            }
-        }
-    }
-
-    // !! WARNING: If this code ever changes to not call `is_asignable_to` when
-    // the variable has been declared `auto` then extra work must be done to
-    // ensure things such as accessing of function references that are private.
-    if (var->assignment && !is_assignable_to(var->type, var->assignment)) {
-        bool is_assignable_to = false;
-
-        if (var->assignment->is(NodeKind::FuncCall)) {
-            FuncCall* call = static_cast<FuncCall*>(var->assignment);
-            if (may_implicitly_convert_return_ptr(var->type, call)) {
-                is_assignable_to = true;
-                call->implicitly_converts_return = true;
-            }
-        }
-
-        if (!is_assignable_to) {
-            error(expand(var), get_type_mismatch_error(var->type, var->assignment).c_str())
-                .end_error(ErrCode::SemaVariableTypeMismatch);
-        }
-    } else if (var->assignment) {
-        create_cast(var->assignment, var->type);
-    }
-
-    return cleanup();
-}
-
-void acorn::Sema::check_struct(Struct* structn) {
-
-    // -- Debug
-    // Logger::debug("checking struct: %s", structn->name);
-
-    check_modifiers_for_composite(structn, "Structs");
-
-    auto prev_struct = cur_struct;
-    cur_struct = structn;
-
-    structn->is_being_checked = true;
-    structn->has_been_checked = true; // Set early to prevent circular checking.
-
-    for (size_t i = 0; i < structn->unresolved_extensions.size(); i++) {
-        auto& extension = structn->unresolved_extensions[i];
-
-        // Check for duplicates.
-        for (long long j = static_cast<long long>(i - 1); j >= 0; j--) {
-            auto& other_extension = structn->unresolved_extensions[j];
-            if (extension.name == other_extension.name) {
-                error(extension.error_loc, "Duplicate extension '%s'", extension.name)
-                    .end_error(ErrCode::SemaDuplicateExtension);
+        bool extends_error_interface = false;
+        for (auto& extension : structn->interface_extensions) {
+            if (extension.interfacen == context.std_error_interface) {
+                extends_error_interface = true;
                 break;
             }
         }
 
-        if (auto composite = find_composite(extension.name)) {
-            if (composite->is_not(NodeKind::Interface)) {
-                error(extension.error_loc, "Cannot extend from type '%s'", composite->name)
-                    .end_error(ErrCode::SemaCannotExtendFromType);
-                continue;
-            }
-
-            if (extension.is_dynamic) {
-                structn->uses_vtable = true;
-            }
-
-            auto interfacen = static_cast<Interface*>(composite);
-            structn->interface_extensions.push_back({ interfacen, extension.is_dynamic });
-            check_struct_interface_extension(structn, interfacen, extension);
-
-        } else {
-            error(extension.error_loc, "Could not find extension '%s'", extension.name)
-                .end_error(ErrCode::SemaCouldNotFindExtension);
+        if (!extends_error_interface) {
+            error(raised_error.error_loc, "Cannot raise '%s' because it does not extend 'std.Error' interface",
+                  raised_error.name)
+                .end_error(ErrCode::SemaRaisedErrorNotExtendErrorInterface);
+            return false;
         }
+
+        raised_error.structn = structn;
+
+    } else {
+        error(raised_error.error_loc, "Raised error '%s' not found", raised_error.name)
+            .end_error(ErrCode::SemaRaisedErrorNotFound);
+        return false;
     }
+    return true;
+}
 
-    auto process_field_struct_type_state = [this, structn](SourceLoc field_loc, StructType* field_struct_type) finline {
-        auto field_struct = field_struct_type->get_struct();
+void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) {
+    if (cur_global_var) {
+        cur_global_var->dependency = var;
 
-        structn->needs_destruction       |= field_struct->needs_destruction;
-        structn->fields_need_destruction |= field_struct->needs_destruction;
-
-        structn->needs_copy_call       |= field_struct->needs_copy_call;
-        structn->fields_need_copy_call |= field_struct->needs_copy_call;
-
-        structn->needs_move_call       |= field_struct->needs_move_call;
-        structn->fields_need_move_call |= field_struct->needs_move_call;
-
-        structn->needs_default_call |= field_struct->needs_default_call;
-
-        if (field_struct->is_being_checked) {
-            display_circular_dep_error(field_loc,
-                                       cur_struct,
-                                       "Circular struct dependency results in infinite storage requirement for struct",
-                                       ErrCode::SemaCircularStructDeclDependency);
-            structn->has_errors = true;
-        }
-    };
-
-    uint32_t ll_field_count = 0;
-
-    if (structn->uses_vtable) {
-        structn->is_default_foldable = false;
-        for (auto& extension : structn->interface_extensions) {
-            if (!extension.is_dynamic) continue;
-            ++ll_field_count;
-        }
-    }
-
-    if (!structn->constructors.empty()) {
-        structn->is_default_foldable = false;
-    }
-
-    for (Var* field : structn->fields) {
-
-        field->ll_field_idx = ll_field_count;
-        ++ll_field_count;
-
-        if (field->has_modifier(Modifier::Native)) {
-            error(field->get_modifier_location(Modifier::Native), "Field cannot have native modifier")
-                .end_error(ErrCode::SemaFieldHasNativeModifier);
-        }
-        if (field->has_modifier(Modifier::DllImport)) {
-            error(field->get_modifier_location(Modifier::DllImport), "Field cannot have dllimport modifier")
-                .end_error(ErrCode::SemaFieldHasDllimportModifier);
-        }
-
-        check_variable(field);
-
-        if (!field->type) {
-            structn->has_errors = true;
-        } else {
-            if (field->type->is_struct()) {
-                process_field_struct_type_state(field->loc, static_cast<StructType*>(field->type));
-            } else if (field->type->is_array()) {
-                auto arr_type = static_cast<ArrayType*>(field->type);
-                auto base_type = arr_type->get_base_type();
-                if (base_type->is_struct()) {
-                    process_field_struct_type_state(field->loc, static_cast<StructType*>(base_type));
-                }
-            }
-        }
-
-        if (field->assignment) {
-            if (field->type) {
-                structn->is_default_foldable &= field->assignment->is_foldable;
-            }
-
-            structn->fields_have_assignments = true;
-        } else if (field->type) {
-            structn->is_default_foldable &= field->type->is_default_foldable();
-        }
-    }
-
-    // !!!! No longer need to treat the struct as if it has been checked since the rest of Sema only cares
-    // if the struct's fields have been checked not if the struct's functions have been. It is now safe to
-    // continue on to checking information about the struct's member functions.
-    //
-    structn->is_being_checked = false;
-
-    structn->needs_default_call |= structn->fields_have_assignments || structn->default_constructor;
-
-
-    if (structn->destructor) {
-        if (structn->destructor->has_checked_declaration || check_function_decl(structn->destructor)) {
-            if (!structn->destructor->params.empty()) {
-                error(structn->destructor, "Destructors should not have any parameters")
-                    .end_error(ErrCode::SemaDestructorsCannotHaveParams);
-            }
-        }
-    }
-    auto check_move_or_copy_has_correct_param_type = [this, structn](Func* constructor,
-                                                                     Type* base_type,
-                                                                     bool is_copy) finline {
-        if (constructor->has_checked_declaration || check_function_decl(constructor)) {
-            // TODO (maddie): can this not result in circular dependencies? Should this not be checking
-            // if the constructor has errors before continuing?
-            auto struct_ptr_type = type_table.get_ptr_type(base_type);
-            if (constructor->params.size() != 1) {
-                error(constructor,
-                      "%s constructor should have one parameter of type '%s'",
-                      is_copy ? "Copy" : "Move", struct_ptr_type)
-                    .end_error(ErrCode::SemaCopyConstructorExpectsOneParam);
+        if (var->is_being_checked) {
+            if (cur_global_var->dependency == cur_global_var) {
+                report_error_cannot_use_variable_before_assigned(error_loc, cur_global_var);
             } else {
-                auto param1 = constructor->params[0];
-                if (param1->type->is_not(struct_ptr_type)) {
-                    error(param1,
-                          "%s constructor parameter should be of type '%s'",
-                          is_copy ? "Copy" : "Move", struct_ptr_type)
-                        .end_error(is_copy ? ErrCode::SemaCopyConstructorExpectedStructPtrType
-                                           : ErrCode::SemaMoveConstructorExpectedStructPtrType);
-                }
+                display_circular_dep_error(error_loc,
+                                           cur_global_var,
+                                           "Global variables form a circular dependency",
+                                           ErrCode::SemaGlobalCircularDependency);
             }
         }
-    };
-    if (structn->copy_constructor) {
-        auto const_struct_type = type_table.get_const_type(structn->struct_type);
-        check_move_or_copy_has_correct_param_type(structn->copy_constructor, const_struct_type, true);
-    }
-    if (structn->move_constructor) {
-        check_move_or_copy_has_correct_param_type(structn->move_constructor, structn->struct_type, false);
     }
 
-    cur_struct = prev_struct;
+    if (!var->has_been_checked) {
+        Sema sema(context, var->file, var->get_logger());
+        sema.check_variable(var);
+    }
+}
 
+bool acorn::Sema::ensure_struct_checked(SourceLoc error_loc, Struct* structn) {
+    if (cur_struct) {
+        cur_struct->dependency = structn;
+
+        // We do not display circular dependencies here because the fields of a struct need
+        // to be able to reference the struct.
+
+        //display_circular_dep_error(error_loc,
+        //                           cur_struct,
+        //                           "Structs form a circular dependency",
+        //                           ErrCode::SemaGlobalCircularDependency);
+    }
+
+    if (!structn->has_been_checked) {
+        Sema sema(context, structn->file, structn->get_logger());
+        sema.check_struct(structn);
+    }
+    return !structn->has_errors;
+}
+
+void acorn::Sema::ensure_enum_checked(SourceLoc error_loc, Enum* enumn) {
+    if (cur_enum) {
+        cur_enum->dependency = enumn;
+
+        if (cur_enum->is_being_checked) {
+            display_circular_dep_error(error_loc,
+                                       cur_enum,
+                                       "Enum forms a circular dependency",
+                                       ErrCode::SemaGlobalCircularDependency);
+        }
+    }
+
+    if (!enumn->has_been_checked) {
+        Sema sema(context, enumn->file, enumn->get_logger());
+        sema.check_enum(enumn);
+    }
+}
+
+void acorn::Sema::ensure_interface_checked(SourceLoc error_loc, Interface* interfacen) {
+    if (cur_interface) {
+        cur_interface->dependency = interfacen;
+
+        if (cur_interface->is_being_checked) {
+            display_circular_dep_error(error_loc,
+                                       cur_interface,
+                                       "Interface forms a circular dependency",
+                                       ErrCode::SemaGlobalCircularDependency);
+        }
+    }
+
+    if (!interfacen->has_been_checked) {
+        Sema sema(context, interfacen->file, interfacen->get_logger());
+        sema.check_interface(interfacen);
+    }
+}
+
+void acorn::Sema::check_modifier_incompatibilities(Decl* decl) {
+    if (decl->has_modifier(Modifier::DllImport) && !decl->has_modifier(Modifier::Native)) {
+        error(decl->get_modifier_location(Modifier::DllImport),
+              "Cannot have dllimport modifier without native modifier")
+            .end_error(ErrCode::SemaDllImportWithoutNativeModifier);
+    }
+#define is_pow2(n) ((n) & ((n) - 1)) == 0
+    uint32_t access_bits = (decl->modifiers >> Modifier::AccessShift) & Modifier::AccessMask;
+    if (is_pow2(access_bits)) {
+        if (decl->has_modifier(Modifier::Public) && decl->has_modifier(Modifier::Private)) {
+            error(decl, "Cannot have both private and public modifiers")
+                .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
+        }
+        if (decl->has_modifier(Modifier::Public) && decl->has_modifier(Modifier::Readonly)) {
+            error(decl, "Cannot have both readonly and public modifiers")
+                .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
+        }
+        if (decl->has_modifier(Modifier::Private) && decl->has_modifier(Modifier::Readonly)) {
+            error(decl, "Cannot have both private and readonly modifiers")
+                .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
+        }
+    }
+#undef is_pow2
+}
+
+void acorn::Sema::check_modifiers_for_composite(Decl* decl, const char* composite_type_str) {
+    check_modifier_incompatibilities(decl);
+    if (decl->has_modifier(Modifier::DllImport)) {
+        error(decl->get_modifier_location(Modifier::DllImport), "%s cannot have dllimport modifier", composite_type_str)
+            .end_error(ErrCode::SemaCompositeCannotHaveDllImportModifier);
+    }
+    if (decl->has_modifier(Modifier::Native)) {
+        error(decl->get_modifier_location(Modifier::Native), "%s cannot have native modifier", composite_type_str)
+            .end_error(ErrCode::SemaCompositeCannotHaveNativeModifier);
+    }
 }
 
 template<bool check_only_non_default_value_params>
@@ -2053,228 +1677,125 @@ bool acorn::Sema::do_interface_functions_matches(Func* interface_func, Func* fun
     return true;
 }
 
-void acorn::Sema::display_interface_func_mismatch_info(Func* interface_func,
-                                                       Func* func,
-                                                       bool indent,
-                                                       bool should_show_invidual_underlines) {
+// Statements checking
+//--------------------------------------
 
-#define err_line(n, fmt, ...) \
-add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_ARGS__);
-
-    size_t param_count = interface_func->params.size();
-    if (param_count != func->params.size()) {
-        err_line(nullptr,
-                 "incorrect number of parameters. Expected %s but found %s",
-                 param_count,
-                 func->params.size());
-        return;
+void acorn::Sema::check_node(Node* node) {
+    switch (node->kind) {
+    case NodeKind::Var:
+        return check_variable(static_cast<Var*>(node));
+    case NodeKind::IdentRef:
+        return check_ident_ref(static_cast<IdentRef*>(node), nspace, nullptr, false);
+    case NodeKind::DotOperator:
+        return check_dot_operator(static_cast<DotOperator*>(node), false);
+    case NodeKind::ReturnStmt:
+        return check_return(static_cast<ReturnStmt*>(node));
+    case NodeKind::IfStmt: {
+        bool ignore1, ignore2;
+        return check_if(static_cast<IfStmt*>(node), ignore1, ignore2);
     }
-
-    if (interface_func->is_constant && !func->is_constant) {
-        err_line(nullptr, "expected function to be const");
-        return;
+    case NodeKind::BinOp:
+        return check_binary_op(static_cast<BinOp*>(node));
+    case NodeKind::UnaryOp:
+        return check_unary_op(static_cast<UnaryOp*>(node));
+    case NodeKind::FuncCall:
+        return check_function_call(static_cast<FuncCall*>(node));
+    case NodeKind::Cast:
+        return check_cast(static_cast<Cast*>(node));
+    case NodeKind::NamedValue:
+        return check_named_value(static_cast<NamedValue*>(node));
+    case NodeKind::Number:
+    case NodeKind::Bool:
+    case NodeKind::String:
+    case NodeKind::Null:
+        break;
+    case NodeKind::ScopeStmt:
+        return check_scope(static_cast<ScopeStmt*>(node));
+    case NodeKind::Array:
+        return check_array(static_cast<Array*>(node), nullptr);
+    case NodeKind::MemoryAccess:
+        return check_memory_access(static_cast<MemoryAccess*>(node));
+    case NodeKind::PredicateLoopStmt:
+        return check_predicate_loop(static_cast<PredicateLoopStmt*>(node));
+    case NodeKind::RangeLoopStmt:
+        return check_range_loop(static_cast<RangeLoopStmt*>(node));
+    case NodeKind::IteratorLoopStmt:
+        return check_iterator_loop(static_cast<IteratorLoopStmt*>(node));
+    case NodeKind::BreakStmt:
+    case NodeKind::ContinueStmt:
+        return check_loop_control(static_cast<LoopControlStmt*>(node));
+    case NodeKind::SwitchStmt:
+        return check_switch(static_cast<SwitchStmt*>(node));
+    case NodeKind::RaiseStmt:
+        return check_raise(static_cast<RaiseStmt*>(node));
+    case NodeKind::RecoverStmt:
+        return check_recover(static_cast<RecoverStmt*>(node));
+    case NodeKind::StructInitializer:
+        return check_struct_initializer(static_cast<StructInitializer*>(node));
+    case NodeKind::This:
+        return check_this(static_cast<This*>(node));
+    case NodeKind::SizeOf:
+        return check_sizeof(static_cast<SizeOf*>(node));
+    case NodeKind::MoveObj:
+        return check_moveobj(static_cast<MoveObj*>(node), false);
+    case NodeKind::Ternary:
+        return check_ternary(static_cast<Ternary*>(node));
+    case NodeKind::TypeExpr:
+        return check_type_expr(static_cast<TypeExpr*>(node));
+    case NodeKind::Reflect:
+        return check_reflect(static_cast<Reflect*>(node));
+    default:
+        acorn_fatal("check_node(): missing case");
     }
-
-    if (!interface_func->is_constant && func->is_constant) {
-        err_line(nullptr, "expected function to not be const");
-        return;
-    }
-
-    if (interface_func->return_type->is_not(func->return_type)) {
-        err_line(nullptr, "expected return type '%s' but found '%s'",
-                 interface_func->return_type,
-                 func->return_type);
-    }
-
-    for (size_t i = 0; i < param_count; i++) {
-        Var* param1 = interface_func->params[i];
-        Var* param2 = func->params[i];
-        if (param1->type->is_not(param2->type)) {
-            err_line(param2, "param %s: expected type '%s' but found '%s'", i + 1, param1->type, param2->type);
-        }
-    }
-
-    // report number of raised errors doesnt match (probably bad idea)
-
-    // report which raised errors are not raised/if they raise errors the interface doesn't
-    // then after this if that doesnt fail then report them being out of order
-
-    bool raised_errors_match = true;
-    for (auto& interface_error : interface_func->raised_errors) {
-        auto itr = std::ranges::find_if(func->raised_errors, [interface_error](auto& func_error) {
-            return func_error.structn == interface_error.structn;
-        });
-        if (itr == func->raised_errors.end()) {
-            err_line(nullptr, "missing raised error '%s'", interface_error.name);
-            raised_errors_match = false;
-        }
-    }
-    for (auto& func_error : func->raised_errors) {
-        auto itr = std::ranges::find_if(interface_func->raised_errors, [func_error](auto& interface_error) {
-            return func_error.structn == interface_error.structn;
-        });
-        if (itr == interface_func->raised_errors.end()) {
-            if (should_show_invidual_underlines)
-                logger.add_individual_underline(func_error.error_loc);
-            logger.add_line("%s- raised error '%s' not raised by interface function", indent ? "  " : "", func_error.name);
-            raised_errors_match = false;
-        }
-    }
-
-    // Still verify that the order they are specified in matches.
-    if (raised_errors_match) {
-        bool order_matches = true;
-        for (size_t i = 0; i < interface_func->raised_errors.size(); i++) {
-            auto& interface_error = interface_func->raised_errors[i];
-            auto& func_error = func->raised_errors[i];
-            if (interface_error.structn != func_error.structn) {
-                order_matches = false;
-                break;
-            }
-        }
-        if (!order_matches) {
-            err_line(nullptr, "raised errors do not appear in the same order as interface function");
-        }
-    }
-
-#undef err_line
 }
 
-void acorn::Sema::check_enum(Enum* enumn) {
+void acorn::Sema::check_scope(ScopeStmt* scope) {
+    SemScope sem_scope = push_scope();
+    check_scope(scope, &sem_scope);
+    pop_scope();
+}
 
-    // -- Debug
-    // Logger::debug("Checking enum: %s", enumn->name);
 
-    check_modifiers_for_composite(enumn, "Enums");
+void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
 
-    enumn->has_been_checked = true;
-    enumn->is_being_checked = true;
+    for (Node* stmt : *scope) {
 
-    uint64_t defualt_index = 0;
-    Type* values_type = enumn->enum_type->get_values_type();
-
-    // TODO: check to make sure the explicit values type is a foldable type?
-    bool has_explicit_values_type = values_type != nullptr;
-
-    if (has_explicit_values_type) {
-        if (is_incomplete_type(values_type)) {
-            error(enumn, "Value type '%s' is an incomplete type", values_type)
-                .end_error(ErrCode::SemaEnumValuesTypeIncomplete);
-            return;
-        }
-    }
-
-    size_t   count = 0;
-    uint64_t index_counter = 0;
-    bool has_non_assigning = false;
-    bool has_conflicting_values_type = false;
-    for (auto& value : enumn->values) {
-
-        for (size_t i = 0; i < count; i++) {
-            if (value.name == enumn->values[i].name) {
-                error(value.name_loc, "Name '%s' already defined in enum", value.name)
-                    .end_error(ErrCode::SemaDuplicateEnumValueName);
-                break;
-            }
+        if (sem_scope && sem_scope->found_terminal) {
+            error(stmt, "Unreachable code")
+                .end_error(ErrCode::SemaUnreachableStmt);
+            break;
         }
 
-        if (value.assignment) {
-            check_node(value.assignment);
-
-            if (value.assignment->type) {
-                bool assignment_is_integer = value.assignment->type->is_integer();
-
-                if (!value.assignment->is_foldable) {
-                    error(expand(value.assignment), "Values of enum expected to be determined at compile time")
-                        .end_error(ErrCode::SemaEnumValuesNotFoldable);
-                } else if (value.assignment->type->is_integer()) {
-                    if (auto ll_const = gen_constant(value.assignment)) {
-                        auto ll_integer = llvm::cast<llvm::ConstantInt>(ll_const);
-                        value.index = ll_integer->getZExtValue();
-                        index_counter = value.index;
-
-                        if (count == 0) {
-                            defualt_index = ll_integer->getZExtValue();
-                        }
-                    }
-                } else {
-                    value.index = index_counter;
-                }
-
-                if (values_type) {
-                    if (!is_assignable_to(values_type, value.assignment)) {
-                        if (has_explicit_values_type) {
-                            error(expand(value.assignment), "Enum value expected to be type '%s' but found '%s'",
-                                  values_type, value.assignment->type)
-                                .end_error(ErrCode::SemaEnumValueWrongType);
-                        } else {
-                            has_conflicting_values_type = true;
-                            error(expand(value.assignment), "Incompatible types for enum '%s'. First found '%s' but now '%s'",
-                                  enumn->name, values_type, value.assignment->type)
-                            .end_error(ErrCode::SemaIncompatibleEnumValueTypes);
-                        }
-                    }
-                } else {
-                    values_type = value.assignment->type;
-                }
+        if (is_incomplete_statement(stmt)) {
+            if (stmt->is_expression()) {
+                logger.begin_error(expand(stmt), "Incomplete statement");
+            } else {
+                logger.begin_error(stmt->loc, "Incomplete statement");
             }
+            logger.end_error(ErrCode::SemaIncompleteStmt);
+            continue;
+        }
+
+        if (stmt->is(NodeKind::Func)) {
+            error(stmt, "Functions cannot be declared within another function")
+                .end_error(ErrCode::SemaNoLocalFuncs);
+        } else if (stmt->is(NodeKind::Struct)) {
+            error(stmt, "Structs cannot be declared within a function")
+                .end_error(ErrCode::SemaNoLocalStructs);
         } else {
-            has_non_assigning = true;
-
-            // No assignment so set it to be equal to one past the last value.
-            value.index = index_counter;
-        }
-
-        ++index_counter;
-        ++count;
-    }
-
-    if (has_non_assigning && !has_conflicting_values_type &&
-        values_type && !values_type->is_integer()) {
-        // Must always assign to all enum slots if the
-        for (auto& value : enumn->values) {
-            if (!value.assignment) {
-                error(value.name_loc, "Enum values require assignment when the value type of the enum is '%s'",
-                      values_type)
-                    .end_error(ErrCode::SemaEnumValueNoAssignment);
-            }
-        }
-    }
-
-    enumn->enum_type->set_default_index(defualt_index);
-    enumn->enum_type->set_values_type(values_type);
-    if (values_type && values_type->is_integer()) {
-        enumn->enum_type->set_index_type(values_type);
-    } else {
-        enumn->enum_type->set_index_type(context.int_type);
-    }
-
-    enumn->enum_type->set_values_type(!values_type ? context.int_type : values_type);
-    enumn->is_being_checked = false;
-
-}
-
-void acorn::Sema::check_interface(Interface* interfacen) {
-
-    interfacen->has_been_checked = true;
-    interfacen->is_being_checked = true;
-
-    check_modifiers_for_composite(interfacen, "interface");
-
-    for (auto func : interfacen->functions) {
-        if (func->modifiers != 0) {
-            for (uint32_t mod = Modifier::Start; mod != Modifier::End; mod *= 2) {
-                if (func->has_modifier(mod)) {
-                    error(func->get_modifier_location(mod), "Interface functions cannot have modifiers")
-                        .end_error(ErrCode::SemaInterfaceFuncNoHaveModifier);
+            if (stmt->is_expression()) {
+                Expr* expr = static_cast<Expr*>(stmt);
+                if (expr->tryn) {
+                    cur_scope->cur_try = expr->tryn;
+                    check_node(expr);
+                    check_try(expr->tryn, false);
+                    cur_scope->cur_try = nullptr;
+                    continue;
                 }
             }
+            check_node(stmt);
         }
-
-        check_function_decl(func);
     }
-
-    interfacen->is_being_checked = false;
 }
 
 void acorn::Sema::check_return(ReturnStmt* ret) {
@@ -3226,340 +2747,6 @@ void acorn::Sema::check_recover(RecoverStmt* recover) {
     cur_scope->found_terminal = true;
 }
 
-void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
-
-    auto get_composite = [this](IdentRef* ref) -> Struct* {
-        auto name = ref->ident;
-        auto composite = find_composite(name);
-
-        if (!composite) {
-            error(ref, "Failed to find struct type '%s'", name)
-                .end_error(ErrCode::SemaStructInitFailedToFindStruct);
-            return nullptr;
-        }
-
-        if (composite->is_not(NodeKind::Struct)) {
-            error(ref, "Expected to find struct for initializer but found %s",
-                  composite->get_composite_kind())
-                .end_error(ErrCode::SemaWrongCompositeKindForStructInitializer);
-            return nullptr;
-        }
-
-        return static_cast<Struct*>(composite);
-    };
-
-    UnboundGenericStruct* unbound_generic_struct = nullptr;
-    llvm::SmallVector<Type*> bound_types;
-    Struct* structn = nullptr;
-    if (initializer->site->is(NodeKind::IdentRef)) {
-
-        auto ref = static_cast<IdentRef*>(initializer->site);
-        structn = get_composite(ref);
-        if (!structn) {
-            return;
-        }
-
-        if (!structn->is_generic) {
-            if (!ensure_struct_checked(ref->loc, structn)) {
-                return;
-            }
-        } else {
-            unbound_generic_struct = static_cast<UnboundGenericStruct*>(structn);
-        }
-    } else {
-        auto call = static_cast<FuncCall*>(initializer->site);
-        auto ref = static_cast<IdentRef*>(call->site);
-        structn = get_composite(ref);
-        if (!structn) {
-            return;
-        }
-
-        if (!get_bound_types_for_generic_type(structn, ref->loc, call->args, bound_types)) {
-            return;
-        }
-        unbound_generic_struct = static_cast<UnboundGenericStruct*>(structn);
-    }
-
-    bool args_have_errors = false;
-    for (auto arg : initializer->values) {
-        if (arg->is(NodeKind::MoveObj)) {
-            check_moveobj(static_cast<MoveObj*>(arg), true);
-        } else {
-            check_node(arg);
-        }
-        if (!arg->type) args_have_errors = true;
-    }
-    if (args_have_errors) return;
-
-
-    if (!structn->constructors.empty()) {
-
-        Func* found_constructor = check_function_decl_call(initializer,
-                                                           initializer->values,
-                                                           initializer->non_named_vals_offset,
-                                                           structn->constructors,
-                                                           false,
-                                                           std::move(bound_types),
-                                                           unbound_generic_struct,
-                                                           structn);
-        if (!found_constructor) {
-            return;
-        }
-
-        initializer->structn = structn;
-        initializer->is_foldable = false;
-        initializer->called_constructor = found_constructor;
-        initializer->type = structn->struct_type;
-
-        return;
-    }
-
-    // Check for duplicate values.
-    if (initializer->non_named_vals_offset != -1) {
-        bool dup_named_vals = false;
-        for (size_t i = initializer->non_named_vals_offset; i < initializer->values.size(); i++) {
-            auto val = initializer->values[i];
-            if (!val->is(NodeKind::NamedValue)) {
-                continue;
-            }
-
-            auto named_val = static_cast<NamedValue*>(val);
-            for (size_t j = i + 1; j < initializer->values.size(); j++) {
-                auto other_val = initializer->values[j];
-                if (!other_val->is(NodeKind::NamedValue)) {
-                    continue;
-                }
-
-                auto other_named_val = static_cast<NamedValue*>(other_val);
-                if (named_val->name == other_named_val->name) {
-                    error(other_named_val, "Duplicated named value '%s'", named_val->name)
-                        .end_error(ErrCode::SemaDuplicatedNamedStructInitVal);
-                    dup_named_vals = true;
-                    break;
-                }
-            }
-        }
-
-        if (dup_named_vals) {
-            return;
-        }
-    }
-
-    auto& values = initializer->values;
-    if (values.size() > structn->fields.size()) {
-        error(initializer, "More values than struct fields")
-            .end_error(ErrCode::SemaStructTooManyFields);
-        return;
-    }
-
-    if (structn->is_generic) {
-        if (bound_types.empty()) {
-            error(initializer, "Expected generics arguments to bind to the generic struct")
-                .end_error(ErrCode::SemaExpectedGenericsToBindToGenericStruct);
-            return;
-        } else if (bound_types.size() < unbound_generic_struct->generics.size()) {
-            error(initializer, "Too few generics arguments to bind to the generic struct")
-                .end_error(ErrCode::SemaTooFewGenericArgumentsForStruct);
-            return;
-        }
-
-        structn = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
-
-        if (!ensure_struct_checked(initializer->loc, structn)) {
-            return;
-        }
-    }
-
-    bool named_values_out_of_order = false;
-    uint32_t named_value_high_idx = 0;
-    for (size_t i = 0; i < values.size(); i++) {
-        Expr* value = values[i];
-
-        Var* field;
-        if (value->is(NodeKind::NamedValue)) {
-            // Handle named arguments by finding the corresponding parameter
-
-            auto named_value = static_cast<NamedValue*>(value);
-            value = named_value->assignment;
-
-            field = structn->nspace->find_variable(named_value->name);
-
-            // Check to make sure we found the field by the given name.
-            if (!field) {
-                error(expand(value), "Could not find field '%s' for named value", named_value->name)
-                    .end_error(ErrCode::SemaStructInitCouldNotFindField);
-                return;
-            }
-
-            if (field->field_idx != i) {
-                named_values_out_of_order = true;
-            }
-            named_value_high_idx = std::max(field->field_idx, named_value_high_idx);
-            named_value->mapped_idx = field->field_idx;
-        } else {
-
-            field = structn->fields[i];
-
-            // Cannot determine the order of the values if the
-            // non-named values come after the named values
-            // and the named values are not in order.
-            if (named_values_out_of_order || named_value_high_idx > i) {
-                error(expand(value), "Value %s causes the values to be out of order", i + 1)
-                    .end_error(ErrCode::SemaStructInitValuesOutOfOrder);
-                return;
-            }
-        }
-
-        if (field->type->does_contain_generics()) {
-            if (!try_bind_type_to_generic_type(field->type, value->type, bound_types)) {
-                // TODO (maddie): error message
-            }
-
-            continue;
-        } else {
-            if (!is_assignable_to(field->type, value)) {
-                error(expand(value), "Field '%s'. %s",
-                      field->name,
-                      get_type_mismatch_error(field->type, value).c_str())
-                    .end_error(ErrCode::SemaFieldInitTypeMismatch);
-            }
-        }
-
-        if (field->assignment) {
-            initializer->is_foldable &= field->assignment->is_foldable;
-        } else {
-            initializer->is_foldable &= field->type->is_default_foldable();
-        }
-
-        create_cast(value, field->type);
-    }
-
-
-
-    if (!structn->is_default_foldable) {
-        initializer->is_foldable = false;
-    }
-
-    initializer->structn = structn;
-    initializer->type = structn->struct_type;
-
-}
-
-void acorn::Sema::check_this(This* thisn) {
-    if (!cur_struct) {
-        error(thisn, "Cannot use 'this' pointer outside a struct")
-            .end_error(ErrCode::SemaThisNotInStruct);
-        return;
-    }
-
-    thisn->type = type_table.get_ptr_type(cur_struct->struct_type);
-    thisn->is_foldable = false;
-}
-
-void acorn::Sema::check_sizeof(SizeOf* sof) {
-
-    check_and_verify_type(sof->value);
-    if (sof->value->type->get_kind() == TypeKind::Expr) {
-        sof->type_with_size = get_type_of_type_expr(sof->value);
-    } else {
-        sof->type_with_size = sof->value->type;
-    }
-
-    if (is_incomplete_type(sof->type_with_size)) {
-        error(expand(sof), "Cannot get size of unsized type '%s'", sof->type_with_size)
-                .end_error(ErrCode::SemaCannotGetSizeOfUnsizedType);
-        return;
-    }
-
-    sof->type = context.int_type;
-}
-
-void acorn::Sema::check_moveobj(MoveObj* move_obj, bool has_destination_address) {
-    check_and_verify_type(move_obj->value);
-
-    if (!is_lvalue(move_obj->value)) {
-        error(expand(move_obj), "moveobj expects the value to have an address")
-            .end_error(ErrCode::SemaMoveObjValueMustHaveAddress);
-    }
-
-    if (!has_destination_address) {
-        error(expand(move_obj), "moveobj must be assigned to an address")
-            .end_error(ErrCode::SemaMoveObjMustBeAssignedToAddress);
-    }
-
-    move_obj->type = move_obj->value->type;
-    move_obj->is_foldable = false;
-}
-
-acorn::Sema::SemScope acorn::Sema::push_scope() {
-    SemScope sem_scope;
-    sem_scope.parent = cur_scope;
-    cur_scope = &sem_scope;
-    return sem_scope;
-}
-
-void acorn::Sema::pop_scope() {
-    cur_scope = cur_scope->parent;
-}
-
-void acorn::Sema::check_scope(ScopeStmt* scope) {
-    SemScope sem_scope = push_scope();
-    check_scope(scope, &sem_scope);
-    pop_scope();
-}
-
-
-void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
-
-    for (Node* stmt : *scope) {
-
-        if (sem_scope && sem_scope->found_terminal) {
-            error(stmt, "Unreachable code")
-                .end_error(ErrCode::SemaUnreachableStmt);
-            break;
-        }
-
-        if (is_incomplete_statement(stmt)) {
-            if (stmt->is_expression()) {
-                logger.begin_error(expand(stmt), "Incomplete statement");
-            } else {
-                logger.begin_error(stmt->loc, "Incomplete statement");
-            }
-            logger.end_error(ErrCode::SemaIncompleteStmt);
-            continue;
-        }
-
-        if (stmt->is(NodeKind::Func)) {
-            error(stmt, "Functions cannot be declared within another function")
-                .end_error(ErrCode::SemaNoLocalFuncs);
-        } else if (stmt->is(NodeKind::Struct)) {
-            error(stmt, "Structs cannot be declared within a function")
-                .end_error(ErrCode::SemaNoLocalStructs);
-        } else {
-            if (stmt->is_expression()) {
-                Expr* expr = static_cast<Expr*>(stmt);
-                if (expr->tryn) {
-                    cur_scope->cur_try = expr->tryn;
-                    check_node(expr);
-                    check_try(expr->tryn, false);
-                    cur_scope->cur_try = nullptr;
-                    continue;
-                }
-            }
-            check_node(stmt);
-        }
-    }
-}
-
-void acorn::Sema::add_variable_to_local_scope(Var* var) {
-    if (Var* prev_var = cur_scope->find_variable(var->name)) {
-        logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
-                .add_line([prev_var](Logger& l) { prev_var->show_prev_declared_msg(l); })
-                .end_error(ErrCode::SemaDuplicateLocVariableDecl);
-    } else {
-        cur_scope->variables.push_back(var);
-    }
-}
 
 // Expression checking
 //--------------------------------------
@@ -4139,7 +3326,7 @@ void acorn::Sema::check_constant_range_for_bigger_lhs(BinOp* bin_op, Type* resul
         auto rhs_value = ll_rhs->getZExtValue();
 
         auto report_lhs_bigger = [this, bin_op]() finline{
-            auto op_str = token_kind_to_string(context, bin_op->op);
+            auto op_str = token_kind_to_string(bin_op->op, context);
             error(expand(bin_op), "Operator %s expects right hand side to be bigger", op_str)
                 .end_error(ErrCode::SemaRangeExpectsRightSideBigger);
         };
@@ -4154,19 +3341,6 @@ void acorn::Sema::check_constant_range_for_bigger_lhs(BinOp* bin_op, Type* resul
             }
         }
     }
-}
-
-void acorn::Sema::report_binary_op_cannot_apply(BinOp* bin_op, Expr* expr) {
-    auto op_str = token_kind_to_string(context, bin_op->op);
-    error(expand(expr), "Operator %s cannot apply to type '%s'.   ('%s' %s '%s')",
-            op_str, expr->type, bin_op->lhs->type, op_str, bin_op->rhs->type)
-        .end_error(ErrCode::SemaBinOpTypeCannotApply);
-}
-
-void acorn::Sema::report_binary_op_mistmatch_types(BinOp* bin_op) {
-    error(expand(bin_op), "Invalid operation. Mismatched types ('%s' %s '%s')",
-          bin_op->lhs->type, token_kind_to_string(context, bin_op->op), bin_op->rhs->type)
-        .end_error(ErrCode::SemaBinOpTypeMismatch);
 }
 
 acorn::Type* acorn::Sema::get_integer_type_for_binary_op(bool enforce_lhs,
@@ -4198,7 +3372,7 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
 
     auto error_no_applies = [this, unary_op, expr]() finline -> void {
         error(expand(unary_op), "Operator %s cannot apply to type '%s'",
-              token_kind_to_string(context, unary_op->op), expr->type)
+              token_kind_to_string(unary_op->op, context), expr->type)
             .end_error(ErrCode::SemaUnaryOpTypeCannotApply);
     };
 
@@ -4648,42 +3822,8 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
     }
     }
 
-    if (ref->binds_generics) {
+    if (ref->explicitly_binds_generics) {
         check_generic_bind_function_call(static_cast<GenericBindFuncCall*>(ref));
-    }
-}
-
-void acorn::Sema::spellcheck_variables_for_ident(const llvm::SmallVector<Var*>& variables,
-                                                 ErrorSpellChecker& spell_checker,
-                                                 bool is_for_call) {
-    if (!is_for_call) {
-        // Not for a call so we might as well try and suggest the variables.
-        spell_checker.add_searches(variables);
-        return;
-    }
-
-    // Otherwise it is for a call so try and suggest
-    // variables that have callable types.
-    for (auto var : variables) {
-        if (var->type && var->type->is_callable()) {
-            spell_checker.add_search(var->name);
-        }
-    }
-}
-
-void acorn::Sema::spellcheck_variables_for_ident(const llvm::DenseMap<Identifier, Var*>& variables,
-                                                 ErrorSpellChecker& spell_checker,
-                                                 bool is_for_call) {
-    if (!is_for_call) {
-        // Not for a call so we might as well try and suggest the variables.
-        spell_checker.add_searches(variables);
-        return;
-    }
-
-    for (auto& [_, var] : variables) {
-        if (var->type && var->type->is_callable()) {
-            spell_checker.add_search(var->name);
-        }
     }
 }
 
@@ -4934,7 +4074,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     Struct* generic_parent_struct = nullptr;
     IdentRef* ref = static_cast<IdentRef*>(call->site);
     llvm::SmallVector<Type*> pre_bound_types;
-    if (ref->binds_generics) {
+    if (ref->explicitly_binds_generics) {
         auto generic_bind_call = static_cast<GenericBindFuncCall*>(ref);
         pre_bound_types = std::move(generic_bind_call->bound_types);
     } else if (ref->is(NodeKind::DotOperator)) {
@@ -5482,69 +4622,6 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
     return called_func;
 }
 
-uint64_t acorn::Sema::get_function_call_score(const Func* candidate,
-                                              const llvm::SmallVector<Expr*>& args,
-                                              bool is_const_object,
-                                              const llvm::SmallVector<Type*>& pre_bound_types) {
-
-    uint64_t score = 0;
-    bool implicitly_converts_ptr_arg = 0;
-    CallCompareStatus status;
-
-    llvm::SmallVector<Type*> generic_bindings;
-    if (!candidate->is_generic()) {
-        status = compare_as_call_candidate<true, false>(candidate,
-                                                        args,
-                                                        is_const_object,
-                                                        score,
-                                                        implicitly_converts_ptr_arg,
-                                                        generic_bindings);
-    } else {
-        generic_bindings.insert(generic_bindings.begin(), pre_bound_types.begin(), pre_bound_types.end());
-        generic_bindings.resize(candidate->generics.size());
-        status = compare_as_call_candidate<true, true>(candidate,
-                                                       args,
-                                                       is_const_object,
-                                                       score,
-                                                       implicitly_converts_ptr_arg,
-                                                       generic_bindings);
-    }
-
-    switch (status) {
-    case CallCompareStatus::INCORRECT_ARGS:
-        return INCORRECT_NUM_ARGS_LIMIT;
-    case CallCompareStatus::INCORRECT_PARAM_BY_NAME_NOT_FOUND:
-    case CallCompareStatus::OUT_OF_ORDER_PARAMS:
-        return INCORRECT_PARAM_NAME_OR_ORD_LIMIT;
-    case CallCompareStatus::CANNOT_ACCESS_PRIVATE:
-        return CANNOT_ACCESS_PRIVATE_LIMIT;
-    case CallCompareStatus::CANNOT_USE_VARARGS_AS_NAMED_ARG:
-        return CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT;
-    case CallCompareStatus::FORWARD_VARIADIC_WITH_OTHERS:
-        return FORWARD_VARIADIC_WITH_OTHERS_LIMIT;
-    default:
-        break;
-    }
-
-    return score;
-}
-
-acorn::Expr* acorn::Sema::try_create_bound_expr_for_variable_with_indetermite_type(Var* param) {
-
-    Expr* copied_assignment = deep_copy_expr(context.get_allocator(), param->assignment);
-    Expr* unbound_assignment = param->assignment;
-    param->assignment = copied_assignment;
-
-    check_variable(param);
-    if (!param->type) {
-        param->assignment = unbound_assignment;
-        return nullptr;
-    }
-
-    param->assignment = unbound_assignment;
-    return copied_assignment;
-}
-
 acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
                                                    llvm::SmallVector<Expr*>& args,
                                                    bool& selected_implicitly_converts_ptr_arg,
@@ -5740,14 +4817,14 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
             }
 
             if (param_type->does_contain_generics()) {
-                if (!try_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings)) {
+                if (!check_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings)) {
 
                     if (param->has_implicit_ptr && arg_value->is_not(NodeKind::MoveObj)) {
                         if (!arg_value->type->is_pointer()) {
                             auto param_ptr_type = static_cast<PointerType*>(param_type);
                             auto param_elm_type = param_ptr_type->get_elm_type();
 
-                            if (try_bind_type_to_generic_type(param_elm_type, arg_value->type, generic_bindings)) {
+                            if (check_bind_type_to_generic_type(param_elm_type, arg_value->type, generic_bindings)) {
                                 // argument success, continue.
                                 continue;
                             } else {
@@ -5763,7 +4840,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                             auto ptr_type = static_cast<PointerType*>(arg_call->type);
                             auto from_type = ptr_type->get_elm_type();
 
-                            if (try_bind_type_to_generic_type(param_type, from_type, generic_bindings)) {
+                            if (check_bind_type_to_generic_type(param_type, from_type, generic_bindings)) {
                                 implicitly_converts_ptr_arg = true;
                                 // argument success, continue.
                                 continue;
@@ -5851,6 +4928,1376 @@ bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const
         }
     }
     return true;
+}
+
+bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
+                                                  Type* from_type, // Type at current level of comparison
+                                                  llvm::SmallVector<Type*>& bindings,
+                                                  bool enforce_elm_const) {
+    if (to_type->is_generic()) {
+        // Generic type can have any type bound so we are finished.
+        auto generic_type = static_cast<GenericType*>(to_type);
+
+        size_t generic_index = generic_type->get_generic_index();
+        if (auto bound_type = bindings[generic_index]) {
+
+            if (enforce_elm_const) {
+                if (!bound_type->is_const() && from_type->is_const()) {
+                    return false;
+                }
+            }
+
+            if (!try_remove_const_for_compare(bound_type, from_type, nullptr)) {
+                return false;
+            }
+
+            // TODO (maddie): does the implicit conversion of pointers happen here
+            // or elsewhere?
+
+            // TODO (maddie): this is way too strict. it will be at the very least
+            // nice to check if the type is convertable to the other type. It might
+            // also be a good idea to pass up information up the stack that basically
+            // tells if all the types have been bound and if they have then use normal
+            // assignment comparison instead.
+            return bound_type->is(from_type);
+        }
+
+        // Constness situations and how they are reduced:
+        //
+        // 1.
+        // generics[T]
+        // fn foo(a: T*) {}
+        //
+        // v: int*;
+        // foo(v);
+        //
+        // Neither `v` or `T` are const so T=int.
+        //
+        // 2.
+        // generics[T]
+        // fn foo(a: const T*) {}
+        //
+        // v: int*;
+        // foo(v);
+        //
+        // Since `T` is const but `v` is not `T` it becomes T=int
+        //
+        // 3.
+        // generics[T]
+        // void foo(a: T*) {}
+        //
+        // v: const int*;
+        // foo(v);
+        //
+        // Since `T` is not const but `v` is const `T` takes on the
+        // constness of v and and so T=const int
+        //
+        // 4.
+        // generics[T]
+        // void foo(a: const T*) {}
+        //
+        // v: const int*;
+        // foo(v);
+        //
+        // Since `T` is const and `v` is const `T` becomes T=int
+        //
+
+        if (to_type->is_const() && from_type->is_const()) {
+            // Make sure not to make T const since it pattern matched
+            // on the existing const.
+            bindings[generic_index] = from_type->remove_all_const();
+        } else {
+            bindings[generic_index] = from_type;
+        }
+        return true;
+    } else if (enforce_elm_const) {
+        // Not generic but element of container, so need to enforce const rules.
+        if (!to_type->is_const() && from_type->is_const()) {
+            // Violates const rules.
+            return false;
+        }
+    }
+
+
+    switch (to_type->get_kind()) {
+    case TypeKind::Pointer:
+    case TypeKind::Slice: {
+        if (from_type->get_kind() != to_type->get_kind()) {
+            return false;
+        }
+
+        auto ptr_to_type   = static_cast<ContainerType*>(to_type);
+        auto ptr_from_type = static_cast<ContainerType*>(from_type);
+
+        auto elm_to_type   = ptr_to_type->get_elm_type();
+        auto elm_from_type = ptr_from_type->get_elm_type();
+
+        return check_bind_type_to_generic_type(elm_to_type, elm_from_type, bindings, true);
+    }
+    case TypeKind::Array: {
+        if (!from_type->is_array()) {
+            return false;
+        }
+
+        auto arr_to_type   = static_cast<ArrayType*>(to_type);
+        auto arr_from_type = static_cast<ArrayType*>(from_type);
+
+        auto elm_to_type   = arr_to_type->get_elm_type();
+        auto elm_from_type = arr_from_type->get_elm_type();
+
+        if (arr_to_type->get_length() != arr_from_type->get_length()) {
+            return false;
+        }
+
+        return check_bind_type_to_generic_type(elm_to_type, elm_from_type, bindings, true);
+    }
+    case TypeKind::Function: {
+        if (!from_type->is_function()) {
+            return false;
+        }
+
+        auto func_to_type   = static_cast<FunctionType*>(to_type);
+        auto func_from_type = static_cast<FunctionType*>(from_type);
+
+        auto& to_param_types   = func_to_type->get_param_types();
+        auto& from_param_types = func_from_type->get_param_types();
+
+        if (to_param_types.size() != from_param_types.size()) {
+            return false;
+        }
+
+        auto to_return_type   = func_to_type->get_return_type();
+        auto from_return_type = func_from_type->get_return_type();
+
+        if (!check_bind_type_to_generic_type(to_return_type, from_return_type, bindings)) {
+            return false;
+        }
+
+        for (size_t i = 0; i < to_param_types.size(); i++) {
+            auto to_param_type   = to_param_types[i];
+            auto from_param_type = from_param_types[i];
+            if (!check_bind_type_to_generic_type(to_param_type, from_param_type, bindings)) {
+                return false;
+            }
+        }
+
+        if (func_to_type->uses_native_varargs() != func_from_type->uses_native_varargs()) {
+            return false;
+        }
+
+        auto& to_raised_errors   = func_to_type->get_raised_errors();
+        auto& from_raised_errors = func_from_type->get_raised_errors();
+
+        if (to_raised_errors.size() != from_raised_errors.size()) {
+            return false;
+        }
+
+        for (size_t i = 0; i < to_raised_errors.size(); i++) {
+            auto& to_raised_error   = to_raised_errors[i];
+            auto& from_raised_error = from_raised_errors[i];
+            if (to_raised_error.structn != from_raised_error.structn) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+    default:
+        acorn_fatal("Unreachable. Hit type that cannot contain a generic");
+        return false;
+    }
+}
+
+void acorn::Sema::check_cast(Cast* cast) {
+    auto fixed_cast_type = fixup_type(cast->explicit_cast_type);
+    if (!fixed_cast_type) {
+        return;
+    }
+    if (fixed_cast_type == context.indeterminate_type) {
+        cast->type = context.indeterminate_type;
+        return;
+    }
+
+
+    if (is_incomplete_type(fixed_cast_type)) {
+        error(expand(cast), "Cannot cast to incomplete type '%s'", fixed_cast_type)
+                .end_error(ErrCode::SemaCannotCastIncompleteType);
+        return;
+    }
+
+    cast->type = fixed_cast_type;
+
+    check_and_verify_type(cast->value);
+    if (!is_castable_to(fixed_cast_type, cast->value)) {
+        error(expand(cast), "Cannot cast from '%s' to '%s'",
+              cast->value->type, fixed_cast_type)
+            .end_error(ErrCode::SemaInvalidCast);
+    }
+}
+
+void acorn::Sema::check_named_value(NamedValue* named_value) {
+    check_node(named_value->assignment);
+    named_value->type = named_value->assignment->type;
+    named_value->is_foldable = named_value->assignment->is_foldable;
+}
+
+void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
+    if (arr->elms.empty()) {
+        arr->type = context.empty_array_type;
+        return;
+    }
+
+    Type* elm_type = nullptr;
+    Expr* value_for_elm_type;
+    bool values_have_errors = false;
+    for (Expr* elm : arr->elms) {
+        if (!elm) continue;
+
+        if (elm->is(NodeKind::Array) && dest_elm_type &&
+            (dest_elm_type->get_kind() == TypeKind::Array || dest_elm_type->get_kind() == TypeKind::AssignDeterminedArray)) {
+            auto next_dest_elm_type = static_cast<ContainerType*>(dest_elm_type)->get_elm_type();
+            check_array(static_cast<Array*>(elm), next_dest_elm_type);
+        } else {
+            check_node(elm);
+        }
+
+        if (!elm->type) {
+            values_have_errors = true;
+            continue;
+        }
+
+        if (dest_elm_type) {
+            // Checking that the type is not an `AssignDeterminedArray` because it
+            // is possible elements of arrays to be assigned to the assign determined
+            // arrays. The checks for dimensional compatibility are checked later when
+            // the type is fixed up.
+            //
+            if (dest_elm_type->get_kind() != TypeKind::AssignDeterminedArray) {
+                if (!is_assignable_to(dest_elm_type, elm)) {
+                    error(expand(elm), "%s", get_type_mismatch_error(dest_elm_type, elm))
+                        .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
+                    values_have_errors = true;
+                }
+            }
+        } else if (!elm_type) {
+            elm_type = elm->type;
+            value_for_elm_type = elm;
+        } else if (elm_type->is_not(elm->type)) {
+            if (!is_assignable_to(elm_type, elm)) {
+                // Check the reverse case.
+                if (!is_assignable_to(elm->type, value_for_elm_type)) {
+                    error(expand(elm), "Incompatible element types. %s",
+                          get_type_mismatch_error(elm_type, elm))
+                        .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
+                    values_have_errors = true;
+                } else {
+                    elm_type = elm->type;
+                    value_for_elm_type = elm;
+                }
+            }
+        }
+    }
+
+    if (values_have_errors) {
+        return;
+    }
+
+    if (!elm_type) {
+        if (dest_elm_type->get_kind() != TypeKind::AssignDeterminedArray) {
+            elm_type = dest_elm_type;
+        } else {
+            elm_type = arr->elms[0]->type;
+        }
+    }
+
+    if (is_incomplete_type(elm_type)) {
+        error(expand(arr), "Array has incomplete element type '%s'", elm_type)
+            .end_error(ErrCode::SemaArrayIncompleteElmType);
+        return;
+    }
+
+    for (Expr* elm : arr->elms) {
+        if (elm) {
+            create_cast(elm, elm_type);
+
+            // Must go after after cast because casting may change foldability
+            if (!elm->is_foldable) {
+                arr->is_foldable = false;
+            }
+        }
+    }
+
+    arr->type = type_table.get_arr_type(elm_type, arr->elms.size());
+}
+
+void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
+    check_and_verify_type(mem_access->site);
+    check_and_verify_type(mem_access->index);
+
+    mem_access->is_foldable = false;
+
+    Type* access_type = mem_access->site->type;
+    if (!(access_type->is_array() || access_type->is_pointer() || access_type->is_slice())) {
+        if (access_type == context.expr_type) {
+            auto elm_type = get_type_of_type_expr(mem_access->site);
+
+            auto unresolved_type = UnresolvedArrayType::create(context.get_allocator(), elm_type, mem_access->index);
+            auto fixed_expr_type = fixup_unresolved_array_type(unresolved_type);
+            if (!fixed_expr_type) {
+                return;
+            }
+
+            mem_access->expr_type = fixed_expr_type;
+            mem_access->type = context.expr_type;
+            return;
+        }
+        error(mem_access, "Cannot index memory of type '%s'", access_type)
+            .end_error(ErrCode::SemaMemoryAccessBadType);
+    } else {
+        auto ctr_type = static_cast<ContainerType*>(access_type);
+        mem_access->type = ctr_type->get_elm_type();
+    }
+
+    if (!mem_access->index->type->is_integer()) {
+        error(expand(mem_access->index), "Expected index of memory access to be an integer")
+            .end_error(ErrCode::SemaMemoryIndexNotInteger);
+    } else {
+        create_cast(mem_access->index, context.usize_type);
+    }
+}
+
+void acorn::Sema::check_ternary(Ternary* ternary) {
+    check_node(ternary->cond);
+    if (ternary->cond->type) {
+        if (!check_is_condition(ternary->cond)) {
+            return;
+        }
+    }
+
+    check_node(ternary->lhs);
+    check_node(ternary->rhs);
+
+    if (!ternary->lhs->type || !ternary->rhs->type) {
+        return;
+    }
+    if (!ternary->lhs->is_foldable || !ternary->rhs->is_foldable) {
+        ternary->is_foldable = false;
+    }
+
+    Type* lhs_type = ternary->lhs->type;
+    Type* rhs_type = ternary->rhs->type;
+    if (rhs_type->is_const()) {
+        rhs_type = type_table.remove_const(rhs_type);
+    }
+    if (lhs_type->is_const()) {
+        lhs_type = type_table.remove_const(lhs_type);
+    }
+
+    if (lhs_type->is_not(rhs_type)) {
+        error(expand(ternary), "Operator ? has incompatible types '%s' and '%s'",
+              ternary->lhs->type, ternary->rhs->type)
+            .end_error(ErrCode::SemaTernaryIncompatibleTypes);
+        return;
+    }
+
+    ternary->type = lhs_type;
+}
+
+void acorn::Sema::check_type_expr(TypeExpr* type_expr) {
+    if (Type* fixed_type = fixup_type(type_expr->parsed_expr_type)) {
+        type_expr->expr_type = fixed_type;
+        type_expr->type = context.expr_type;
+    }
+}
+
+void acorn::Sema::check_reflect(Reflect* reflect) {
+    if (context.should_stand_alone()) {
+        error(reflect, "Cannot reflect when stand alone is enabled")
+            .end_error(ErrCode::SemaCannotReflectWhenStandAlone);
+        return;
+    }
+
+    check_and_verify_type(reflect->expr);
+
+    switch (reflect->reflect_kind) {
+    case ReflectKind::TypeInfo: {
+
+        if (reflect->expr->type == context.expr_type) {
+            reflect->type_info_type = get_type_of_type_expr(reflect->expr);
+        } else {
+            reflect->type_info_type = reflect->expr->type;
+        }
+
+        if (is_incomplete_type(reflect->type_info_type)) {
+            error(expand(reflect), "Cannot get type information of incomplete type '%s'",
+                  reflect->type_info_type)
+                .end_error(ErrCode::SemaCannotGetTypeInfoIncompleteType);
+            return;
+        }
+
+        reflect->type = context.const_std_type_ptr;
+        // TODO: come back to we will need some way for accessing the fields to be considered foldable.
+        reflect->is_foldable = false;
+
+        break;
+    }
+    default:
+        acorn_fatal("Reflection kind not implemented");
+    }
+}
+
+void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
+
+    auto get_composite = [this](IdentRef* ref) -> Struct* {
+        auto name = ref->ident;
+        auto composite = find_composite(name);
+
+        if (!composite) {
+            error(ref, "Failed to find struct type '%s'", name)
+                .end_error(ErrCode::SemaStructInitFailedToFindStruct);
+            return nullptr;
+        }
+
+        if (composite->is_not(NodeKind::Struct)) {
+            error(ref, "Expected to find struct for initializer but found %s",
+                  composite->get_composite_kind())
+                .end_error(ErrCode::SemaWrongCompositeKindForStructInitializer);
+            return nullptr;
+        }
+
+        return static_cast<Struct*>(composite);
+    };
+
+    UnboundGenericStruct* unbound_generic_struct = nullptr;
+    llvm::SmallVector<Type*> bound_types;
+    Struct* structn = nullptr;
+    if (initializer->site->is(NodeKind::IdentRef)) {
+
+        auto ref = static_cast<IdentRef*>(initializer->site);
+        structn = get_composite(ref);
+        if (!structn) {
+            return;
+        }
+
+        if (!structn->is_generic) {
+            if (!ensure_struct_checked(ref->loc, structn)) {
+                return;
+            }
+        } else {
+            unbound_generic_struct = static_cast<UnboundGenericStruct*>(structn);
+        }
+    } else {
+        auto call = static_cast<FuncCall*>(initializer->site);
+        auto ref = static_cast<IdentRef*>(call->site);
+        structn = get_composite(ref);
+        if (!structn) {
+            return;
+        }
+
+        if (!get_bound_types_for_generic_type(structn, ref->loc, call->args, bound_types)) {
+            return;
+        }
+        unbound_generic_struct = static_cast<UnboundGenericStruct*>(structn);
+    }
+
+    bool args_have_errors = false;
+    for (auto arg : initializer->values) {
+        if (arg->is(NodeKind::MoveObj)) {
+            check_moveobj(static_cast<MoveObj*>(arg), true);
+        } else {
+            check_node(arg);
+        }
+        if (!arg->type) args_have_errors = true;
+    }
+    if (args_have_errors) return;
+
+
+    if (!structn->constructors.empty()) {
+
+        Func* found_constructor = check_function_decl_call(initializer,
+                                                           initializer->values,
+                                                           initializer->non_named_vals_offset,
+                                                           structn->constructors,
+                                                           false,
+                                                           std::move(bound_types),
+                                                           unbound_generic_struct,
+                                                           structn);
+        if (!found_constructor) {
+            return;
+        }
+
+        initializer->structn = structn;
+        initializer->is_foldable = false;
+        initializer->called_constructor = found_constructor;
+        initializer->type = structn->struct_type;
+
+        return;
+    }
+
+    // Check for duplicate values.
+    if (initializer->non_named_vals_offset != -1) {
+        bool dup_named_vals = false;
+        for (size_t i = initializer->non_named_vals_offset; i < initializer->values.size(); i++) {
+            auto val = initializer->values[i];
+            if (!val->is(NodeKind::NamedValue)) {
+                continue;
+            }
+
+            auto named_val = static_cast<NamedValue*>(val);
+            for (size_t j = i + 1; j < initializer->values.size(); j++) {
+                auto other_val = initializer->values[j];
+                if (!other_val->is(NodeKind::NamedValue)) {
+                    continue;
+                }
+
+                auto other_named_val = static_cast<NamedValue*>(other_val);
+                if (named_val->name == other_named_val->name) {
+                    error(other_named_val, "Duplicated named value '%s'", named_val->name)
+                        .end_error(ErrCode::SemaDuplicatedNamedStructInitVal);
+                    dup_named_vals = true;
+                    break;
+                }
+            }
+        }
+
+        if (dup_named_vals) {
+            return;
+        }
+    }
+
+    auto& values = initializer->values;
+    if (values.size() > structn->fields.size()) {
+        error(initializer, "More values than struct fields")
+            .end_error(ErrCode::SemaStructTooManyFields);
+        return;
+    }
+
+    if (structn->is_generic) {
+        if (bound_types.empty()) {
+            error(initializer, "Expected generics arguments to bind to the generic struct")
+                .end_error(ErrCode::SemaExpectedGenericsToBindToGenericStruct);
+            return;
+        } else if (bound_types.size() < unbound_generic_struct->generics.size()) {
+            error(initializer, "Too few generics arguments to bind to the generic struct")
+                .end_error(ErrCode::SemaTooFewGenericArgumentsForStruct);
+            return;
+        }
+
+        structn = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
+
+        if (!ensure_struct_checked(initializer->loc, structn)) {
+            return;
+        }
+    }
+
+    bool named_values_out_of_order = false;
+    uint32_t named_value_high_idx = 0;
+    for (size_t i = 0; i < values.size(); i++) {
+        Expr* value = values[i];
+
+        Var* field;
+        if (value->is(NodeKind::NamedValue)) {
+            // Handle named arguments by finding the corresponding parameter
+
+            auto named_value = static_cast<NamedValue*>(value);
+            value = named_value->assignment;
+
+            field = structn->nspace->find_variable(named_value->name);
+
+            // Check to make sure we found the field by the given name.
+            if (!field) {
+                error(expand(value), "Could not find field '%s' for named value", named_value->name)
+                    .end_error(ErrCode::SemaStructInitCouldNotFindField);
+                return;
+            }
+
+            if (field->field_idx != i) {
+                named_values_out_of_order = true;
+            }
+            named_value_high_idx = std::max(field->field_idx, named_value_high_idx);
+            named_value->mapped_idx = field->field_idx;
+        } else {
+
+            field = structn->fields[i];
+
+            // Cannot determine the order of the values if the
+            // non-named values come after the named values
+            // and the named values are not in order.
+            if (named_values_out_of_order || named_value_high_idx > i) {
+                error(expand(value), "Value %s causes the values to be out of order", i + 1)
+                    .end_error(ErrCode::SemaStructInitValuesOutOfOrder);
+                return;
+            }
+        }
+
+        if (!is_assignable_to(field->type, value)) {
+            error(expand(value), "Field '%s'. %s",
+                  field->name,
+                  get_type_mismatch_error(field->type, value).c_str())
+                .end_error(ErrCode::SemaFieldInitTypeMismatch);
+        }
+
+        if (field->assignment) {
+            initializer->is_foldable &= field->assignment->is_foldable;
+        } else {
+            initializer->is_foldable &= field->type->is_default_foldable();
+        }
+
+        create_cast(value, field->type);
+    }
+
+
+    if (!structn->is_default_foldable) {
+        initializer->is_foldable = false;
+    }
+
+    initializer->structn = structn;
+    initializer->type = structn->struct_type;
+
+}
+
+void acorn::Sema::check_this(This* thisn) {
+    if (!cur_struct) {
+        error(thisn, "Cannot use 'this' pointer outside a struct")
+            .end_error(ErrCode::SemaThisNotInStruct);
+        return;
+    }
+
+    thisn->type = type_table.get_ptr_type(cur_struct->struct_type);
+    thisn->is_foldable = false;
+}
+
+void acorn::Sema::check_sizeof(SizeOf* sof) {
+
+    check_and_verify_type(sof->value);
+    if (sof->value->type->get_kind() == TypeKind::Expr) {
+        sof->type_with_size = get_type_of_type_expr(sof->value);
+    } else {
+        sof->type_with_size = sof->value->type;
+    }
+
+    if (is_incomplete_type(sof->type_with_size)) {
+        error(expand(sof), "Cannot get size of unsized type '%s'", sof->type_with_size)
+            .end_error(ErrCode::SemaCannotGetSizeOfUnsizedType);
+        return;
+    }
+
+    sof->type = context.int_type;
+}
+
+void acorn::Sema::check_moveobj(MoveObj* move_obj, bool has_destination_address) {
+    check_and_verify_type(move_obj->value);
+
+    if (!is_lvalue(move_obj->value)) {
+        error(expand(move_obj), "moveobj expects the value to have an address")
+            .end_error(ErrCode::SemaMoveObjValueMustHaveAddress);
+    }
+
+    if (!has_destination_address) {
+        error(expand(move_obj), "moveobj must be assigned to an address")
+            .end_error(ErrCode::SemaMoveObjMustBeAssignedToAddress);
+    }
+
+    move_obj->type = move_obj->value->type;
+    move_obj->is_foldable = false;
+}
+
+bool acorn::Sema::check_modifiable(Expr* expr, Expr* error_node, bool is_assignment) {
+
+    if (!is_lvalue(expr)) {
+        error(expand(error_node), "Expected to be a modifiable value")
+            .end_error(ErrCode::SemaExpectedModifiable);
+        return false;
+    }
+
+    if (expr->type->is_const()) {
+        if (expr->is(NodeKind::IdentRef) &&
+            static_cast<IdentRef*>(expr)->found_kind == IdentRef::VarKind) {
+
+            auto ref = static_cast<IdentRef*>(expr);
+            if (ref->var_ref->is_field() && !ref->var_ref->type->is_const() &&
+                cur_func && cur_func->is_constant) {
+                error(expand(error_node), "Cannot %s field in a const function",
+                      is_assignment ? "reassign to" : "modify a")
+                    .end_error(ErrCode::SemaReassignConstVariable);
+            } else {
+                error(expand(error_node), "Cannot %s a const variable", is_assignment ? "reassign to" : "modify")
+                    .end_error(ErrCode::SemaReassignConstVariable);
+            }
+
+            return false;
+        } else {
+            error(expand(error_node), "Cannot %s a const address", is_assignment ? "assign to" : "modify")
+                .end_error(ErrCode::SemaReassignConstAddress);
+            return false;
+        }
+    }
+    if (is_readonly_field_without_access(expr)) {
+        auto dot = static_cast<DotOperator*>(expr);
+        error(expand(error_node), "Cannot %s field '%s', it is marked readonly",
+              is_assignment ? "assign to" : "modify", dot->var_ref->name)
+            .end_error(ErrCode::SemaCannotAssignToReadonly);
+        return false;
+    }
+
+    return true;
+}
+
+acorn::Expr* acorn::Sema::try_create_bound_expr_for_variable_with_indetermite_type(Var* param) {
+
+    Expr* copied_assignment = deep_copy_expr(context.get_allocator(), param->assignment);
+    Expr* unbound_assignment = param->assignment;
+    param->assignment = copied_assignment;
+
+    check_variable(param);
+    if (!param->type) {
+        param->assignment = unbound_assignment;
+        return nullptr;
+    }
+
+    param->assignment = unbound_assignment;
+    return copied_assignment;
+}
+
+void acorn::Sema::check_division_by_zero(Node* error_node, Expr* expr) {
+    if (!expr->is_foldable) return;
+
+    if (auto ll_constant = gen_constant(expr)) {
+        if (!ll_constant->isZeroValue()) return;
+
+        error(error_node, "Division by zero")
+            .end_error(ErrCode::SemaDivisionByZero);
+    }
+}
+
+bool acorn::Sema::check_is_condition(Expr* cond) {
+    if (!is_condition(cond->type)) {
+        error(expand(cond), "Expected condition")
+            .end_error(ErrCode::SemaExpectedCondition);
+        return false;
+    }
+    return true;
+}
+
+bool acorn::Sema::check_comptime_cond(Expr* cond, const char* comptime_type_str) {
+    is_comptime_if_cond = true;
+    check_node(cond);
+    if (!cond->type) {
+        return false;
+    }
+
+    if (!cond->is_foldable) {
+        error(expand(cond), "Directive %s expects the condition to be determined at compile time", comptime_type_str)
+            .end_error(ErrCode::SemaNotComptimeCompute);
+        return false;
+    }
+
+    if (!is_condition(cond->type)) {
+        return false;
+    }
+
+    auto ll_cond = llvm::cast<llvm::ConstantInt>(gen_constant(cond));
+    if (!ll_cond) {
+        return false;
+    }
+    return !ll_cond->isZero();
+}
+
+
+// Type fixup
+//--------------------------------------
+
+acorn::Type* acorn::Sema::fixup_type(Type* type, bool is_ptr_elm_type) {
+    if (type->get_kind() == TypeKind::UnresolvedArray) {
+        return fixup_unresolved_array_type(type);
+    } else if (type->get_kind() == TypeKind::UnresolvedComposite) {
+        return fixup_unresolved_composite_type(type, is_ptr_elm_type);
+    } else if (type->get_kind() == TypeKind::UnresolvedGenericComposite) {
+        return fixup_unresolved_generic_composite_type(type, is_ptr_elm_type);
+    } else if (type->get_kind() == TypeKind::UnresolvedEnumValueType) {
+        return fixup_unresolved_enum_value_type(type, is_ptr_elm_type);
+    } else if (type->get_kind() == TypeKind::Function) {
+        return fixup_function_type(type);
+    } else if (type->is_pointer()) {
+
+        auto ptr_type = static_cast<PointerType*>(type);
+        auto elm_type = ptr_type->get_elm_type();
+        auto fixed_elm_type = fixup_type(elm_type, true);
+        if (!fixed_elm_type) {
+            return nullptr;
+        }
+
+        if (fixed_elm_type == elm_type) {
+            return ptr_type;
+        } else {
+            Type* fixed_ptr_type = type_table.get_ptr_type(fixed_elm_type);
+            if (ptr_type->is_const()) {
+                return type_table.get_const_type(fixed_ptr_type);
+            }
+            return fixed_ptr_type;
+        }
+    } else if (type->is_slice()) {
+
+        auto slice_type = static_cast<SliceType*>(type);
+        auto elm_type = slice_type->get_elm_type();
+        auto fixed_elm_type = fixup_type(elm_type);
+        if (!fixed_elm_type) {
+            return nullptr;
+        }
+
+        if (fixed_elm_type == elm_type) {
+            return slice_type;
+        } else {
+            Type* fixed_slice_type = type_table.get_slice_type(fixed_elm_type);
+            if (slice_type->is_const()) {
+                return type_table.get_const_type(fixed_slice_type);
+            }
+            return fixed_slice_type;
+        }
+    } else if (type->is_array()) {
+        auto arr_type = static_cast<ArrayType*>(type);
+        auto elm_type = arr_type->get_elm_type();
+        auto fixed_elm_type = fixup_type(elm_type);
+        if (!fixed_elm_type) {
+            return nullptr;
+        }
+
+        if (fixed_elm_type == elm_type) {
+            return arr_type;
+        } else {
+            Type* fixed_arr_type = type_table.get_arr_type(fixed_elm_type, arr_type->get_length());
+            if (arr_type->is_const()) {
+                return type_table.get_const_type(fixed_arr_type);
+            }
+            return fixed_arr_type;
+        }
+    } else if (type->is_generic()) {
+        return fixup_generic_type(type);
+    } else {
+        return type;
+    }
+}
+
+acorn::Type* acorn::Sema::fixup_unresolved_array_type(Type* type) {
+    auto unresolved_type = static_cast<UnresolvedArrayType*>(type);
+    Expr* expr = unresolved_type->get_expr();
+
+    Type* fixed_elm_type = fixup_type(unresolved_type->get_elm_type());
+    if (!fixed_elm_type) {
+        return nullptr;
+    }
+
+    check_node(expr);
+    if (!expr->type) {
+        // Failed to check the length expression so returning early.
+        return nullptr;
+    }
+
+    if (!expr->type->is_integer()) {
+        error(expand(expr), "Array length must be an integer type")
+            .end_error(ErrCode::SemaArrayLengthNotInteger);
+        return nullptr;
+    }
+
+    if (expr->type->get_number_of_bits() > 32) {
+        error(expand(expr), "Array length must be less than or equal to a 32 bit integer")
+            .end_error(ErrCode::SemaArrayLengthTooLargeType);
+        return nullptr;
+    }
+
+    if (!expr->is_foldable) {
+        error(expand(expr), "Array length must be able to be determined at compile time")
+            .end_error(ErrCode::SemaArrayLengthNotComptime);
+        return nullptr;
+    }
+
+    if (auto ll_length = gen_constant(expr)) {
+        auto ll_int_length = llvm::cast<llvm::ConstantInt>(ll_length);
+        uint32_t length = static_cast<uint32_t>(ll_int_length->getZExtValue());
+
+        if (length == 0) {
+            error(expand(expr), "Array length cannot be zero")
+                .end_error(ErrCode::SemaArrayLengthZero);
+            return nullptr;
+        }
+
+        if (expr->type->is_signed() && static_cast<int32_t>(length) < 0) {
+            error(expand(expr), "Array length cannot be negative")
+                .end_error(ErrCode::SemaArrayLengthNegative);
+            return nullptr;
+        }
+
+        // Everything is okay we can create a new array out of it!
+        auto fixed_type = type_table.get_arr_type(fixed_elm_type, length);
+        if (type->is_const()) {
+            return type_table.get_const_type(fixed_type);
+        }
+        return fixed_type;
+    }
+
+    return nullptr;
+}
+
+acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
+
+    auto from_type = var->assignment->type;
+    auto assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(type);
+
+    if (from_type->get_kind() != TypeKind::Array) {
+        error(expand(var), "Expected array type for '%s', but found '%s'",
+                type, from_type)
+            .end_error(ErrCode::SemaAssignDetArrTypeReqsArrAssignment);
+        return nullptr;
+    }
+
+    auto arr_type = static_cast<ArrayType*>(from_type);
+
+    auto elm_type = assign_det_arr_type->get_elm_type();
+    auto from_elm_type = arr_type->get_elm_type();
+
+    llvm::SmallVector<uint32_t, 8> arr_lengths;
+    arr_lengths.push_back(arr_type->get_length());
+
+    auto report_dimensions_error = [this, var, type, from_type]() finline {
+        error(expand(var), "Wrong array dimensions for '%s', found '%s'",
+                type, from_type)
+            .end_error(ErrCode::SemaAssignDetArrWrongDimensions);
+    };
+
+    ContainerType* ctr_type = assign_det_arr_type;
+    while (elm_type->get_kind() == TypeKind::AssignDeterminedArray  ||
+           elm_type->get_kind() == TypeKind::Array) {
+        if (from_elm_type->get_kind() != TypeKind::Array) {
+            report_dimensions_error();
+            return nullptr;
+        }
+
+        ctr_type = static_cast<ContainerType*>(elm_type);
+        elm_type = ctr_type->get_elm_type();
+
+        arr_type = static_cast<ArrayType*>(from_elm_type);
+        from_elm_type = arr_type->get_elm_type();
+
+        if (ctr_type->is_array()) {
+            auto to_arr_type = static_cast<ArrayType*>(ctr_type);
+            if (to_arr_type->get_length() != arr_type->get_length()) {
+                // Return the given type so it says the types could not
+                // be assigned to each other.
+                return type;
+            }
+        }
+
+        arr_lengths.push_back(arr_type->get_length());
+    }
+
+    if (from_elm_type->get_kind() == TypeKind::Array) {
+        report_dimensions_error();
+        return nullptr;
+    }
+
+    Type* fixed_type = fixup_type(elm_type);
+    if (!fixed_type) {
+        return nullptr;
+    }
+
+    for (auto itr = arr_lengths.rbegin(); itr != arr_lengths.rend(); ++itr) {
+        uint32_t arr_length = *itr;
+        fixed_type = type_table.get_arr_type(fixed_type, arr_length);
+    }
+
+    return fixed_type;
+}
+
+acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_ptr_elm_type) {
+
+    auto unresolved_composite_type = static_cast<UnresolvedCompositeType*>(type);
+
+    auto name = unresolved_composite_type->get_composite_name();
+    auto error_loc = unresolved_composite_type->get_error_location();
+
+    auto found_composite = find_composite_for_composite_type(name, error_loc);
+    if (!found_composite) {
+        return nullptr;
+    }
+
+    switch (found_composite->kind) {
+    case NodeKind::Struct: {
+        auto found_struct = static_cast<Struct*>(found_composite);
+
+        if (found_struct->is_generic) {
+            error(error_loc, "Expected generic arguments for generic type")
+                .end_error(ErrCode::SemaExpectedGenericArgsForGenericType);
+            return nullptr;
+        }
+
+        if (!ensure_struct_checked(unresolved_composite_type->get_error_location(), found_struct)) {
+            return nullptr;
+        }
+
+        Type* struct_type = found_struct->struct_type;
+        if (unresolved_composite_type->is_const()) {
+            struct_type = type_table.get_const_type(struct_type);
+        }
+
+        return struct_type;
+    }
+    case NodeKind::Enum: {
+        auto found_enum = static_cast<Enum*>(found_composite);
+
+        ensure_enum_checked(unresolved_composite_type->get_error_location(), found_enum);
+
+        Type* enum_type = found_enum->enum_type;
+        if (unresolved_composite_type->is_const()) {
+            enum_type = type_table.get_const_type(enum_type);
+        }
+
+        return enum_type;
+    }
+    case NodeKind::Interface: {
+        auto found_interface = static_cast<Interface*>(found_composite);
+
+        ensure_interface_checked(unresolved_composite_type->get_error_location(), found_interface);
+
+        Type* intr_type = found_interface->interface_type;
+        if (unresolved_composite_type->is_const()) {
+            intr_type = type_table.get_const_type(intr_type);
+        }
+
+        if (!is_ptr_elm_type) {
+            error(unresolved_composite_type->get_error_location(), "Interface types should be declared a pointer")
+                .add_line("Use type '%s*' instead", unresolved_composite_type->get_composite_name())
+                .end_error(ErrCode::SemaInterfaceMustBeDeclAsPtr);
+            return nullptr;
+        }
+
+        return intr_type;
+    }
+    default:
+        acorn_fatal("Unknown composite kind");
+        return nullptr;
+    }
+}
+
+acorn::Type* acorn::Sema::fixup_unresolved_generic_composite_type(Type* type, bool is_ptr_elm_type) {
+
+    auto unresolved_composite_type = static_cast<UnresolvedGenericCompositeType*>(type);
+
+    auto name = unresolved_composite_type->get_composite_name();
+    auto error_loc = unresolved_composite_type->get_error_location();
+
+    auto found_composite = find_composite_for_composite_type(name, error_loc);
+    if (!found_composite) {
+        return nullptr;
+    }
+
+    const llvm::SmallVector<Expr*>& bound_exprs = unresolved_composite_type->get_bound_exprs();
+
+    Type* struct_type = fixup_unresolved_generic_composite_type(found_composite, error_loc, bound_exprs);;
+    if (type->is_const()) {
+        return type_table.get_const_type(struct_type);
+    }
+    return struct_type;
+}
+
+acorn::Type* acorn::Sema::fixup_unresolved_generic_composite_type(Decl* found_composite,
+                                                                  SourceLoc error_loc,
+                                                                  const llvm::SmallVector<Expr*>& bound_exprs) {
+
+
+
+    // TODO (maddie): with is generic types nonsense and generally having to fixup the type information of the bound
+    // types then setting if this type contains generics.
+
+    llvm::SmallVector<Type*> bound_types;
+    if (!get_bound_types_for_generic_type(found_composite, error_loc, bound_exprs, bound_types)) {
+        return nullptr;
+    }
+
+    auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(found_composite);
+
+    if (bound_exprs.size() < unbound_generic_struct->generics.size()) {
+        error(error_loc, "Too few generic arguments for struct. Got %s but expected %s",
+              bound_exprs.size(), unbound_generic_struct->generics.size())
+            .end_error(ErrCode::SemaTooFewGenericArgumentsForStruct);
+        return nullptr;
+    }
+
+    auto new_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
+
+    if (!ensure_struct_checked(error_loc, new_struct)) {
+        return nullptr;
+    }
+
+
+
+    return new_struct->struct_type;
+}
+
+bool acorn::Sema::get_bound_types_for_generic_type(Decl* found_composite,
+                                                   SourceLoc error_loc,
+                                                   const llvm::SmallVector<Expr*>& bound_exprs,
+                                                   llvm::SmallVector<Type*>& bound_types) {
+    // TODO (maddie): expand error location so things make more sense in error logging.
+
+    if (bound_exprs.empty()) {
+        error(error_loc, "Expected generic arguments for generic type")
+            .end_error(ErrCode::SemaExpectedGenericArgsForGenericType);
+        return false;
+    }
+
+    bool uses_named_args_values;
+    if (found_composite->kind != NodeKind::Struct) {
+        error(error_loc, "Type does not take generic arguments")
+            .end_error(ErrCode::SemaTypeDoesNotTakeGenerics);
+        return false;
+    }
+
+    auto found_struct = static_cast<Struct*>(found_composite);
+
+    if (!found_struct->is_generic) {
+        error(error_loc, "Type does not take generic arguments")
+            .end_error(ErrCode::SemaTypeDoesNotTakeGenerics);
+        return false;
+    }
+
+    auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(found_struct);
+
+    auto& generics = unbound_generic_struct->generics;
+
+    if (bound_exprs.size() > unbound_generic_struct->generics.size()) {
+        error(error_loc, "Too many generic arguments for struct. Got %s but expected %s",
+              bound_exprs.size(), unbound_generic_struct->generics.size())
+            .end_error(ErrCode::SemaTooManyGenericArgumentsForStruct);
+        return false;
+    }
+
+    if (!check_generic_bind_arguments(bound_exprs, uses_named_args_values)) {
+        return false;
+    }
+
+    if (uses_named_args_values) {
+        if (compare_generic_bind_candidate_with_named_args(bound_exprs, generics, bound_types)) {
+            // binds the types during the call.
+        } else {
+            Logger& logger = error(error_loc, "Failed to bind generic arguments");
+            logger.add_empty_line();
+            display_generic_bind_named_args_fail_info(bound_exprs, generics);
+            logger.end_error(ErrCode::SemaFailedToBindGenerics);
+            return false;
+        }
+    } else {
+        for (Expr* arg : bound_exprs) {
+            Type* bind_type = get_type_of_type_expr(arg);
+            bound_types.push_back(bind_type);
+        }
+    }
+
+    return true;
+}
+
+acorn::Type* acorn::Sema::fixup_unresolved_enum_value_type(Type* type, bool is_ptr_elm_type) {
+
+    auto unresolved_enum_value_type = static_cast<UnresolvedEnumValueType*>(type);
+
+    auto name = unresolved_enum_value_type->get_enum_name();
+    auto error_loc = unresolved_enum_value_type->get_error_location();
+
+    auto found_composite = find_composite_for_composite_type(name, error_loc);
+    if (!found_composite) {
+        return nullptr;
+    }
+
+    if (found_composite->is_not(NodeKind::Enum)) {
+        error(error_loc, "Enum value type expects enum type")
+            .end_error(ErrCode::SemaEnumValueTypeExpectsEnum);
+        return nullptr;
+    }
+
+    auto found_enum = static_cast<Enum*>(found_composite);
+
+    ensure_enum_checked(error_loc, found_enum);
+
+    auto fixed_type = type_table.get_enum_container_type(found_enum->enum_type);
+    if (type->is_const()) {
+        return type_table.get_const_type(fixed_type);
+    }
+    return fixed_type;
+}
+
+acorn::Decl* acorn::Sema::find_composite_for_composite_type(Identifier name, SourceLoc error_loc) {
+
+    auto found_composite = find_composite(name);
+
+    if (!found_composite) {
+        ErrorSpellChecker spell_checker(context.should_show_spell_checking());
+        spell_checker.add_searches(file->get_namespace()->get_composites());
+        spell_checker.add_searches(file->get_composites());
+        for (auto& [import_key, importn] : file->get_imports()) {
+            if (importn->is_imported_composite()) {
+                spell_checker.add_search(import_key);
+            }
+        }
+
+        auto end = error_loc.end();
+
+        // HACK
+        //
+        // Checking if the user possibly mistyped common mistakes that happen when
+        // writing code to assume it was a parsing mistake instead.
+
+        auto try_detect_multiply_parse_error = [this, &spell_checker, name]
+            (const char* end, SourceLoc error_loc) finline {
+            if (*end == '*') {
+                auto star_loc = end;
+                ++end;
+                while (is_whitespace(*end))  ++end;
+                if (*end == ';' || *end == ']' || *end == ')') {
+                    // could be something like `int a = b *;` in which case we will tell the
+                    // user that it expected an expression instead.
+
+                    logger.begin_error(error_loc, "Tried to interpret '%s' as a type but may be part of an incomplete expression",
+                                       name);
+                    SourceLoc arrow_loc = {
+                        .ptr = star_loc,
+                        .length = 1
+                    };
+                    logger.add_arrow_msg_alongside("expression after multiply?", arrow_loc);
+                    spell_checker.search(logger, name);
+                    logger.end_error(ErrCode::ParseExpectedExpression);
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        while (true) {
+            while (is_whitespace(*end))  ++end;
+            if (try_detect_multiply_parse_error(end, error_loc)) {
+                return nullptr;
+            } else if (*end == '[') {
+                go_until(end, '[', ']');
+                if (try_detect_multiply_parse_error(end, error_loc)) {
+                    return nullptr;
+                }
+            } else {
+                // Did not detect that the user tried to type an expression instead.
+                break;
+            }
+        }
+
+        logger.begin_error(error_loc, "Could not find struct, enum, or interface type '%s'", name);
+        spell_checker.search(logger, name);
+        logger.end_error(ErrCode::SemaCouldNotFindStructType);
+        return nullptr;
+    }
+
+    return found_composite;
+}
+
+acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
+    auto func_type = static_cast<FunctionType*>(type);
+
+    llvm::SmallVector<Type*, 8> fixed_param_types;
+    llvm::SmallVector<RaisedError> fixed_raised_errors;
+    fixed_raised_errors.reserve(func_type->get_raised_errors().size());
+    bool type_needed_fixing = false;
+
+    auto ret_type = func_type->get_return_type();
+    auto fixed_ret_type = fixup_type(ret_type);
+    if (!fixed_ret_type) {
+        return nullptr;
+    }
+
+    if (fixed_ret_type != ret_type) {
+        type_needed_fixing = true;
+    }
+
+    for (auto param_type : func_type->get_param_types()) {
+        auto fixed_param_type = fixup_type(param_type);
+        if (!fixed_param_type) {
+            return nullptr;
+        }
+
+        fixed_param_types.push_back(fixed_param_type);
+        if (fixed_param_type != param_type) {
+            type_needed_fixing = true;
+        }
+    }
+
+    type_needed_fixing |= !func_type->get_raised_errors().empty();
+
+    for (auto& raised_error : func_type->get_raised_errors()) {
+        if (!check_raised_error(raised_error)) {
+            return nullptr;
+        }
+        fixed_raised_errors.push_back(raised_error);
+        raised_error.structn = nullptr;
+    }
+
+    if (type_needed_fixing) {
+        return type_table.get_function_type(fixed_ret_type,
+                                            std::move(fixed_param_types),
+                                            std::move(fixed_raised_errors),
+                                            func_type->uses_native_varargs());
+    }
+
+    return type;
+}
+
+acorn::Type* acorn::Sema::fixup_generic_type(Type* type) {
+    auto generic_type = static_cast<GenericType*>(type);
+    if (func_call_generic_bindings) {
+        size_t generic_index = generic_type->get_generic_index();
+        return (*func_call_generic_bindings)[generic_index];
+    } else if (cur_func && cur_func->is_generic()) {
+        // Get the bound type of the current generic state.
+        size_t generic_index = generic_type->get_generic_index();
+        return cur_func->generic_instance->bound_types[generic_index];
+    } else if (cur_struct && cur_struct->is_generic) {
+        auto generic_instance = static_cast<GenericStructInstance*>(cur_struct);
+        size_t generic_index = generic_type->get_generic_index();
+        return generic_instance->bound_types[generic_index];
+    }
+    return type;
+}
+
+
+// Error reporting
+//--------------------------------------
+
+void acorn::Sema::spellcheck_variables_for_ident(const llvm::SmallVector<Var*>& variables,
+                                                 ErrorSpellChecker& spell_checker,
+                                                 bool is_for_call) {
+    if (!is_for_call) {
+        // Not for a call so we might as well try and suggest the variables.
+        spell_checker.add_searches(variables);
+        return;
+    }
+
+    // Otherwise it is for a call so try and suggest
+    // variables that have callable types.
+    for (auto var : variables) {
+        if (var->type && var->type->is_callable()) {
+            spell_checker.add_search(var->name);
+        }
+    }
+}
+
+void acorn::Sema::spellcheck_variables_for_ident(const llvm::DenseMap<Identifier, Var*>& variables,
+                                                 ErrorSpellChecker& spell_checker,
+                                                 bool is_for_call) {
+    if (!is_for_call) {
+        // Not for a call so we might as well try and suggest the variables.
+        spell_checker.add_searches(variables);
+        return;
+    }
+
+    for (auto& [_, var] : variables) {
+        if (var->type && var->type->is_callable()) {
+            spell_checker.add_search(var->name);
+        }
+    }
 }
 
 void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
@@ -6140,27 +6587,9 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
     auto show_generic_types_where_line = [this, indent]
         (Type* param_type, const llvm::SmallVector<Type*>& generic_bindings) {
 
-        llvm::SmallVector<const GenericType*> generics_used;
-        param_type->get_generic_types(generics_used);
-
-        llvm::SmallVector<std::pair<const GenericType*, const Type*>> bound_pairings;
-        for (auto generic_type : generics_used) {
-            size_t generic_index = generic_type->get_generic_index();
-            if (Type* bound_type = generic_bindings[generic_index]) {
-                bound_pairings.push_back({ generic_type, bound_type });
-            }
-        }
-        if (!bound_pairings.empty()) {
-            std::string generics_msg = "where ";
-            for (size_t i = 0; i < bound_pairings.size(); i++) {
-                auto generic_type = std::get<0>(bound_pairings[i]);
-                auto bound_type   = std::get<1>(bound_pairings[i]);
-                generics_msg += generic_type->to_string() + "='" + bound_type->to_string() + "'";
-                if (i + 1 != bound_pairings.size()) {
-                    generics_msg += ", ";
-                }
-            }
-            logger.add_line("%s         %s", indent ? "  " : "", generics_msg)
+        std::string where_msg = get_type_with_generics_where_msg(param_type, generic_bindings, indent);
+        if (!where_msg.empty()) {
+            logger.add_line("%s         %s", indent ? "  " : "", where_msg)
                 .remove_period();
         }
     };
@@ -6233,17 +6662,19 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
                 }
 
                 if (param_type->does_contain_generics()) {
-                    if (!try_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings)) {
+                    if (!check_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings)) {
 
                         if (param->has_implicit_ptr) {
                             if (!arg_value->type->is_pointer()) {
                                 auto param_ptr_type = static_cast<PointerType*>(param_type);
                                 auto param_elm_type = param_ptr_type->get_elm_type();
 
-                                if (try_bind_type_to_generic_type(param_elm_type, arg_value->type, generic_bindings)) {
+                                if (check_bind_type_to_generic_type(param_elm_type, arg_value->type, generic_bindings)) {
                                     if (arg_value->is(NodeKind::MoveObj)) {
                                         add_err_line_moveobj_to_implicit_ptr(i, param_type, arg_value);
-                                        show_generic_types_where_line(param_type, generic_bindings);
+                                        get_type_with_generics_where_msg(param_type,
+                                                                                               generic_bindings,
+                                                                                               indent);
                                     }
                                     // argument success, continue.
                                     continue;
@@ -6258,7 +6689,7 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
                                 auto ptr_type = static_cast<PointerType*>(arg_call->type);
                                 auto from_type = ptr_type->get_elm_type();
 
-                                if (try_bind_type_to_generic_type(param_type, from_type, generic_bindings)) {
+                                if (check_bind_type_to_generic_type(param_type, from_type, generic_bindings)) {
                                     // argument success, continue.
                                     continue;
                                 }
@@ -6313,6 +6744,53 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
     }
 
 #undef err_line
+}
+
+uint64_t acorn::Sema::get_function_call_score(const Func* candidate,
+                                              const llvm::SmallVector<Expr*>& args,
+                                              bool is_const_object,
+                                              const llvm::SmallVector<Type*>& pre_bound_types) {
+
+    uint64_t score = 0;
+    bool implicitly_converts_ptr_arg = 0;
+    CallCompareStatus status;
+
+    llvm::SmallVector<Type*> generic_bindings;
+    if (!candidate->is_generic()) {
+        status = compare_as_call_candidate<true, false>(candidate,
+                                                        args,
+                                                        is_const_object,
+                                                        score,
+                                                        implicitly_converts_ptr_arg,
+                                                        generic_bindings);
+    } else {
+        generic_bindings.insert(generic_bindings.begin(), pre_bound_types.begin(), pre_bound_types.end());
+        generic_bindings.resize(candidate->generics.size());
+        status = compare_as_call_candidate<true, true>(candidate,
+                                                       args,
+                                                       is_const_object,
+                                                       score,
+                                                       implicitly_converts_ptr_arg,
+                                                       generic_bindings);
+    }
+
+    switch (status) {
+    case CallCompareStatus::INCORRECT_ARGS:
+        return INCORRECT_NUM_ARGS_LIMIT;
+    case CallCompareStatus::INCORRECT_PARAM_BY_NAME_NOT_FOUND:
+    case CallCompareStatus::OUT_OF_ORDER_PARAMS:
+        return INCORRECT_PARAM_NAME_OR_ORD_LIMIT;
+    case CallCompareStatus::CANNOT_ACCESS_PRIVATE:
+        return CANNOT_ACCESS_PRIVATE_LIMIT;
+    case CallCompareStatus::CANNOT_USE_VARARGS_AS_NAMED_ARG:
+        return CANNOT_USE_VARARGS_AS_NAMED_ARG_LIMIT;
+    case CallCompareStatus::FORWARD_VARIADIC_WITH_OTHERS:
+        return FORWARD_VARIADIC_WITH_OTHERS_LIMIT;
+    default:
+        break;
+    }
+
+    return score;
 }
 
 void acorn::Sema::display_call_ambiguous_info(PointSourceLoc error_loc,
@@ -6373,6 +6851,52 @@ void acorn::Sema::display_call_ambiguous_info(PointSourceLoc error_loc,
 
 }
 
+std::string acorn::Sema::get_type_with_generics_where_msg(Type* type_with_generics,
+                                                          const llvm::SmallVector<Type*>& generic_bindings,
+                                                          bool indent) {
+
+    llvm::SmallVector<const GenericType*> generics_used;
+    type_with_generics->get_generic_types(generics_used);
+
+    llvm::SmallVector<std::pair<const GenericType*, const Type*>> bound_pairings;
+    for (auto generic_type : generics_used) {
+        size_t generic_index = generic_type->get_generic_index();
+        if (Type* bound_type = generic_bindings[generic_index]) {
+            bound_pairings.push_back({ generic_type, bound_type });
+        }
+    }
+    if (!bound_pairings.empty()) {
+        std::string generics_msg = "where ";
+        for (size_t i = 0; i < bound_pairings.size(); i++) {
+            auto generic_type = std::get<0>(bound_pairings[i]);
+            auto bound_type   = std::get<1>(bound_pairings[i]);
+            generics_msg += generic_type->to_string() + "='" + bound_type->to_string() + "'";
+            if (i + 1 != bound_pairings.size()) {
+                generics_msg += ", ";
+            }
+        }
+
+        return generics_msg;
+    }
+    return "";
+}
+
+template<unsigned N>
+void acorn::Sema::display_ambiguous_functions(const llvm::SmallVector<Func*, N>& ambiguous_funcs) {
+    for (size_t i = 0; i < ambiguous_funcs.size(); i++) {
+        auto ambiguous_func = ambiguous_funcs[i];
+
+        logger.add_line([ambiguous_func](auto& logger) {
+            logger.print("Defined at: ");
+            ambiguous_func->show_location_msg(logger);
+        }).remove_period();
+
+        logger.add_line("  '%s'", ambiguous_func->get_decl_string())
+            .remove_period();
+        logger.add_empty_line();
+    }
+}
+
 void acorn::Sema::display_call_missing_bindings_info(Expr* call_node,
                                                      Func* called_func,
                                                      const llvm::SmallVector<Type*>& generic_bindings) {
@@ -6395,22 +6919,6 @@ void acorn::Sema::display_call_missing_bindings_info(Expr* call_node,
     error(expand(call_node), "Call to generic function does not bind all types")
         .add_line("Missing bindings for: %s", missing_bound_types_str)
         .end_error(ErrCode::SemaGenericCallHasUnboundTypes);
-}
-
-template<unsigned N>
-void acorn::Sema::display_ambiguous_functions(const llvm::SmallVector<Func*, N>& ambiguous_funcs) {
-    for (size_t i = 0; i < ambiguous_funcs.size(); i++) {
-        auto ambiguous_func = ambiguous_funcs[i];
-
-        logger.add_line([ambiguous_func](auto& logger) {
-            logger.print("Defined at: ");
-            ambiguous_func->show_location_msg(logger);
-        }).remove_period();
-
-        logger.add_line("  '%s'", ambiguous_func->get_decl_string())
-            .remove_period();
-        logger.add_empty_line();
-    }
 }
 
 void acorn::Sema::display_generic_bind_named_args_fail_info(const llvm::SmallVector<Expr*>& args,
@@ -6456,502 +6964,310 @@ void acorn::Sema::display_generic_bind_named_args_fail_info(const llvm::SmallVec
     }
 }
 
-bool acorn::Sema::try_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
-                                                Type* from_type, // Type at current level of comparison
-                                                llvm::SmallVector<Type*>& bindings,
-                                                bool enforce_elm_const) {
-    if (to_type->is_generic()) {
-        // Generic type can have any type bound so we are finished.
-        auto generic_type = static_cast<GenericType*>(to_type);
+void acorn::Sema::report_binary_op_cannot_apply(BinOp* bin_op, Expr* expr) {
+    auto op_str = token_kind_to_string(bin_op->op, context);
+    error(expand(expr), "Operator %s cannot apply to type '%s'.   ('%s' %s '%s')",
+            op_str, expr->type, bin_op->lhs->type, op_str, bin_op->rhs->type)
+        .end_error(ErrCode::SemaBinOpTypeCannotApply);
+}
 
-        size_t generic_index = generic_type->get_generic_index();
-        if (auto bound_type = bindings[generic_index]) {
+void acorn::Sema::report_binary_op_mistmatch_types(BinOp* bin_op) {
+    error(expand(bin_op), "Invalid operation. Mismatched types ('%s' %s '%s')",
+          bin_op->lhs->type, token_kind_to_string(bin_op->op, context), bin_op->rhs->type)
+        .end_error(ErrCode::SemaBinOpTypeMismatch);
+}
 
-            if (enforce_elm_const) {
-                if (!bound_type->is_const() && from_type->is_const()) {
-                    return false;
+void acorn::Sema::display_interface_func_mismatch_info(Func* interface_func,
+                                                       Func* func,
+                                                       bool indent,
+                                                       bool should_show_invidual_underlines) {
+
+#define err_line(n, fmt, ...) \
+add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_ARGS__);
+
+    size_t param_count = interface_func->params.size();
+    if (param_count != func->params.size()) {
+        err_line(nullptr,
+                 "incorrect number of parameters. Expected %s but found %s",
+                 param_count,
+                 func->params.size());
+        return;
+    }
+
+    if (interface_func->is_constant && !func->is_constant) {
+        err_line(nullptr, "expected function to be const");
+        return;
+    }
+
+    if (!interface_func->is_constant && func->is_constant) {
+        err_line(nullptr, "expected function to not be const");
+        return;
+    }
+
+    if (interface_func->return_type->is_not(func->return_type)) {
+        err_line(nullptr, "expected return type '%s' but found '%s'",
+                 interface_func->return_type,
+                 func->return_type);
+    }
+
+    for (size_t i = 0; i < param_count; i++) {
+        Var* param1 = interface_func->params[i];
+        Var* param2 = func->params[i];
+        if (param1->type->is_not(param2->type)) {
+            err_line(param2, "param %s: expected type '%s' but found '%s'", i + 1, param1->type, param2->type);
+        }
+    }
+
+    // report number of raised errors doesnt match (probably bad idea)
+
+    // report which raised errors are not raised/if they raise errors the interface doesn't
+    // then after this if that doesnt fail then report them being out of order
+
+    bool raised_errors_match = true;
+    for (auto& interface_error : interface_func->raised_errors) {
+        auto itr = std::ranges::find_if(func->raised_errors, [interface_error](auto& func_error) {
+            return func_error.structn == interface_error.structn;
+        });
+        if (itr == func->raised_errors.end()) {
+            err_line(nullptr, "missing raised error '%s'", interface_error.name);
+            raised_errors_match = false;
+        }
+    }
+    for (auto& func_error : func->raised_errors) {
+        auto itr = std::ranges::find_if(interface_func->raised_errors, [func_error](auto& interface_error) {
+            return func_error.structn == interface_error.structn;
+        });
+        if (itr == interface_func->raised_errors.end()) {
+            if (should_show_invidual_underlines)
+                logger.add_individual_underline(func_error.error_loc);
+            logger.add_line("%s- raised error '%s' not raised by interface function", indent ? "  " : "", func_error.name);
+            raised_errors_match = false;
+        }
+    }
+
+    // Still verify that the order they are specified in matches.
+    if (raised_errors_match) {
+        bool order_matches = true;
+        for (size_t i = 0; i < interface_func->raised_errors.size(); i++) {
+            auto& interface_error = interface_func->raised_errors[i];
+            auto& func_error = func->raised_errors[i];
+            if (interface_error.structn != func_error.structn) {
+                order_matches = false;
+                break;
+            }
+        }
+        if (!order_matches) {
+            err_line(nullptr, "raised errors do not appear in the same order as interface function");
+        }
+    }
+
+#undef err_line
+}
+
+std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr, bool has_implicit_pointer) const {
+
+    if (auto to_enum_type = to_type->get_container_enum_type()) {
+        if (expr->type->is_enum()) {
+            if (expr->type->is_not(to_enum_type)) {
+                return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
+            }
+        } else if (auto from_enum_type = expr->type->get_container_enum_type()) {
+            if (from_enum_type->is_not(to_enum_type)) {
+                return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
+            }
+        } else {
+            return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
+        }
+    }
+
+    if (to_type->is_integer() && expr->trivially_reassignable && expr->type->is_integer()) {
+        return get_error_msg_for_value_not_fit_type(to_type);
+    } else if (to_type->is_pointer() && expr->type->is_array()) {
+
+        auto from_type = expr->type;
+        auto cmp_to_type = to_type;
+        if (try_remove_const_for_compare(cmp_to_type, from_type, expr)) {
+            auto to_arr_Type   = static_cast<ArrayType*>(cmp_to_type);
+            auto from_ptr_type = static_cast<PointerType*>(from_type);
+
+            auto to_elm_type   = to_arr_Type->get_elm_type();
+            auto from_elm_type = from_ptr_type->get_elm_type();
+
+            if (to_elm_type->is(from_elm_type) || to_elm_type->is(context.void_type)) {
+                if (expr->is(NodeKind::Array)) {
+                    return "Cannot an assign array directly to a pointer";
+                } else if (expr->is(NodeKind::FuncCall)) {
+                    return "Cannot assign an array from a function call to a pointer";
                 }
             }
-
-            if (!try_remove_const_for_compare(bound_type, from_type, nullptr)) {
-                return false;
-            }
-
-            // TODO (maddie): does the implicit conversion of pointers happen here
-            // or elsewhere?
-
-            // TODO (maddie): this is way too strict. it will be at the very least
-            // nice to check if the type is convertable to the other type. It might
-            // also be a good idea to pass up information up the stack that basically
-            // tells if all the types have been bound and if they have then use normal
-            // assignment comparison instead.
-            return bound_type->is(from_type);
         }
 
-        // Constness situations and how they are reduced:
-        //
-        // 1.
-        // generics[T]
-        // fn foo(a: T*) {}
-        //
-        // v: int*;
-        // foo(v);
-        //
-        // Neither `v` or `T` are const so T=int.
-        //
-        // 2.
-        // generics[T]
-        // fn foo(a: const T*) {}
-        //
-        // v: int*;
-        // foo(v);
-        //
-        // Since `T` is const but `v` is not `T` it becomes T=int
-        //
-        // 3.
-        // generics[T]
-        // void foo(a: T*) {}
-        //
-        // v: const int*;
-        // foo(v);
-        //
-        // Since `T` is not const but `v` is const `T` takes on the
-        // constness of v and and so T=const int
-        //
-        // 4.
-        // generics[T]
-        // void foo(a: const T*) {}
-        //
-        // v: const int*;
-        // foo(v);
-        //
-        // Since `T` is const and `v` is const `T` becomes T=int
-        //
-
-        if (to_type->is_const() && from_type->is_const()) {
-            // Make sure not to make T const since it pattern matched
-            // on the existing const.
-            bindings[generic_index] = from_type->remove_all_const();
-        } else {
-            bindings[generic_index] = from_type;
-        }
-        return true;
-    } else if (enforce_elm_const) {
-        // Not generic but element of container, so need to enforce const rules.
-        if (!to_type->is_const() && from_type->is_const()) {
-            // Violates const rules.
-            return false;
-        }
-    }
-
-
-    switch (to_type->get_kind()) {
-    case TypeKind::Pointer:
-    case TypeKind::Slice: {
-        if (from_type->get_kind() != to_type->get_kind()) {
-            return false;
-        }
-
-        auto ptr_to_type   = static_cast<ContainerType*>(to_type);
-        auto ptr_from_type = static_cast<ContainerType*>(from_type);
-
-        auto elm_to_type   = ptr_to_type->get_elm_type();
-        auto elm_from_type = ptr_from_type->get_elm_type();
-
-        return try_bind_type_to_generic_type(elm_to_type, elm_from_type, bindings, true);
-    }
-    case TypeKind::Array: {
-        if (!from_type->is_array()) {
-            return false;
-        }
-
-        auto arr_to_type   = static_cast<ArrayType*>(to_type);
-        auto arr_from_type = static_cast<ArrayType*>(from_type);
-
-        auto elm_to_type   = arr_to_type->get_elm_type();
-        auto elm_from_type = arr_from_type->get_elm_type();
-
-        if (arr_to_type->get_length() != arr_from_type->get_length()) {
-            return false;
-        }
-
-        return try_bind_type_to_generic_type(elm_to_type, elm_from_type, bindings, true);
-    }
-    case TypeKind::Function: {
-        if (!from_type->is_function()) {
-            return false;
-        }
-
-        auto func_to_type   = static_cast<FunctionType*>(to_type);
-        auto func_from_type = static_cast<FunctionType*>(from_type);
-
-        auto& to_param_types   = func_to_type->get_param_types();
-        auto& from_param_types = func_from_type->get_param_types();
-
-        if (to_param_types.size() != from_param_types.size()) {
-            return false;
-        }
-
-        auto to_return_type   = func_to_type->get_return_type();
-        auto from_return_type = func_from_type->get_return_type();
-
-        if (!try_bind_type_to_generic_type(to_return_type, from_return_type, bindings)) {
-            return false;
-        }
-
-        for (size_t i = 0; i < to_param_types.size(); i++) {
-            auto to_param_type   = to_param_types[i];
-            auto from_param_type = from_param_types[i];
-            if (!try_bind_type_to_generic_type(to_param_type, from_param_type, bindings)) {
-                return false;
-            }
-        }
-
-        if (func_to_type->uses_native_varargs() != func_from_type->uses_native_varargs()) {
-            return false;
-        }
-
-        auto& to_raised_errors   = func_to_type->get_raised_errors();
-        auto& from_raised_errors = func_from_type->get_raised_errors();
-
-        if (to_raised_errors.size() != from_raised_errors.size()) {
-            return false;
-        }
-
-        for (size_t i = 0; i < to_raised_errors.size(); i++) {
-            auto& to_raised_error   = to_raised_errors[i];
-            auto& from_raised_error = from_raised_errors[i];
-            if (to_raised_error.structn != from_raised_error.structn) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-    default:
-        acorn_fatal("Unreachable. Hit type that cannot contain a generic");
-        return false;
+        return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
+    } else if (expr->is(NodeKind::Array)) {
+        // Recreating the array because when assigning to variables it is possible
+        // they end up with different dimensions.
+        auto arr = static_cast<Array*>(expr);
+        Type* expr_type = get_array_type_for_mismatch_error(arr);
+        return get_type_mismatch_error(to_type, expr_type, has_implicit_pointer);
+    } else {
+        return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
     }
 }
 
-void acorn::Sema::check_cast(Cast* cast) {
-    auto fixed_cast_type = fixup_type(cast->explicit_cast_type);
-    if (!fixed_cast_type) {
-        return;
-    }
-    if (fixed_cast_type == context.indeterminate_type) {
-        cast->type = context.indeterminate_type;
-        return;
-    }
+std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Type* from_type, bool has_implicit_pointer) const {
 
-
-    if (is_incomplete_type(fixed_cast_type)) {
-        error(expand(cast), "Cannot cast to incomplete type '%s'", fixed_cast_type)
-                .end_error(ErrCode::SemaCannotCastIncompleteType);
-        return;
+    std::string to_type_str;
+    if (has_implicit_pointer && to_type->is_pointer()) {
+        auto ptr_type = static_cast<PointerType*>(to_type);
+        auto elm_type = ptr_type->get_elm_type();
+        to_type_str = elm_type->to_string() + "^";
+    } else {
+        to_type_str = to_type->to_string();
     }
 
-    cast->type = fixed_cast_type;
+    if (from_type->is(context.funcs_ref_type)) {
+        return std::format("Cannot assign a reference to a function to type '{}'", to_type_str);
+    } else if (to_type->is_pointer() && from_type->is_pointer()) {
+        auto to_ptr_type = static_cast<PointerType*>(to_type);
+        auto to_elm_type = to_ptr_type->get_elm_type();
+        if (to_elm_type->is_interface()) {
+            auto from_ptr_type = static_cast<PointerType*>(from_type);
+            auto from_elm_type = from_ptr_type->get_elm_type();
+            if (from_elm_type->is_struct()) {
+                auto struct_type = static_cast<StructType*>(from_elm_type);
+                auto intr_type = static_cast<InterfaceType*>(to_elm_type);
 
-    check_and_verify_type(cast->value);
-    if (!is_castable_to(fixed_cast_type, cast->value)) {
-        error(expand(cast), "Cannot cast from '%s' to '%s'",
-              cast->value->type, fixed_cast_type)
-            .end_error(ErrCode::SemaInvalidCast);
+                auto structn = struct_type->get_struct();
+                auto interfacen = intr_type->get_interface();
+
+                if (auto extension = structn->find_interface_extension(interfacen->name)) {
+                    if (!extension->is_dynamic) {
+                        return std::format("Cannot assign type '{}' to '{}' (Interface extension not dynamic)",
+                                           from_type->to_string(), to_type_str);
+                    }
+                }
+            }
+        }
     }
+
+    return std::format("Cannot assign type '{}' to '{}'", from_type->to_string(), to_type_str);
 }
 
-void acorn::Sema::check_named_value(NamedValue* named_value) {
-    check_node(named_value->assignment);
-    named_value->type = named_value->assignment->type;
-    named_value->is_foldable = named_value->assignment->is_foldable;
+acorn::Type* acorn::Sema::get_array_type_for_mismatch_error(Array* arr) const {
+    llvm::SmallVector<size_t> lengths;
+    return get_array_type_for_mismatch_error(arr, lengths, 0);
 }
 
-void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
-    if (arr->elms.empty()) {
-        arr->type = context.empty_array_type;
-        return;
+acorn::Type* acorn::Sema::get_array_type_for_mismatch_error(Array* arr,
+                                                            llvm::SmallVector<size_t>& lengths,
+                                                            size_t depth) const {
+    if (lengths.size() == depth) {
+        lengths.push_back(arr->elms.size());
+    } else if (lengths[depth] < arr->elms.size()) {
+        lengths[depth] = arr->elms.size();
     }
 
     Type* elm_type = nullptr;
-    Expr* value_for_elm_type;
-    bool values_have_errors = false;
-    for (Expr* elm : arr->elms) {
-        if (!elm) continue;
-
-        if (elm->is(NodeKind::Array) && dest_elm_type &&
-            (dest_elm_type->get_kind() == TypeKind::Array || dest_elm_type->get_kind() == TypeKind::AssignDeterminedArray)) {
-            auto next_dest_elm_type = static_cast<ContainerType*>(dest_elm_type)->get_elm_type();
-            check_array(static_cast<Array*>(elm), next_dest_elm_type);
+    for (auto elm : arr->elms) {
+        if (elm->is(NodeKind::Array)) {
+            auto elm_arr = static_cast<Array*>(elm);
+            elm_type = get_array_type_for_mismatch_error(elm_arr, lengths, depth + 1);
         } else {
-            check_node(elm);
-        }
 
-        if (!elm->type) {
-            values_have_errors = true;
-            continue;
-        }
-
-        if (dest_elm_type) {
-            // Checking that the type is not an `AssignDeterminedArray` because it
-            // is possible elements of arrays to be assigned to the assign determined
-            // arrays. The checks for dimensional compatibility are checked later when
-            // the type is fixed up.
-            //
-            if (dest_elm_type->get_kind() != TypeKind::AssignDeterminedArray) {
-                if (!is_assignable_to(dest_elm_type, elm)) {
-                    error(expand(elm), "%s", get_type_mismatch_error(dest_elm_type, elm))
-                        .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
-                    values_have_errors = true;
-                }
-            }
-        } else if (!elm_type) {
-            elm_type = elm->type;
-            value_for_elm_type = elm;
-        } else if (elm_type->is_not(elm->type)) {
-            if (!is_assignable_to(elm_type, elm)) {
-                // Check the reverse case.
-                if (!is_assignable_to(elm->type, value_for_elm_type)) {
-                    error(expand(elm), "Incompatible element types. %s",
-                          get_type_mismatch_error(elm_type, elm))
-                        .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
-                    values_have_errors = true;
-                } else {
-                    elm_type = elm->type;
-                    value_for_elm_type = elm;
-                }
+            if (!elm_type) {
+                elm_type = elm->type;
+            } else if (elm_type->is_not(elm->type)) {
+                elm_type = elm->type;
             }
         }
     }
 
-    if (values_have_errors) {
-        return;
-    }
-
-    if (!elm_type) {
-        if (dest_elm_type->get_kind() != TypeKind::AssignDeterminedArray) {
-            elm_type = dest_elm_type;
-        } else {
-            elm_type = arr->elms[0]->type;
-        }
-    }
-
-    if (is_incomplete_type(elm_type)) {
-        error(expand(arr), "Array has incomplete element type '%s'", elm_type)
-            .end_error(ErrCode::SemaArrayIncompleteElmType);
-        return;
-    }
-
-    for (Expr* elm : arr->elms) {
-        if (elm) {
-            create_cast(elm, elm_type);
-
-            // Must go after after cast because casting may change foldability
-            if (!elm->is_foldable) {
-                arr->is_foldable = false;
-            }
-        }
-    }
-
-    arr->type = type_table.get_arr_type(elm_type, arr->elms.size());
+    size_t length = lengths[depth];
+    return type_table.get_arr_type(elm_type, length);
 }
 
-void acorn::Sema::check_memory_access(MemoryAccess* mem_access) {
-    check_and_verify_type(mem_access->site);
-    check_and_verify_type(mem_access->index);
-
-    mem_access->is_foldable = false;
-
-    Type* access_type = mem_access->site->type;
-    if (!(access_type->is_array() || access_type->is_pointer() || access_type->is_slice())) {
-        if (access_type == context.expr_type) {
-            auto elm_type = get_type_of_type_expr(mem_access->site);
-
-            auto unresolved_type = UnresolvedArrayType::create(context.get_allocator(), elm_type, mem_access->index);
-            auto fixed_expr_type = fixup_unresolved_array_type(unresolved_type);
-            if (!fixed_expr_type) {
-                return;
-            }
-
-            mem_access->expr_type = fixed_expr_type;
-            mem_access->type = context.expr_type;
-            return;
+void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code) {
+    logger.begin_error(error_loc, msg);
+    llvm::SmallVector<Decl*> dep_chain;
+    Decl* start_dep = dep;
+    while (dep) {
+        if (std::ranges::find(dep_chain, dep) != dep_chain.end()) {
+            // Prevent possible endless dependency determination.
+            break;
         }
-        error(mem_access, "Cannot index memory of type '%s'", access_type)
-            .end_error(ErrCode::SemaMemoryAccessBadType);
+
+        dep_chain.push_back(dep);
+        dep = dep->dependency;
+    }
+
+    logger.add_line("Dependency graph:").remove_period();
+    logger.add_empty_line();
+
+    // Calculate the maximum name length to format the display better.
+    size_t max_name_length = 0;
+    for (const auto& dep1 : dep_chain) {
+        max_name_length = std::max(max_name_length, dep1->name.to_string().size());
+    }
+
+    for (auto itr = dep_chain.begin(); itr != dep_chain.end(); ++itr) {
+        Decl* dep_lhs = *itr;
+        Decl* dep_rhs = (itr + 1) != dep_chain.end() ? *(itr + 1) : start_dep;
+
+        logger.add_line([dep_lhs, dep_rhs, max_name_length](Logger& logger) {
+            size_t lhs_pad = max_name_length - dep_lhs->name.to_string().size();
+            size_t rhs_pad = max_name_length - dep_rhs->name.to_string().size();
+
+            logger.fmt_print("  '%s'%s deps-on '%s'.   %s",
+                             dep_lhs->name,
+                             std::string(lhs_pad, ' '),
+                             dep_rhs->name,
+                             std::string(rhs_pad, ' '));
+            dep_lhs->show_location_msg(logger);
+        }).remove_period();
+    }
+
+    logger.end_error(error_code);
+}
+
+void acorn::Sema::report_error_cannot_use_variable_before_assigned(SourceLoc error_loc, Var* var) {
+    error(error_loc, "Cannot use variable '%s' before it has been assigned", var->name)
+        .end_error(ErrCode::SemaCannotUseVariableBeforeAssigned);
+}
+
+template<typename... TArgs>
+void acorn::Sema::add_error_line(Node* err_node, bool should_show_invidual_underlines, bool indent, const char* fmt, TArgs&&... args) {
+    if (err_node && should_show_invidual_underlines) {
+        logger.add_individual_underline(expand(err_node));
     } else {
-        auto ctr_type = static_cast<ContainerType*>(access_type);
-        mem_access->type = ctr_type->get_elm_type();
+        logger.still_give_main_location_priority();
     }
-
-    if (!mem_access->index->type->is_integer()) {
-        error(expand(mem_access->index), "Expected index of memory access to be an integer")
-            .end_error(ErrCode::SemaMemoryIndexNotInteger);
-    } else {
-        create_cast(mem_access->index, context.usize_type);
-    }
+    logger.add_line(fmt, indent ? "  " : "", std::forward<TArgs>(args)...);
 }
 
-void acorn::Sema::check_ternary(Ternary* ternary) {
-    check_node(ternary->cond);
-    if (ternary->cond->type) {
-        if (!check_is_condition(ternary->cond)) {
-            return;
-        }
-    }
-
-    check_node(ternary->lhs);
-    check_node(ternary->rhs);
-
-    if (!ternary->lhs->type || !ternary->rhs->type) {
-        return;
-    }
-    if (!ternary->lhs->is_foldable || !ternary->rhs->is_foldable) {
-        ternary->is_foldable = false;
-    }
-
-    Type* lhs_type = ternary->lhs->type;
-    Type* rhs_type = ternary->rhs->type;
-    if (rhs_type->is_const()) {
-        rhs_type = type_table.remove_const(rhs_type);
-    }
-    if (lhs_type->is_const()) {
-        lhs_type = type_table.remove_const(lhs_type);
-    }
-
-    if (lhs_type->is_not(rhs_type)) {
-        error(expand(ternary), "Operator ? has incompatible types '%s' and '%s'",
-              ternary->lhs->type, ternary->rhs->type)
-            .end_error(ErrCode::SemaTernaryIncompatibleTypes);
-        return;
-    }
-
-    ternary->type = lhs_type;
-}
-
-void acorn::Sema::check_type_expr(TypeExpr* type_expr) {
-    if (Type* fixed_type = fixup_type(type_expr->parsed_expr_type)) {
-        type_expr->expr_type = fixed_type;
-        type_expr->type = context.expr_type;
-    }
-}
-
-void acorn::Sema::check_reflect(Reflect* reflect) {
-    if (context.should_stand_alone()) {
-        error(reflect, "Cannot reflect when stand alone is enabled")
-            .end_error(ErrCode::SemaCannotReflectWhenStandAlone);
-        return;
-    }
-
-    check_and_verify_type(reflect->expr);
-
-    switch (reflect->reflect_kind) {
-    case ReflectKind::TypeInfo: {
-
-        if (reflect->expr->type == context.expr_type) {
-            reflect->type_info_type = get_type_of_type_expr(reflect->expr);
-        } else {
-            reflect->type_info_type = reflect->expr->type;
-        }
-
-        if (is_incomplete_type(reflect->type_info_type)) {
-            error(expand(reflect), "Cannot get type information of incomplete type '%s'",
-                  reflect->type_info_type)
-                .end_error(ErrCode::SemaCannotGetTypeInfoIncompleteType);
-            return;
-        }
-
-        reflect->type = context.const_std_type_ptr;
-        // TODO: come back to we will need some way for accessing the fields to be considered foldable.
-        reflect->is_foldable = false;
-
-        break;
-    }
-    default:
-        acorn_fatal("Reflection kind not implemented");
-    }
-}
-
-void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) {
-    if (cur_global_var) {
-        cur_global_var->dependency = var;
-
-        if (var->is_being_checked) {
-            if (cur_global_var->dependency == cur_global_var) {
-                report_error_cannot_use_variable_before_assigned(error_loc, cur_global_var);
-            } else {
-                display_circular_dep_error(error_loc,
-                                           cur_global_var,
-                                           "Global variables form a circular dependency",
-                                           ErrCode::SemaGlobalCircularDependency);
-            }
-        }
-    }
-
-    if (!var->has_been_checked) {
-        Sema sema(context, var->file, var->get_logger());
-        sema.check_variable(var);
-    }
-}
-
-bool acorn::Sema::ensure_struct_checked(SourceLoc error_loc, Struct* structn) {
-    if (cur_struct) {
-        cur_struct->dependency = structn;
-
-        // We do not display circular dependencies here because the fields of a struct need
-        // to be able to reference the struct.
-
-        //display_circular_dep_error(error_loc,
-        //                           cur_struct,
-        //                           "Structs form a circular dependency",
-        //                           ErrCode::SemaGlobalCircularDependency);
-    }
-
-    if (!structn->has_been_checked) {
-        Sema sema(context, structn->file, structn->get_logger());
-        sema.check_struct(structn);
-    }
-    return !structn->has_errors;
-}
-
-void acorn::Sema::ensure_enum_checked(SourceLoc error_loc, Enum* enumn) {
-    if (cur_enum) {
-        cur_enum->dependency = enumn;
-
-        if (cur_enum->is_being_checked) {
-            display_circular_dep_error(error_loc,
-                                       cur_enum,
-                                       "Enum forms a circular dependency",
-                                       ErrCode::SemaGlobalCircularDependency);
-        }
-    }
-
-    if (!enumn->has_been_checked) {
-        Sema sema(context, enumn->file, enumn->get_logger());
-        sema.check_enum(enumn);
-    }
-}
-
-void acorn::Sema::ensure_interface_checked(SourceLoc error_loc, Interface* interfacen) {
-    if (cur_interface) {
-        cur_interface->dependency = interfacen;
-
-        if (cur_interface->is_being_checked) {
-            display_circular_dep_error(error_loc,
-                                       cur_interface,
-                                       "Interface forms a circular dependency",
-                                       ErrCode::SemaGlobalCircularDependency);
-        }
-    }
-
-    if (!interfacen->has_been_checked) {
-        Sema sema(context, interfacen->file, interfacen->get_logger());
-        sema.check_interface(interfacen);
-    }
-}
 
 // Utility functions
 //--------------------------------------
+
+acorn::Sema::SemScope acorn::Sema::push_scope() {
+    SemScope sem_scope;
+    sem_scope.parent = cur_scope;
+    cur_scope = &sem_scope;
+    return sem_scope;
+}
+
+void acorn::Sema::pop_scope() {
+    cur_scope = cur_scope->parent;
+}
+
+void acorn::Sema::add_variable_to_local_scope(Var* var) {
+    if (Var* prev_var = cur_scope->find_variable(var->name)) {
+        logger.begin_error(var->loc, "Duplicate declaration of variable '%s'", var->name)
+                .add_line([prev_var](Logger& l) { prev_var->show_prev_declared_msg(l); })
+                .end_error(ErrCode::SemaDuplicateLocVariableDecl);
+    } else {
+        cur_scope->variables.push_back(var);
+    }
+}
 
 bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
 
@@ -7194,47 +7510,6 @@ bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) {
     }
 }
 
-bool acorn::Sema::check_modifiable(Expr* expr, Expr* error_node, bool is_assignment) {
-
-    if (!is_lvalue(expr)) {
-        error(expand(error_node), "Expected to be a modifiable value")
-            .end_error(ErrCode::SemaExpectedModifiable);
-        return false;
-    }
-
-    if (expr->type->is_const()) {
-        if (expr->is(NodeKind::IdentRef) &&
-            static_cast<IdentRef*>(expr)->found_kind == IdentRef::VarKind) {
-
-            auto ref = static_cast<IdentRef*>(expr);
-            if (ref->var_ref->is_field() && !ref->var_ref->type->is_const() &&
-                cur_func && cur_func->is_constant) {
-                error(expand(error_node), "Cannot %s field in a const function",
-                      is_assignment ? "reassign to" : "modify a")
-                    .end_error(ErrCode::SemaReassignConstVariable);
-            } else {
-                error(expand(error_node), "Cannot %s a const variable", is_assignment ? "reassign to" : "modify")
-                    .end_error(ErrCode::SemaReassignConstVariable);
-            }
-
-            return false;
-        } else {
-            error(expand(error_node), "Cannot %s a const address", is_assignment ? "assign to" : "modify")
-                .end_error(ErrCode::SemaReassignConstAddress);
-            return false;
-        }
-    }
-    if (is_readonly_field_without_access(expr)) {
-        auto dot = static_cast<DotOperator*>(expr);
-        error(expand(error_node), "Cannot %s field '%s', it is marked readonly",
-              is_assignment ? "assign to" : "modify", dot->var_ref->name)
-            .end_error(ErrCode::SemaCannotAssignToReadonly);
-        return false;
-    }
-
-    return true;
-}
-
 bool acorn::Sema::is_lvalue(Expr* expr) const {
     if (expr->is(NodeKind::MemoryAccess)) {
         return true;
@@ -7358,17 +7633,6 @@ bool acorn::Sema::may_implicitly_convert_ptr(PointerType* ptr_type, Expr* from_e
     return false;
 }
 
-void acorn::Sema::check_division_by_zero(Node* error_node, Expr* expr) {
-    if (!expr->is_foldable) return;
-
-    if (auto ll_constant = gen_constant(expr)) {
-        if (!ll_constant->isZeroValue()) return;
-
-        error(error_node, "Division by zero")
-            .end_error(ErrCode::SemaDivisionByZero);
-    }
-}
-
 void acorn::Sema::create_cast(Expr* expr, Type* to_type) {
     // TODO: Removing all constness here although because function types are
     // pointers it may be possible at some point that you can cast between them
@@ -7381,142 +7645,10 @@ void acorn::Sema::create_cast(Expr* expr, Type* to_type) {
     }
 }
 
-bool acorn::Sema::check_is_condition(Expr* cond) {
-    if (!is_condition(cond->type)) {
-        error(expand(cond), "Expected condition")
-            .end_error(ErrCode::SemaExpectedCondition);
-        return false;
-    }
-    return true;
-}
-
 bool acorn::Sema::is_condition(Type* type) const {
     return type->is_bool() ||
            type->is_pointer() ||
            type->get_kind() == TypeKind::Null;
-}
-
-void acorn::Sema::check_modifier_incompatibilities(Decl* decl) {
-    if (decl->has_modifier(Modifier::DllImport) && !decl->has_modifier(Modifier::Native)) {
-        error(decl->get_modifier_location(Modifier::DllImport),
-              "Cannot have dllimport modifier without native modifier")
-            .end_error(ErrCode::SemaDllImportWithoutNativeModifier);
-    }
-#define is_pow2(n) ((n) & ((n) - 1)) == 0
-    uint32_t access_bits = (decl->modifiers >> Modifier::AccessShift) & Modifier::AccessMask;
-    if (is_pow2(access_bits)) {
-        if (decl->has_modifier(Modifier::Public) && decl->has_modifier(Modifier::Private)) {
-            error(decl, "Cannot have both private and public modifiers")
-                .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
-        }
-        if (decl->has_modifier(Modifier::Public) && decl->has_modifier(Modifier::Readonly)) {
-            error(decl, "Cannot have both readonly and public modifiers")
-                .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
-        }
-        if (decl->has_modifier(Modifier::Private) && decl->has_modifier(Modifier::Readonly)) {
-            error(decl, "Cannot have both private and readonly modifiers")
-                .end_error(ErrCode::SemaHaveBothPrivateAndPublicModifier);
-        }
-    }
-#undef is_pow2
-}
-
-void acorn::Sema::check_modifiers_for_composite(Decl* decl, const char* composite_type_str) {
-    check_modifier_incompatibilities(decl);
-    if (decl->has_modifier(Modifier::DllImport)) {
-        error(decl->get_modifier_location(Modifier::DllImport), "%s cannot have dllimport modifier", composite_type_str)
-            .end_error(ErrCode::SemaCompositeCannotHaveDllImportModifier);
-    }
-    if (decl->has_modifier(Modifier::Native)) {
-        error(decl->get_modifier_location(Modifier::Native), "%s cannot have native modifier", composite_type_str)
-            .end_error(ErrCode::SemaCompositeCannotHaveNativeModifier);
-    }
-}
-
-bool acorn::Sema::check_raised_error(RaisedError& raised_error) {
-    if (auto composite = find_composite(raised_error.name)) {
-        if (composite->is_not(NodeKind::Struct)) {
-            error(raised_error.error_loc, "Raised error '%s' must be an error struct", raised_error.name)
-                .end_error(ErrCode::SemaRaisedErrorNotStruct);
-            return false;
-        }
-
-        auto structn = static_cast<Struct*>(composite);
-        if (!ensure_struct_checked(raised_error.error_loc, structn)) {
-            return false;
-        }
-
-        bool extends_error_interface = false;
-        for (auto& extension : structn->interface_extensions) {
-            if (extension.interfacen == context.std_error_interface) {
-                extends_error_interface = true;
-                break;
-            }
-        }
-
-        if (!extends_error_interface) {
-            error(raised_error.error_loc, "Cannot raise '%s' because it does not extend 'std.Error' interface",
-                  raised_error.name)
-                .end_error(ErrCode::SemaRaisedErrorNotExtendErrorInterface);
-            return false;
-        }
-
-        raised_error.structn = structn;
-
-    } else {
-        error(raised_error.error_loc, "Raised error '%s' not found", raised_error.name)
-            .end_error(ErrCode::SemaRaisedErrorNotFound);
-        return false;
-    }
-    return true;
-}
-
-void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code) {
-    logger.begin_error(error_loc, msg);
-    llvm::SmallVector<Decl*> dep_chain;
-    Decl* start_dep = dep;
-    while (dep) {
-        if (std::ranges::find(dep_chain, dep) != dep_chain.end()) {
-            // Prevent possible endless dependency determination.
-            break;
-        }
-
-        dep_chain.push_back(dep);
-        dep = dep->dependency;
-    }
-
-    logger.add_line("Dependency graph:").remove_period();
-    logger.add_empty_line();
-
-    // Calculate the maximum name length to format the display better.
-    size_t max_name_length = 0;
-    for (const auto& dep1 : dep_chain) {
-        max_name_length = std::max(max_name_length, dep1->name.to_string().size());
-    }
-
-    for (auto itr = dep_chain.begin(); itr != dep_chain.end(); ++itr) {
-        Decl* dep_lhs = *itr;
-        Decl* dep_rhs = (itr + 1) != dep_chain.end() ? *(itr + 1) : start_dep;
-
-        logger.add_line([dep_lhs, dep_rhs, max_name_length](Logger& logger) {
-            size_t lhs_pad = max_name_length - dep_lhs->name.to_string().size();
-            size_t rhs_pad = max_name_length - dep_rhs->name.to_string().size();
-
-            logger.fmt_print("  '%s'%s deps-on '%s'.   %s",
-                             dep_lhs->name,
-                             std::string(lhs_pad, ' '),
-                             dep_rhs->name,
-                             std::string(rhs_pad, ' '));
-            dep_lhs->show_location_msg(logger);
-        }).remove_period();
-    }
-
-    logger.end_error(error_code);
-}
-
-void acorn::Sema::report_error_cannot_use_variable_before_assigned(SourceLoc error_loc, Var* var) {
-    error(error_loc, "Cannot use variable '%s' before it has been assigned", var->name)
-        .end_error(ErrCode::SemaCannotUseVariableBeforeAssigned);
 }
 
 acorn::Type* acorn::Sema::get_type_of_type_expr(Expr* expr) {
@@ -7617,138 +7749,6 @@ llvm::Constant* acorn::Sema::gen_constant(Expr* expr) {
     }
 
     return llvm::cast<llvm::Constant>(ll_value);
-}
-
-std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr, bool has_implicit_pointer) const {
-
-    if (auto to_enum_type = to_type->get_container_enum_type()) {
-        if (expr->type->is_enum()) {
-            if (expr->type->is_not(to_enum_type)) {
-                return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
-            }
-        } else if (auto from_enum_type = expr->type->get_container_enum_type()) {
-            if (from_enum_type->is_not(to_enum_type)) {
-                return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
-            }
-        } else {
-            return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
-        }
-    }
-
-    if (to_type->is_integer() && expr->trivially_reassignable && expr->type->is_integer()) {
-        return get_error_msg_for_value_not_fit_type(to_type);
-    } else if (to_type->is_pointer() && expr->type->is_array()) {
-
-        auto from_type = expr->type;
-        auto cmp_to_type = to_type;
-        if (try_remove_const_for_compare(cmp_to_type, from_type, expr)) {
-            auto to_arr_Type   = static_cast<ArrayType*>(cmp_to_type);
-            auto from_ptr_type = static_cast<PointerType*>(from_type);
-
-            auto to_elm_type   = to_arr_Type->get_elm_type();
-            auto from_elm_type = from_ptr_type->get_elm_type();
-
-            if (to_elm_type->is(from_elm_type) || to_elm_type->is(context.void_type)) {
-                if (expr->is(NodeKind::Array)) {
-                    return "Cannot an assign array directly to a pointer";
-                } else if (expr->is(NodeKind::FuncCall)) {
-                    return "Cannot assign an array from a function call to a pointer";
-                }
-            }
-        }
-
-        return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
-    } else if (expr->is(NodeKind::Array)) {
-        // Recreating the array because when assigning to variables it is possible
-        // they end up with different dimensions.
-        auto arr = static_cast<Array*>(expr);
-        Type* expr_type = get_array_type_for_mismatch_error(arr);
-        return get_type_mismatch_error(to_type, expr_type, has_implicit_pointer);
-    } else {
-        return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
-    }
-}
-
-std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Type* from_type, bool has_implicit_pointer) const {
-
-    std::string to_type_str;
-    if (has_implicit_pointer && to_type->is_pointer()) {
-        auto ptr_type = static_cast<PointerType*>(to_type);
-        auto elm_type = ptr_type->get_elm_type();
-        to_type_str = elm_type->to_string() + "^";
-    } else {
-        to_type_str = to_type->to_string();
-    }
-
-    if (from_type->is(context.funcs_ref_type)) {
-        return std::format("Cannot assign a reference to a function to type '{}'", to_type_str);
-    } else if (to_type->is_pointer() && from_type->is_pointer()) {
-        auto to_ptr_type = static_cast<PointerType*>(to_type);
-        auto to_elm_type = to_ptr_type->get_elm_type();
-        if (to_elm_type->is_interface()) {
-            auto from_ptr_type = static_cast<PointerType*>(from_type);
-            auto from_elm_type = from_ptr_type->get_elm_type();
-            if (from_elm_type->is_struct()) {
-                auto struct_type = static_cast<StructType*>(from_elm_type);
-                auto intr_type = static_cast<InterfaceType*>(to_elm_type);
-
-                auto structn = struct_type->get_struct();
-                auto interfacen = intr_type->get_interface();
-
-                if (auto extension = structn->find_interface_extension(interfacen->name)) {
-                    if (!extension->is_dynamic) {
-                        return std::format("Cannot assign type '{}' to '{}' (Interface extension not dynamic)",
-                                           from_type->to_string(), to_type_str);
-                    }
-                }
-            }
-        }
-    }
-
-    return std::format("Cannot assign type '{}' to '{}'", from_type->to_string(), to_type_str);
-}
-
-acorn::Type* acorn::Sema::get_array_type_for_mismatch_error(Array* arr) const {
-    llvm::SmallVector<size_t> lengths;
-    return get_array_type_for_mismatch_error(arr, lengths, 0);
-}
-
-acorn::Type* acorn::Sema::get_array_type_for_mismatch_error(Array* arr,
-                                                            llvm::SmallVector<size_t>& lengths,
-                                                            size_t depth) const {
-    if (lengths.size() == depth) {
-        lengths.push_back(arr->elms.size());
-    } else if (lengths[depth] < arr->elms.size()) {
-        lengths[depth] = arr->elms.size();
-    }
-
-    Type* elm_type = nullptr;
-    for (auto elm : arr->elms) {
-        if (elm->is(NodeKind::Array)) {
-            auto elm_arr = static_cast<Array*>(elm);
-            elm_type = get_array_type_for_mismatch_error(elm_arr, lengths, depth + 1);
-        } else {
-
-            if (!elm_type) {
-                elm_type = elm->type;
-            } else if (elm_type->is_not(elm->type)) {
-                elm_type = elm->type;
-            }
-        }
-    }
-
-    size_t length = lengths[depth];
-    return type_table.get_arr_type(elm_type, length);
-}
-
-template<typename... TArgs>
-void acorn::Sema::add_error_line(Node* err_node, bool should_show_invidual_underlines, bool indent, const char* fmt, TArgs&&... args) {
-    if (err_node && should_show_invidual_underlines) {
-        logger.add_individual_underline(expand(err_node));
-    } else {
-        logger.still_give_main_location_priority();
-    }
-    logger.add_line(fmt, indent ? "  " : "", std::forward<TArgs>(args)...);
 }
 
 acorn::Var* acorn::Sema::SemScope::find_variable(Identifier name) const {

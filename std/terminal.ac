@@ -27,7 +27,7 @@ fn print(s: const String^) {
 }
 
 fn print(value: int, base := 10) {
-    if value < 0 {
+    if (value < 0) {
         print("-");
         value = -value;
     }
@@ -46,7 +46,7 @@ fn print(value: uint64, base := 10) {
 }
 
 fn print(value: int64, base := 10) {
-    if value < 0 {
+    if (value < 0) {
         print('-');
         value = -value;
     }
@@ -59,7 +59,7 @@ fn print(c: char) {
 }
 
 fn print(b: bool) {
-    if b {
+    if (b) {
         print("true", 4);
     } else {
         print("false", 5);
@@ -72,8 +72,8 @@ fn print(value: Any) {
 
 fn print(fmt: const char*, args: Any...) {
     arg_index := 0;
-    loop ptr := fmt; *ptr != '\0'; {
-        if *ptr == '%' && *(ptr+1) == 's' {
+    loop (ptr := fmt; *ptr != '\0';) {
+        if (*ptr == '%' && *(ptr+1) == 's') {
             ptr += 2;
             arg: Any = args[arg_index++];
             print(arg);
@@ -101,7 +101,7 @@ fn print(ptr: const void*) {
 }
 
 private fn print_any(ptr: const void*, type: const Type*) {
-    switch type.id {
+    switch (type.id) {
     case Int:     print(as(int64)  *as(const int*)    ptr);
     case Int8:    print(as(int64)  *as(const int8*)   ptr);
     case Int16:   print(as(int64)  *as(const int16*)  ptr);
@@ -119,16 +119,16 @@ private fn print_any(ptr: const void*, type: const Type*) {
     // TODO: case Float32: case Float64:
     case Bool:    print(*as(const bool*) ptr);
     case Pointer:
-        if type.elm_type.id == TypeId.Char {
+        if (type.elm_type.id == TypeId.Char) {
             print(*as(const (const char*)*) ptr);
-        } elif type.elm_type == #type_info(String) {
+        } elif (type.elm_type == #type_info(String)) {
             print(*as(const (const String*)*) ptr);
         } else {
             print(*as(const (const void*)*) ptr);
         }
     case Function: print(*as(const (const void*)*) ptr);
     case Struct:
-        if type == #type_info(String) {
+        if (type == #type_info(String)) {
             print(as(const String*) ptr);
         } else {
             print_struct(ptr, type.struct_info);
@@ -149,14 +149,14 @@ private fn print_array_like_value(array: const void*, elm_type: const Type*, len
     print('[');
 
     elm_byte_size: int = elm_type.size_in_bytes;
-    loop i in 0..<length {
+    loop (i in 0..<length) {
         offset_into_array: const void* = array + (i * elm_byte_size);
 
-        if elm_type.is_string()  print('"');
+        if (elm_type.is_string()) print('"');
         print_any(offset_into_array, elm_type);
-        if elm_type.is_string()  print('"');
+        if (elm_type.is_string()) print('"');
 
-        if i+1 != length {
+        if (i+1 != length) {
             print(", ");
         }
     }
@@ -168,18 +168,18 @@ private fn print_struct(ptr: const void*, struct_info: const StructTypeInfo*) {
     print(struct_info.name);
     print("{ ");
 
-    loop i in 0..<struct_info.num_fields {
+    loop (i in 0..<struct_info.num_fields) {
         field_info := struct_info.fields + i;
         print(field_info.name);
         print("=");
 
         field_data: const void* = ptr + field_info.offset_in_bytes;
 
-        if field_info.type.is_string()  print('"');
+        if (field_info.type.is_string()) print('"');
         print_any(field_data, field_info.type);
-        if field_info.type.is_string()  print('"');
+        if (field_info.type.is_string()) print('"');
 
-        if i+1 != struct_info.num_fields {
+        if (i+1 != struct_info.num_fields) {
             print(", ");
         }
     }
@@ -189,7 +189,7 @@ private fn print_struct(ptr: const void*, struct_info: const StructTypeInfo*) {
 
 private fn print_enum(ptr: const void*, enum_info: const EnumTypeInfo*) {
     index: uint64;
-    switch enum_info.index_type.id {
+    switch (enum_info.index_type.id) {
     case Int:     index = as(uint64) *as(const int*)    ptr;
     case Int8:    index = as(uint64) *as(const int8*)   ptr;
     case Int16:   index = as(uint64) *as(const int16*)  ptr;

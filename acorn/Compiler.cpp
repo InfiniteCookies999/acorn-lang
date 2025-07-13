@@ -236,7 +236,7 @@ void acorn::Compiler::sema_and_irgen() {
     // Check for nodes being placed in the wrong scope first such as if
     // statements at global scope.
     for (auto& entry : context.get_modules()) {
-        Sema::check_nodes_wrong_scopes(*entry.second);
+        Sema::report_nodes_wrong_scopes(*entry.second);
     }
 
     if (context.has_errors()) {

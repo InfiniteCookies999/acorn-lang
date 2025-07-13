@@ -40,7 +40,7 @@ void test_sema() {
         parser->parse();
 
         for (auto& entry : context->get_modules()) {
-            Sema::check_nodes_wrong_scopes(*entry.second);
+            Sema::report_nodes_wrong_scopes(*entry.second);
         }
         if (context->has_errors()) {
             return mock_modl;

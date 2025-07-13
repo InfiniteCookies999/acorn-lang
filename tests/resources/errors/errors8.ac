@@ -16,7 +16,7 @@ fn foo() | raises TestError {
 }
 
 fn main() {
-    try err: foo() {
+    try err: (foo()) {
         std.print("caught error!");
         std.print(err.get_message());
     };

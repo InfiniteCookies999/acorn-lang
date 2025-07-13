@@ -39,9 +39,9 @@ struct B {
 }
 
 fn main() {
-    loop i: int = 0; i < 5; i++ {
+    loop (i: int = 0; i < 5; i++) {
         a: A;
-        if i == 0 {
+        if (i == 0) {
             b: B;
             break;
         }

@@ -32,7 +32,7 @@ struct A :: *I {
     v: int;
 
     fn foo(b: bool, iv: int) | raises TestError {
-        if b {
+        if (b) {
             raise TestError{};
         }
         v = iv;
@@ -42,7 +42,7 @@ struct A :: *I {
 fn main() {
     a: A;
     i: I* = &a;
-    try i.foo(false, 64);
+    try (i.foo(false, 64));
     write_val(a.v);
-    try i.foo(true, 0);
+    try (i.foo(true, 0));
 }

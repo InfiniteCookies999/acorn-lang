@@ -16,30 +16,41 @@ native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-fn print(s: const char*, length: int) {
+fn write_val(val: int) {
+
 #if OS_GROUP_WINDOWS
     handle: void* = GetStdHandle(-11);
     written: uint32;
-    WriteFile(handle, s, as(uint32) length, &written, null);
+    c: char = as(char) val;
+    WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
-    write(1, s, as(usize) length);
+    c: char = as(char) val;
+    write(1, &c, 1);
 #endif
+
 }
 
-fn get_true() -> int* {
-    return as(int*) 1;
-}
+generics(T)
+struct A {
+    v1: T;
+    v2: T;
 
-fn get_false() -> int* {
-    return null;
+    fn foo(v1: T, v2: T) {
+        this.v1 = v1;
+        this.v2 = v2;
+    }
 }
 
 fn main() {
-    if (tof: int* = get_false()) {
-        print("False Case", 10);
-    }
 
-    if (tof: int* = get_true()) {
-        print("True Case", 9);
-    }
+    a1: A(int);
+    a1.foo(64, 80);
+    write_val(a1.v1);
+    write_val(a1.v2);
+
+    a2: A(float);
+    a2.foo(64.0f, 80.0f);
+    write_val(as(int) a2.v1);
+    write_val(as(int) a2.v2);
+
 }

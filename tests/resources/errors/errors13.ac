@@ -32,7 +32,7 @@ struct A {
 }
 
 fn foo(b: bool) -> A | raises TestError {
-    if b {
+    if (b) {
         raise TestError{};
     } else {
         return A{ 65, 66, 67, 68 };
@@ -40,7 +40,7 @@ fn foo(b: bool) -> A | raises TestError {
 }
 
 fn main() {
-    a1: A = try foo(false) {
+    a1: A = try (foo(false)) {
         std.print("I am not called");
         return;
     };
@@ -50,7 +50,7 @@ fn main() {
     write_val(a1.v3);
     write_val(a1.v4);
 
-    a2: A = try foo(true) {
+    a2: A = try (foo(true)) {
         std.print("error caught!");
         return;
     };

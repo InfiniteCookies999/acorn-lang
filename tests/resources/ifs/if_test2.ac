@@ -27,13 +27,13 @@ fn print(s: const char*, length: int) {
 }
 
 fn main() {
-    if true {
+    if (true) {
         print("True Case", 9);
     } else {
         print("Else Case", 9);
     }
 
-    if false {
+    if (false) {
         print("False Case", 10);
     } else {
         print("Else Case", 9);

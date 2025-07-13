@@ -49,9 +49,9 @@ void test_lexer() {
                 "const as null true false native dllimport return";
             Lexer& lexer = *mock_lexer(program);
 
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
+            auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwInt8);
+            expect((TokenKind)lexer.next_token().kind, to_string).to_be(Token::KwInt8);
             expect(lexer.next_token().kind, to_string).to_be(Token::KwInt16);
             expect(lexer.next_token().kind, to_string).to_be(Token::KwInt32);
             expect(lexer.next_token().kind, to_string).to_be(Token::KwInt64);
@@ -76,7 +76,7 @@ void test_lexer() {
             const char* program = "abc abc123 ABC123 aBc123 666abc abc^qq";
             Lexer& lexer = *mock_lexer(program);
 
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
+            auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
             expect(lexer.next_token().kind, to_string).to_be(Token::Identifier);
             expect(lexer.next_token().kind, to_string).to_be(Token::Identifier);
@@ -93,7 +93,7 @@ void test_lexer() {
                 ">> << ++ -- == != <= >= %= ^= &= *= /= += -= |= >>= <<= ~=";
             Lexer& lexer = *mock_lexer(program);
 
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
+            auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
             expect(lexer.next_token().kind, to_string).to_be('~');
             expect(lexer.next_token().kind, to_string).to_be('+');
@@ -140,7 +140,7 @@ void test_lexer() {
                 "1_2_3'i8   1_2_3'i16   1_2_3'i32   1_2_3'i64   1_2_3'u8   1_2_3'u16   1_2_3'u32   1_2_3'u64";
             Lexer& lexer = *mock_lexer(program);
 
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
+            auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
             expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
             expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
@@ -175,7 +175,7 @@ void test_lexer() {
                 "0x1_Fa'i8   0x1_Fa'i16   0x1_Fa'i32   0x1_Fa'i64   0x1_Fa'u8   0x1_Fa'u16   0x1_Fa'u32   0x1_Fa'u64 ";
             Lexer& lexer = *mock_lexer(program);
 
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
+            auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
             expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
             expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
@@ -212,7 +212,7 @@ void test_lexer() {
                 "0b1_01'i8   0b1_01'i16   0b1_01'i32   0b1_01'i64   0b1_01'u8   0b1_01'u16   0b1_01'u32   0b1_01'u64 ";
             Lexer& lexer = *mock_lexer(program);
 
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
+            auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
             expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
             expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
@@ -247,7 +247,7 @@ void test_lexer() {
                 "01_23'i8   01_23'i16   01_23'i32   01_23'i64   01_23'u8   01_23'u16   01_23'u32   01_23'u64 ";
             Lexer& lexer = *mock_lexer(program);
 
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
+            auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
             expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
             expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
@@ -279,7 +279,7 @@ void test_lexer() {
             const char* program = "523'i11  636'  7'i  62'u  23'7  51'123";
             Lexer& lexer = *mock_lexer(program);
 
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
+            auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
             expect(lexer.next_token(), empty<Token>).to_produce_error(ErrCode::LexNumberBadTypeSpec);
             expect(lexer.next_token(), empty<Token>).to_produce_error(ErrCode::LexNumberBadTypeSpec);
@@ -307,7 +307,7 @@ void test_lexer() {
             )";
             Lexer& lexer = *mock_lexer(program);
 
-            auto to_string = std::bind(token_kind_to_string, std::ref(*context), std::placeholders::_1);
+            auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
             expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
             expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);

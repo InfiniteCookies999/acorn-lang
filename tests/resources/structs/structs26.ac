@@ -50,7 +50,7 @@ fn foo(t: bool) -> A {
     a2.c = 99;
     a2.d = 100;
 
-    if t {
+    if (t) {
         return a1;
     }
 

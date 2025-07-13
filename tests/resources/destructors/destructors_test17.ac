@@ -33,7 +33,7 @@ struct A {
 }
 
 fn main() {
-    loop i: int = 0; i < 5; i++ {
+    loop (i: int = 0; i < 5; i++) {
         a: A;
     }
 }
