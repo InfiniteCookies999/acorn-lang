@@ -204,7 +204,7 @@ acorn::Var* acorn::Func::find_parameter(Identifier name) const {
 
 acorn::GenericFuncInstance* acorn::Func::get_generic_instance(PageAllocator& allocator,
                                                               llvm::SmallVector<Type*> bound_types,
-                                                              llvm::SmallVector<Type*> qualified_param_types,
+                                                              llvm::SmallVector<Type*> qualified_decl_types,
                                                               Struct* parent_struct) {
     // Check to see if the instance already exists.
     for (auto* instance : generic_instances) {
@@ -216,7 +216,7 @@ acorn::GenericFuncInstance* acorn::Func::get_generic_instance(PageAllocator& all
     auto generic_instance = allocator.alloc_type<GenericFuncInstance>();
     new (generic_instance) GenericFuncInstance();
     generic_instance->bound_types = std::move(bound_types);
-    generic_instance->qualified_decl_types  = std::move(qualified_param_types);
+    generic_instance->qualified_decl_types  = std::move(qualified_decl_types);
     generic_instance->structn = parent_struct;
 
     generic_instances.push_back(generic_instance);
@@ -231,6 +231,8 @@ void acorn::Func::bind_generic_instance(GenericFuncInstance* generic_instance) {
 
     this->generic_instance = generic_instance;
     this->structn = generic_instance->structn;
+    this->ll_func = generic_instance->ll_func;
+    acorn_assert(this->ll_func != nullptr, "Expected ll_func to exist by this point");
 
     // Bind the types bound to this instance of the generic function.
     return_type = generic_instance->qualified_decl_types[0];
@@ -251,7 +253,8 @@ const acorn::Struct::InterfaceExtension* acorn::Struct::find_interface_extension
     return itr != interface_extensions.end() ? itr : nullptr;
 }
 
-acorn::GenericStructInstance* acorn::UnboundGenericStruct::get_generic_instance(PageAllocator& allocator, llvm::SmallVector<Type*> bound_types) {
+acorn::GenericStructInstance* acorn::UnboundGenericStruct::get_generic_instance(PageAllocator& allocator,
+                                                                                llvm::SmallVector<Type*> bound_types) {
     // Check to see if the instance already exists.
     for (auto* instance : generic_instances) {
         if (instance->bound_types == bound_types) {
@@ -264,7 +267,7 @@ acorn::GenericStructInstance* acorn::UnboundGenericStruct::get_generic_instance(
     new_struct_instance->bound_types = std::move(bound_types);
     generic_instances.push_back(new_struct_instance);
 
-    auto new_struct_type = StructType::create(allocator, new_struct_instance);
+    auto new_struct_type = StructType::create(allocator, new_struct_instance, false);
     new_struct_instance->struct_type = new_struct_type;
 
     return new_struct_instance;

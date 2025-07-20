@@ -255,9 +255,14 @@ namespace acorn {
         }
         case NodeKind::Try: {
             auto tryn = static_cast<Try*>(node);
-            reset_node(tryn->caught_expr);
+            // DONT reset caught expression since it controls
+            // cleaning up the try statement.
+            //
+            // reset_node(tryn->caught_expr);
             tryn->passes_error_along = false;
-            tryn->caught_var->type = nullptr;
+            if (tryn->caught_var) {
+                tryn->caught_var->type = nullptr;
+            }
             tryn->ll_error = nullptr;
             tryn->ll_catch_bb = nullptr;
             tryn->ll_end_bb = nullptr;

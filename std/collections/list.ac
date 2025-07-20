@@ -1,0 +1,29 @@
+#file(access=public)
+
+/*
+generics(T)
+struct List {
+    private  buckets:  T*;
+    readonly length:   int = 0;
+    private  capacity: int = 0;
+
+    fn add(value: T) {
+        if (length + 1 > capacity) {
+            grow(length + 1);
+        }
+    }
+
+    private fn grow(min_capacity: int) {
+        new_capacity := min_capacity + min_capacity/2;
+        new_buckets  := malloc(new_capacity * sizeof(T));
+
+        if (length != 0) {
+            //loop (bucket, new_bucket := buckets, new_buckets;
+            //      buckets < buckets + length;
+            //      ++bucket, ++new_bucket) {
+            //    new_bucket.new(moveobj(*bucket));
+            //}
+        }
+    }
+}
+*/

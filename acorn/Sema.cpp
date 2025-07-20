@@ -186,7 +186,7 @@ void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
 }
 
 bool acorn::Sema::check_for_duplicate_match(const Func* func1, const Func* func2) {
-    if (do_functions_match<true>(func1, func2)) {
+    if (do_functions_match<false>(func1, func2)) {
         report_redeclaration(func1, func2, func1->is_constructor ? "constructor" : "function", ErrCode::SemaDuplicateFunc);
         return true;
     }
@@ -876,27 +876,76 @@ void acorn::Sema::check_struct(Struct* structn) {
                     .end_error(ErrCode::SemaDestructorsCannotHaveParams);
             }
         }
+        if (structn->is_generic) {
+            // Making sure to create a generic instance for the destructor since it is not
+            // called directly.
+            auto generic_instance = static_cast<GenericStructInstance*>(structn);
+            generic_instance->generic_destructor_instance =
+                structn->destructor->get_generic_instance(context.get_allocator(),
+                                                          generic_instance->bound_types,
+                                                          { context.void_type },
+                                                          structn);
+        }
     }
     auto check_move_or_copy_has_correct_param_type = [this, structn](Func* constructor,
-                                                                     Type* base_type,
+                                                                     Type* elm_type,
                                                                      bool is_copy) finline {
         if (constructor->has_checked_declaration || check_function_decl(constructor)) {
+            if (constructor->has_errors) {
+                return;
+            }
             // TODO (maddie): can this not result in circular dependencies? Should this not be checking
             // if the constructor has errors before continuing?
-            auto struct_ptr_type = type_table.get_ptr_type(base_type);
+            auto struct_ptr_type = type_table.get_ptr_type(elm_type);
             if (constructor->params.size() != 1) {
                 error(constructor,
-                      "%s constructor should have one parameter of type '%s'",
-                      is_copy ? "Copy" : "Move", struct_ptr_type)
+                        "%s constructor should have one parameter of type '%s'",
+                        is_copy ? "Copy" : "Move", struct_ptr_type)
                     .end_error(ErrCode::SemaCopyConstructorExpectsOneParam);
             } else {
                 auto param1 = constructor->params[0];
-                if (param1->type->is_not(struct_ptr_type)) {
+                Type* param_type = param1->type;
+                // Resolve situation like:
+                //
+                // generics(T)
+                // struct A {
+                //    fn copyobj(o: const A*) {}
+                // }
+                //
+                if (param_type->does_contain_generics() && structn->is_generic) {
+                    if (param_type->is_pointer()) {
+                        auto param_ptr_type = static_cast<PointerType*>(param_type);
+                        auto param_elm_type = param_ptr_type->get_elm_type();
+
+                        if (param_elm_type->get_kind() == TypeKind::PartiallyBoundStruct) {
+                            auto partially_bound_struct_type = static_cast<PartiallyBoundStructType*>(param_elm_type);
+                            auto unbound_generic_struct = partially_bound_struct_type->get_unbound_generic_struct();
+
+                            if (unbound_generic_struct->nspace == structn->nspace) {
+                                auto generic_struct_instance = static_cast<GenericStructInstance*>(structn);
+
+                                auto fixed_elm_type = fixup_partially_bound_struct_type(param_elm_type,
+                                                                                        &generic_struct_instance->bound_types);
+                                if (!fixed_elm_type) {
+                                    return;
+                                }
+
+                                Type* new_param_type = type_table.get_ptr_type(fixed_elm_type);
+                                if (param_type->is_const()) {
+                                    new_param_type = type_table.get_const_type(new_param_type);
+                                }
+                                param_type = new_param_type;
+                            }
+                        }
+                    }
+                }
+
+                if (param_type->is_not(struct_ptr_type)) {
                     error(param1,
-                          "%s constructor parameter should be of type '%s'",
-                          is_copy ? "Copy" : "Move", struct_ptr_type)
+                            "%s constructor parameter should be of type '%s'",
+                            is_copy ? "Copy" : "Move", struct_ptr_type)
                         .end_error(is_copy ? ErrCode::SemaCopyConstructorExpectedStructPtrType
-                                           : ErrCode::SemaMoveConstructorExpectedStructPtrType);
+                                            : ErrCode::SemaMoveConstructorExpectedStructPtrType);
                 }
             }
         }
@@ -904,9 +953,41 @@ void acorn::Sema::check_struct(Struct* structn) {
     if (structn->copy_constructor) {
         auto const_struct_type = type_table.get_const_type(structn->struct_type);
         check_move_or_copy_has_correct_param_type(structn->copy_constructor, const_struct_type, true);
+        if (structn->is_generic) {
+            // Making sure to create a generic instance for the move constructor since it is not
+            // called directly.
+            auto generic_instance = static_cast<GenericStructInstance*>(structn);
+            generic_instance->generic_copy_constructor_instance =
+                structn->copy_constructor->get_generic_instance(context.get_allocator(),
+                                                                generic_instance->bound_types,
+                                                                { context.void_type, type_table.get_ptr_type(const_struct_type) },
+                                                                structn);
+        }
     }
     if (structn->move_constructor) {
         check_move_or_copy_has_correct_param_type(structn->move_constructor, structn->struct_type, false);
+        if (structn->is_generic) {
+            // Making sure to create a generic instance for the move constructor since it is not
+            // called directly.
+            auto generic_instance = static_cast<GenericStructInstance*>(structn);
+            generic_instance->generic_move_constructor_instance =
+                structn->move_constructor->get_generic_instance(context.get_allocator(),
+                                                                generic_instance->bound_types,
+                                                                { context.void_type, type_table.get_ptr_type(structn->struct_type) },
+                                                                structn);
+        }
+    }
+    if (structn->default_constructor) {
+        if (structn->is_generic) {
+            // Making sure to create a generic instance for the move constructor since it is not
+            // called directly.
+            auto generic_instance = static_cast<GenericStructInstance*>(structn);
+            generic_instance->generic_default_constructor_instance =
+                structn->default_constructor->get_generic_instance(context.get_allocator(),
+                                                                   generic_instance->bound_types,
+                                                                   { context.void_type },
+                                                                   structn);
+        }
     }
 }
 
@@ -1051,13 +1132,16 @@ bool acorn::Sema::check_function_decl(Func* func) {
 
 
     // -- debug
-    // Logger::debug("checking function declaration: %s", func->name);
+    // Logger::debug("checking function declaration: %s | %s", func->name, func->file->path);
+
 
     // TODO: This does not take into account that it is possible a
     // parameter with a default value calls another function and that
     // other function's declaration has not been fullfilled yet.
     func->has_checked_declaration = true;
     func->is_checking_declaration = true;
+
+    cur_func_decl = func;
 
     auto error_cleanup = [](Func* func) finline {
         func->has_errors = true;
@@ -1520,15 +1604,15 @@ void acorn::Sema::check_modifiers_for_composite(Decl* decl, const char* composit
     }
 }
 
-template<bool check_only_non_default_value_params>
+template<bool check_for_interface>
 bool acorn::Sema::do_functions_match(const Func* func1, const Func* func2) {
 
     if (func1->is_generic() || func2->is_generic()) {
-        return false;
+        return check_for_interface;
     }
 
     auto get_param_count = [](const Func* func) finline {
-        if constexpr (check_only_non_default_value_params) {
+        if constexpr (!check_for_interface) {
             if (func->default_params_offset == -1) {
                 return func->params.size();
             }
@@ -1563,7 +1647,7 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn,
                                                    const Struct::UnresolvedExtension& extension) {
 
     if (!interfacen->has_been_checked) {
-        check_interface(interfacen);
+        ensure_interface_checked(extension.error_loc, interfacen);
     }
 
     if (interfacen == context.std_error_interface) {
@@ -1656,7 +1740,7 @@ bool acorn::Sema::do_interface_functions_matches(Func* interface_func, Func* fun
         return false;
     }
 
-    if (!do_functions_match<false>(interface_func, func)) {
+    if (!do_functions_match<true>(interface_func, func)) {
         return false;
     }
 
@@ -2899,8 +2983,10 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         return nullptr;
     };
 
-    auto cleanup_try = [this]() finline {
-        if (cur_scope)
+    // Need to handle try here because assignment operators can
+    // have try statements.
+    auto cleanup_try = [this, bin_op]() finline {
+        if (bin_op->rhs->tryn)
             cur_scope->cur_try = nullptr;
     };
 
@@ -3000,15 +3086,18 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             break;
         }
         case Token::AddEq: case Token::SubEq: case Token::MulEq: {
-            if (!get_add_sub_mul_type(true, lhs_type, rhs_type)) return;
+            if (!get_add_sub_mul_type(true, lhs_type, rhs_type))
+                return cleanup_try();
             break;
         }
         case Token::DivEq: case Token::ModEq: {
-            if (!get_div_mod_type(true, lhs_type, rhs_type)) return;
+            if (!get_div_mod_type(true, lhs_type, rhs_type))
+                return cleanup_try();
             break;
         }
         case Token::AndEq: case Token::OrEq: case Token::CaretEq: {
-            if (!get_logical_bitwise_type(true, lhs_type, rhs_type)) return;
+            if (!get_logical_bitwise_type(true, lhs_type, rhs_type))
+                return cleanup_try();
             break;
         }
         case Token::TildeEq: {
@@ -3861,7 +3950,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         }
 
         if (dot->is_var_ref() && dot->var_ref->has_modifier(Modifier::Private)) {
-            if (!cur_func || cur_func->structn != dot->var_ref->structn) {
+            if (!cur_func || cur_func->non_generic_struct_instance != dot->var_ref->non_generic_struct_instance) {
                 error(expand(dot), "Cannot access field '%s', it is marked private",
                       dot->var_ref->name)
                     .end_error(ErrCode::SemaCannotAccessFieldIsPrivate);
@@ -3956,7 +4045,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             auto func = (*funcs)[0];
 
             if (func->has_modifier(Modifier::Private)) {
-                if (!cur_func || cur_func->structn != func->structn) {
+                if (!cur_func || cur_func->non_generic_struct_instance != func->non_generic_struct_instance) {
                     error(expand(dot), "Cannot access function '%s', it is marked private",
                           func->name)
                         .end_error(ErrCode::SemaCannotAccessFuncIsPrivate);
@@ -4074,6 +4163,27 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     Struct* generic_parent_struct = nullptr;
     IdentRef* ref = static_cast<IdentRef*>(call->site);
     llvm::SmallVector<Type*> pre_bound_types;
+
+    // Check if calling a member function of a generic struct in which case
+    // the the currently bound generic types must be pre bound.
+    if (cur_func && cur_func->structn && cur_func->structn->is_generic) {
+        bool passes_generics_along = (ref->is_not(NodeKind::DotOperator) &&
+                                      cur_func->non_generic_struct_instance == (*ref->funcs_ref)[0]->non_generic_struct_instance);
+        if (!passes_generics_along && ref->is(NodeKind::DotOperator)) {
+            auto dot = static_cast<DotOperator*>(ref);
+            if (dot->site->is(NodeKind::This)) {
+                passes_generics_along = true;
+            }
+        }
+
+        if (passes_generics_along) {
+            generic_parent_struct = cur_func->structn;
+            pre_bound_types.insert(pre_bound_types.begin(),
+                                    cur_func->generic_instance->bound_types.begin(),
+                                    cur_func->generic_instance->bound_types.end());
+        }
+    }
+
     if (ref->explicitly_binds_generics) {
         auto generic_bind_call = static_cast<GenericBindFuncCall*>(ref);
         pre_bound_types = std::move(generic_bind_call->bound_types);
@@ -4091,6 +4201,9 @@ void acorn::Sema::check_function_call(FuncCall* call) {
                                        generic_struct_instance->bound_types.end());
             }
         }
+    } else if (ref->is(NodeKind::This) && cur_func && cur_func->structn && cur_func->structn->is_generic) {
+        // Check if calling a member function of a generic struct in which case
+        // the the currently bound generic types must be pre bound.
     }
 
     Struct* ignored;
@@ -4467,6 +4580,9 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
 
         func_call_generic_bindings = &generic_bindings;
 
+        // +1 for return type.
+        qualified_decl_types.resize(called_func->params.size() + 1);
+
         // Attempt to fixup any indeterminate state.
         //
         for (size_t i = called_func->default_params_offset; i < called_func->params.size(); i++) {
@@ -4487,19 +4603,14 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                     initializer->indeterminate_inferred_default_values.push_back(bound_expr);
                 }
 
-                // +2 because +1 for return type.
-                qualified_decl_types.resize(i + 2);
+                // +1 for return type.
                 qualified_decl_types[i + 1] = bound_expr->type;
 
                 continue;
             }
         }
 
-        if (qualified_decl_types.empty()) {
-            auto return_type = called_func->partially_qualified_types[0];
-            return_type = fixup_type(return_type);
-            qualified_decl_types.push_back(return_type);
-        } else if (qualified_decl_types[0] == nullptr) {
+        if (qualified_decl_types[0] == nullptr) {
             auto return_type = called_func->partially_qualified_types[0];
             return_type = fixup_type(return_type);
             qualified_decl_types[0] = return_type;
@@ -4537,25 +4648,15 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         }
 
         if (called_func->is_generic()) {
-            if (qualified_decl_types.size() <= param->param_idx + 1) {
+            if (qualified_decl_types[param->param_idx + 1] == nullptr) {
                 param_type = called_func->partially_qualified_types[param->param_idx + 1];
 
                 if (param_type->does_contain_generics()) {
                     auto qualified_generic_type = fixup_type(param_type);
-                    qualified_decl_types.push_back(qualified_generic_type);
+                    qualified_decl_types[param->param_idx + 1] = qualified_generic_type;
                     param_type = qualified_generic_type;
                 } else {
-                    qualified_decl_types.push_back(param_type);
-                }
-            } else if (qualified_decl_types[param->param_idx] == nullptr) {
-                param_type = called_func->partially_qualified_types[param->param_idx + 1];
-
-                if (param_type->does_contain_generics()) {
-                    auto qualified_generic_type = fixup_type(param_type);
-                    qualified_decl_types[param->param_idx] = qualified_generic_type;
-                    param_type = qualified_generic_type;
-                } else {
-                    qualified_decl_types[param->param_idx] = param_type;
+                    qualified_decl_types[param->param_idx + 1] = param_type;
                 }
             } else {
                 param_type = qualified_decl_types[param->param_idx + 1];
@@ -4582,6 +4683,17 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
 
 
     if (called_func->is_generic()) {
+
+        // Qualifying any parameters with default values that did not have an assigned
+        // argument.
+        if (called_func->default_params_offset != -1) {
+            for (size_t i = called_func->default_params_offset; i < called_func->params.size(); i++) {
+                if (qualified_decl_types[i + 1] == nullptr) {
+                    Var* param = called_func->params[i];
+                    qualified_decl_types[i + 1] = param->type;
+                }
+            }
+        }
 
         // If calling a generic constructor then the pre bound types have not yet created
         // a generic struct because the constructor call is allowed to finish binding the
@@ -4703,7 +4815,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
     }
 
     if (candidate->has_modifier(Modifier::Private) && candidate->structn) {
-        if (!cur_func || (cur_func->structn != candidate->structn)) {
+        if (!cur_func || (cur_func->non_generic_struct_instance != candidate->non_generic_struct_instance)) {
             return CallCompareStatus::CANNOT_ACCESS_PRIVATE;
         }
     }
@@ -5101,6 +5213,40 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
         }
 
         return true;
+    }
+    case TypeKind::PartiallyBoundStruct: {
+        if (!from_type->is_struct()) {
+            return false;
+        }
+
+        auto partially_bound_struct_type = static_cast<PartiallyBoundStructType*>(to_type);
+        auto from_struct_type            = static_cast<StructType*>(from_type);
+
+        auto to_unbound_generic_struct = partially_bound_struct_type->get_unbound_generic_struct();
+        auto from_struct = from_struct_type->get_struct();
+        // Make sure we are effectively referring to the same struct.
+        if (from_struct->nspace != to_unbound_generic_struct->nspace) {
+            return false;
+        }
+
+        auto& partially_bound_types = partially_bound_struct_type->get_partially_bound_types();
+        if (partially_bound_types.empty()) {
+            // Checking if the bindings happens to be filled up for the entirety of the
+            // struct's generics, and if so, then we can fully qualify the generic struct
+            // and assume assignment.
+
+            for (size_t i = 0; i < to_unbound_generic_struct->generics.size(); i++) {
+                if (!bindings[i]) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // TODO (maddie): else deal with there being bound types that are generic.
+        acorn_fatal("Not implemented yet");
+        return false;
     }
     default:
         acorn_fatal("Unreachable. Hit type that cannot contain a generic");
@@ -5773,6 +5919,8 @@ acorn::Type* acorn::Sema::fixup_type(Type* type, bool is_ptr_elm_type) {
         }
     } else if (type->is_generic()) {
         return fixup_generic_type(type);
+    } else if (type->get_kind() == TypeKind::PartiallyBoundStruct) {
+        return fixup_partially_bound_struct_type(type, func_call_generic_bindings);
     } else {
         return type;
     }
@@ -5925,6 +6073,31 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
         auto found_struct = static_cast<Struct*>(found_composite);
 
         if (found_struct->is_generic) {
+            // Checking if within a member function, and if its a member function
+            // of the struct being declared. If so, then the generic struct type
+            // can take on the generics of the given struct.
+            if (cur_func && cur_func->non_generic_struct_instance == found_struct) {
+                Type* struct_type = cur_func->structn->struct_type;
+                if (unresolved_composite_type->is_const()) {
+                    struct_type = type_table.get_const_type(struct_type);
+                }
+                return struct_type;
+            } else if (cur_func_decl && cur_func_decl->non_generic_struct_instance == found_struct) {
+
+                // When there are no bound types it can be treated as if the type has
+                // generic types but none of them where bound.
+
+                auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(found_struct);
+                auto partially_bound_struct_type = PartiallyBoundStructType::create(context.get_allocator(),
+                                                                                    unbound_generic_struct,
+                                                                                    {});
+
+                if (unresolved_composite_type->is_const()) {
+                    return type_table.get_const_type(partially_bound_struct_type);
+                }
+                return partially_bound_struct_type;
+            }
+
             error(error_loc, "Expected generic arguments for generic type")
                 .end_error(ErrCode::SemaExpectedGenericArgsForGenericType);
             return nullptr;
@@ -6027,8 +6200,6 @@ acorn::Type* acorn::Sema::fixup_unresolved_generic_composite_type(Decl* found_co
     if (!ensure_struct_checked(error_loc, new_struct)) {
         return nullptr;
     }
-
-
 
     return new_struct->struct_type;
 }
@@ -6262,6 +6433,45 @@ acorn::Type* acorn::Sema::fixup_generic_type(Type* type) {
     return type;
 }
 
+acorn::Type* acorn::Sema::fixup_partially_bound_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_types) {
+    if (bound_types) {
+        auto partially_bound_struct_type = static_cast<PartiallyBoundStructType*>(type);
+        auto& partially_bound_types = partially_bound_struct_type->get_partially_bound_types();
+        auto unbound_generic_struct = partially_bound_struct_type->get_unbound_generic_struct();
+
+        llvm::SmallVector<Type*> fixed_bound_types;
+        if (partially_bound_types.empty()) {
+            fixed_bound_types.insert(fixed_bound_types.begin(),
+                                     bound_types->begin(),
+                                     bound_types->begin() + unbound_generic_struct->generics.size());
+
+        } else {
+            fixed_bound_types.reserve(unbound_generic_struct->generics.size());
+            for (auto bound_type : partially_bound_types) {
+                auto fixed_bound_type = fixup_type(bound_type);
+                if (!fixed_bound_type) {
+                    return nullptr;
+                }
+
+                fixed_bound_types.push_back(fixed_bound_type);
+            }
+        }
+
+        auto new_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(),
+                                                                       std::move(fixed_bound_types));
+
+        if (!ensure_struct_checked({}, new_struct)) {
+            return nullptr;
+        }
+
+        if (partially_bound_struct_type->is_const()) {
+            return type_table.get_const_type(new_struct->struct_type);
+        }
+        return new_struct->struct_type;
+    }
+    return type;
+}
+
 
 // Error reporting
 //--------------------------------------
@@ -6450,7 +6660,7 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
         }
 
         if (candidate->has_modifier(Modifier::Private) && candidate->structn) {
-            if (!cur_func || (cur_func->structn != candidate->structn)) {
+            if (!cur_func || (cur_func->non_generic_struct_instance != candidate->non_generic_struct_instance)) {
                 err_line(nullptr, "it is private");
                 return;
             }
@@ -7531,7 +7741,7 @@ bool acorn::Sema::is_readonly_field_without_access(Expr* expr) const {
     if (expr->is(NodeKind::DotOperator)) {
         auto dot = static_cast<DotOperator*>(expr);
         if (dot->is_var_ref() && dot->var_ref->has_modifier(Modifier::Readonly) &&
-            (!cur_func || cur_func->structn != dot->var_ref->structn)) {
+            (!cur_func || cur_func->non_generic_struct_instance != dot->var_ref->non_generic_struct_instance)) {
             return true;
         }
     }

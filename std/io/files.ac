@@ -1,9 +1,10 @@
-#file(access=public, namespace=files)
+#file(access=public, namespace=io)
 
 import .. module;
 import .win32;
 import .unix;
 import .String;
+import .IOError;
 
 #if OS_GROUP_UNIX
 import .unix.Stat;
@@ -55,7 +56,7 @@ enum FileFlag :: uint32 {
 
 // TODO: We need to fix the file handle to work with
 //       large files?
-struct FileHandle {
+struct FileHandle :: Writable, Readable {
 
 #if OS_GROUP_WINDOWS
     handle: void*;
@@ -115,38 +116,33 @@ struct FileHandle {
 #endif
     }
 
-    fn read_buffer(buffer: char*, length: int) -> int {
+    fn read_buffer(buffer: char*, length: int) -> int | raises IOError {
 #if OS_GROUP_WINDOWS
         bytes_read: uint32;
         if (win32.ReadFile(handle, buffer, as(uint32) length, &bytes_read, null) == 0) {
-            // TODO: proper error handling.
-            module.println("failed to read buffer of file :(");
-            return 0;
+            raise IOError{ "Failed to read from file handle" };
         }
         return as(int) bytes_read;
 #elif OS_GROUP_UNIX
         bytes_read: isize = unix.read(handle, buffer, as(usize) length);
         if (bytes_read == -1) {
-            module.println("failed to read buffer of file :(");
-            return 0;
+            raise IOError{ "Failed to read from file handle" };
         }
         return as(int) bytes_read;
 #endif
     }
 
-    fn write_buffer(buffer: const char*, length: int) -> int {
+    fn write_buffer(buffer: const char*, length: int) -> int | raises IOError {
 #if OS_GROUP_WINDOWS
         bytes_written: uint32;
         if (win32.WriteFile(handle, buffer, as(uint32) length, &bytes_written, null) == 0) {
-            module.println("failed to write to file handle :(");
-            return 0;
+            raise IOError{ "Failed to write to file handle" };
         }
         return as(int) bytes_written;
 #elif OS_GROUP_UNIX
         bytes_written: isize = unix.write(handle, buffer, as(usize) length);
         if (bytes_written == -1) {
-            module.println("failed to write to file handle :(");
-            return 0;
+            raise IOError{ "Failed to write to file handle" };
         }
         return as(int) bytes_written;
 #endif
@@ -170,30 +166,18 @@ struct FileHandle {
 /*
  * Reads an entire file into a string.
  */
-fn read(path: const char*) -> String {
-    handle := open(path, FileFlag.IN | FileFlag.SHARE);
-
-// TODO: eventually when we have proper error handling this should
-//       not be needed.
-#if OS_GROUP_WINDOWS
-    if (!handle.handle) {
-        return String{ "" };
-    }
-#elif OS_GROUP_UNIX
-    if (handle.handle == -1) {
-        return String{ "" };
-    }
-#endif
+fn read_file(path: const char*) -> String | raises IOError {
+    handle := try (open_file(path, FileFlag.IN | FileFlag.SHARE));
 
     size := handle.get_size();
 
     buffer := as(char*) module.malloc(size + 1); // +1 for null terminator.
-    bytes_read := handle.read_buffer(buffer, size);
+    bytes_read := try err: (handle.read_buffer(buffer, size)) {
+        raise IOError{ module.format("Reading file \"%s\": %s", path, err.get_message()) };
+    };
 
     if (bytes_read != size) {
-        // TODO: proper error handling.
-        module.println("Read the incorrect number of bytes from file :(");
-        return String{ "" };
+        raise IOError{ module.format("Failed to read all bytes of file: \"%s\"", path) };
     }
 
     buffer[size] = '\0'; // Adding null terminator.
@@ -203,15 +187,16 @@ fn read(path: const char*) -> String {
 /*
  * Reads an entire file into a string.
  */
-fn read(path: const String^) -> String {
-    return read(path.buffer);
+fn read_file(path: const String^) -> String | raises IOError {
+    contents := try (read_file(path.buffer));
+    return contents;
 }
 
 /*
  * Returns true if the file system has a file or
  * directory at the given path.
  */
-fn exists(path: const char*) -> bool {
+fn path_exists(path: const char*) -> bool {
 #if OS_GROUP_WINDOWS
     attribs: uint32 = win32.GetFileAttributesA(path);
     return attribs != win32.INVALID_FILE_ATTRIBUTES;
@@ -224,8 +209,8 @@ fn exists(path: const char*) -> bool {
  * Returns true if the file system has a file or
  * directory at the given path.
  */
-fn exists(path: const String^) -> bool {
-    return exists(path.buffer);
+fn path_exists(path: const String^) -> bool {
+    return path_exists(path.buffer);
 }
 
 /*
@@ -312,7 +297,7 @@ fn mkdir(path: const String^) -> bool {
  * If deleting a directory the directory must be
  * empty.
  */
-fn remove(path: const char*) -> bool {
+fn remove_path(path: const char*) -> bool {
 
 #if OS_GROUP_WINDOWS
     attribs: uint32 = win32.GetFileAttributesA(path);
@@ -335,11 +320,12 @@ fn remove(path: const char*) -> bool {
  * If deleting a directory the directory must be
  * empty.
  */
-fn remove(path: const String^) -> bool {
-    return remove(path.buffer);
+fn remove_path(path: const String^) -> bool {
+    return remove_path(path.buffer);
 }
 
-fn open(path: const char*, flags: FileFlag$) -> FileHandle {
+fn open_file(path: const char*, flags: FileFlag$) -> FileHandle | raises IOError {
+
 #if OS_GROUP_WINDOWS
     access_flags: uint32 = 0;
     share_flags:  uint32 = 0;
@@ -370,7 +356,7 @@ fn open(path: const char*, flags: FileFlag$) -> FileHandle {
             // Windows is weird and none of the create options allow us to simply
             // overwrite the old file. We will simply remove the existing file if
             // it exists then create a new one.
-            remove(path); // TODO: should this report an error if it fails?
+            remove_path(path); // TODO: should this report an error if it fails?
             create_flags |= win32.CREATE_NEW;
         }
     } else {
@@ -386,9 +372,7 @@ fn open(path: const char*, flags: FileFlag$) -> FileHandle {
                                       null);
 
     if (handle == win32.INVALID_HANDLE_VALUE) {
-        // TODO: Proper error handling!
-        module.println("Failed to open file :(");
-        return FileHandle{ null };
+        raise IOError{ module.format("Failed to open file: \"%s\"", path) };
     }
 
     return FileHandle{ handle };
@@ -422,15 +406,14 @@ fn open(path: const char*, flags: FileFlag$) -> FileHandle {
 
     handle: int32 = unix.open(path, os_flags, os_mode);
     if (handle == -1) {
-        // TODO: proper error handling!
-        module.println("Failed to open file :(");
-        return FileHandle{ -1 };
+        raise IOError{ module.format("Failed to open file: \"%s\"", path) };
     }
 
     return FileHandle{ handle };
 #endif
 }
 
-fn open(path: const String^, flags: FileFlag$) -> FileHandle {
-    return open(path.buffer, flags);
+fn open_file(path: const String^, flags: FileFlag$) -> FileHandle | raises IOError {
+    handle := try (open_file(path.buffer, flags));
+    return handle;
 }

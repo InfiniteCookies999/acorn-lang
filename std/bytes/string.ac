@@ -602,7 +602,7 @@ private native fn wcscmp(string1: const char16*, string2: const char16*) -> int3
  * @base  The numeric base of the value. Defaults to 10.
  */
 fn to_string(value: uint64, base := 10) -> String {
-    BUFFER_SIZE :: 21;
+    BUFFER_SIZE :: 64;
     buffer: char[BUFFER_SIZE];
 
     ptr := uint64_to_chars(value, buffer + BUFFER_SIZE - 1, base);
@@ -625,7 +625,7 @@ fn to_string(value: int64, base := 10) -> String {
         value = -value;
     }
 
-    BUFFER_SIZE :: 21 + 1;
+    BUFFER_SIZE :: 64 + 1;
     buffer: char[BUFFER_SIZE];
 
     ptr := uint64_to_chars(as(uint64) value, buffer + BUFFER_SIZE - 1, base);

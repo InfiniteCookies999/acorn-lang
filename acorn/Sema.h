@@ -54,6 +54,7 @@ namespace acorn {
         TypeTable&  type_table;
 
         Func*      cur_func       = nullptr;
+        Func*      cur_func_decl  = nullptr; // current function when checking its declaration.
         Var*       cur_global_var = nullptr;
         Struct*    cur_struct     = nullptr;
         Enum*      cur_enum       = nullptr;
@@ -135,7 +136,7 @@ namespace acorn {
         void check_modifier_incompatibilities(Decl* decl);
         void check_modifiers_for_composite(Decl* decl, const char* composite_type_str);
 
-        template<bool check_only_non_default_value_params>
+        template<bool check_for_interface>
         static bool do_functions_match(const Func* func1, const Func* func2);
 
         void check_struct_interface_extension(Struct* structn,
@@ -273,6 +274,7 @@ namespace acorn {
         Decl* find_composite_for_composite_type(Identifier name, SourceLoc error_loc);
         Type* fixup_function_type(Type* type);
         Type* fixup_generic_type(Type* type);
+        Type* fixup_partially_bound_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_types);
 
 
         // Error reporting

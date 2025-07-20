@@ -1,0 +1,30 @@
+import std;
+import std.Error;
+
+interface I {
+    fn foo() -> const char*;
+}
+
+struct TestError :: *I, *Error {
+    const fn get_name() -> const char* {
+        return "TestError";
+    }
+    const fn get_message() -> const char* {
+        return "test error msg!";
+    }
+    fn foo() -> const char* { return "from foo!"; }
+}
+
+fn bar() | raises TestError {
+    raise TestError{};
+}
+
+fn main() {
+    try err: (bar()) {
+        //e := as(TestError*) err;
+        err.get_message();
+        //std.print(err.get_message());
+        //std.print(e.get_message());
+        //std.print(e.foo());
+    };
+}

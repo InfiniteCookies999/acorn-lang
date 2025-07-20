@@ -70,7 +70,7 @@ fn sys_time_in_millisecs() -> int64 {
 
     // This represents the difference in the amount of 100-nanosecond intervals
     // between January 1, 1701 (UTC) and January 1, 1970 (UTC).
-    WINDOWS_UNIX_TIME_DIFFERENCE: int64: 116444736000000000;
+    WINDOWS_UNIX_TIME_DIFFERENCE: int64 : 116444736000000000;
 
     time: int64;
     win32.GetSystemTimeAsFileTime(&time);

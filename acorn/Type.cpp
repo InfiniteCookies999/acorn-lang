@@ -352,8 +352,10 @@ acorn::Type* acorn::UnresolvedArrayType::create(PageAllocator& allocator,
     return unresolved_type;
 }
 
-acorn::ArrayType* acorn::ArrayType::create(PageAllocator& allocator, Type* elm_type,
-                                           uint32_t length, bool is_const) {
+acorn::ArrayType* acorn::ArrayType::create(PageAllocator& allocator,
+                                           Type* elm_type,
+                                           uint32_t length,
+                                           bool is_const) {
     ArrayType* arr_type = allocator.alloc_type<ArrayType>();
     new (arr_type) ArrayType(is_const, elm_type, length);
     arr_type->contains_const = is_const;
@@ -558,6 +560,33 @@ std::string acorn::StructType::to_string() const {
         }
         str += ")";
     }
+    return str;
+}
+
+acorn::PartiallyBoundStructType* acorn::PartiallyBoundStructType::create(PageAllocator& allocator,
+                                                                         UnboundGenericStruct* unbound_generic_struct,
+                                                                         llvm::SmallVector<Type*> partially_bound_types,
+                                                                         bool is_const) {
+    auto struct_type = allocator.alloc_type<PartiallyBoundStructType>();
+    new (struct_type) PartiallyBoundStructType(is_const, unbound_generic_struct, std::move(partially_bound_types));
+    struct_type->contains_const = is_const;
+    if (!is_const) {
+        struct_type->non_const_version = struct_type;
+    }
+    struct_type->contains_generics = true;
+    return struct_type;
+}
+
+std::string acorn::PartiallyBoundStructType::to_string() const {
+    std::string str = unbound_generic_struct->name.to_string().str();
+    str += "(";
+    for (size_t i = 0; i < partially_bound_types.size(); i++) {
+        str += partially_bound_types[i]->to_string();
+        if (i + 1 != partially_bound_types.size()) {
+            str += ", ";
+        }
+    }
+    str += ")";
     return str;
 }
 

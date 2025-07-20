@@ -1,0 +1,16 @@
+#file(access=public, namespace=io)
+
+import .IOError;
+
+interface Readable {
+
+    /*
+     * Reads `length` bytes or less and stores the results
+     * in `buffer`.
+     *
+     * @return the number of bytes actually read.
+     */
+    fn read_buffer(buffer: char*, length: int) -> int
+        | raises IOError;
+
+}

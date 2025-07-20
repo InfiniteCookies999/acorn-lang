@@ -15,30 +15,33 @@ namespace acorn {
         DebugInfoEmitter(Context& context, SourceFile* file);
 
         void emit_function(Func* func);
+        void emit_implicit_function(llvm::Function* ll_func,
+                                    SourceFile* file,
+                                    Struct* parent_struct,
+                                    SourceLoc loc);
         void emit_function_end(Func* func);
+        void emit_function_end(llvm::Function* ll_func);
         void emit_struct_this_variable(llvm::Value* ll_this, Func* func, llvm::IRBuilder<>& ir_builder);
 
+        void push_location(llvm::IRBuilder<>& ir_builder, SourceLoc loc);
+        void pop_location(llvm::IRBuilder<>& ir_builder);
+        void set_location(llvm::Instruction* ll_instruction, SourceLoc loc);
+
         // Emit based on the last created instruction.
-        void emit_location(llvm::IRBuilder<>& ir_builder, SourceLoc location);
-        void emit_location(llvm::Instruction* ll_instruction, SourceLoc location);
-
-        void set_store_node(Node* store_node) {
-            this->store_node = store_node;
-        }
-
-        void clear_store_node() {
-            this->store_node = nullptr;
-        }
-
-        Node* get_store_node() const {
-            return store_node;
-        }
+        //void emit_location(llvm::IRBuilder<>& ir_builder, SourceLoc location);
+        //void emit_location(llvm::Instruction* ll_instruction, SourceLoc location);
+        //void emit_location(llvm::Instruction* ll_instruction,
+        //                   llvm::DIScope* ll_di_scope,
+        //                   size_t line_number,
+        //                   size_t column_number);
 
         void emit_function_variable(Var* var, llvm::IRBuilder<>& ir_builder);
         void emit_global_variable(Var* global);
 
         void emit_scope_start(SourceLoc loc);
         void emit_scope_end();
+
+        void emit_function_scope(llvm::Function* ll_func);
 
         void finalize();
 
@@ -49,15 +52,17 @@ namespace acorn {
         SourceFile*          file;
         llvm::DIBuilder      builder;
         llvm::DICompileUnit* di_unit = nullptr;
-        Node*                store_node = nullptr;
 
-        llvm::SmallVector<llvm::DIScope*> di_lexical_scopes;
+        llvm::SmallVector<llvm::DebugLoc, 4> di_location_stack;
+        llvm::SmallVector<llvm::DIScope*, 4> di_lexical_scopes;
 
         static llvm::DenseMap<Type*, llvm::DIType*> di_cached_types;
 
         void emit_file(SourceFile* file);
 
         llvm::DIType* emit_type(Type* type);
+
+        llvm::DILocation* create_location(SourceLoc loc);
 
     };
 }

@@ -384,7 +384,7 @@ void acorn::Compiler::sema_and_irgen() {
     ir_timer.start();
     IRGenerator generator(context);
     generator.add_return_to_global_init_function();
-    generator.destroy_global_variables();
+    generator.gen_global_cleanup_function();
     ir_timer.stop();
 
     // Checking any declarations that were not checked.

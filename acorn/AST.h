@@ -215,6 +215,11 @@ namespace acorn {
 
         // If not null then the function is a member function.
         Struct* structn = nullptr;
+        // This is equal to `structn` if the struct is not generic
+        // otherwise this is the version of the struct prior to having
+        // specific generic types specified.
+        Struct* non_generic_struct_instance = nullptr;
+
 
         // If not null then the function is a function of an
         // interface. Note, this is different than a function that
@@ -338,8 +343,11 @@ namespace acorn {
 
         llvm::StringRef linkname;
 
-        // TODO (maddie): we can probably get rid of this.
-        Struct* structn;
+        Struct* structn = nullptr;
+        // This is equal to `structn` if the struct is not generic
+        // otherwise this is the version of the struct prior to having
+        // specific generic types specified.
+        Struct* non_generic_struct_instance = nullptr;
 
         uint32_t param_idx = NotParam;
         uint32_t field_idx = NotField;
@@ -445,6 +453,13 @@ namespace acorn {
         GenericStructInstance() : Struct() {}
 
         llvm::SmallVector<Type*> bound_types;
+
+        // Need these in order to properly set the generic instance information
+        // when generating the llvm function declaration in implicit contexts.
+        GenericFuncInstance* generic_default_constructor_instance;
+        GenericFuncInstance* generic_destructor_instance;
+        GenericFuncInstance* generic_move_constructor_instance;
+        GenericFuncInstance* generic_copy_constructor_instance;
     };
 
     struct UnboundGenericStruct : Struct {
@@ -454,7 +469,8 @@ namespace acorn {
         llvm::SmallVector<Generic*>               generics;
         llvm::SmallVector<GenericStructInstance*> generic_instances;
 
-        GenericStructInstance* get_generic_instance(PageAllocator& allocator, llvm::SmallVector<Type*> bound_types);
+        GenericStructInstance* get_generic_instance(PageAllocator& allocator,
+                                                    llvm::SmallVector<Type*> bound_types);
 
     };
 

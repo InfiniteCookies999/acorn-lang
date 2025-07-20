@@ -24,7 +24,7 @@ void* acorn::PageAllocator::allocate(size_t size) {
 
     std::lock_guard<std::mutex> lock(mtx);
     if (aligned_size + offset > cur_page_size) {
-        alloc_new_page(next_multiple(size, page_size));
+        alloc_new_page(next_multiple(aligned_size, page_size));
     }
 
     void* new_alloc = static_cast<char*>(cur_page) + offset;

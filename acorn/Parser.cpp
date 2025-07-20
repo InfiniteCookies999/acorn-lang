@@ -163,6 +163,7 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
             var->field_idx = static_cast<uint32_t>(structn->fields.size());
             structn->fields.push_back(var);
             var->structn = structn;
+            var->non_generic_struct_instance = structn;
         }
     };
 
@@ -177,6 +178,9 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
     } else if (node->is(NodeKind::Func)) {
         auto func = static_cast<Func*>(node);
         if (func->name != Identifier::Invalid) {
+            func->structn = structn;
+            func->non_generic_struct_instance = structn;
+
             if (func->is_destructor) {
                 if (structn->destructor) {
                     structn->duplicate_struct_func_infos.push_back(
@@ -185,7 +189,6 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
 
                 structn->destructor = func;
                 structn->needs_destruction = true;
-                func->structn = structn;
             } else if (func->is_copy_constructor) {
                 if (structn->copy_constructor) {
                     structn->duplicate_struct_func_infos.push_back(
@@ -193,7 +196,6 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
                 }
 
                 structn->copy_constructor = func;
-                func->structn = structn;
                 structn->needs_copy_call = true;
             } else if (func->is_move_constructor) {
                 if (structn->move_constructor) {
@@ -202,17 +204,14 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
                 }
 
                 structn->move_constructor = func;
-                func->structn = structn;
                 structn->needs_move_call = true;
             } else if (func->is_constructor) {
                 if (func->params.empty()) {
                     structn->default_constructor = func;
                 }
                 structn->constructors.push_back(func);
-                func->structn = structn;
             } else {
                 structn->nspace->add_function(func);
-                func->structn = structn;
             }
             if (!func->is_generic()) {
                 context.add_unchecked_decl(func);
@@ -1881,11 +1880,6 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
 
     switch (op.kind) {
     case '+': {
-        // Note: Even if one of the values is a signed negative value for the unsigned
-        //       result case there cannot be negative underflow since the values are
-        //       first cast to unsigned integers and what would be negative overflow is
-        //       actually then caught as overflow.
-
         if (rval > 0 && lval > std::numeric_limits<T>::max() - rval) {
             return report_overflow(op, lhs, rhs, to_type);
         }
@@ -1898,14 +1892,11 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         return calc(lval + rval);
     }
     case '-': {
-        if constexpr (!is_signed) { // unsigned
-            if (lval < rval) {
-                return report_underflow(op, lhs, rhs, to_type);
-            }
-        } else {
-            if (rval < 0 && lval > std::numeric_limits<T>::max() + rval) {
-                return report_overflow(op, lhs, rhs, to_type);
-            }
+        if (rval < 0 && lval > std::numeric_limits<T>::max() + rval) {
+            return report_overflow(op, lhs, rhs, to_type);
+        }
+
+        if constexpr (is_signed) {
             if (rval > 0 && lval < std::numeric_limits<T>::min() + rval) {
                 return report_underflow(op, lhs, rhs, to_type);
             }
@@ -1913,23 +1904,31 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         return calc(lval - rval);
     }
     case '*': {
-        if constexpr (!is_signed) { // unsigned
-            if (lval != 0 && rval > std::numeric_limits<T>::max() / lval) {
+        if (rval != 0 && lval > std::numeric_limits<T>::max() / rval) {
+            return report_overflow(op, lhs, rhs, to_type);
+        }
+
+        if constexpr (is_signed) {
+            if (lval == ((T)-1) && rval == std::numeric_limits<T>::min()) {
                 return report_overflow(op, lhs, rhs, to_type);
             }
-        } else {
-            if (lhs != 0 && rhs != 0) {
-                if (lval > std::numeric_limits<T>::max() / rval) {
-                    return report_overflow(op, lhs, rhs, to_type);
-                }
-                if (lval < std::numeric_limits<T>::min() / rval) {
-                    return report_underflow(op, lhs, rhs, to_type);
-                }
+            if (rval == ((T)-1) && lval == std::numeric_limits<T>::min()) {
+                return report_overflow(op, lhs, rhs, to_type);
+            }
+
+            if (rval != 0 && lval < std::numeric_limits<T>::min() / rval) {
+                return report_underflow(op, lhs, rhs, to_type);
             }
         }
         return calc(lval * rval);
     }
     case '/': {
+        if constexpr (is_signed) {
+            if (rval == ((T)-1) && lval == std::numeric_limits<T>::min()) {
+                return report_overflow(op, lhs, rhs, to_type);
+            }
+        }
+
         if (rval == 0) {
             // Let sema complain about division by zero.
             return new_binary_op(op, lhs, rhs);
@@ -1937,6 +1936,12 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         return calc(lval / rval);
     }
     case '%': {
+        if constexpr (is_signed) {
+            if (rval == ((T)-1) && lval == std::numeric_limits<T>::min()) {
+                return report_overflow(op, lhs, rhs, to_type);
+            }
+        }
+
         if (rval == 0) {
             // Let sema complain about division by zero.
             return new_binary_op(op, lhs, rhs);

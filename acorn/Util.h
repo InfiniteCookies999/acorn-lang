@@ -58,6 +58,24 @@ namespace acorn {
         StdErr
     };
 
+    template<typename F>
+    struct Deferer {
+        F cb;
+        Deferer(F&& cb) : cb(cb) {}
+        ~Deferer() { cb(); }
+    };
+
+    template<typename F>
+    Deferer<F> new_deferer(F&& cb) {
+        return Deferer<F>(std::forward<F>(cb));
+    }
+
+#define defer_name3(x, y) x##y
+#define defer_name2(x, y) defer_name3(x, y)
+#define defer_name(x) defer_name2(x, __COUNTER__)
+#define defer(code) auto defer_name(_defer_val) = new_deferer([&] { code; });
+
+
     template<typename T, typename V>
     static bool fits_in_range(V value) {
         if constexpr (std::is_signed_v<T> && std::is_signed_v<V>) {

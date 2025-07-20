@@ -242,6 +242,12 @@ static void global_variable_tests() {
 
         expect(result, std::identity()).to_be("ABC");
     });
+    test("global inline initialize temp struct for constructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("globals/global_test10.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@");
+    });
 }
 
 static void if_tests() {
@@ -1993,6 +1999,12 @@ static void varargs_tests() {
 
         expect(result, std::identity()).to_be("@?Lets go!");
     });
+    test("Varargs in a member function", [&] {
+        auto [err_msg, result] = run_codegen_test(src("varargs/varargs_test9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCD");
+    });
 }
 
 static void interface_tests() {
@@ -2055,6 +2067,12 @@ static void interface_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("AB");
+    });
+    test("Cast virtual struct to interface pointer then back again and call member funcs", [&] {
+        auto [err_msg, result] = run_codegen_test(src("interfaces/interfaces_test11.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABAB");
     });
 }
 
@@ -2197,6 +2215,12 @@ static void error_tests() {
 
         expect(result, std::identity()).to_be("@test error msg");
     });
+    // test("Raise error with multiple interface extensions", [&] {
+    //     auto [err_msg, result] = run_codegen_test(src("errors/errors24.ac"), true);
+    //     if (!err_msg.empty())  force_fail(err_msg.c_str());
+    //
+    //     expect(result, std::identity()).to_be("test error msg!test error msg!from foo!");
+    // });
     // ... Destructors
     test("Raise error does not call destructor for assigned object", [&] {
         auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors1.ac"), true);
@@ -2268,7 +2292,7 @@ static void error_tests() {
         auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors12.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("caught error!destructor called 1!...caught error!destructor called 2!end!");
+        expect(result, std::identity()).to_be("caught error!@destructor called 1!...caught error!#destructor called 2!end!");
     });
     test("Raise errors with one destructor other not called. Only error with destructor called", [&] {
         auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors13.ac"), true);
@@ -2399,6 +2423,13 @@ static void generics_tests() {
 
         expect(result, std::identity()).to_be("++");
     });
+
+    test("Call generic function with default parameter value", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs20.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%@%@*@*");
+    });
     test("Create generic variable and access fields", [&] {
         auto [err_msg, result] = run_codegen_test(src("generics/generic_structs1.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
@@ -2434,6 +2465,36 @@ static void generics_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("@P@P");
+    });
+    test("Call generic function of generic struct from another generic member function", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs7.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@@");
+    });
+    test("Call generic function of generic struct from another generic member function using 'this'", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs8.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@@");
+    });
+    test("Generic struct calls its destructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs9.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("called$called&");
+    });
+    test("Generic struct calls its copy constructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs10.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("called&&called$$");
+    });
+    test("Generic struct calls its move constructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs11.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("called#&called#$");
     });
 }
 

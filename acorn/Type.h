@@ -24,6 +24,7 @@ namespace acorn {
     struct Expr;
     class Context;
     struct Struct;
+    struct UnboundGenericStruct;
     struct Enum;
     struct Interface;
     struct Generic;
@@ -82,6 +83,7 @@ namespace acorn {
         Expr, // A type that appears as part of an expression in code.
         Generic,
         Inderminate,
+        PartiallyBoundStruct,
         Invalid,
 
     };
@@ -251,8 +253,10 @@ namespace acorn {
     class ArrayType : public ContainerType {
     public:
 
-        static ArrayType* create(PageAllocator& allocator, Type* elm_type,
-                                 uint32_t length, bool is_const = false);
+        static ArrayType* create(PageAllocator& allocator,
+                                 Type* elm_type,
+                                 uint32_t length,
+                                 bool is_const = false);
 
         uint32_t get_length() const { return length; }
 
@@ -478,6 +482,38 @@ namespace acorn {
 
         llvm::StructType* ll_struct_type = nullptr;
         Struct*           structn;
+    };
+
+    struct PartiallyBoundStructType : public Type {
+    public:
+
+        static PartiallyBoundStructType* create(PageAllocator& allocator,
+                                                UnboundGenericStruct* unbound_generic_struct,
+                                                llvm::SmallVector<Type*> partially_bound_types,
+                                                bool is_const = false);
+
+        std::string to_string() const;
+
+        UnboundGenericStruct* get_unbound_generic_struct() const {
+            return unbound_generic_struct;
+        }
+
+        const llvm::SmallVector<Type*>& get_partially_bound_types() const {
+            return partially_bound_types;
+        }
+
+    private:
+        PartiallyBoundStructType(bool is_const,
+                                 UnboundGenericStruct* unbound_generic_struct,
+                                 llvm::SmallVector<Type*> partially_bound_types)
+            : Type(TypeKind::PartiallyBoundStruct, is_const),
+              unbound_generic_struct(unbound_generic_struct),
+              partially_bound_types(std::move(partially_bound_types)) {
+        }
+
+        UnboundGenericStruct*    unbound_generic_struct;
+        // These may contain generic types.
+        llvm::SmallVector<Type*> partially_bound_types;
     };
 
     class EnumType : public Type {

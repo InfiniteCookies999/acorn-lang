@@ -1,0 +1,45 @@
+import .io.OutStream;
+import .io.Writable;
+import .reflect.Any;
+
+struct FormatStringBuffer :: Writable {
+    buffer:   char*;
+    length:   int;
+    capacity: int;
+
+    fn grow(min_capacity: int) {
+        new_capacity := min_capacity + (min_capacity / 2);
+        if (new_capacity < min_capacity) {
+            raise OutOfMemoryError{ "No more memory left to allocate formatted string" };
+        }
+
+        old_buffer := buffer;
+        buffer = as(char*) malloc(new_capacity);
+        memcpy(buffer, old_buffer, this.length);
+        free(old_buffer);
+
+        capacity = new_capacity;
+    }
+
+    fn write_buffer(buffer: const char*, length: int) -> int
+        | raises IOError {
+
+        if (this.length + length > capacity) {
+            grow(this.length + length);
+        }
+
+        memcpy(this.buffer + this.length, buffer, length);
+        this.length += length;
+        return length;
+    }
+
+    const fn to_string() -> String {
+        return String{ buffer, length };
+    }
+}
+
+public fn format(fmt: const char*, args: Any...) -> String {
+    out_stream := OutStream{ FormatStringBuffer{} };
+    try (out_stream.write(fmt, args));
+    return out_stream.handle.to_string();
+}
