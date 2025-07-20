@@ -29,12 +29,12 @@ fn write(c: char) {
 }
 
 fn main() {
-    loop a: int = 0; a < 5; a = a + 1 {
-        if a == 0 {
+    loop (a: int = 0; a < 5; a = a + 1) {
+        if (a == 0) {
             write('b');
             continue;
         }
-        if a == 2 {
+        if (a == 2) {
             write('b');
             continue;
         }

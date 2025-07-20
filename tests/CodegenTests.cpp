@@ -242,6 +242,12 @@ static void global_variable_tests() {
 
         expect(result, std::identity()).to_be("ABC");
     });
+    test("global inline initialize temp struct for constructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("globals/global_test10.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@");
+    });
 }
 
 static void if_tests() {
@@ -1993,6 +1999,12 @@ static void varargs_tests() {
 
         expect(result, std::identity()).to_be("@?Lets go!");
     });
+    test("Varargs in a member function", [&] {
+        auto [err_msg, result] = run_codegen_test(src("varargs/varargs_test9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCD");
+    });
 }
 
 static void interface_tests() {
@@ -2055,6 +2067,12 @@ static void interface_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("AB");
+    });
+    test("Cast virtual struct to interface pointer then back again and call member funcs", [&] {
+        auto [err_msg, result] = run_codegen_test(src("interfaces/interfaces_test11.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABAB");
     });
 }
 
@@ -2197,6 +2215,12 @@ static void error_tests() {
 
         expect(result, std::identity()).to_be("@test error msg");
     });
+    // test("Raise error with multiple interface extensions", [&] {
+    //     auto [err_msg, result] = run_codegen_test(src("errors/errors24.ac"), true);
+    //     if (!err_msg.empty())  force_fail(err_msg.c_str());
+    //
+    //     expect(result, std::identity()).to_be("test error msg!test error msg!from foo!");
+    // });
     // ... Destructors
     test("Raise error does not call destructor for assigned object", [&] {
         auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors1.ac"), true);
@@ -2268,13 +2292,209 @@ static void error_tests() {
         auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors12.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
-        expect(result, std::identity()).to_be("caught error!destructor called 1!...caught error!destructor called 2!end!");
+        expect(result, std::identity()).to_be("caught error!@destructor called 1!...caught error!#destructor called 2!end!");
     });
     test("Raise errors with one destructor other not called. Only error with destructor called", [&] {
         auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors13.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("caught error!destructor called 1!...caught error!end!");
+    });
+}
+
+static void generics_tests() {
+    test("Call generic function with different types", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs1.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%$");
+    });
+    test("Call generic function with pointer to generic type", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs2.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%");
+    });
+    test("Call generic function with array of generic types", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs3.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%");
+    });
+    test("Call generic function with array of generic types", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs3.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%");
+    });
+    test("Call generic function with two generic types", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs4.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("#?");
+    });
+    test("Call generic function taking function which takes and returns generic type", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs5.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("*$");
+    });
+    test("Call generic function with implicit param accepts non pointer argument", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs6.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%");
+    });
+    test("Call generic function does not care about constness when assigning int types", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs7.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("$$");
+    });
+    test("Call generic function does not care about constness when assigning int type produced from const int* bind", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs8.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("$");
+    });
+    test("Call generic function can bind `T=const int` and assign `const int**` to `T**`", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs9.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("$");
+    });
+    test("Call generic function can resolve generic type in sizeof", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs10.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@@");
+    });
+    test("Call generic function implicitly convert return call", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs11.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("7");
+    });
+    test("Call generic function with generic variadic list", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs12.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("k");
+    });
+    test("Call generic function by explicitly binding to type with no arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs13.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("&&");
+    });
+    test("Call generic function by explicitly binding to type with 1 arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs14.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("&&");
+    });
+    test("Call generic function by explicitly binding to 1 type but not other", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs15.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("&&");
+    });
+    test("Call generic function by binding with named arg no arguments", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs16.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
+    test("Call generic function by binding with named arg of second not first type", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs17.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
+    test("Call generic function by binding with named args out of order", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs18.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
+    test("Call generic function by binding with named args and non named args", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs19.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("++");
+    });
+
+    test("Call generic function with default parameter value", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs20.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@%@%@*@*");
+    });
+    test("Create generic variable and access fields", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs1.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@@");
+    });
+    test("Create generic which assigns field assignments defined in struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs2.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@P@P");
+    });
+    test("Create generic from struct initializer", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs3.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@P@P");
+    });
+    test("Create generic struct from constructor call", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs4.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@P@P");
+    });
+    test("Call function of generic struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs5.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@P@P");
+    });
+    test("Call generic function of generic struct", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs6.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@P@P");
+    });
+    test("Call generic function of generic struct from another generic member function", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs7.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@@");
+    });
+    test("Call generic function of generic struct from another generic member function using 'this'", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs8.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@@");
+    });
+    test("Generic struct calls its destructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs9.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("called$called&");
+    });
+    test("Generic struct calls its copy constructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs10.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("called&&called$$");
+    });
+    test("Generic struct calls its move constructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs11.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("called#&called#$");
     });
 }
 
@@ -2326,5 +2546,6 @@ void test_codegen() {
         varargs_tests();
         interface_tests();
         error_tests();
+        generics_tests();
     }, true);
 }

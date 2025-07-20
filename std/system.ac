@@ -33,7 +33,7 @@ private performance_freq: int64;
  */
 fn time_in_nanosecs() -> int64 {
 #if OS_GROUP_WINDOWS
-    if performance_freq == 0 {
+    if (performance_freq == 0) {
         win32.QueryPerformanceFrequency(&performance_freq);
     }
     current: int64;
@@ -41,7 +41,7 @@ fn time_in_nanosecs() -> int64 {
     return as(int64) ((as(double) (current * 1E+9) / performance_freq));
 #elif OS_GROUP_UNIX
     ts: Timespec;
-    if unix.clock_gettime(unix.CLOCK_MONOTONIC, &ts) == 0 {
+    if (unix.clock_gettime(unix.CLOCK_MONOTONIC, &ts) == 0) {
         return as(int64) (ts.tv_sec * 1E+9) + (as(int64) ts.tv_nsec);
     } else {
         raise StateError{ "Failed to get clock time" };
@@ -70,7 +70,7 @@ fn sys_time_in_millisecs() -> int64 {
 
     // This represents the difference in the amount of 100-nanosecond intervals
     // between January 1, 1701 (UTC) and January 1, 1970 (UTC).
-    WINDOWS_UNIX_TIME_DIFFERENCE: int64: 116444736000000000;
+    WINDOWS_UNIX_TIME_DIFFERENCE: int64 : 116444736000000000;
 
     time: int64;
     win32.GetSystemTimeAsFileTime(&time);

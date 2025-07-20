@@ -65,8 +65,65 @@ void acorn::DebugInfoEmitter::emit_function(Func* func) {
     di_lexical_scopes.push_back(di_func);
 }
 
+void acorn::DebugInfoEmitter::emit_implicit_function(llvm::Function* ll_func,
+                                                     SourceFile* file,
+                                                     Struct* parent_struct,
+                                                     SourceLoc loc) {
+
+    // Ensure the compilation unit exists for this function.
+    emit_file(file);
+
+    llvm::DIScope* di_scope;
+    if (parent_struct) {
+        di_scope = emit_type(parent_struct->struct_type);
+    } else {
+        di_scope = di_unit->getFile();
+    }
+
+    llvm::SmallVector<llvm::Metadata*> di_func_types;
+    di_func_types.push_back(emit_type(context.void_type));
+
+    // Needs to know about the 'this' pointer type.
+    if (parent_struct) {
+        auto this_type = context.type_table.get_ptr_type(parent_struct->struct_type);
+        auto di_this_type = builder.createObjectPointerType(emit_type(this_type));
+        di_func_types.push_back(di_this_type);
+    }
+
+    auto di_func_type = builder.createSubroutineType(builder.getOrCreateTypeArray(di_func_types));
+
+    size_t line_number       = file->line_table.get_line_number(loc);
+    size_t scope_line_number = file->line_table.get_line_number(loc);
+
+    auto di_func = builder.createFunction(
+        di_scope,
+        "acorn.implicit",
+        ll_func->getName(), // Linkage name
+        di_unit->getFile(),
+        static_cast<unsigned>(line_number),
+        di_func_type,
+        static_cast<unsigned>(scope_line_number),
+        llvm::DINode::DIFlags::FlagPrototyped,
+        llvm::DISubprogram::DISPFlags::SPFlagDefinition,
+        nullptr,
+        nullptr // DIForwardDeclaredFunc // Forward declaration
+    );
+
+    ll_func->setSubprogram(di_func);
+    di_lexical_scopes.push_back(di_func);
+}
+
 void acorn::DebugInfoEmitter::emit_function_end(Func* func) {
-    llvm::DISubprogram* di_func = func->ll_func->getSubprogram();
+    emit_function_end(func->ll_func);
+}
+
+void acorn::DebugInfoEmitter::emit_function_end(llvm::Function* ll_func) {
+    di_lexical_scopes.clear();
+    if (!di_location_stack.empty()) {
+        acorn_fatal("Expected all the di locations to be popped");
+    }
+
+    llvm::DISubprogram* di_func = ll_func->getSubprogram();
 
     // !! IF THE PROGRAM HAS A FORWARD DECLARATION YOU STILL HAVE TO FINALIZE IT OR THE RETAINED
     // NODES WILL BE TEMPORARY !!
@@ -104,13 +161,30 @@ void acorn::DebugInfoEmitter::emit_struct_this_variable(llvm::Value* ll_this, Fu
     );
 }
 
+void acorn::DebugInfoEmitter::push_location(llvm::IRBuilder<>& ir_builder, SourceLoc loc) {
+    const auto& l = ir_builder.getCurrentDebugLocation();
+    di_location_stack.push_back(ir_builder.getCurrentDebugLocation());
+    auto di_location = create_location(loc);
+    ir_builder.SetCurrentDebugLocation(llvm::DebugLoc(di_location));
+}
+
+void acorn::DebugInfoEmitter::pop_location(llvm::IRBuilder<>& ir_builder) {
+    auto& di_prev_location = di_location_stack.back();
+    ir_builder.SetCurrentDebugLocation(std::move(di_prev_location));
+    di_location_stack.pop_back();
+}
+
+void acorn::DebugInfoEmitter::set_location(llvm::Instruction* ll_instruction, SourceLoc loc) {
+    ll_instruction->setDebugLoc(create_location(loc));
+}
+
+/*
 void acorn::DebugInfoEmitter::emit_location(llvm::IRBuilder<>& ir_builder, SourceLoc location) {
     auto* ll_last_instruction = &ir_builder.GetInsertBlock()->back();
     emit_location(ll_last_instruction, location);
 }
 
 void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction, SourceLoc location) {
-
     if (store_node) {
         location = store_node->loc;
     }
@@ -118,6 +192,14 @@ void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction, S
     auto [line_number, column_number] = file->line_table.get_line_and_column_number(location);
 
     llvm::DIScope* di_scope = di_lexical_scopes.back();
+    emit_location(ll_instruction, di_scope, line_number, column_number);
+
+}
+
+void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction,
+                                            llvm::DIScope* ll_di_scope,
+                                            size_t line_number,
+                                            size_t column_number) {
     auto di_location = llvm::DILocation::get(
         context.get_ll_context(),
         static_cast<unsigned>(line_number),
@@ -125,11 +207,12 @@ void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction, S
         // This is probably because it breaks once per unique location and adding the column number makes the location non-unique to the line
         // its on.
         0, //column_number,
-        di_scope
+        ll_di_scope
     );
-
     ll_instruction->setDebugLoc(di_location);
-}
+
+
+}*/
 
 void acorn::DebugInfoEmitter::emit_function_variable(Var* var, llvm::IRBuilder<>& ir_builder) {
     auto di_scope = di_lexical_scopes.back();
@@ -168,7 +251,7 @@ void acorn::DebugInfoEmitter::emit_global_variable(Var* global) {
     size_t line_number = global->file->line_table.get_line_number(global->loc);
 
     auto di_global = builder.createGlobalVariableExpression(
-        di_unit, // TODO probably wrong!
+        di_unit,
         global->name.to_string(),
         global->ll_address->getName(), // Linkage name
         di_unit->getFile(),
@@ -197,6 +280,10 @@ void acorn::DebugInfoEmitter::emit_scope_start(SourceLoc loc) {
 
 void acorn::DebugInfoEmitter::emit_scope_end() {
     di_lexical_scopes.pop_back();
+}
+
+void acorn::DebugInfoEmitter::emit_function_scope(llvm::Function* ll_func) {
+    di_lexical_scopes.push_back(ll_func->getSubprogram());
 }
 
 void acorn::DebugInfoEmitter::finalize() {
@@ -519,4 +606,19 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
         acorn_fatal_fmt("Unreachable, Unimplemented type: '%s'", type->to_string());
         return nullptr;
     }
+}
+
+llvm::DILocation* acorn::DebugInfoEmitter::create_location(SourceLoc loc) {
+    auto [line_number, column_number] = file->line_table.get_line_and_column_number(loc);
+
+    llvm::DIScope* di_scope = di_lexical_scopes.back();
+    return llvm::DILocation::get(
+        context.get_ll_context(),
+        static_cast<unsigned>(line_number),
+        // Emission of column number seems to confuse the debugger and cause it to make multiple steps for an instruction on a single line.
+        // This is probably because it breaks once per unique location and adding the column number makes the location non-unique to the line
+        // its on.
+        0, //column_number,
+        di_scope
+    );
 }

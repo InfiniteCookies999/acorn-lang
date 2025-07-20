@@ -45,7 +45,7 @@ fn main() {
 
     foo(a);
 
-    if y == p2 {
+    if (y == p2) {
         write_val(*p2);
     }
 }

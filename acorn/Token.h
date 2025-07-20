@@ -8,13 +8,11 @@
 
 namespace acorn {
 
-    using tokkind = uint16_t;
-
     class Context;
 
+    using TokenKind = uint16_t;
     struct Token {
-
-        enum {
+        enum : TokenKind {
             Invalid = 0,
 
             // Reserve space for ASCII characters
@@ -22,6 +20,7 @@ namespace acorn {
 
             KeywordStart,
 
+            // Type keywords
             KwInt,
             KwInt8,
             KwInt16,
@@ -36,15 +35,18 @@ namespace acorn {
             KwFloat,
             KwDouble,
             KwBool,
-            KwFn,
             KwVoid,
             KwChar,
             KwChar16,
             KwConst,
-            KwAs,
+            // Statement keywords
+            KwFn,
             KwIf,
             KwElIf,
             KwElse,
+            KwReturn,
+            KwLoop,
+            KwIn,
             KwImport,
             KwContinue,
             KwBreak,
@@ -54,22 +56,23 @@ namespace acorn {
             KwStruct,
             KwInterface,
             KwEnum,
+            KwRaise,
+            KwRaises,
+            KwTry,
+            KwRecover,
+            KwGenerics,
+            // Expression keywords
+            KwAs,
             KwThis,
             KwSizeof,
             KwCopyobj,
             KwMoveobj,
             KwNew,
             KwDelete,
-            KwRaise,
-            KwRaises,
-            KwTry,
-            KwRecover,
-            KwGenerics,
-
             KwNull,
             KwTrue,
             KwFalse,
-
+            // Modifier keywords
             ModifierStart,
             KwNative,
             KwDllimport,
@@ -77,11 +80,7 @@ namespace acorn {
             KwPrivate,
             KwReadonly,
             ModifierEnd,
-
-            KwReturn,
-            KwLoop,
-            KwIn,
-
+            // Comptime directive keywords
             ComptimeKeywordStart,
             KwCTIf,
             KwCTElIf,
@@ -94,6 +93,7 @@ namespace acorn {
 
             KeywordEnd,
 
+            // Special tokens
             Arrow,
             LtLt,
             GtGt,
@@ -128,6 +128,7 @@ namespace acorn {
             DotDotDot,
             BackslashBackslash,
 
+            // Literals
             IntLiteral,
             HexLiteral,
             BinLiteral,
@@ -145,20 +146,28 @@ namespace acorn {
             EOB
         };
 
-        SourceLoc loc;
-        tokkind   kind;
+        TokenKind   kind;
+        uint32_t    lexeme_length;
+        const char* buffer_ptr; // Pointer to the start of the token in the source buffer.
+
 
         Token() {}
 
-        Token(tokkind kind, SourceLoc loc)
-            : kind(kind), loc(loc) {
+        Token(TokenKind kind, const char* buffer_ptr, uint32_t lexeme_length)
+            : kind(kind)
+            , buffer_ptr(buffer_ptr)
+            , lexeme_length(lexeme_length) {
         }
 
-        // Checks if the token is of the given kind.
-        [[nodiscard]] constexpr bool is(tokkind kind) const noexcept { return this->kind == kind; }
+        // Checks if the token has the same `kind`.
+        [[nodiscard]] constexpr bool is(TokenKind kind) const noexcept {
+            return this->kind == kind;
+        }
 
-        // Checks if the token is not of the given kind.
-        [[nodiscard]] constexpr bool is_not(tokkind kind) const noexcept { return !is(kind); }
+        // Checks if the token does not have the same `kind`.
+        [[nodiscard]] constexpr bool is_not(TokenKind kind) const noexcept {
+            return !is(kind);
+        }
 
         // Checks if the token is a keyword.
         [[nodiscard]] constexpr bool is_keyword() const noexcept {
@@ -174,16 +183,16 @@ namespace acorn {
             return kind > Token::ModifierStart && kind < Token::ModifierEnd;
         }
 
-        // Get a text representation of the token.
-        [[nodiscard]] llvm::StringRef text() const noexcept { return llvm::StringRef(loc.ptr, loc.length); }
+        llvm::StringRef text() const {
+            return llvm::StringRef(buffer_ptr, static_cast<size_t>(lexeme_length));
+        }
 
+        SourceLoc get_location() const {
+            return SourceLoc{ buffer_ptr, lexeme_length };
+        }
     };
 
-    std::string token_kind_to_string(Context& context, tokkind kind);
-
-    std::string to_string(Context& context, Token token);
-
-    std::string to_lexical_string(Context& context, Token token);
+    std::string token_kind_to_string(TokenKind kind, Context& context);
 
 }
 

@@ -1,0 +1,284 @@
+#file(access=public, namespace=io)
+
+import .. module;
+import .IOError;
+import .reflect.Any;
+import .reflect.Type;
+import .reflect.StructTypeInfo;
+import .reflect.EnumTypeInfo;
+import .reflect.TypeId;
+
+/*
+ * A general purpose output stream for writing to files, sockets,
+ * or any `Writable` handle.
+ *
+ * This stream is particularly helpful in that it has support for
+ * outputting with different formats. As well it is capable of writing
+ * any value of any type.
+ */
+generics(W) // TODO (maddie): add constraints for Writable once supported!
+struct OutStream :: Writable {
+
+    handle: W;
+
+    fn new(handle: W) {
+        this.handle = handle;
+    }
+
+    fn write_buffer(buffer: const char*, length: int) -> int | raises IOError {
+        bytes_written := try (handle.write_buffer(buffer, length));
+        return bytes_written;
+    }
+
+    fn write(s: const char*) | raises IOError {
+        try (write_buffer(s, module.strlen(s)));
+    }
+
+    fn write(s: const String^) | raises IOError {
+        try (write_buffer(s.buffer, s.length));
+    }
+
+    fn write(value: int, base := 10) | raises IOError {
+        value_u64 := as(uint64) value;
+        if (value < 0) {
+            try (write("-"));
+            value_u64 = -(as(uint64) value);
+        }
+
+        try (write(value_u64, base));
+    }
+
+    fn write(value: uint64, base := 10) | raises IOError {
+
+        BUFFER_SIZE :: 64;
+        buffer: char[BUFFER_SIZE] = ---;
+        ptr := module.uint64_to_chars(value, buffer + BUFFER_SIZE - 1, base);
+
+        length := as(int) ((buffer + BUFFER_SIZE) - ptr);
+        try (write_buffer(ptr, length));
+    }
+
+    fn write(value: int64, base := 10) | raises IOError {
+        if (value < 0) {
+            try (write('-'));
+            value = -value;
+        }
+
+        try (write(as(uint64) value, base));
+    }
+
+    fn write(c: char) | raises IOError {
+        try (write_buffer(&c, 1));
+    }
+
+    fn write(b: bool) | raises IOError {
+        if (b) {
+            try (write_buffer("true", 4));
+        } else {
+            try (write_buffer("false", 5));
+        }
+    }
+
+    fn write(value: Any) | raises IOError {
+        try (write_any(value.ptr, value.type));
+    }
+
+    fn write(fmt: const char*, args: Any...) | raises IOError {
+        arg_index := 0;
+        loop (ptr := fmt; *ptr != '\0';) {
+            if (*ptr == '%' && *(ptr+1) == 's') {
+                ptr += 2;
+                arg: Any = args[arg_index++];
+                try (write(arg));
+            } else {
+                try (write(*ptr));
+                ++ptr;
+            }
+        }
+    }
+
+    fn write(ptr: const void*) | raises IOError {
+
+        BUFFER_SIZE :: sizeof(void*) * 2 + 2;
+        buffer: char[BUFFER_SIZE] = ---;
+
+        buffer_end := buffer + buffer.length - 1;
+        int_ptr_start := module.uint64_to_chars(as(uint64) ptr, buffer_end, base=16);
+
+        zeros_length := as(int) (int_ptr_start - as(const char*) buffer);
+        module.memset(buffer, '0', zeros_length);
+        buffer[1] = 'x';
+
+        try (write_buffer(buffer, buffer.length));
+
+    }
+
+    private fn write_any(ptr: const void*, type: const Type*) | raises IOError {
+        switch (type.id) {
+        case Int:     try (write(as(int64)  *as(const int*)    ptr));
+        case Int8:    try (write(as(int64)  *as(const int8*)   ptr));
+        case Int16:   try (write(as(int64)  *as(const int16*)  ptr));
+        case Int32:   try (write(as(int64)  *as(const int32*)  ptr));
+        case Int64:   try (write(as(int64)  *as(const int64*)  ptr));
+        case ISize:   try (write(as(int64)  *as(const isize*)  ptr));
+        case UInt8:   try (write(as(uint64) *as(const uint8*)  ptr));
+        case UInt16:  try (write(as(uint64) *as(const uint16*) ptr));
+        case UInt32:  try (write(as(uint64) *as(const uint32*) ptr));
+        case UInt64:  try (write(as(uint64) *as(const uint64*) ptr));
+        case USize:   try (write(as(uint64) *as(const usize*)  ptr));
+        case Char:    try (write(*as(const char*) ptr));
+        // Just write out the numeric value of the characters.
+        case Char16:  try (write(as(uint64) *as(const char16*) ptr));
+        // TODO: case Float32: case Float64:
+        case Bool:    try (write(*as(const bool*) ptr));
+        case Pointer:
+            if (type.elm_type.id == TypeId.Char) {
+                try (write(*as(const (const char*)*) ptr));
+            } elif (type.elm_type == #type_info(String)) {
+                try (write(*as(const (const String*)*) ptr));
+            } else {
+                try (write(*as(const (const void*)*) ptr));
+            }
+        case Function: try (write(*as(const (const void*)*) ptr));
+        case Struct:
+            if (type == #type_info(String)) {
+                try (write(as(const String*) ptr));
+            } else {
+                try (write_struct(ptr, type.struct_info));
+            }
+        case Slice:
+
+            length := *as(const int*)(ptr + sizeof(void*));
+            elements := *as(const (const void*)*) ptr;
+
+            try (write_array_like_value(elements, type.elm_type, length));
+
+        case Array: try (write_array_like_value(ptr, type.elm_type, type.array_length));
+        case Enum:  try (write_enum(ptr, type.enum_info));
+        }
+    }
+
+    private fn write_array_like_value(array: const void*, elm_type: const Type*, length: int)
+        | raises IOError {
+        try (write('['));
+
+        elm_byte_size: int = elm_type.size_in_bytes;
+        loop (i in 0..<length) {
+            offset_into_array: const void* = array + (i * elm_byte_size);
+
+            if (elm_type.is_string()) try (write('"'));
+            try (write_any(offset_into_array, elm_type));
+            if (elm_type.is_string()) try (write('"'));
+
+            if (i+1 != length) {
+                try (write(", "));
+            }
+        }
+
+        try (write(']'));
+    }
+
+    private fn write_struct(ptr: const void*, struct_info: const StructTypeInfo*)
+        | raises IOError {
+
+        try (write(struct_info.name));
+        try (write("{ "));
+
+        loop (i in 0..<struct_info.num_fields) {
+            field_info := struct_info.fields + i;
+            try (write(field_info.name));
+            try (write("="));
+
+            field_data: const void* = ptr + field_info.offset_in_bytes;
+
+            try (write('"'));
+
+            if (field_info.type.is_string()) try (write('"'));
+            try (write_any(field_data, field_info.type));
+            if (field_info.type.is_string()) try (write('"'));
+
+            if (i+1 != struct_info.num_fields) {
+                try (write(", "));
+            }
+        }
+
+        try (write(" }"));
+    }
+
+    private fn write_enum(ptr: const void*, enum_info: const EnumTypeInfo*)
+        | raises IOError {
+        index: uint64;
+        switch (enum_info.index_type.id) {
+        case Int:     index = as(uint64) *as(const int*)    ptr;
+        case Int8:    index = as(uint64) *as(const int8*)   ptr;
+        case Int16:   index = as(uint64) *as(const int16*)  ptr;
+        case Int32:   index = as(uint64) *as(const int32*)  ptr;
+        case Int64:   index = as(uint64) *as(const int64*)  ptr;
+        case ISize:   index = as(uint64) *as(const isize*)  ptr;
+        case UInt8:   index = as(uint64) *as(const uint8*)  ptr;
+        case UInt16:  index = as(uint64) *as(const uint16*) ptr;
+        case UInt32:  index = as(uint64) *as(const uint32*) ptr;
+        case UInt64:  index = as(uint64) *as(const uint64*) ptr;
+        case USize:   index = as(uint64) *as(const usize*)  ptr;
+        case Char:    index = as(uint64) *as(const char*)   ptr;
+        case Char16:  index = as(uint64) *as(const char16*) ptr;
+        }
+
+        name := enum_info.get_value_name(index);
+        try (write(name));
+    }
+
+    // -- writeln functions
+    //
+    // TODO (maddie): simplify this once we have generic constraints.
+
+    fn writeln(ptr: const void*) | raises IOError {
+        try (write(ptr));
+        try (write("\n"));
+    }
+
+    fn writeln(s: const char*) | raises IOError {
+        try (write(s));
+        try (write("\n"));
+    }
+
+    fn writeln(value: int, base := 10) | raises IOError {
+        try (write(value, base));
+        try (write("\n"));
+    }
+
+    fn writeln(value: uint64, base := 10) | raises IOError {
+        try (write(value, base));
+        try (write("\n"));
+    }
+
+    fn writeln(value: int64, base := 10) | raises IOError {
+        try (write(value, base));
+        try (write("\n"));
+    }
+
+    fn writeln(c: char) | raises IOError {
+        try (write(c));
+        try (write("\n"));
+    }
+
+    fn writeln(b: bool) | raises IOError {
+        try (write(b));
+        try (write("\n"));
+    }
+
+    fn writeln(s: const String^) | raises IOError {
+        try (write(s));
+        try (write("\n"));
+    }
+
+    fn writeln(any: Any) | raises IOError {
+        try (write(any));
+        try (write("\n"));
+    }
+
+    fn writeln(fmt: const char*, args: Any...) | raises IOError {
+        try (write(fmt, args));
+        try (write("\n"));
+    }
+}

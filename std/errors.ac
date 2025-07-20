@@ -1,6 +1,7 @@
 #file(access=public)
 
 import .. module;
+import .io;
 
 interface Error {
 
@@ -59,6 +60,22 @@ struct StateError :: *Error {
     const fn get_message() -> const char* { return msg.buffer; }
 }
 
+#aborts
+struct OutOfMemoryError :: *Error {
+    msg: String;
+
+    fn new(msg: const char*) {
+        this.msg = String{ msg };
+    }
+
+    fn new(msg: String) {
+        this.msg = moveobj(msg);
+    }
+
+    const fn get_name()    -> const char* { return "OutOfMemoryError"; }
+    const fn get_message() -> const char* { return msg.buffer; }
+}
+
 struct IOError :: *Error {
     msg: String;
 
@@ -77,9 +94,9 @@ struct IOError :: *Error {
 fn abort(error: Error*) {
     error_name := error.get_name();
     message := error.get_message();
-    module.print(error_name);
-    module.print(": ");
-    module.print(message);
-    module.print(".");
+    io.print(error_name);
+    io.print(": ");
+    io.print(message);
+    io.print(".");
     module.exit(1);
 }

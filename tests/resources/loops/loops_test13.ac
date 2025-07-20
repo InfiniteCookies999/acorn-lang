@@ -32,7 +32,7 @@ fn write_val(val: int) {
 
 fn main() {
     arr: int[2][3] = [[80,105,122], [122,97,33]];
-    loop v: int[3] in arr {
+    loop (v: int[3] in arr) {
         write_val(v[0]);
         write_val(v[1]);
         write_val(v[2]);

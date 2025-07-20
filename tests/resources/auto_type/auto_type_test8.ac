@@ -31,7 +31,7 @@ fn write_val(val: int) {
 }
 
 fn main() {
-    loop i in 0..<5 {
+    loop (i in 0..<5) {
         write_val(i + 65);
     }
 }

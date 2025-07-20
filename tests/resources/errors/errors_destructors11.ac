@@ -19,7 +19,7 @@ fn foo() -> int | raises TestError {
 }
 
 fn main() {
-    a: int = try err: foo() {
+    a: int = try err: (foo()) {
         std.print("caught error!");
         recover 55;
     };

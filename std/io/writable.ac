@@ -1,0 +1,15 @@
+#file(access=public, namespace=io)
+
+import .IOError;
+
+interface Writable {
+
+    /*
+     * Writes `length` bytes of the `buffer` or less.
+     *
+     * @return the number of bytes actually written.
+     */
+    fn write_buffer(buffer: const char*, length: int) -> int
+        | raises IOError;
+
+}

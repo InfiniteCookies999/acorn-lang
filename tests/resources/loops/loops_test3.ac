@@ -30,7 +30,7 @@ fn write(c: char) {
 
 fn main() {
     a: int = 0;
-    loop ; a < 5; a = a + 1 {
+    loop (; a < 5; a = a + 1) {
         write('a');
     }
 }

@@ -25,9 +25,9 @@ namespace acorn {
     //
     struct PointSourceLoc {
         const char* ptr;
-        uint16_t    length;
+        uint32_t    length;
         const char* point;
-        uint16_t    point_length;
+        uint32_t    point_length;
 
         const char* end() const {
             return ptr + length;
@@ -39,20 +39,21 @@ namespace acorn {
         // This might improve performance since it would allow
         // tokens to fit into 8 bytes.
         const char* ptr;
-        uint16_t    length;
+        uint32_t    length;
+
 
         static SourceLoc from_ptrs(const char* start_ptr, const char* end_ptr) {
             return SourceLoc{
-                .ptr = start_ptr,
-                .length = static_cast<uint16_t>(end_ptr - start_ptr)
+                .ptr    = start_ptr,
+                .length = static_cast<uint32_t>(end_ptr - start_ptr)
             };
         }
 
         PointSourceLoc to_point_source() const {
             return PointSourceLoc{
-                .ptr = ptr,
-                .length = length,
-                .point = ptr,
+                .ptr          = ptr,
+                .length       = length,
+                .point        = ptr,
                 .point_length = length
             };
         }

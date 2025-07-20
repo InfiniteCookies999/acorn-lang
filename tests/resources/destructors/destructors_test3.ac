@@ -47,7 +47,7 @@ struct C {
 fn foo(b: bool) {
     aa: A ;
 
-    if b {
+    if (b) {
         bb: B;
         return;
     }

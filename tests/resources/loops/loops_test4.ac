@@ -29,8 +29,8 @@ fn write(c: char) {
 }
 
 fn main() {
-    loop a: int = 0; ; a = a + 1 {
-        if a >= 5 {
+    loop (a: int = 0; ; a = a + 1) {
+        if (a >= 5) {
             return;
         }
         write('a');

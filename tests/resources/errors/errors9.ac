@@ -26,7 +26,7 @@ struct TestError2 :: *Error {
 
 fn foo(b: bool) | raises TestError1, TestError2 {
     std.print("foo called!");
-    if b {
+    if (b) {
         raise TestError1{};
     } else {
         raise TestError2{ 65, 66, 67, 68 };
@@ -48,11 +48,11 @@ fn write_val(val: int64) {
 }
 
 fn main() {
-    try err: foo(true) {
+    try err: (foo(true)) {
         std.print("caught error!");
         std.print(err.get_message());
     };
-    try err: foo(false) {
+    try err: (foo(false)) {
         std.print("caught error!");
         std.print(err.get_message());
         e2: TestError2* = as(TestError2*) err;

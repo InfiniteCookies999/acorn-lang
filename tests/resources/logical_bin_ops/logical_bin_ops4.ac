@@ -33,7 +33,7 @@ fn main() {
     c1: bool = false;
 
     cond1: bool = a1 || b1 || c1;
-    if cond1 {
+    if (cond1) {
         print("False", 5);
     }
 
@@ -42,7 +42,7 @@ fn main() {
     c2: bool = false;
 
     cond2: bool = a2 || b2 || c2;
-    if cond2 {
+    if (cond2) {
         print("True1", 5);
     }
 
@@ -51,7 +51,7 @@ fn main() {
     c3: bool = false;
 
     cond3: bool = a3 || b3 || c3;
-    if cond3 {
+    if (cond3) {
         print("True2", 5);
     }
 
@@ -60,7 +60,7 @@ fn main() {
     c4: bool = true;
 
     cond4: bool = a4 || b4 || c4;
-    if cond4 {
+    if (cond4) {
         print("True3", 5);
     }
 
@@ -69,7 +69,7 @@ fn main() {
     c5: bool = true;
 
     cond5: bool = a5 || b5 || c5;
-    if cond5 {
+    if (cond5) {
         print("True4", 5);
     }
 }

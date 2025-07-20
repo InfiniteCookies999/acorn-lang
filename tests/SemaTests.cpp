@@ -40,7 +40,7 @@ void test_sema() {
         parser->parse();
 
         for (auto& entry : context->get_modules()) {
-            Sema::check_nodes_wrong_scopes(*entry.second);
+            Sema::report_nodes_wrong_scopes(*entry.second);
         }
         if (context->has_errors()) {
             return mock_modl;
@@ -235,6 +235,45 @@ void test_sema() {
                 }
             )");
             expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);
+        });
+        test("Generic function with `T=int` bound violates assigning `const int*` to `T*`", [&] {
+            mock_sema(R"(
+                generics(T)
+                fn foo(a: T*, b: T*) {}
+
+                fn main() {
+                    a: int*;
+                    b: const int*;
+                    foo(a, b);
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
+        });
+        test("Generic function with `T=int*` bound violates assigning `const int**` to `T**`", [&] {
+            mock_sema(R"(
+                generics(T)
+                fn foo(a: T*, b: T*) {}
+
+                fn main() {
+                    a: int**;
+                    b: const int**;
+                    foo(a, b);
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
+        });
+        test("Generic function with `T=const int` bound violates assigning `const (int*)*` to `T**`", [&] {
+            mock_sema(R"(
+                generics(T)
+                fn foo(a: T, b: T**) {}
+
+                fn main() {
+                    a: const int = 2;
+                    b: const (int*)*;
+                    foo(a, b);
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
         });
     });
 }

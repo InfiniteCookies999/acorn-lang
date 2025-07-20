@@ -1,0 +1,100 @@
+#file(access=public, namespace=io)
+
+import .reflect.Any;
+import .win32;
+
+#if OS_GROUP_WINDOWS
+private std_out_handle := FileHandle{ win32.GetStdHandle(win32.STD_OUTPUT_HANDLE), auto_close=false };
+#elif OS_GROUP_UNIX
+// TODO (maddie): implement for unix.
+#endif
+
+std_out := OutStream{ std_out_handle };
+
+// -- print functions
+//
+// TODO (maddie): simplify with generics
+
+fn print(s: const char*) {
+    try (std_out.write(s));
+}
+
+fn print(s: const String^) {
+    try (std_out.write(s));
+}
+
+fn print(value: int, base := 10) {
+    try (std_out.write(value, base));
+}
+
+fn print(value: uint64, base := 10) {
+    try (std_out.write(value, base));
+}
+
+fn print(value: int64, base := 10) {
+    try (std_out.write(value, base));
+}
+
+fn print(c: char) {
+    try (std_out.write(c));
+}
+
+fn print(b: bool) {
+    try (std_out.write(b));
+}
+
+fn print(value: Any) {
+    try (std_out.write(value));
+}
+
+fn print(fmt: const char*, args: Any...) {
+    try (std_out.write(fmt, args));
+}
+
+fn print(ptr: const void*) {
+    try (std_out.write(ptr));
+}
+
+// -- println functions
+//
+// TODO (maddie): simplify with generics
+
+fn println(ptr: const void*) {
+    try (std_out.writeln(ptr));
+}
+
+fn println(s: const char*) {
+    try (std_out.writeln(s));
+}
+
+fn println(value: int, base := 10) {
+    try (std_out.writeln(value, base));
+}
+
+fn println(value: uint64, base := 10) {
+    try (std_out.writeln(value, base));
+}
+
+fn println(value: int64, base := 10) {
+    try (std_out.writeln(value, base));
+}
+
+fn println(c: char) {
+    try (std_out.writeln(c));
+}
+
+fn println(b: bool) {
+    try (std_out.writeln(b));
+}
+
+fn println(s: const String^) {
+    try (std_out.writeln(s));
+}
+
+fn println(any: Any) {
+    try (std_out.writeln(any));
+}
+
+fn println(fmt: const char*, args: Any...) {
+    try (std_out.writeln(fmt, args));
+}

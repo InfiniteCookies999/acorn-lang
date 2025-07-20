@@ -30,23 +30,23 @@ fn main() {
     a: int = 4;
     b: int* = &a;
 
-    if b {
+    if (b) {
         print("Ptr Not Null Case1", 18);
     }
 
     c: int* = null;
-    if c {
+    if (c) {
         print("Ptr Null Case1", 14);
     }
-    if null {
+    if (null) {
         print("Ptr Null Case2", 14);
     }
 
-    if b != null {
+    if (b != null) {
         print("Ptr Not Null Case2", 18);
     }
 
-    if null != b {
+    if (null != b) {
         print("Ptr Not Null Case3", 18);
     }
 }

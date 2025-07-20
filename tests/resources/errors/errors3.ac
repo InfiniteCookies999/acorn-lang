@@ -25,7 +25,7 @@ struct TestError :: *Error {
 }
 
 fn foo(cond: bool) -> int | raises TestError {
-    if cond {
+    if (cond) {
         return 64;
     }
 
@@ -33,7 +33,7 @@ fn foo(cond: bool) -> int | raises TestError {
 }
 
 fn main() {
-    value: int = try foo(true);
+    value: int = try (foo(true));
     write_val(value);
-    try foo(false);
+    try (foo(false));
 }

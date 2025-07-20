@@ -42,7 +42,7 @@ fn foo(b: bool) -> A {
     a.val2 = 106;
     a.val3 = 107;
 
-    if b {
+    if (b) {
         return a;
     }
     return a;

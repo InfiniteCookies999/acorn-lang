@@ -15,14 +15,14 @@ fn foo() | raises TestError {
 }
 
 fn bar() | raises TestError {
-    try foo();
+    try (foo());
 }
 
 fn main() {
-    try err: bar() {
+    try err: (bar()) {
         std.print("caught error!");
         std.print(err.get_message());
     };
 
-    try bar();
+    try (bar());
 }

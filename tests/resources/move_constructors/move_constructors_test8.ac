@@ -40,7 +40,7 @@ struct A {
 a: A;
 
 fn foo(t: bool) -> A {
-    if t {
+    if (t) {
         return a;
     }
 

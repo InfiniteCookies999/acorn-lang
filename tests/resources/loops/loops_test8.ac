@@ -31,7 +31,7 @@ fn write_val(val: int) {
 }
 
 fn foo(a: int[5]) {
-    loop v: int in a {
+    loop (v: int in a) {
         write_val(v);
     }
 }

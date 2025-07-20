@@ -30,14 +30,14 @@ fn foo() -> int | raises TestError {
 
 fn main() {
     a: int = 38;
-    a = try foo() {
+    a = try (foo()) {
         std.print("caught 1");
         recover 64;
     };
 
     write_val(a);
 
-    a += try foo() {
+    a += try (foo()) {
         std.print("caught 2");
         recover 30;
     };

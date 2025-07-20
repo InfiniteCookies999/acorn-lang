@@ -38,10 +38,10 @@ fn main() {
         e1: En = En.A;
         e2: En = En.B;
         e3: En = En.A;
-        if e1 == e2 {
+        if (e1 == e2) {
             print("eq1", 3);
         }
-        if e1 == e3 {
+        if (e1 == e3) {
             print("eq2", 3);
         }
     }
@@ -49,10 +49,10 @@ fn main() {
         e1: En = En.A;
         e2: En = En.B;
         e3: En = En.A;
-        if e1 != e2 {
+        if (e1 != e2) {
             print("neq1", 4);
         }
-        if e1 != e3 {
+        if (e1 != e3) {
             print("neq2", 4);
         }
     }

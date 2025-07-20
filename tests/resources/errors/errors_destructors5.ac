@@ -32,7 +32,7 @@ struct A {
 }
 
 fn foo(b: bool) -> A | raises TestError {
-    if b {
+    if (b) {
         raise TestError{};
     } else {
         return A{ 64 };
@@ -40,7 +40,7 @@ fn foo(b: bool) -> A | raises TestError {
 }
 
 fn bar(b: bool) | raises TestError {
-    a: A = try foo(b) {
+    a: A = try (foo(b)) {
         std.print("caught error!");
         raise TestError{};
     };
@@ -48,7 +48,7 @@ fn bar(b: bool) | raises TestError {
 }
 
 fn main() {
-    try bar(false);
+    try (bar(false));
     std.print("...");
-    try bar(true);
+    try (bar(true));
 }

@@ -33,11 +33,12 @@ enum TypeId {
     Array,
     Slice,
     EmptyArray,
-    UnresolvedBracket, // Length could not be resolved during parsing.
+    UnresolvedArray, // Length could not be resolved during parsing.
     Null,
     AssignDeterminedArray,
     Function,
     UnresolvedComposite,
+    UnresolvedGenericComposite,
     Struct,
     Enum,
     UnresolvedEnumValueType,
@@ -46,6 +47,8 @@ enum TypeId {
     Range,
     Auto,
     Expr, // A type that appears as part of an expression in code.
+    Generic,
+    Inderminate,
     Invalid,
 
 }
@@ -78,10 +81,10 @@ struct EnumTypeInfo {
 
         loop {
             bucket: const uint64[2]* = index_mappings + bucket_index;
-            if (*bucket)[0] == index {
+            if ((*bucket)[0] == index) {
                 // Still have to check for -1 because it is possible the user wanted
                 // to store a -1 index value in the enum and -1 is used for empty keys.
-                if (*bucket)[1] != -1 {
+                if ((*bucket)[1] != -1) {
                     return (*bucket)[1];
                 }
             }
@@ -128,9 +131,9 @@ struct Type {
     }
 
     const fn is_string() -> bool {
-        if id == TypeId.Pointer {
+        if (id == TypeId.Pointer) {
             return elm_type.id == TypeId.Char;
-        } elif id == TypeId.Struct {
+        } elif (id == TypeId.Struct) {
             return this == #type_info(String);
         } else {
             return false;

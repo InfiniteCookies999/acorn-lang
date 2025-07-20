@@ -35,7 +35,7 @@ struct B {
 struct A {
 
     fn f(b: bool) -> B | raises TestError {
-        if b {
+        if (b) {
             raise TestError{};
         } else {
             return B{ 64 };
@@ -52,13 +52,13 @@ fn foo() -> A {
 }
 
 fn bar(b: bool) | raises TestError {
-    b2: B = try foo().f(b);
+    b2: B = try (foo().f(b));
     write_val(b2.v);
 }
 
 fn main() {
-    try bar(false);
+    try (bar(false));
     std.print("...");
-    try bar(true);
+    try (bar(true));
     std.print("end");
 }

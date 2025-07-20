@@ -37,7 +37,7 @@ enum Day {
 }
 
 fn foo(day: Day) {
-    switch day {
+    switch (day) {
     case TUESDAY ..= FRIDAY:
         print("case 1", 6);
     case MONDAY:

@@ -1,0 +1,53 @@
+
+#if OS_GROUP_WINDOWS
+
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
+
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
+
+#elif OS_GROUP_UNIX
+
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
+
+#endif
+
+fn write_val(val: int) {
+
+#if OS_GROUP_WINDOWS
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
+    WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    c: char = as(char) val;
+    write(1, &c, 1);
+#endif
+
+}
+
+
+generics(T)
+fn foo(a: T[4], b: T) -> T {
+    value: T = a[0] + a[1] + a[2] + a[3] + b;
+    return value;
+}
+
+fn main() {
+
+    a1: int[4] = [10,12,10,11];
+    r1: int = foo(a1, 21);
+    write_val(r1);
+
+    // Use 0.5f since additions result in deterministic
+    // behavior for IEEE floating points.
+    a2: float[4] = [0.5f, 0.5f, 0.0f, 0.5f];
+    r2: float = foo(a2, 0.5f);
+    r3: int = (as(int) r2) + 35;
+    write_val(r3);
+
+}

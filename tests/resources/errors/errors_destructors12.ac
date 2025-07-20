@@ -1,7 +1,23 @@
 import std;
 import std.Error;
 
+fn write_val(val: int) {
+
+#if OS_GROUP_WINDOWS
+    handle: void* = std.GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
+    std.WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    c: char = as(char) val;
+    std.write(1, &c, 1);
+#endif
+
+}
+
 struct TestError1 :: *Error {
+    v: int;
+
     const fn get_name() -> const char* {
         return "TestError1";
     }
@@ -10,11 +26,14 @@ struct TestError1 :: *Error {
     }
 
     fn delete() {
+        write_val(v);
         std.print("destructor called 1!");
     }
 }
 
 struct TestError2 :: *Error {
+    v: int;
+
     const fn get_name() -> const char* {
         return "TestError2";
     }
@@ -23,24 +42,25 @@ struct TestError2 :: *Error {
     }
 
     fn delete() {
+        write_val(v);
         std.print("destructor called 2!");
     }
 }
 
 fn foo(b: bool) | raises TestError1, TestError2 {
-    if b {
-        raise TestError1{};
+    if (b) {
+        raise TestError1{ 64 };
     } else {
-        raise TestError2{};
+        raise TestError2{ 35 };
     }
 }
 
 fn main() {
-    try err: foo(true) {
+    try err: (foo(true)) {
         std.print("caught error!");
     };
     std.print("...");
-    try err: foo(false) {
+    try err: (foo(false)) {
         std.print("caught error!");
     };
     std.print("end!");

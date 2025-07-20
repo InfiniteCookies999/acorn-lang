@@ -105,7 +105,7 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = RangeType::create(allocator, range_type->get_value_type());
         break;
     }
-    case TypeKind::UnresolvedBracket: {
+    case TypeKind::UnresolvedArray: {
         auto un_arr_type = static_cast<UnresolvedArrayType*>(type);
         new_type = UnresolvedArrayType::create(allocator, un_arr_type->get_elm_type(), un_arr_type->get_expr(), is_const);
         break;
@@ -118,6 +118,17 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
                                                    is_const);
         break;
     }
+    case TypeKind::UnresolvedGenericComposite: {
+        auto un_composite_type = static_cast<UnresolvedGenericCompositeType*>(type);
+        new_type = UnresolvedGenericCompositeType::create(allocator,
+                                                          un_composite_type->get_composite_name(),
+                                                          un_composite_type->get_error_location(),
+                                                          un_composite_type->get_bound_exprs(),
+                                                          un_composite_type->get_non_named_generic_args_offsets(),
+                                                          is_const);
+        break;
+    }
+
     case TypeKind::UnresolvedEnumValueType: {
         auto un_enum_value_type = static_cast<UnresolvedEnumValueType*>(type);
         new_type = UnresolvedEnumValueType::create(allocator,
@@ -131,11 +142,25 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = AssignDeterminedArrayType::create(allocator, assign_det_arr_type->get_elm_type(), is_const);
         break;
     }
+    case TypeKind::Generic: {
+        auto generic_type = static_cast<GenericType*>(type);
+        new_type = GenericType::create(allocator, generic_type->get_generic(), is_const);
+        break;
+    }
+    case TypeKind::PartiallyBoundStruct: {
+        auto generic_struct_type = static_cast<PartiallyBoundStructType*>(type);
+        new_type = PartiallyBoundStructType::create(allocator,
+                                                    generic_struct_type->get_unbound_generic_struct(),
+                                                    generic_struct_type->get_partially_bound_types(),
+                                                    is_const);
+        break;
+    }
     default:
         new_type = Type::create(allocator, type->get_kind(), is_const);
         break;
     }
 
+    new_type->contains_generics = type->contains_generics;
     return new_type;
 }
 

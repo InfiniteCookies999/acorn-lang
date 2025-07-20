@@ -29,7 +29,7 @@ fn write(c: char) {
 }
 
 fn main() {
-    loop i: int in 0..=5 {
+    loop (i: int in 0..=5) {
         val: int = i + 48;
         write(as(char) val);
     }

@@ -29,7 +29,7 @@ struct A {
 }
 
 fn foo(cond: bool) -> A | raises TestError {
-    if cond {
+    if (cond) {
         return A{ 64 };
     }
 
@@ -37,7 +37,7 @@ fn foo(cond: bool) -> A | raises TestError {
 }
 
 fn main() {
-    a: A = try foo(true);
+    a: A = try (foo(true));
     write_val(a.v);
-    try foo(false);
+    try (foo(false));
 }

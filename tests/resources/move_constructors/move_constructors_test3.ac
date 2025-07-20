@@ -37,7 +37,7 @@ struct A {
 fn foo(t: bool) -> A {
     a: A;
 
-    if t {
+    if (t) {
         print("!!!", 3);
         return A{};
     }

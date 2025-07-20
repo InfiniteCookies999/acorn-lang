@@ -36,7 +36,7 @@ struct A {
 }
 
 fn foo(b: bool) -> A | raises TestError {
-    if b {
+    if (b) {
         raise TestError{};
     } else {
         return A{};
@@ -44,7 +44,7 @@ fn foo(b: bool) -> A | raises TestError {
 }
 
 fn bar(b: bool) {
-    a: int = try foo(b).f() {
+    a: int = try (foo(b).f()) {
         std.print("caught error!");
         return;
     };

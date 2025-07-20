@@ -34,7 +34,7 @@ fn get_slice(a: int[4], t: bool) -> int[..] {
     s1: int[..] = a;
     s2: int[..] = a;
 
-    if t {
+    if (t) {
         return s1;
     }
 

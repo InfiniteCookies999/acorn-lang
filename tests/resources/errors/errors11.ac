@@ -25,7 +25,7 @@ fn write_val(val: int) {
 }
 
 fn foo(b: bool) -> int | raises TestError {
-    if b {
+    if (b) {
         raise TestError{};
     } else {
         return 64;
@@ -34,7 +34,7 @@ fn foo(b: bool) -> int | raises TestError {
 
 fn main() {
     a1: int;
-    a1 = try foo(false) {
+    a1 = try (foo(false)) {
         std.print("I am not called");
         return;
     };
@@ -42,7 +42,7 @@ fn main() {
     write_val(a1);
 
     a2: int;
-    a2 = try foo(true) {
+    a2 = try (foo(true)) {
         std.print("error caught!");
         return;
     };

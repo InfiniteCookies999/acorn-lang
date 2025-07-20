@@ -126,40 +126,41 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 }
 
 llvm::Value* acorn::IRGenerator::gen_assignment_op(Expr* lhs, Expr* rhs) {
-    emit_dbg(di_emitter->set_store_node(lhs));
     Try* prev_try = nullptr;
     if (rhs->tryn) {
         gen_try(rhs->tryn, prev_try);
     }
+
+    push_dbg_loc(lhs->loc);
     auto ll_address = gen_node(lhs);
-    gen_assignment(ll_address, lhs->type, rhs, lhs->loc, lhs, true);
+    gen_assignment(ll_address, lhs->type, rhs, lhs, true);
+    pop_dbg_loc();
+
     if (rhs->tryn) {
         finish_try(prev_try);
     }
-    emit_dbg(di_emitter->clear_store_node());
     return ll_address;
 }
 
-llvm::Value* acorn::IRGenerator::gen_apply_and_assign_op(tokkind op, SourceLoc loc, Type* rtype, Expr* lhs, Expr* rhs) {
-
-    emit_dbg(di_emitter->set_store_node(lhs));
+llvm::Value* acorn::IRGenerator::gen_apply_and_assign_op(TokenKind op, SourceLoc loc, Type* rtype, Expr* lhs, Expr* rhs) {
 
     Try* prev_try = nullptr;
     if (rhs->tryn) {
         gen_try(rhs->tryn, prev_try);
     }
+
+    push_dbg_loc(lhs->loc);
     auto ll_address = gen_node(lhs);
     auto ll_value = gen_numeric_binary_op(op, rtype,
                                           lhs, rhs,
                                           builder.CreateLoad(gen_type(lhs->type), ll_address),
                                           gen_rvalue(rhs));
     builder.CreateStore(ll_value, ll_address);
-    emit_dbg(di_emitter->emit_location(builder, loc));
+    pop_dbg_loc();
+
     if (rhs->tryn) {
         finish_try(prev_try);
     }
-
-    emit_dbg(di_emitter->clear_store_node());
     return nullptr;
 }
 
@@ -172,7 +173,7 @@ llvm::Value* acorn::IRGenerator::gen_apply_and_assign_op(tokkind op, SourceLoc l
 // defined behavior for arithmetic. NSW does not guarantee defined behavior
 // but it does provide better performance which is the trade-off.
 //
-llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(tokkind op, Type* rtype,
+llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(TokenKind op, Type* rtype,
                                                        Expr* lhs, Expr* rhs,
                                                        llvm::Value* ll_lhs, llvm::Value* ll_rhs) {
 
@@ -315,7 +316,8 @@ llvm::Value* acorn::IRGenerator::gen_equal(llvm::Value* ll_lhs, llvm::Value* ll_
 llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
     Expr* expr = unary_op->expr;
 
-    auto gen_inc_or_dec = [this, unary_op](bool add, bool is_post) finline {
+    auto gen_inc_or_dec = [this, unary_op](bool add, bool is_post) finline{
+        push_dbg_loc(unary_op->loc);
         auto type = unary_op->expr->type;
         llvm::Value* ll_addr  = gen_node(unary_op->expr);
         llvm::Value* ll_value = builder.CreateLoad(gen_type(unary_op->expr->type), ll_addr);
@@ -340,7 +342,7 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
             }
         }
         builder.CreateStore(ll_value, ll_addr);
-        emit_dbg(di_emitter->emit_location(builder, unary_op->loc));
+        pop_dbg_loc();
         return is_post ? ll_org : ll_value;
     };
 
@@ -448,13 +450,13 @@ llvm::Value* acorn::IRGenerator::gen_ternary(Ternary* ternary,
         // Then block
         insert_bblock_at_end(ll_then_bb);
         builder.SetInsertPoint(ll_then_bb);
-        gen_assignment(ll_dest_addr, ternary->type, ternary->lhs, ternary->loc, nullptr, is_assign_op, try_move);
+        gen_assignment(ll_dest_addr, ternary->type, ternary->lhs, nullptr, is_assign_op, try_move);
         gen_branch_if_not_term(ll_end_bb);
 
         // Else block
         insert_bblock_at_end(ll_else_bb);
         builder.SetInsertPoint(ll_else_bb);
-        gen_assignment(ll_dest_addr, ternary->type, ternary->rhs, ternary->loc, nullptr, is_assign_op, try_move);
+        gen_assignment(ll_dest_addr, ternary->type, ternary->rhs, nullptr, is_assign_op, try_move);
         gen_branch_if_not_term(ll_end_bb);
 
         // Continuing forward into a new block after the ternary.

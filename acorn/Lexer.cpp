@@ -13,8 +13,8 @@ static bool is_digit(char c) {
 
 static bool is_hexidecimal(char c) {
     return (c >= '0' && c <= '9') ||
-           (c >= 'a' && c <= 'z') ||
-           (c >= 'A' && c <= 'Z');
+           (c >= 'a' && c <= 'f') ||
+           (c >= 'A' && c <= 'F');
 }
 
 static bool is_octal(char c) {
@@ -40,24 +40,26 @@ acorn::Lexer::Lexer(const Lexer& lexer, llvm::SmallVector<Token, 8> peeked_token
 
 acorn::Token acorn::Lexer::next_token() {
 
+    // Keep track of if whitespace was parsed to determine
+    // if the line is only made up of whitespace.
     bool whitespace = false;
 
-RestartLexingLabel:
+#define lex1(c) { ++ptr; return Token(c, ptr - 1, 1); }
+#define lex2(c1, c2, c2kind) {            \
+    ++ptr;                                \
+    if (*ptr == c2) {                     \
+        ++ptr;                            \
+        return Token(c2kind, ptr - 2, 2); \
+    }                                     \
+    return Token(c1, ptr - 1, 1);       }
 
-#define two_tok(c1, c2, c2kind)                 \
-case c1:                                        \
-    if (*(++ptr) == c2) { ++ptr;                \
-        return new_token(ptr - 2, 2, c2kind); } \
-    return new_token(ptr - 1, 1, c1);
 
-
+start:
     switch (*ptr) {
-
     // Skip any whitespace.
     case ' ': case '\t': case '\v': case '\f':
         ++ptr;
-        goto RestartLexingLabel;
-
+        goto start;
     // Encountered a new line.
     case '\n': {
         if (whitespace) {
@@ -66,7 +68,7 @@ case c1:                                        \
         whitespace = true;
         ++total_lines_lexed;
         ++ptr;
-        goto RestartLexingLabel;
+        goto start;
     }
     case '\r': {
         if (whitespace) {
@@ -79,7 +81,12 @@ case c1:                                        \
         if (*ptr == '\n') {
             ++ptr;
         }
-        goto RestartLexingLabel;
+        goto start;
+    }
+    // End of buffer
+    case '\0': {
+        ++ptr;
+        return Token(Token::EOB, ptr - 1, 1);
     }
     case 'a': case 'b': case 'c': case 'd': case 'e':
     case 'f': case 'g': case 'h': case 'i': case 'j':
@@ -102,166 +109,149 @@ case c1:                                        \
         return next_string();
     case '\'':
         return next_char();
-
+    case '#':
+        return next_comptime();
+    // Special characters
+    case ',': lex1(',');
+    case ':': lex1(':');
+    case '(': lex1('(');
+    case ')': lex1(')');
+    case '[': lex1('[');
+    case ']': lex1(']');
+    case '{': lex1('{');
+    case '}': lex1('}');
+    case ';': lex1(';');
+    case '?': lex1('?');
+    case '$': lex1('$');
+    case '=':  lex2('=', '=', Token::EqEq);
+    case '*':  lex2('*', '=', Token::MulEq);
+    case '%':  lex2('%', '=', Token::ModEq);
+    case '^':  lex2('^', '=', Token::CaretEq);
+    case '~':  lex2('~', '=', Token::TildeEq);
+    case '!':  lex2('!', '=', Token::ExEq);
+    case '\\': lex2('\\', '\\', Token::BackslashBackslash);
     case '/': {
         ++ptr;
         if (*ptr == '/') {
             eat_single_line_comment();
-            goto RestartLexingLabel;
+            goto start;
         } else if (*ptr == '*') {
             eat_multiline_comment();
-            goto RestartLexingLabel;
+            goto start;
         } else if (*ptr == '=') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::DivEq);
+            return Token(Token::DivEq, ptr - 2, 2);
         }
-        return new_token(ptr - 1, 1, '/');
-    }
-    case ',':
-        return new_token_and_eat(',');
-
-    two_tok('=', '=', Token::EqEq);
-    two_tok('*', '=', Token::MulEq);
-    two_tok('%', '=', Token::ModEq);
-    two_tok('^', '=', Token::CaretEq);
-    two_tok('~', '=', Token::TildeEq);
-    two_tok('!', '=', Token::ExEq);
-    two_tok('\\', '\\', Token::BackslashBackslash);
-
-    case ':': {
-        ++ptr;
-        return new_token(ptr - 1, 1, ':');
+        return Token('/', ptr - 1, 1);
     }
     case '&': {
         ++ptr;
         if (*ptr == '=') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::AndEq);
+            return Token(Token::AndEq, ptr - 2, 2);
         } else if (*ptr == '&') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::AndAnd);
+            return Token(Token::AndAnd, ptr - 2, 2);
         }
-        return new_token(ptr - 1, 1, '&');
+        return Token('&', ptr - 1, 1);
     }
     case '|': {
         ++ptr;
         if (*ptr == '=') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::OrEq);
+            return Token(Token::OrEq, ptr - 2, 2);
         } else if (*ptr == '|') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::OrOr);
+            return Token(Token::OrOr, ptr - 2, 2);
         }
-        return new_token(ptr - 1, 1, '|');
+        return Token('|', ptr - 1, 1);
     }
     case '+': {
         ++ptr;
         if (*ptr == '=') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::AddEq);
+            return Token(Token::AddEq, ptr - 2, 2);
         } else if (*ptr == '+') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::AddAdd);
+            return Token(Token::AddAdd, ptr - 2, 2);
         } else if (is_digit(*ptr)) {
             return next_number(ptr - 1);
         }
-        return new_token(ptr - 1, 1, '+');
+        return Token('+', ptr - 1, 1);
     }
     case '-': {
         ++ptr;
         if (*ptr == '>') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::Arrow);
+            return Token(Token::Arrow, ptr - 2, 2);
         } else if (*ptr == '=') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::SubEq);
+            return Token(Token::SubEq, ptr - 2, 2);
         } else if (*ptr == '-') {
             ++ptr;
             if (*ptr == '-') {
                 ++ptr;
-                return new_token(ptr - 3, 3, Token::SubSubSub);
+                return Token(Token::SubSubSub, ptr - 3, 3);
             }
-            return new_token(ptr - 2, 2, Token::SubSub);
+            return Token(Token::SubSub, ptr - 2, 2);
         } else if (is_digit(*ptr)) {
             return next_number(ptr - 1);
         }
-        return new_token(ptr - 1, 1, '-');
+        return Token('-', ptr - 1, 1);
     }
     case '>': {
         ++ptr;
         if (*ptr == '>') {
             if (*(++ptr) == '=') {
                 ++ptr;
-                return new_token(ptr - 3, 3, Token::GtGtEq);
+                return Token(Token::GtGtEq, ptr - 3, 3);
             }
-            return new_token(ptr - 2, 2, Token::GtGt);
+            return Token(Token::GtGt, ptr - 2, 2);
         }
         else if (*ptr == '=') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::GtEq);
+            return Token(Token::GtEq, ptr - 2, 2);
         }
-        return new_token(ptr - 1, 1, '>');
+        return Token('>', ptr - 1, 1);
     }
     case '<': {
         ++ptr;
         if (*ptr == '<') {
             if (*(++ptr) == '=') {
                 ++ptr;
-                return new_token(ptr - 3, 3, Token::LtLtEq);
+                return Token(Token::LtLtEq, ptr - 3, 3);
             }
-            return new_token(ptr - 2, 2, Token::LtLt);
+            return Token(Token::LtLt, ptr - 2, 2);
         }
         else if (*ptr == '=') {
             ++ptr;
-            return new_token(ptr - 2, 2, Token::LtEq);
+            return Token(Token::LtEq, ptr - 2, 2);
         }
-        return new_token(ptr - 1, 1, '<');
+        return Token('<', ptr - 1, 1);
     }
     case '.': {
         ++ptr;
         if (*ptr == '.' && *(ptr + 1) == '=') {
             ptr += 2;
-            return new_token(ptr - 3, 3, Token::RangeEq);
+            return Token(Token::RangeEq, ptr - 3, 3);
         } else if (*ptr == '.' && *(ptr + 1) == '<') {
             ptr += 2;
-            return new_token(ptr - 3, 3, Token::RangeLt);
+            return Token(Token::RangeLt, ptr - 3, 3);
         } else if (*ptr == '.') {
             ptr += 1;
             if (*ptr == '.') {
                 ptr += 1;
-                return new_token(ptr - 3, 3, Token::DotDotDot);
+                return Token(Token::DotDotDot, ptr - 3, 3);
             } else {
-                return new_token(ptr - 2, 2, Token::DotDot);
+                return Token(Token::DotDot, ptr - 2, 2);
             }
         }
-        return new_token(ptr - 1, 1, '.');
+        return Token('.', ptr - 1, 1);
     }
-    case '#':
-        return next_comptime();
-    case '(':
-        return new_token_and_eat('(');
-    case ')':
-        return new_token_and_eat(')');
-    case '[':
-        return new_token_and_eat('[');
-    case ']':
-        return new_token_and_eat(']');
-    case '{':
-        return new_token_and_eat('{');
-    case '}':
-        return new_token_and_eat('}');
-    case ';':
-        return new_token_and_eat(';');
-    case '?':
-        return new_token_and_eat('?');
-    case '$':
-        return new_token_and_eat('$');
-
-    case '\0':
-        return new_token_and_eat(Token::EOB);
+    // Invalid characters
     default: {
 
-        const char* start = ptr;
+        const char* beg = ptr;
 
         auto byte = static_cast<unsigned char>(*ptr);
         if (byte >= 33 && byte <= 126) { // Easily displayable.
@@ -269,13 +259,13 @@ case c1:                                        \
                   .add_arrow_msg(Logger::CaretPlacement::At, "remove this character")
                   .end_error(ErrCode::LexInvalidChar);
             ++ptr;
-            return new_token(Token::Invalid, start);
+            return Token(Token::Invalid, beg, 1);
         }
 
         if (byte <= 127) {
             error("Invalid character (ASCII code): '%s'", byte).end_error(ErrCode::LexInvalidChar);
             ++ptr;
-            return new_token(Token::Invalid, start);
+            return Token(Token::Invalid, beg, 1);
         }
 
         // Dealing with non-ascii characters.
@@ -288,18 +278,18 @@ case c1:                                        \
             error("Invalid character. Could not interpret character using UTF-8 encoding")
                 .end_error(ErrCode::LexInvalidChar);
             ++ptr;
-            return new_token(Token::Invalid, start);
+            return Token(Token::Invalid, beg, 1);
         }
 
         SourceLoc loc = {
-            .ptr = ptr,
-            .length = static_cast<uint16_t>(num_bytes)
+            .ptr    = ptr,
+            .length = static_cast<uint32_t>(num_bytes)
         };
         error("Invalid character. Only ASCII characters are allowed outside comments and strings")
             .end_error(ErrCode::LexInvalidChar);
 
         ptr += num_bytes;
-        return new_token(Token::Invalid, start);
+        return Token(Token::Invalid, beg, static_cast<uint32_t>(ptr - beg));
     }
     }
 }
@@ -361,19 +351,21 @@ void acorn::Lexer::eat_multiline_comment() {
 
 acorn::Token acorn::Lexer::next_word() {
 
-    const char* start = ptr;
+    const char* beg = ptr;
 
     while (is_alpha(*ptr) || is_digit(*ptr) || *ptr == '_') {
         ++ptr;
     }
 
-    auto word = llvm::StringRef(start, ptr - start);
+    auto lexeme_length = ptr - beg;
+    auto word = llvm::StringRef(beg, static_cast<size_t>(lexeme_length));
     auto kind = context.get_keyword_kind(word);
 
-    return new_token(kind != Token::Invalid ? kind : Token::Identifier, start);
+    kind = kind != Token::Invalid ? kind : Token::Identifier;
+    return Token(kind, beg, static_cast<uint32_t>(lexeme_length));
 }
 
-acorn::Token acorn::Lexer::next_number(const char* start) {
+acorn::Token acorn::Lexer::next_number(const char* beg) {
 
     if (*ptr == '0') {
         ++ptr;
@@ -383,20 +375,20 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
             while (is_hexidecimal(*ptr) || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
-            return finish_int_number(Token::HexLiteral, start);
+            return finish_int_number(Token::HexLiteral, beg);
         } else if (*ptr == 'b') {
             // Lexing binary
             ++ptr;
             while (*ptr == '0' || *ptr == '1' || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
-            return finish_int_number(Token::BinLiteral, start);
+            return finish_int_number(Token::BinLiteral, beg);
         } else if (is_octal(*ptr)) {
             // Parsing octal number
             while (is_octal(*ptr) || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
-            return finish_int_number(Token::OctLiteral, start);
+            return finish_int_number(Token::OctLiteral, beg);
         }
     }
 
@@ -446,30 +438,30 @@ acorn::Token acorn::Lexer::next_number(const char* start) {
             }
         }
 
-        return finish_float_number(start, has_errors);
+        return finish_float_number(beg, has_errors);
     }
 
-    return finish_int_number(Token::IntLiteral, start);
+    return finish_int_number(Token::IntLiteral, beg);
 }
 
-acorn::Token acorn::Lexer::finish_int_number(tokkind kind, const char* start) {
+acorn::Token acorn::Lexer::finish_int_number(TokenKind kind, const char* beg) {
 
     if (*(ptr - 1) == NUMBER_SEPERATOR) {
-        auto error_loc = SourceLoc{ start, static_cast<uint16_t>(ptr - start) };
+        auto error_loc = SourceLoc::from_ptrs(beg, ptr);
         logger.begin_error(error_loc, "Numbers cannot end with _")
               .end_error(ErrCode::LexNumberCannotEndUnderscore);
-        return new_token(Token::InvalidNumberLiteral, start);
+        return Token(Token::InvalidNumberLiteral, beg, static_cast<uint32_t>(ptr - beg));
     }
 
     if (*ptr == '\'') {
         auto type_spec_start = ptr;
 
-        auto invalid_type_spec = [this, type_spec_start, start]() finline{
-            auto error_loc = SourceLoc{ type_spec_start, static_cast<uint16_t>(ptr - type_spec_start) };
+        auto invalid_type_spec = [this, type_spec_start, beg]() finline{
+            auto error_loc = SourceLoc::from_ptrs(type_spec_start, ptr);
             logger.begin_error(error_loc, "Invalid type specifier")
                   .add_line("One of: i8, i16, i32, i64, u8, u16, u32, u64")
                   .end_error(ErrCode::LexNumberBadTypeSpec);
-            return new_token(Token::InvalidNumberLiteral, start);
+            return Token(Token::InvalidNumberLiteral, beg, static_cast<uint32_t>(ptr - type_spec_start));
         };
 
         // Explicit type specification.
@@ -488,25 +480,25 @@ acorn::Token acorn::Lexer::finish_int_number(tokkind kind, const char* start) {
         if (!is_digit(*ptr)) {
             if (digit1 != '8')
                 return invalid_type_spec();
-            return new_token(kind, start);
+            return Token(kind, beg, static_cast<uint32_t>(ptr - beg));
         }
         ++ptr;
         if ((digit1 == '1' && digit2 == '6') ||
             (digit1 == '3' && digit2 == '2') ||
             (digit1 == '6' && digit2 == '4')
             ) {
-            return new_token(kind, start);
+            return Token(kind, beg, static_cast<uint32_t>(ptr - beg));
         }
         return invalid_type_spec();
     } else if (*ptr == 'f' || *ptr == 'd') {   // Integer will be treated as a 32/64 bit float.
         ++ptr;
     }
 
-    return new_token(kind, start);
+    return Token(kind, beg, static_cast<uint32_t>(ptr - beg));
 }
 
-acorn::Token acorn::Lexer::finish_float_number(const char* start, bool has_errors) {
-    tokkind kind = Token::DoubleLiteral;;
+acorn::Token acorn::Lexer::finish_float_number(const char* beg, bool has_errors) {
+    TokenKind kind = Token::DoubleLiteral;;
 
     if (*ptr == 'f') {
         ++ptr;
@@ -515,16 +507,17 @@ acorn::Token acorn::Lexer::finish_float_number(const char* start, bool has_error
         ++ptr;
     }
 
-    return new_token(has_errors ? Token::InvalidNumberLiteral : kind, start);
+    kind = has_errors ? Token::InvalidNumberLiteral : kind;
+    return Token(kind, beg, static_cast<uint32_t>(ptr - beg));
 }
 
 bool acorn::Lexer::skip_unicode_seq_digits(size_t n) {
-    auto start = ptr;
+    auto beg = ptr;
     ++ptr; // Skip u or U
     for (size_t i = 0; i < n && *ptr != '\0'; ++i, ++ptr) {
         if (!is_hexidecimal(*ptr)) {
-            logger.begin_error(SourceLoc{ start - 1, static_cast<uint16_t>(i + 2) },
-                               "Incomplete UTF-8 sequence. Expected %s digits", n)
+            SourceLoc error_loc = SourceLoc{ beg - 1, static_cast<uint32_t>(i + 2) };
+            logger.begin_error(error_loc, "Incomplete UTF-8 sequence. Expected %s digits", n)
                 .end_error(ErrCode::LexInvalidUnicodeSeq);
             return false;
         }
@@ -534,7 +527,7 @@ bool acorn::Lexer::skip_unicode_seq_digits(size_t n) {
 
 acorn::Token acorn::Lexer::next_string() {
 
-    const char* start = ptr;
+    const char* beg = ptr;
     ++ptr; // Skip initial "
 
     bool invalid = false;
@@ -569,22 +562,18 @@ FinishedStringLexLab:
 
         // Underlining the entire string so that there is not just a weird hanging messing
         // at the end of the line with the whitespace.
-        SourceLoc loc = SourceLoc{
-            .ptr = start,
-            .length = static_cast<uint16_t>(ptr - start)
-        };
-        logger.begin_error(loc, "Expected closing \" for string")
+        SourceLoc error_loc = SourceLoc::from_ptrs(beg, ptr);
+        logger.begin_error(error_loc, "Expected closing \" for string")
             .end_error(ErrCode::LexStringMissingEndQuote);
     }
 
-    return new_token(start,
-                     static_cast<uint16_t>(ptr - start),
-                     !invalid ? Token::StringLiteral : Token::InvalidStringLiteral);
+    auto kind = !invalid ? Token::StringLiteral : Token::InvalidStringLiteral;
+    return Token(kind, beg, static_cast<uint32_t>(ptr - beg));
 }
 
 acorn::Token acorn::Lexer::next_char() {
 
-    const char* start = ptr;
+    const char* beg = ptr;
     ++ptr; // Skip initial '
 
     // TODO: What should we do if the user types a tab?
@@ -594,7 +583,7 @@ acorn::Token acorn::Lexer::next_char() {
     case '\n': {
         error("Expected closing ' for character")
             .end_error(ErrCode::LexCharMissingEndQuote);
-        return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidCharLiteral);
+        return Token(Token::InvalidCharLiteral, beg, static_cast<uint32_t>(ptr - beg));
     }
     case '\\': {
         ++ptr;
@@ -612,16 +601,16 @@ acorn::Token acorn::Lexer::next_char() {
     if (*ptr != '\'') {
         error("Expected closing ' for character")
             .end_error(ErrCode::LexCharMissingEndQuote);
-        return new_token(start, static_cast<uint16_t>(ptr - start), Token::InvalidCharLiteral);
+        return Token(Token::InvalidCharLiteral, beg, static_cast<uint32_t>(ptr - beg));
     } else {
         ++ptr; // Eating closing '
-        return new_token(start, static_cast<uint16_t>(ptr - start), Token::CharLiteral);
+        return Token(Token::CharLiteral, beg, static_cast<uint32_t>(ptr - beg));
     }
 }
 
 acorn::Token acorn::Lexer::next_comptime() {
 
-    const char* start = ptr;
+    const char* beg = ptr;
 
     ++ptr; // Eating the '#' character.
 
@@ -629,12 +618,13 @@ acorn::Token acorn::Lexer::next_comptime() {
         ++ptr;
     }
 
-    auto word = llvm::StringRef(start, ptr - start);
+    auto word = llvm::StringRef(beg, static_cast<size_t>(ptr - beg));
     auto kind = context.get_keyword_kind(word);
 
-    Token token = new_token(kind, start);
+    Token token = Token(kind, beg, static_cast<uint32_t>(ptr - beg));
     if (kind == Token::Invalid) {
-        logger.begin_error(token.loc, "Unknown comptime directive")
+        SourceLoc error_loc = SourceLoc::from_ptrs(beg, ptr);
+        logger.begin_error(error_loc, "Unknown comptime directive")
             .end_error(ErrCode::LexUnknownComptimeDirective);
     }
     return token;

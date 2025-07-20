@@ -33,11 +33,14 @@ namespace acorn {
     class StructType;
     class EnumType;
     class InterfaceType;
+    class GenericType;
     struct ComptimeIfStmt;
     struct Struct;
     struct BinOp;
     struct Interface;
     struct Try;
+    struct Generic;
+    class PageAllocator;
 
     const size_t MAX_FUNC_PARAMS = 64;
 
@@ -52,6 +55,7 @@ namespace acorn {
         Struct,
         Enum,
         Interface,
+        Generic,
 
         ReturnStmt,
         IfStmt,
@@ -139,6 +143,18 @@ namespace acorn {
     // Statements
     //--------------------------------------
 
+    struct Generic : Node {
+        Generic() : Node(NodeKind::Generic) {
+        }
+
+        Identifier   name;
+        size_t       index;
+        GenericType* type;
+    };
+
+    struct GenericInstance {
+    };
+
     struct Decl : Node {
         Decl(NodeKind kind) : Node(kind) {
         }
@@ -179,12 +195,31 @@ namespace acorn {
 
     };
 
+    struct GenericFuncInstance : GenericInstance {
+        llvm::SmallVector<Type*> bound_types;
+        // Parameters have their types fully qualified so that future
+        // calls to the generic function know how to properly call the
+        // function.
+        //
+        // Index 0 is the return type.
+        llvm::SmallVector<Type*> qualified_decl_types;
+
+        Struct* structn = nullptr;
+
+        llvm::Function* ll_func = nullptr;
+    };
+
     struct Func : Decl {
         Func() : Decl(NodeKind::Func) {
         }
 
         // If not null then the function is a member function.
         Struct* structn = nullptr;
+        // This is equal to `structn` if the struct is not generic
+        // otherwise this is the version of the struct prior to having
+        // specific generic types specified.
+        Struct* non_generic_struct_instance = nullptr;
+
 
         // If not null then the function is a function of an
         // interface. Note, this is different than a function that
@@ -201,10 +236,22 @@ namespace acorn {
         // that is implemented.
         Func* mapped_interface_func = nullptr;
 
+        // If this is a generic function then this is the currently bound
+        // generic instance.
+        GenericFuncInstance* generic_instance = nullptr;
+
         Type* parsed_return_type;
         Type* return_type;
         llvm::SmallVector<Var*, 8> params;
         llvm::SmallVector<RaisedError> raised_errors;
+
+        // generic data
+        //
+        llvm::SmallVector<Generic*>             generics;
+        llvm::SmallVector<GenericFuncInstance*> generic_instances;
+        // Index 0 is the return type, rest are parameter types.
+        llvm::SmallVector<Type*> partially_qualified_types;
+
 
         llvm::StringRef linkname;
 
@@ -261,6 +308,15 @@ namespace acorn {
 
         bool forwards_varargs(Expr* arg_value) const;
 
+        bool is_generic() const { return !generics.empty(); }
+
+        GenericFuncInstance* get_generic_instance(PageAllocator& allocator,
+                                                  llvm::SmallVector<Type*> bound_types,
+                                                  llvm::SmallVector<Type*> qualified_param_types,
+                                                  Struct* parent_struct);
+
+        void bind_generic_instance(GenericFuncInstance* generic_instance);
+
     };
 
     struct ImplicitFunc : Node {
@@ -287,7 +343,11 @@ namespace acorn {
 
         llvm::StringRef linkname;
 
-        Struct* structn;
+        Struct* structn = nullptr;
+        // This is equal to `structn` if the struct is not generic
+        // otherwise this is the version of the struct prior to having
+        // specific generic types specified.
+        Struct* non_generic_struct_instance = nullptr;
 
         uint32_t param_idx = NotParam;
         uint32_t field_idx = NotField;
@@ -301,24 +361,15 @@ namespace acorn {
 
         Expr* assignment = nullptr;
 
-        bool has_been_checked          = false;
-        bool is_foldable               = false;
-        bool has_implicit_ptr          = false;
-        bool should_default_initialize = true;
+        bool has_been_checked             = false;
+        bool is_foldable                  = false;
+        bool has_implicit_ptr             = false;
+        bool should_default_initialize    = true;
+        bool assignment_contains_generics = false;
 
         // If the variable is foldable then this contains the
         // generated value of the variable.
         llvm::Value* ll_comptime_value = nullptr;
-
-        // If this is set to true then the function passes the
-        // struct value as an integer type then converts it back
-        // once inside the body of the function.
-        bool is_aggr_int_param = true;
-        // If this is set to true then struct type parameters
-        // are passed as pointers and memcpy is used at the
-        // calling location.
-        bool is_aggr_param = false;
-
         llvm::Value* ll_address;
 
         bool is_param() const { return param_idx != NotParam; }
@@ -389,9 +440,37 @@ namespace acorn {
         bool uses_vtable             = false;
         bool aborts_error            = false;
         bool is_default_foldable     = true;
+        bool is_generic              = false;
+        // DUMMY variable for debugging.
+        bool is_struct_instance_copy = false;
 
         Var* find_field(Identifier name) const;
         const InterfaceExtension* find_interface_extension(Identifier name) const;
+
+    };
+
+    struct GenericStructInstance : Struct, GenericInstance {
+        GenericStructInstance() : Struct() {}
+
+        llvm::SmallVector<Type*> bound_types;
+
+        // Need these in order to properly set the generic instance information
+        // when generating the llvm function declaration in implicit contexts.
+        GenericFuncInstance* generic_default_constructor_instance;
+        GenericFuncInstance* generic_destructor_instance;
+        GenericFuncInstance* generic_move_constructor_instance;
+        GenericFuncInstance* generic_copy_constructor_instance;
+    };
+
+    struct UnboundGenericStruct : Struct {
+        UnboundGenericStruct() : Struct() {
+        }
+
+        llvm::SmallVector<Generic*>               generics;
+        llvm::SmallVector<GenericStructInstance*> generic_instances;
+
+        GenericStructInstance* get_generic_instance(PageAllocator& allocator,
+                                                    llvm::SmallVector<Type*> bound_types);
 
     };
 
@@ -618,7 +697,7 @@ namespace acorn {
         BinOp() : Expr(NodeKind::BinOp) {
         }
 
-        tokkind op;
+        TokenKind op;
 
         Expr* lhs;
         Expr* rhs;
@@ -628,8 +707,8 @@ namespace acorn {
         UnaryOp() : Expr(NodeKind::UnaryOp) {
         }
 
-        tokkind op;
-        Expr*   expr;
+        TokenKind op;
+        Expr*     expr;
     };
 
     struct Number : Expr {
@@ -665,6 +744,7 @@ namespace acorn {
         }
 
         Identifier ident;
+        bool explicitly_binds_generics = false;
 
         enum class RelativeEnforcement {
             File,
@@ -684,7 +764,8 @@ namespace acorn {
             UniversalKind,
             NamespaceKind,
             CompositeKind,
-            EnumValueKind
+            EnumValueKind,
+            GenericTypeKind
         } found_kind = NoneKind;
 
         union {
@@ -694,14 +775,16 @@ namespace acorn {
             Namespace*   nspace_ref;
             Decl*        composite_ref;
             Enum::Value* enum_value_ref;
+            GenericType* generic_type_ref;
         };
 
-        bool is_var_ref() const        { return found_kind == VarKind;       }
-        bool is_funcs_ref() const      { return found_kind == FuncsKind;     }
-        bool is_universal_ref() const  { return found_kind == UniversalKind; }
-        bool is_namespace_ref() const  { return found_kind == NamespaceKind; }
-        bool is_composite_ref() const  { return found_kind == CompositeKind; }
-        bool is_enum_value_ref() const { return found_kind == EnumValueKind; }
+        bool is_var_ref() const          { return found_kind == VarKind;         }
+        bool is_funcs_ref() const        { return found_kind == FuncsKind;       }
+        bool is_universal_ref() const    { return found_kind == UniversalKind;   }
+        bool is_namespace_ref() const    { return found_kind == NamespaceKind;   }
+        bool is_composite_ref() const    { return found_kind == CompositeKind;   }
+        bool is_enum_value_ref() const   { return found_kind == EnumValueKind;   }
+        bool is_generic_type_ref() const { return found_kind == GenericTypeKind; }
 
         void set_var_ref(Var* var) {
             var_ref    = var;
@@ -732,6 +815,11 @@ namespace acorn {
             enum_value_ref = value;
             found_kind = EnumValueKind;
         }
+
+        void set_generic_type_ref(GenericType* generic_type) {
+            generic_type_ref = generic_type;
+            found_kind = GenericTypeKind;
+        }
     };
 
     struct DotOperator : IdentRef {
@@ -745,6 +833,15 @@ namespace acorn {
 
         PointSourceLoc expand_access_only() const;
 
+    };
+
+    struct GenericBindFuncCall : IdentRef {
+        GenericBindFuncCall() : IdentRef(NodeKind::IdentRef) {
+        }
+
+        size_t non_named_args_offset = -1;
+        llvm::SmallVector<Expr*> args;
+        llvm::SmallVector<Type*> bound_types;
     };
 
     struct TypeExpr : Expr {
@@ -781,11 +878,14 @@ namespace acorn {
         FuncCall() : Expr(NodeKind::FuncCall) {
         }
 
-        Expr* site;
-        Func* called_func;
+        Expr*                site;
+        Func*                called_func;
+        GenericFuncInstance* generic_instance = nullptr;
+        Type*                type_for_type_expr = nullptr;
 
         size_t non_named_args_offset = -1;
         llvm::SmallVector<Expr*> args;
+        llvm::SmallVector<Expr*> indeterminate_inferred_default_args;
         bool implicitly_converts_return = false;
 
     };
@@ -796,9 +896,11 @@ namespace acorn {
 
         size_t non_named_vals_offset = 0;
         Struct* structn;
-        IdentRef* ref;
+        Expr*  site;
         Func* called_constructor = nullptr;
+        GenericFuncInstance* generic_called_instance = nullptr;
         llvm::SmallVector<Expr*> values;
+        llvm::SmallVector<Expr*> indeterminate_inferred_default_values;
     };
 
     struct String : Expr {

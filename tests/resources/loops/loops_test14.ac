@@ -38,7 +38,7 @@ struct A {
 
 fn main() {
     arr: A[2] = [ A{80,105,122}, A{122,97,33} ];
-    loop a: A in arr {
+    loop (a: A in arr) {
         write_val(a.v1);
         write_val(a.v2);
         write_val(a.v3);

@@ -34,11 +34,11 @@ fn main() {
     a: int[5] = [ 114, 97, 109, 101, 110 ];
     s: int[..] = a;
 
-    loop v: int* in s {
+    loop (v: int* in s) {
         *v = 64;
     }
 
-    loop v: int in s {
+    loop (v: int in s) {
         write_val(v);
     }
 }

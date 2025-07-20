@@ -15,5 +15,5 @@ fn foo() | raises TestError {
 }
 
 fn main() {
-    try foo();
+    try (foo());
 }

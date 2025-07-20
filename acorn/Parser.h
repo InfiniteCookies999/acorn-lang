@@ -51,7 +51,9 @@ namespace acorn {
 
         Func*      cur_func      = nullptr;
         Struct*    cur_struct    = nullptr;
+        Var*       cur_var       = nullptr;
         Interface* cur_interface = nullptr;
+        llvm::SmallVector<Generic*> cur_generics;
 
         // Linkage name set by the native modifier.
         llvm::StringRef linkname;
@@ -61,7 +63,6 @@ namespace acorn {
 
         // If true still parsing imports at the top of the file.
         bool parsing_import_tops      = true;
-        bool allow_struct_initializer = true;
 
         // Statement processing
         //--------------------------------------
@@ -94,6 +95,7 @@ namespace acorn {
         void       check_composite_name_conflict_with_imports(Identifier name, const char* composite_type_str);
         void       parse_raised_errors(llvm::SmallVector<RaisedError>& raised_errors);
         uint32_t   parse_modifiers();
+        void       parse_generics(llvm::SmallVector<acorn::Generic*>& generics);
 
         ScopeStmt*  parse_scope(const char* closing_for = nullptr);
         ReturnStmt* parse_return();
@@ -127,7 +129,7 @@ namespace acorn {
 
         Expr* parse_assignment_and_expr();
         Expr* parse_expr();
-        Expr* parse_try();
+        Expr* parse_try(Var* tried_on_var = nullptr);
 
         Expr*                   parse_binary_expr(Expr* lhs);
         Expr*                   new_binary_op(Token op_tok, Expr* lhs, Expr* rhs);
@@ -140,10 +142,12 @@ namespace acorn {
         Expr* report_overflow(Token op, Expr* lhs, Expr* rhs, Type* to_type);
         Expr* report_underflow(Token op, Expr* lhs, Expr* rhs, Type* to_type);
 
-        Expr* parse_expr_trail();
-        Expr* parse_expr_trail(Expr* lhs);
-        Expr* parse_function_call(Expr* site);
-        Expr* parse_term();
+        Expr*     parse_expr_trail();
+        Expr*     parse_expr_trail(Expr* lhs);
+        FuncCall* parse_function_call(Expr* site);
+        Expr*     parse_generic_function_bind_call();
+        void      parse_function_call_args(llvm::SmallVector<Expr*>& args, size_t& non_named_args_offset);
+        Expr*     parse_term();
 
         Number* parse_int_literal();
         Number* parse_hex_literal();
@@ -165,7 +169,7 @@ namespace acorn {
                                          int          ptr_offset);
 
         Expr* parse_array();
-        Expr* parse_struct_initializer(IdentRef* ref);
+        Expr* parse_struct_initializer(Expr* site);
         Expr* parse_type_expr();
 
         // Utility functions
@@ -181,7 +185,10 @@ namespace acorn {
 
         // Expect the current token to be of kind and if it is it consumes
         // it.
-        bool expect(tokkind kind, const char* for_msg = nullptr);
+        bool expect(TokenKind kind, const char* for_msg = nullptr);
+
+        // Search the current generics list of the generic type.
+        Type* find_generic_type(Identifier name) const;
 
         // Expect the current token to be an identifier and construct
         // an identifier object if it is. It then consumes the token.
@@ -198,7 +205,7 @@ namespace acorn {
 
         template<typename T>
         T* new_node(Token token) {
-            return new_node<T>(token.loc);
+            return new_node<T>(token.get_location());
         }
 
         template<typename T>
@@ -219,7 +226,7 @@ namespace acorn {
 
         template<typename... TArgs>
         [[nodiscard]] Logger& error(Token error_token, const char* fmt, TArgs&&... args) {
-            return error(error_token.loc, fmt, std::forward<TArgs>(args)...);
+            return error(error_token.get_location(), fmt, std::forward<TArgs>(args)...);
         }
 
     };
