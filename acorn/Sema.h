@@ -41,6 +41,7 @@ namespace acorn {
 
         void check_function(Func* func);
         void check_variable(Var* var);
+        void check_variable_list(VarList* var_list);
         void check_struct(Struct* structn);
         void check_enum(Enum* enumn);
         void check_interface(Interface* interfacen);

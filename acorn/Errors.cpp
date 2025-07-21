@@ -19,3 +19,13 @@ void acorn::print_source_location(Logger& logger, SourceFile* file, SourceLoc lo
     logger.fmt_print("%s%s%s:", Color::BrightCyan, file->path, Color::BrightWhite);
     logger.fmt_print("%s%s%s", Color::BrightYellow, line_number, Color::BrightWhite);
 }
+
+void acorn::report_cannot_specify_auto_ptr_and_type_for_variable(Logger& logger, Var* var) {
+    auto ptr = var->loc.end();
+    while (is_whitespace(*ptr)) {
+        ++ptr;
+    }
+
+    logger.begin_error(var->loc, "Cannot specify pointer for inference because the variable also specifies a type")
+          .end_error(ErrCode::ParseVariableWithPtrAutoSpecifiesType);
+}

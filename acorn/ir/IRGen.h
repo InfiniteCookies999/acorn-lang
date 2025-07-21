@@ -186,6 +186,7 @@ namespace acorn {
         llvm::Value* gen_scope_with_dbg_scope(ScopeStmt* scope);
 
         llvm::Value* gen_variable(Var* var);
+        llvm::Value* gen_variable_list(VarList* var_list);
         llvm::Value* gen_number(Number* number);
         llvm::Value* gen_ident_reference(IdentRef* ref);
         llvm::Value* gen_binary_op(BinOp* bin_op);

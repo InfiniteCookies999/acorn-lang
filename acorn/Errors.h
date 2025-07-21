@@ -8,6 +8,7 @@
 
 namespace acorn {
 
+    struct Var;
     struct Number;
     class SourceFile;
     class Logger;
@@ -26,13 +27,21 @@ namespace acorn {
     };
 
     inline std::string error_code_to_string(ErrCode code) {
-        return ErrCodeStrs [code];
+        return ErrCodeStrs[code];
     }
 
     // This is here because it is used by both sema and parsing.
     std::string get_error_msg_for_value_not_fit_type(Type* type);
 
     void print_source_location(Logger& logger, SourceFile* file, SourceLoc location);
+
+    // Given an already parsed tree s.t. it has valid parse syntax, this function will skip
+    // characters which are whitespace or comments starting at `ptr` and return a ptr to the
+    // location after skipping.
+    //const char* skip_till_next_token(const char* ptr);
+
+    // Report functions for more complex errors.
+    void report_cannot_specify_auto_ptr_and_type_for_variable(Logger& logger, Var* var);
 
 }
 

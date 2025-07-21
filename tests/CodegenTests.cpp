@@ -1615,6 +1615,24 @@ static void auto_type_tests() {
 
         expect(result, std::identity()).to_be("ABCDE");
     });
+    test("Auto pointer type assign address of variable", [&] {
+        auto [err_msg, result] = run_codegen_test(src("auto_type/auto_type_test9.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("=");
+    });
+    test("Auto pointer type assign address of variable in multi-variable on a line stmt", [&] {
+        auto [err_msg, result] = run_codegen_test(src("auto_type/auto_type_test10.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("=77=");
+    });
+    test("Auto pointer type within range loop loop", [&] {
+        auto [err_msg, result] = run_codegen_test(src("auto_type/auto_type_test11.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    });
 }
 
 static void test_implicit_ptrs() {

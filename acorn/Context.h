@@ -75,6 +75,8 @@ namespace acorn {
         Type* empty_array_type;
         Type* auto_type;
         Type* const_auto_type;
+        Type* auto_ptr_type;
+        Type* auto_const_ptr_type;
         Type* expr_type;
         Type* indeterminate_type;
 

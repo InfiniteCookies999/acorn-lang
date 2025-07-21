@@ -91,6 +91,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_unary_op(static_cast<UnaryOp*>(node));
     case NodeKind::Var:
         return gen_variable(static_cast<Var*>(node));
+    case NodeKind::VarList:
+        return gen_variable_list(static_cast<VarList*>(node));
     case NodeKind::Number:
         return gen_number(static_cast<Number*>(node));
     case NodeKind::IdentRef:
@@ -1900,6 +1902,8 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
     push_scope();
     ir_scope->is_loop_scope = true;
 
+    Var* var = static_cast<Var*>(loop->vars);
+
     auto iterator_over_array = [=, this](llvm::Type* ll_ptr_type,
                                          llvm::Type* ll_elm_type,
                                          llvm::Value* ll_arr_itr_ptr,
@@ -1934,20 +1938,20 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         // Store the pointer value into the variable.
         auto ll_ptr_index3 = builder.CreateLoad(ll_ptr_type, ll_arr_itr_ptr);
         auto ll_index_value = ll_ptr_index3;
-        if (!loop->references_memory && !loop->var->type->is_aggregate()) {
+        if (!loop->references_memory && !var->type->is_aggregate()) {
             ll_index_value = builder.CreateLoad(ll_elm_type, ll_ptr_index3);
         }
 
-        emit_dbg(di_emitter->emit_function_variable(loop->var, builder));
-        push_dbg_loc(loop->var->loc);
-        if (loop->var->type->is_struct()) {
-            auto struct_type = static_cast<StructType*>(loop->var->type);
-            gen_copy_struct(loop->var->ll_address, ll_index_value, struct_type);
-        } else if (loop->var->type->is_array()) {
-            auto elm_arr_type = static_cast<ArrayType*>(loop->var->type);
-            gen_copy_array(loop->var->ll_address, ll_index_value, elm_arr_type);
+        emit_dbg(di_emitter->emit_function_variable(var, builder));
+        push_dbg_loc(var->loc);
+        if (var->type->is_struct()) {
+            auto struct_type = static_cast<StructType*>(var->type);
+            gen_copy_struct(var->ll_address, ll_index_value, struct_type);
+        } else if (var->type->is_array()) {
+            auto elm_arr_type = static_cast<ArrayType*>(var->type);
+            gen_copy_array(var->ll_address, ll_index_value, elm_arr_type);
         } else {
-            builder.CreateStore(ll_index_value, loop->var->ll_address);
+            builder.CreateStore(ll_index_value, var->ll_address);
         }
         pop_dbg_loc();
     };
@@ -1983,7 +1987,7 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
 
         // Storing the beginning index of the range.
         //
-        builder.CreateStore(gen_rvalue(range->lhs), loop->var->ll_address);
+        builder.CreateStore(gen_rvalue(range->lhs), var->ll_address);
 
         // Calculating the end index. Adding one to the index if checking
         // when equal since it is possible the range starts past the end
@@ -2002,7 +2006,7 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         builder.SetInsertPoint(ll_cond_bb);
 
         llvm::Type*  ll_index_type = gen_type(value_type);
-        llvm::Value* ll_index      = builder.CreateLoad(ll_index_type, loop->var->ll_address);
+        llvm::Value* ll_index      = builder.CreateLoad(ll_index_type, var->ll_address);
 
         push_dbg_loc(loop->loc);
         auto ll_cond = value_type->is_signed() ? builder.CreateICmpSLT(ll_index, ll_compare_index)
@@ -2014,14 +2018,14 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         //
         builder.SetInsertPoint(ll_inc_bb);
 
-        ll_index = builder.CreateLoad(ll_index_type, loop->var->ll_address);
+        ll_index = builder.CreateLoad(ll_index_type, var->ll_address);
         ll_index = builder.CreateNSWAdd(ll_index, ll_one);
         // We need to output the location here so that when it jumps to the increment block it
         // does not get confused and not know where it is at.
         //emit_dbg(di_emitter->emit_location(builder, loop->loc));
 
-        push_dbg_loc(loop->var->loc);
-        builder.CreateStore(ll_index, loop->var->ll_address);
+        push_dbg_loc(var->loc);
+        builder.CreateStore(ll_index, var->ll_address);
         pop_dbg_loc();
 
 
@@ -2032,7 +2036,7 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         builder.SetInsertPoint(ll_body_bb);
         emit_dbg(di_emitter->emit_scope_start(loop->scope->loc));
 
-        emit_dbg(di_emitter->emit_function_variable(loop->var, builder));
+        emit_dbg(di_emitter->emit_function_variable(var, builder));
 
     } else if (loop->container->type->is_slice()) {
 
@@ -2755,6 +2759,13 @@ llvm::Value* acorn::IRGenerator::gen_variable(Var* var) {
         process_destructor_state(var->type, var->ll_address, false);
     }
 
+    return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_variable_list(VarList* var_list) {
+    for (Var* var : var_list->vars) {
+        gen_variable(var);
+    }
     return nullptr;
 }
 

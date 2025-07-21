@@ -456,11 +456,18 @@ acorn::Node* acorn::Parser::parse_statement() {
     case Token::KwInterface:
         return parse_interface(0);
     case Token::Identifier: {
-        if (peek_token(0).is(':')) {
+        auto peek0 = peek_token(0);
+        if (peek0.is(':')) {
             Var* var = parse_variable(0);
             expect(';');
             return var;
-        } else if (peek_token(0).is(',')) {
+        } else if (peek0.is(',')) {
+            return parse_variable_list(0);
+        } else if (peek0.is('*') && peek_token(1).is(':')) {
+            Var* var = parse_variable(0);
+            expect(';');
+            return var;
+        } else if (peek0.is('*') && peek_token(1).is(',')) {
             return parse_variable_list(0);
         } else {
             Expr* expr = parse_assignment_and_expr();
@@ -676,13 +683,24 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const) {
 }
 
 acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers) {
+    return parse_variable_list(modifiers, &var_list);
+}
 
-    llvm::SmallVector<Token> name_tokens;
+acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers, VarList* var_list) {
+
+    llvm::SmallVector<std::tuple<Token, bool, Token>> name_tokens;
     bool more_variables = false;
     do {
 
-        name_tokens.push_back(cur_token);
+        Token name_token = cur_token;
         expect_identifier("for variable declaration");
+
+        if (cur_token.is('*')) {
+            name_tokens.push_back({ name_token, true, cur_token });
+            next_token();
+        } else {
+            name_tokens.push_back({ name_token, false, {} });
+        }
 
         more_variables = cur_token.is(',');
         if (more_variables) {
@@ -692,22 +710,24 @@ acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers) {
 
     Type* type;
     expect(':');
-    if (cur_token.is_not('=')) {
-        type = parse_type();
-    } else {
+    if (cur_token.is('=')) {
         type = context.auto_type;
+    } else if (cur_token.is(':')) {
+        type = context.const_auto_type;
+    } else {
+        type = parse_type();
     }
 
-    for (Token& name_token : name_tokens) {
-        Var* var = new_declaration<Var, true>(modifiers, cur_token);
+    for (auto& [name_token, ignore1, ignore2] : name_tokens) {
+        Var* var = new_declaration<Var, true>(modifiers, name_token);
         if (name_token.is(Token::Identifier)) {
             var->name = Identifier::get(name_token.text());
         }
         var->parsed_type = type;
-        var_list.vars.push_back(var);
+        var_list->vars.push_back(var);
     }
 
-    if (cur_token.is('=')) {
+    if (cur_token.is('=') || cur_token.is(':')) {
         next_token();
 
         llvm::SmallVector<Expr*, 4> assignments;
@@ -724,13 +744,13 @@ acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers) {
         } while (more_expressions);
 
 
-        if (assignments.size() > var_list.vars.size()) {
+        if (assignments.size() > var_list->vars.size()) {
             if (!context.has_errors()) {
-                Expr* first_extra_assignment = assignments[var_list.vars.size()];
+                Expr* first_extra_assignment = assignments[var_list->vars.size()];
                 logger.begin_error(expand(first_extra_assignment), "Too many assignments for the number of variables")
                     .end_error(ErrCode::ParseTooManyAssignmentsForNumberOfVariables);
             }
-        } else if (assignments.size() != var_list.vars.size()) {
+        } else if (assignments.size() != var_list->vars.size()) {
 
             // TODO (maddie): this is where we would check if the number of assignments is one,
             // then allow for decomposition if so.
@@ -744,20 +764,41 @@ acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers) {
                     .end_error(ErrCode::ParseTooFewAssignmentsForNumberOfVariables);
             }
         } else {
-            for (size_t i = 0; i < var_list.vars.size(); i++) {
+            for (size_t i = 0; i < var_list->vars.size(); i++) {
                 auto assignment = assignments[i];
-                var_list.vars[i]->assignment = assignment;
+                Var* var = var_list->vars[i];
+                var->assignment = assignment;
+
+                bool infers_ptr_type = std::get<1>(name_tokens[i]);
+                Token auto_ptr_type  = std::get<2>(name_tokens[i]);
+                check_for_auto_ptr_with_type(var, infers_ptr_type, auto_ptr_type);
+
+                if (infers_ptr_type) {
+                    if (var->parsed_type == context.auto_type) {
+                        var->parsed_type = context.auto_ptr_type;
+                    } else {
+                        var->parsed_type = context.auto_const_ptr_type;
+                    }
+                }
             }
         }
     }
 
-    return &var_list;
+    return var_list;
 }
 
 acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, bool may_parse_implicit_ptr) {
 
     Var* var = new_declaration<Var, true>(modifiers, cur_token);
     var->name = expect_identifier("for variable declaration");
+
+    bool infers_ptr_type = false;
+    Token auto_ptr_token;
+    if (cur_token.is('*')) {
+        auto_ptr_token = cur_token;
+        infers_ptr_type = true;
+        next_token();
+    }
 
     expect(':');
     if (cur_token.is('=')) {
@@ -772,6 +813,16 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, bool may_parse_imp
                 var->parsed_type = type_table.get_ptr_type(var->parsed_type);
                 var->has_implicit_ptr = true;
             }
+        }
+    }
+
+    check_for_auto_ptr_with_type(var, infers_ptr_type, auto_ptr_token);
+
+    if (infers_ptr_type) {
+        if (var->parsed_type == context.auto_type) {
+            var->parsed_type = context.auto_ptr_type;
+        } else {
+            var->parsed_type = context.auto_const_ptr_type;
         }
     }
 
@@ -1114,7 +1165,8 @@ acorn::IfStmt* acorn::Parser::parse_if() {
 
     ++paren_count;
     expect('(');
-    if (cur_token.is(Token::Identifier) && peek_token(0).is(':')) {
+    if (cur_token.is(Token::Identifier) &&
+        (peek_token(0).is(':') || peek_token(0).is('*') && peek_token(1).is(':'))) {
         ifn->cond = parse_variable(0);
         if (cur_token.is(';')) {
             next_token();
@@ -1281,7 +1333,7 @@ acorn::Node* acorn::Parser::parse_loop() {
 
         next_token(); // Consuming name token.
 
-        return parse_iterator_loop(loop_token, var, false);
+        return parse_iterator_loop(loop_token, { var }, false);
     } else if (cur_token.is(Token::Identifier) && peek0.is('*') && peek_token(1).is(Token::KwIn)) {
         Var* var = new_declaration<Var, false>(0, cur_token);
         var->name = Identifier::get(cur_token.text());
@@ -1290,17 +1342,26 @@ acorn::Node* acorn::Parser::parse_loop() {
         next_token(); // Consuming '*' token.
         next_token(); // Consuming name token.
 
-        return parse_iterator_loop(loop_token, var, true);
+        return parse_iterator_loop(loop_token, { var }, true);
     } else if (cur_token.is(Token::Identifier) && peek0.is(':')) {
         Var* var = parse_variable(0);
 
         if (!var->assignment && cur_token.is(Token::KwIn)) {
-            return parse_iterator_loop(loop_token, var, false);
+            return parse_iterator_loop(loop_token, { var }, false);
         }
 
         return parse_range_loop(loop_token, var);
     } else if (cur_token.is(';')) {
         return parse_range_loop(loop_token, nullptr);
+    } else if (cur_token.is(Token::Identifier) && peek0.is('*') && peek_token(1).is(':')) {
+        return parse_range_loop(loop_token, parse_variable(0));
+    } else if (cur_token.is(Token::Identifier) && (
+               peek0.is(',') || (peek0.is('*') && peek_token(1).is(',')))
+        ) {
+        auto var_list = new_node<VarList>(cur_token);
+        parse_variable_list(0, var_list);
+
+        return parse_range_loop(loop_token, var_list);
     } else {
 
         Expr* cond = parse_assignment_and_expr();
@@ -1320,11 +1381,11 @@ acorn::Node* acorn::Parser::parse_loop() {
     }
 }
 
-acorn::Node* acorn::Parser::parse_iterator_loop(Token loop_token, Var* var, bool var_as_pointer) {
+acorn::Node* acorn::Parser::parse_iterator_loop(Token loop_token, Node* vars, bool var_as_pointer) {
     next_token(); // Consuming 'in' token.
 
     auto loop = new_node<IteratorLoopStmt>(loop_token);
-    loop->var = var;
+    loop->vars = std::move(vars);
     loop->var_auto_ptr = var_as_pointer;
 
     loop->container = parse_expr();
@@ -3166,6 +3227,15 @@ bool acorn::Parser::peek_if_expr_is_type(Token tok0, Token tok1) {
         return true;
     }
     return false;
+}
+
+void acorn::Parser::check_for_auto_ptr_with_type(Var* var, bool infers_ptr_type, Token auto_ptr_token) {
+    if (infers_ptr_type) {
+        if (var->parsed_type->get_kind() != TypeKind::Auto) {
+            error(auto_ptr_token, "Cannot specify pointer for inference because the variable also declares a type")
+                .end_error(ErrCode::ParseVariableWithPtrAutoSpecifiesType);
+        }
+    }
 }
 
 void acorn::Parser::skip_recovery(bool stop_on_modifiers) {

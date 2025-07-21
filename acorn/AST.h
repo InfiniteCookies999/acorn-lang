@@ -593,13 +593,13 @@ namespace acorn {
         IteratorLoopStmt() : Node(NodeKind::IteratorLoopStmt) {
         }
 
-        Var*       var;
-        bool       var_auto_ptr = false;
-        Expr*      container;
-        ScopeStmt* scope;
+        Node*                   vars;
+        bool                    var_auto_ptr = false;
+        Expr*                   container;
+        ScopeStmt*              scope;
         // Instead of copying the value into the variable each loop it instead
         // stores a pointer to each element in the container.
-        bool       references_memory = false;
+        bool                    references_memory = false;
     };
 
     struct LoopControlStmt : Node {

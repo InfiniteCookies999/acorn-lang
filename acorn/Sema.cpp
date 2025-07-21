@@ -596,7 +596,9 @@ void acorn::Sema::check_variable(Var* var) {
 
     // If the variable uses type inference then resolving the type based on the assignment.
     //
-    if (var->parsed_type == context.auto_type || var->parsed_type == context.const_auto_type) {
+    if (var->parsed_type == context.auto_type     || var->parsed_type == context.const_auto_type ||
+        var->parsed_type == context.auto_ptr_type || var->parsed_type == context.auto_const_ptr_type
+        ) {
         if (!var->assignment) {
             error(var, "Must have assignment to determine infered type")
                 .end_error(ErrCode::SemaMustHaveAssignmentToDetAuto);
@@ -624,7 +626,7 @@ void acorn::Sema::check_variable(Var* var) {
         }
 
         var->type = var->assignment->type;
-        if (var->type->is_const()) {
+        if (var->assignment->type->is_const()) {
             // A :: 55;
             // b := A;
             // ^^^^^^
@@ -632,10 +634,14 @@ void acorn::Sema::check_variable(Var* var) {
             var->type = type_table.remove_const(var->type);
         }
 
+        if (var->parsed_type == context.auto_ptr_type || var->parsed_type == context.auto_const_ptr_type) {
+            if (!var->type->is_pointer()) {
+                var->type = type_table.get_ptr_type(var->type);
+            }
+        }
+
         // Apply const at all depths.
         if (var->parsed_type == context.const_auto_type) {
-            // TODO (maddie): is this not missing const being applied at all
-            // depths for pointers?
             if (var->assignment->is(NodeKind::Array)) {
                 auto arr_type = static_cast<ArrayType*>(var->type);
 
@@ -729,10 +735,35 @@ void acorn::Sema::check_variable(Var* var) {
                 .end_error(ErrCode::SemaVariableTypeMismatch);
         }
     } else if (var->assignment) {
+        // check for case like:
+        //
+        // fn foo() -> int^ { return &b; }
+        // a := foo();
+        //
+        if (var->parsed_type->get_kind() == TypeKind::Auto) {
+            if (var->assignment->is(NodeKind::FuncCall)) {
+                FuncCall* call = static_cast<FuncCall*>(var->assignment);
+                if (call->called_func && call->called_func->has_implicit_return_ptr) {
+                    call->implicitly_converts_return = true;
+                    auto ptr_type = static_cast<PointerType*>(var->type);
+                    var->type = ptr_type->get_elm_type();
+                    if (var->parsed_type == context.const_auto_type) {
+                        var->type = type_table.get_const_type(var->type);
+                    }
+                }
+            }
+        }
+
         create_cast(var->assignment, var->type);
     }
 
     return cleanup();
+}
+
+void acorn::Sema::check_variable_list(VarList* var_list) {
+    for (Var* var : var_list->vars) {
+        check_variable(var);
+    }
 }
 
 void acorn::Sema::check_struct(Struct* structn) {
@@ -1768,6 +1799,8 @@ void acorn::Sema::check_node(Node* node) {
     switch (node->kind) {
     case NodeKind::Var:
         return check_variable(static_cast<Var*>(node));
+    case NodeKind::VarList:
+        return check_variable_list(static_cast<VarList*>(node));
     case NodeKind::IdentRef:
         return check_ident_ref(static_cast<IdentRef*>(node), nspace, nullptr, false);
     case NodeKind::DotOperator:
@@ -2079,17 +2112,19 @@ void acorn::Sema::check_range_loop(RangeLoopStmt* loop) {
 
 void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
 
+    Var* var = static_cast<Var*>(loop->vars);
+
     SemScope sem_scope = push_scope();
-    loop->var->type = fixup_type(loop->var->parsed_type);
-    auto var_type = loop->var->type;
+    var->type = fixup_type(var->parsed_type);
+    auto var_type = var->type;
     if (!var_type) {
         return;
     }
 
-    loop->var->is_foldable = false;
-    add_variable_to_local_scope(loop->var);
-    if (!loop->var->is_foldable) {
-        cur_func->vars_to_alloc.push_back(loop->var);
+    var->is_foldable = false;
+    add_variable_to_local_scope(var);
+    if (!var->is_foldable) {
+        cur_func->vars_to_alloc.push_back(var);
     }
 
     check_node(loop->container);
@@ -2100,15 +2135,15 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
             auto elm_type = arr_type->get_elm_type();
 
             if (var_type == context.auto_type) {
-                loop->var->type = elm_type;
+                var->type = elm_type;
                 if (!loop->var_auto_ptr) {
-                    loop->var->type = elm_type;
+                    var->type = elm_type;
                 } else {
-                    loop->var->type = type_table.get_ptr_type(elm_type);
+                    var->type = type_table.get_ptr_type(elm_type);
                     loop->references_memory = true;
                 }
             } else if (var_type == context.const_auto_type) {
-                loop->var->type = type_table.get_const_type(elm_type);
+                var->type = type_table.get_const_type(elm_type);
             } else {
                 bool types_match = has_valid_constness(var_type, elm_type) && var_type->is_ignore_const(elm_type);
                 if (!types_match) {
@@ -2119,15 +2154,15 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
 
                 if (!types_match) {
                     auto container_loc = expand(loop->container);
-                    auto start_loc = loop->var->loc.ptr;
+                    auto start_loc = var->loc.ptr;
                     auto error_loc = PointSourceLoc{
                         .ptr = start_loc,
                         .length = static_cast<uint16_t>(container_loc.end() - start_loc),
                         .point = start_loc,
-                        .point_length = loop->var->loc.length,
+                        .point_length = var->loc.length,
                     };
                     error(error_loc, "Cannot assign type '%s' to variable '%s' with type '%s'",
-                          elm_type, loop->var->name, var_type)
+                          elm_type, var->name, var_type)
                         .end_error(ErrCode::SemaCannotAssignIteratorElmTypeToVar);
                 }
             }
@@ -2137,13 +2172,13 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
             auto value_type = range_type->get_value_type();
 
             if (var_type == context.auto_type) {
-                loop->var->type = value_type;
+                var->type = value_type;
             } else if (var_type == context.const_auto_type) {
-                loop->var->type = type_table.get_const_type(value_type);
+                var->type = type_table.get_const_type(value_type);
             } else {
                 bool types_match = has_valid_constness(var_type, value_type) && var_type->is_ignore_const(value_type);
                 if (!types_match) {
-                    error(loop->var, "Expected type '%s' for variable", value_type)
+                    error(var, "Expected type '%s' for variable", value_type)
                         .end_error(ErrCode::SemaCannotAssignIteratorElmTypeToVar);
                 }
             }

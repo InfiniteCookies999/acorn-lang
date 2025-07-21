@@ -53,6 +53,7 @@ X(ParseArrAssignIndexTooBig                      , 20043)
 X(ParseExpectedDeclaration                       , 20044)
 X(ParseTooManyAssignmentsForNumberOfVariables    , 20181)
 X(ParseTooFewAssignmentsForNumberOfVariables     , 20182)
+X(ParseVariableWithPtrAutoSpecifiesType          , 20183)
 
 X(SemaNotAllFuncPathReturn                       , 30000)
 X(SemaVariableCannotHaveVoidType                 , 30001)

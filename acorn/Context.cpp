@@ -54,6 +54,8 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
       empty_array_type(Type::create(allocator, TypeKind::EmptyArray)),
       auto_type(Type::create(allocator, TypeKind::Auto)),
       const_auto_type(type_table.get_const_type(auto_type)),
+      auto_ptr_type(type_table.get_ptr_type(auto_type)),
+      auto_const_ptr_type(type_table.get_const_type(auto_ptr_type)),
       expr_type(Type::create(allocator, TypeKind::Expr)),
       indeterminate_type(Type::create(allocator, TypeKind::Inderminate)),
 

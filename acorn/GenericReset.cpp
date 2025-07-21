@@ -97,7 +97,10 @@ namespace acorn {
         }
         case NodeKind::IteratorLoopStmt: {
             auto loop = static_cast<IteratorLoopStmt*>(node);
-            reset_node(loop->var);
+            if (loop->vars->is(NodeKind::Var)) {
+                auto var = static_cast<Var*>(loop->vars);
+                reset_node(var);
+            }
             reset_node(loop->container);
             reset_node(loop->scope);
             break;

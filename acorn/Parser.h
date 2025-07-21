@@ -88,6 +88,7 @@ namespace acorn {
 
         Func*      parse_function(uint32_t modifiers, bool is_const);
         VarList*   parse_variable_list(uint32_t modifiers);
+        VarList*   parse_variable_list(uint32_t modifiers, VarList* var_list);
         Var*       parse_variable(uint32_t modifiers, bool may_parse_implicit_ptr = false);
         Struct*    parse_struct(uint32_t modifiers);
         Enum*      parse_enum(uint32_t modifiers);
@@ -102,7 +103,7 @@ namespace acorn {
         IfStmt*     parse_if();
         void        parse_comptime_if(bool chain_start = true, bool takes_path = true);
         Node*       parse_loop();
-        Node*       parse_iterator_loop(Token loop_token, Var* var, bool var_as_pointer);
+        Node*       parse_iterator_loop(Token loop_token, Node* vars, bool var_as_pointer);
         Node*       parse_range_loop(Token loop_token, Node* init_node);
         Node*       parse_loop_control();
         Node*       parse_switch();
@@ -202,6 +203,8 @@ namespace acorn {
         // Continues to skip tokens until it can find a new valid
         // location to start parsing again.
         void skip_recovery(bool stop_on_modifiers = true);
+
+        void check_for_auto_ptr_with_type(Var* var, bool infers_ptr_type, Token auto_ptr_token);
 
         template<typename T>
         T* new_node(Token token) {
