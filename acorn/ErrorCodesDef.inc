@@ -252,6 +252,8 @@ X(SemaTooManyGenericArgumentsForStruct           , 20200)
 X(SemaTooFewGenericArgumentsForStruct            , 20201)
 X(SemaCannotDetArrSizeAssignContainsGenericTypes , 20202)
 X(SemaExpectedGenericsToBindToGenericStruct      , 20203)
+X(SemaNewCallExpectsPtrForAddress                , 20204)
+X(SemaNewCallTypeMismatch                        , 20205)
 
 X(NumericOverflow                                , 40000)
 X(NumericUnderflow                               , 40001)

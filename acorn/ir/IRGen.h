@@ -210,6 +210,7 @@ namespace acorn {
 
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
         llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue = nullptr, bool for_call_arg = false);
+        llvm::Value* gen_new_call(UninitNewCallStmt* new_call);
         llvm::Value* gen_function_decl_call(Func* called_func,
                                             llvm::SmallVector<Expr*>& args,
                                             llvm::SmallVector<Expr*>& indeterminate_inferred_default_args,

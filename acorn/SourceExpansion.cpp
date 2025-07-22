@@ -33,6 +33,11 @@ if (e1 > e) { e = e1; }           \
             get(var->assignment);
             break;
         }
+        case NodeKind::UninitNewCallStmt: {
+            UninitNewCallStmt* new_call = static_cast<UninitNewCallStmt*>(node);
+            go_until(e, '(', ')');
+            break;
+        }
         case NodeKind::FuncCall: {
             FuncCall* call = static_cast<FuncCall*>(node);
             get(call->site);

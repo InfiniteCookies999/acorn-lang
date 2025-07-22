@@ -1817,6 +1817,8 @@ void acorn::Sema::check_node(Node* node) {
         return check_unary_op(static_cast<UnaryOp*>(node));
     case NodeKind::FuncCall:
         return check_function_call(static_cast<FuncCall*>(node));
+    case NodeKind::UninitNewCallStmt:
+        return check_new_call(static_cast<UninitNewCallStmt*>(node));
     case NodeKind::Cast:
         return check_cast(static_cast<Cast*>(node));
     case NodeKind::NamedValue:
@@ -4263,7 +4265,32 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     } else {
         call->type = call->generic_instance->qualified_decl_types[0];
     }
- }
+}
+
+void acorn::Sema::check_new_call(UninitNewCallStmt* call) {
+
+    check_node(call->address);
+    check_node(call->value);
+
+    if (!call->address || !call->value) {
+        return;
+    }
+
+    if (!call->address->type->is_pointer()) {
+        error(expand(call->address), "Expected a pointer to the address of the value")
+            .end_error(ErrCode::SemaNewCallExpectsPtrForAddress);
+        return;
+    }
+
+    auto ptr_type = static_cast<PointerType*>(call->address->type);
+    auto elm_type = ptr_type->get_elm_type();
+
+    if (!is_assignable_to(elm_type, call->value)) {
+        error(expand(call->value), get_type_mismatch_error(elm_type, call->value).c_str())
+            .end_error(ErrCode::SemaNewCallTypeMismatch);
+        return;
+    }
+}
 
 void acorn::Sema::check_generic_bind_function_call(GenericBindFuncCall* call) {
 
@@ -4734,7 +4761,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         // a generic struct because the constructor call is allowed to finish binding the
         // types first. We must take the types that have been bound by the function call and
         // create a finalized version of the generic struct instance out of it.
-        if (called_func->is_constructor) {
+        if (call_node->is(NodeKind::StructInitializer)) {
             auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(generic_parent_struct);
 
             llvm::SmallVector<Type*> parent_struct_bound_types;
@@ -7819,6 +7846,7 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
     case NodeKind::RaiseStmt:
     case NodeKind::RecoverStmt:
     case NodeKind::VarList:
+    case NodeKind::UninitNewCallStmt:
         return false;
     case NodeKind::BinOp: {
         auto bin_op = static_cast<const BinOp*>(stmt);

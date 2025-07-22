@@ -121,6 +121,12 @@ namespace acorn {
             named_value->assignment = deep_copy(allocator, named_value);
             return named_value;
         }
+        case NodeKind::UninitNewCallStmt: {
+            auto new_call = raw_copy(allocator, static_cast<UninitNewCallStmt*>(node));
+            new_call->address = deep_copy(allocator, new_call->address);
+            new_call->value = deep_copy(allocator, new_call->value);
+            return new_call;
+        }
         case NodeKind::FuncCall: {
             auto call = raw_copy(allocator, static_cast<FuncCall*>(node));
             call->site = deep_copy(allocator, call->site);

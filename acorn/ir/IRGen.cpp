@@ -105,6 +105,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_scope_with_dbg_scope(static_cast<ScopeStmt*>(node));
     case NodeKind::FuncCall:
         return gen_function_call(static_cast<FuncCall*>(node), nullptr);
+    case NodeKind::UninitNewCallStmt:
+        return gen_new_call(static_cast<UninitNewCallStmt*>(node));
     case NodeKind::Bool:
         return gen_bool(static_cast<Bool*>(node));
     case NodeKind::String:
@@ -2885,6 +2887,21 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
                                       for_call_arg,
                                       call->generic_instance);
     }
+}
+
+llvm::Value* acorn::IRGenerator::gen_new_call(UninitNewCallStmt* new_call) {
+
+    push_dbg_loc(new_call->loc);
+    defer(pop_dbg_loc());
+
+    auto ll_address = gen_node(new_call->address);
+
+    auto ptr_type = static_cast<PointerType*>(new_call->address->type);
+    auto elm_type = ptr_type->get_elm_type();
+
+    gen_assignment(ll_address, elm_type, new_call->value, new_call);
+
+    return nullptr;
 }
 
 llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {

@@ -184,6 +184,12 @@ namespace acorn {
             reset_node(value->assignment);
             break;
         }
+        case NodeKind::UninitNewCallStmt: {
+            auto new_call = static_cast<UninitNewCallStmt*>(node);
+            reset_node(new_call->address);
+            reset_node(new_call->value);
+            break;
+        }
         case NodeKind::FuncCall: {
             auto call = static_cast<FuncCall*>(node);
             reset_node(call->site);

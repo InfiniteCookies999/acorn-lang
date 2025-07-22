@@ -1,0 +1,49 @@
+
+#if OS_GROUP_WINDOWS
+
+native dllimport fn GetStdHandle(nStdHandle: uint32) -> void*;
+
+native dllimport fn WriteFile(hFile:                  void*,
+                              lpBuffer:               const void*,
+                              nNumberOfBytesToWrite:  uint32,
+                              lpNumberOfBytesWritten: uint32*,
+                              lpOverlapped:           void*
+                              ) -> int32;
+
+#elif OS_GROUP_UNIX
+
+native fn write(fd: int32, buf: const void*, count: usize) -> isize;
+
+#endif
+
+fn write_val(val: int) {
+
+#if OS_GROUP_WINDOWS
+    handle: void* = GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
+    WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    c: char = as(char) val;
+    write(1, &c, 1);
+#endif
+
+}
+
+struct A {
+    v1: int;
+    v2: int;
+
+    fn new(v1: int, v2: int) {
+        this.v1 = v1;
+        this.v2 = v2;
+    }
+}
+
+fn main() {
+    a: A = ---;
+    uninit_new(&a, A{ 42, 35 });
+
+    write_val(a.v1);
+    write_val(a.v2);
+}

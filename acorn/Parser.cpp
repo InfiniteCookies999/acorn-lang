@@ -513,6 +513,16 @@ acorn::Node* acorn::Parser::parse_statement() {
         structn->aborts_error = true;
         return structn;
     }
+    case Token::KwUninitNew: {
+        auto new_call = new_node<UninitNewCallStmt>(cur_token);
+        next_token();
+        expect('(');
+        new_call->address = parse_expr();
+        expect(',');
+        new_call->value = parse_expr();
+        expect(')');
+        return new_call;
+    }
     case '{':
         return parse_scope();
     case ';': {

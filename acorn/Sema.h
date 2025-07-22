@@ -187,6 +187,7 @@ namespace acorn {
                              bool is_dot_op_site = false);
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
+        void check_new_call(UninitNewCallStmt* call);
         void check_generic_bind_function_call(GenericBindFuncCall* call);
         bool compare_generic_bind_candidate_with_named_args(const llvm::SmallVector<Expr*>& args,
                                                             const llvm::SmallVector<Generic*>& generics,

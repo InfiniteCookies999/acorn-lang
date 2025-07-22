@@ -2516,6 +2516,27 @@ static void generics_tests() {
     });
 }
 
+static void uninitialized_new_tests() {
+    test("Create variable and then uninitialize new with a value", [&] {
+        auto [err_msg, result] = run_codegen_test(src("uninitialized_new/uninitialized_new1.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@");
+    });
+    test("Create variable with struct type and then uninitialize new with a struct init", [&] {
+        auto [err_msg, result] = run_codegen_test(src("uninitialized_new/uninitialized_new2.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("*#");
+    });
+    test("Create variable with struct type and then uninitialize new with a constructor call", [&] {
+        auto [err_msg, result] = run_codegen_test(src("uninitialized_new/uninitialized_new3.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("*#");
+    });
+}
+
 void test_codegen() {
 
     std::string err;
@@ -2565,5 +2586,6 @@ void test_codegen() {
         interface_tests();
         error_tests();
         generics_tests();
+        uninitialized_new_tests();
     }, true);
 }

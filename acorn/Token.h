@@ -68,6 +68,7 @@ namespace acorn {
             KwCopyobj,
             KwMoveobj,
             KwNew,
+            KwUninitNew,
             KwDelete,
             KwNull,
             KwTrue,

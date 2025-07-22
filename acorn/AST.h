@@ -69,6 +69,7 @@ namespace acorn {
         SwitchStmt,
         RaiseStmt,
         RecoverStmt,
+        UninitNewCallStmt,
 
         ExprStart,
         InvalidExpr,
@@ -644,6 +645,13 @@ namespace acorn {
         SourceLoc end_loc;
     };
 
+    struct UninitNewCallStmt : Node {
+        UninitNewCallStmt() : Node(NodeKind::UninitNewCallStmt) {}
+
+        Expr* address;
+        Expr* value;
+    };
+
 
     // Expressions
     //--------------------------------------
@@ -876,6 +884,8 @@ namespace acorn {
 
     struct FuncCall : Expr {
         FuncCall() : Expr(NodeKind::FuncCall) {
+        }
+        FuncCall(NodeKind kind) : Expr(kind) {
         }
 
         Expr*                site;
