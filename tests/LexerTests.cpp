@@ -51,25 +51,25 @@ void test_lexer() {
 
             auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
-            expect((TokenKind)lexer.next_token().kind, to_string).to_be(Token::KwInt8);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwInt16);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwInt32);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwInt64);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwUInt8);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwUInt16);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwUInt32);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwUInt64);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwBool);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwVoid);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwChar);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwConst);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwAs);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwNull);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwTrue);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwFalse);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwNative);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwDllimport);
-            expect(lexer.next_token().kind, to_string).to_be(Token::KwReturn);
+            expect((TokenKind)lexer.next_token().kind, to_string).to_be(Token::KW_INT8);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_INT16);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_INT32);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_INT64);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_UINT8);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_UINT16);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_UINT32);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_UINT64);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_BOOL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_VOID);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_CHAR);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_CONST);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_AS);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_NULL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_TRUE);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_FALSE);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_NATIVE);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_DLLIMPORT);
+            expect(lexer.next_token().kind, to_string).to_be(Token::KW_RETURN);
 
         });
         test("identifiers", [&] {
@@ -78,15 +78,15 @@ void test_lexer() {
 
             auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
-            expect(lexer.next_token().kind, to_string).to_be(Token::Identifier);
-            expect(lexer.next_token().kind, to_string).to_be(Token::Identifier);
-            expect(lexer.next_token().kind, to_string).to_be(Token::Identifier);
-            expect(lexer.next_token().kind, to_string).to_be(Token::Identifier);
-            expect(lexer.next_token().kind, to_string).not_to_be(Token::Identifier);
-            expect(lexer.next_token().kind, to_string).to_be(Token::Identifier);
-            expect(lexer.next_token().kind, to_string).to_be(Token::Identifier);
-            expect(lexer.next_token().kind, to_string).not_to_be(Token::Identifier);
-            expect(lexer.next_token().kind, to_string).to_be(Token::Identifier);
+            expect(lexer.next_token().kind, to_string).to_be(Token::IDENTIFIER);
+            expect(lexer.next_token().kind, to_string).to_be(Token::IDENTIFIER);
+            expect(lexer.next_token().kind, to_string).to_be(Token::IDENTIFIER);
+            expect(lexer.next_token().kind, to_string).to_be(Token::IDENTIFIER);
+            expect(lexer.next_token().kind, to_string).not_to_be(Token::IDENTIFIER);
+            expect(lexer.next_token().kind, to_string).to_be(Token::IDENTIFIER);
+            expect(lexer.next_token().kind, to_string).to_be(Token::IDENTIFIER);
+            expect(lexer.next_token().kind, to_string).not_to_be(Token::IDENTIFIER);
+            expect(lexer.next_token().kind, to_string).to_be(Token::IDENTIFIER);
         });
         test("special tokens", [&] {
             const char* program = "~ + - * / % ! < > ^ & | ( ) { } = "
@@ -112,25 +112,25 @@ void test_lexer() {
             expect(lexer.next_token().kind, to_string).to_be('{');
             expect(lexer.next_token().kind, to_string).to_be('}');
             expect(lexer.next_token().kind, to_string).to_be('=');
-            expect(lexer.next_token().kind, to_string).to_be(Token::GtGt);
-            expect(lexer.next_token().kind, to_string).to_be(Token::LtLt);
-            expect(lexer.next_token().kind, to_string).to_be(Token::AddAdd);
-            expect(lexer.next_token().kind, to_string).to_be(Token::SubSub);
-            expect(lexer.next_token().kind, to_string).to_be(Token::EqEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::ExEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::LtEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::GtEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::ModEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::CaretEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::AndEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::MulEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::DivEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::AddEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::SubEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OrEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::GtGtEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::LtLtEq);
-            expect(lexer.next_token().kind, to_string).to_be(Token::TildeEq);
+            expect(lexer.next_token().kind, to_string).to_be(Token::GT_GT);
+            expect(lexer.next_token().kind, to_string).to_be(Token::LT_LT);
+            expect(lexer.next_token().kind, to_string).to_be(Token::ADD_ADD);
+            expect(lexer.next_token().kind, to_string).to_be(Token::SUB_SUB);
+            expect(lexer.next_token().kind, to_string).to_be(Token::EQ_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::EX_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::LT_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::GT_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::MOD_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::CARET_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::AND_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::MUL_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::DIV_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::ADD_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::SUB_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OR_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::GT_GT_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::LT_LT_EQ);
+            expect(lexer.next_token().kind, to_string).to_be(Token::TILDE_EQ);
 
         });
         test("integer tokens", [&] {
@@ -142,31 +142,31 @@ void test_lexer() {
 
             auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
             // type specifiers
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
             // type specifiers with underscores
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL);
         });
         test("hexidecimal tokens", [&] {
             const char* program = "0x0 0x523 0xFFFFFF 0x123456789ABCDEF 0xffffff 0x123456789abcdef "
@@ -177,33 +177,33 @@ void test_lexer() {
 
             auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
             // Underscores
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
             // Type specifiers
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
             // Type specifiers with underscores
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::HexLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::HEX_LITERAL);
         });
         test("binary tokens", [&] {
             const char* program = "0b0 0b10101001 0b000 0b1011101 "
@@ -214,31 +214,31 @@ void test_lexer() {
 
             auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
             // Underscores
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
             // Type specifiers
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
             // Type specifiers with underscores
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::BinLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::BIN_LITERAL);
         });
         test("octol tokens", [&] {
             const char* program = "00 0123 0735 001234567 "
@@ -249,31 +249,31 @@ void test_lexer() {
 
             auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
             // Underscores
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
             // Type specifiers
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
             // Type specifiers with underscores
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::OctLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::OCT_LITERAL);
         });
         test("invalid type specifiers", [&] {
             const char* program = "523'i11  636'  7'i  62'u  23'7  51'123";
@@ -286,7 +286,7 @@ void test_lexer() {
             expect(lexer.next_token(), empty<Token>).to_produce_error(ErrCode::LexNumberBadTypeSpec);
             expect(lexer.next_token(), empty<Token>).to_produce_error(ErrCode::LexNumberBadTypeSpec);
             expect(lexer.next_token(), empty<Token>).to_produce_error(ErrCode::LexNumberBadTypeSpec);
-            expect(lexer.next_token().kind, to_string).to_be(Token::IntLiteral); // 7 occures after '7
+            expect(lexer.next_token().kind, to_string).to_be(Token::INT_LITERAL); // 7 occures after '7
             expect(lexer.next_token(), empty<Token>).to_produce_error(ErrCode::LexNumberBadTypeSpec);
         });
         test("Number cannot end in _", [&] {
@@ -309,12 +309,12 @@ void test_lexer() {
 
             auto to_string = std::bind(token_kind_to_string, std::placeholders::_1, std::ref(*context));
 
-            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
-            expect(lexer.next_token().kind, to_string).to_be(Token::StringLiteral);
+            expect(lexer.next_token().kind, to_string).to_be(Token::STRING_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::STRING_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::STRING_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::STRING_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::STRING_LITERAL);
+            expect(lexer.next_token().kind, to_string).to_be(Token::STRING_LITERAL);
         });
         test("string missing closing quote", [&] {
             const char* program = R"(

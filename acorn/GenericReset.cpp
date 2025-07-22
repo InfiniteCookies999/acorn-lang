@@ -8,10 +8,10 @@ namespace acorn {
             Expr* expr = static_cast<Expr*>(node);
             switch (expr->kind) {
             // A few nodes have the type set during parsing.
-            case NodeKind::Number:
-            case NodeKind::Bool:
-            case NodeKind::Null:
-            case NodeKind::String:
+            case NodeKind::NUMBER:
+            case NodeKind::BOOL_EXPR:
+            case NodeKind::NULL_EXPR:
+            case NodeKind::STRING:
                 break;
             default:
                 expr->type = nullptr;
@@ -20,9 +20,9 @@ namespace acorn {
             // Check for nodes which have `trivially_reassignable`
             // set specifically during parsing.
             switch (expr->kind) {
-            case NodeKind::BinOp:
-            case NodeKind::DotOperator:
-            case NodeKind::UnaryOp:
+            case NodeKind::BIN_OP:
+            case NodeKind::DOT_OPERATOR:
+            case NodeKind::UNARY_OP:
                 expr->trivially_reassignable = false;
                 break;
             default:
@@ -37,7 +37,7 @@ namespace acorn {
 
 
         switch (node->kind) {
-        case NodeKind::Var: {
+        case NodeKind::VAR: {
             auto var = static_cast<Var*>(node);
             var->type = nullptr;
             var->has_been_checked = false;
@@ -49,12 +49,12 @@ namespace acorn {
             }
             break;
         }
-        case NodeKind::ReturnStmt: {
+        case NodeKind::RETURN_STMT: {
             auto ret = static_cast<ReturnStmt*>(node);
             reset_node(ret->value);
             break;
         }
-        case NodeKind::IfStmt: {
+        case NodeKind::IF_STMT: {
             auto ifn = static_cast<IfStmt*>(node);
             reset_node(ifn->cond);
             if (ifn->post_variable_cond) {
@@ -66,14 +66,14 @@ namespace acorn {
             reset_node(ifn->scope);
             break;
         }
-        case NodeKind::ScopeStmt: {
+        case NodeKind::SCOPE_STMT: {
             auto scope = static_cast<ScopeStmt*>(node);
             for (Node* stmt : *scope) {
                 reset_node(stmt);
             }
             break;
         }
-        case NodeKind::PredicateLoopStmt: {
+        case NodeKind::PREDICATE_LOOP_STMT: {
             auto loop = static_cast<PredicateLoopStmt*>(node);
             if (loop->cond) {
                 reset_node(loop->cond);
@@ -81,7 +81,7 @@ namespace acorn {
             reset_node(loop->scope);
             break;
         }
-        case NodeKind::RangeLoopStmt: {
+        case NodeKind::RANGE_LOOP_STMT: {
             auto loop = static_cast<RangeLoopStmt*>(node);
             if (loop->init_node) {
                 reset_node(loop->init_node);
@@ -95,9 +95,9 @@ namespace acorn {
             reset_node(loop->scope);
             break;
         }
-        case NodeKind::IteratorLoopStmt: {
+        case NodeKind::ITERATOR_LOOP_STMT: {
             auto loop = static_cast<IteratorLoopStmt*>(node);
-            if (loop->vars->is(NodeKind::Var)) {
+            if (loop->vars->is(NodeKind::VAR)) {
                 auto var = static_cast<Var*>(loop->vars);
                 reset_node(var);
             }
@@ -105,12 +105,12 @@ namespace acorn {
             reset_node(loop->scope);
             break;
         }
-        case NodeKind::ContinueStmt:
-        case NodeKind::BreakStmt: {
+        case NodeKind::CONTINUE_STMT:
+        case NodeKind::BREAK_STMT: {
             // Nothing to reset.
             break;
         }
-        case NodeKind::SwitchStmt: {
+        case NodeKind::SWITCH_STMT: {
             auto switchn = static_cast<SwitchStmt*>(node);
             switchn->all_conds_foldable = false;
             if (switchn->on) {
@@ -125,36 +125,36 @@ namespace acorn {
             }
             break;
         }
-        case NodeKind::RaiseStmt: {
+        case NodeKind::RAISE_STMT: {
             auto raise = static_cast<RaiseStmt*>(node);
             reset_node(raise->expr);
             raise->raised_error = nullptr;
             break;
         }
-        case NodeKind::RecoverStmt: {
+        case NodeKind::RECOVER_STMT: {
             auto recover = static_cast<RecoverStmt*>(node);
             reset_node(recover->value);
             break;
         }
-        case NodeKind::BinOp: {
+        case NodeKind::BIN_OP: {
             auto bin_op = static_cast<BinOp*>(node);
             reset_node(bin_op->lhs);
             reset_node(bin_op->rhs);
             break;
         }
-        case NodeKind::UnaryOp: {
+        case NodeKind::UNARY_OP: {
             auto unary_op = static_cast<UnaryOp*>(node);
             reset_node(unary_op->expr);
             break;
         }
-        case NodeKind::Number:
-        case NodeKind::Bool: {
+        case NodeKind::NUMBER:
+        case NodeKind::BOOL_EXPR: {
             // Nothing to reset.
             break;
         }
-        case NodeKind::IdentRef: {
+        case NodeKind::IDENT_REF: {
             auto ref = static_cast<IdentRef*>(node);
-            ref->found_kind = IdentRef::NoneKind;
+            ref->found_kind = IdentRef::NONE_KIND;
             if (ref->explicitly_binds_generics) {
                 auto call = static_cast<GenericBindFuncCall*>(ref);
                 call->bound_types.clear();
@@ -164,33 +164,33 @@ namespace acorn {
             }
             break;
         }
-        case NodeKind::DotOperator: {
+        case NodeKind::DOT_OPERATOR: {
             auto dot = static_cast<DotOperator*>(node);
-            dot->found_kind = IdentRef::NoneKind;
+            dot->found_kind = IdentRef::NONE_KIND;
             dot->is_array_length = false;
             dot->is_slice_ptr = false;
             dot->is_enum_value = false;
             reset_node(dot->site);
             break;
         }
-        case NodeKind::MemoryAccess: {
+        case NodeKind::MEMORY_ACCESS: {
             auto mem_access = static_cast<MemoryAccess*>(node);
             reset_node(mem_access->site);
             reset_node(mem_access->index);
             break;
         }
-        case NodeKind::NamedValue: {
+        case NodeKind::NAMED_VALUE: {
             auto value = static_cast<NamedValue*>(node);
             reset_node(value->assignment);
             break;
         }
-        case NodeKind::UninitNewCallStmt: {
+        case NodeKind::UNINIT_NEW_CALL_STMT: {
             auto new_call = static_cast<UninitNewCallStmt*>(node);
             reset_node(new_call->address);
             reset_node(new_call->value);
             break;
         }
-        case NodeKind::FuncCall: {
+        case NodeKind::FUNC_CALL: {
             auto call = static_cast<FuncCall*>(node);
             reset_node(call->site);
             for (Expr* arg : call->args) {
@@ -203,7 +203,7 @@ namespace acorn {
             call->indeterminate_inferred_default_args.clear();
             break;
         }
-        case NodeKind::StructInitializer: {
+        case NodeKind::STRUCT_INITIALIZER: {
             auto initializer = static_cast<StructInitializer*>(node);
             reset_node(initializer->site);
             for (Expr* value : initializer->values) {
@@ -213,56 +213,56 @@ namespace acorn {
             initializer->called_constructor = nullptr;
             break;
         }
-        case NodeKind::String:
-        case NodeKind::Null: {
+        case NodeKind::STRING:
+        case NodeKind::NULL_EXPR: {
             // Nothing to reset.
             break;
         }
-        case NodeKind::Cast: {
+        case NodeKind::CAST: {
             auto cast = static_cast<Cast*>(node);
             reset_node(cast->value);
             break;
         }
-        case NodeKind::Array: {
+        case NodeKind::ARRAY: {
             auto arr = static_cast<Array*>(node);
             for (Expr* elm : arr->elms) {
                 reset_node(elm);
             }
             break;
         }
-        case NodeKind::This: {
+        case NodeKind::THIS_EXPR: {
             // Nothing to reset.
             break;
         }
-        case NodeKind::SizeOf: {
+        case NodeKind::SIZE_OF: {
             auto sof = static_cast<SizeOf*>(node);
             reset_node(sof->value);
             break;
         }
-        case NodeKind::Ternary: {
+        case NodeKind::TERNARY: {
             auto ternary = static_cast<Ternary*>(node);
             reset_node(ternary->cond);
             reset_node(ternary->lhs);
             reset_node(ternary->rhs);
             break;
         }
-        case NodeKind::MoveObj: {
+        case NodeKind::MOVEOBJ: {
             auto moveobj = static_cast<MoveObj*>(node);
             reset_node(moveobj->value);
             break;
         }
-        case NodeKind::TypeExpr: {
+        case NodeKind::TYPE_EXPR: {
             auto type_expr = static_cast<TypeExpr*>(node);
             type_expr->expr_type = nullptr;
             break;
         }
-        case NodeKind::Reflect: {
+        case NodeKind::REFLECT: {
             auto reflect = static_cast<Reflect*>(node);
             reset_node(reflect->expr);
             reflect->type_info_type = nullptr;
             break;
         }
-        case NodeKind::Try: {
+        case NodeKind::TRY: {
             auto tryn = static_cast<Try*>(node);
             // DONT reset caught expression since it controls
             // cleaning up the try statement.
@@ -278,15 +278,15 @@ namespace acorn {
             break;
         }
 
-        case NodeKind::InvalidExpr:
-        case NodeKind::ImportStmt:
-        case NodeKind::Enum:
-        case NodeKind::Interface:
-        case NodeKind::Struct:
-        case NodeKind::Generic:
-        case NodeKind::VarList:
-        case NodeKind::Func:
-        case NodeKind::ImplicitFunc:
+        case NodeKind::INVALID_EXPR:
+        case NodeKind::IMPORT_STMT:
+        case NodeKind::ENUM:
+        case NodeKind::INTERFACE:
+        case NodeKind::STRUCT:
+        case NodeKind::GENERIC:
+        case NodeKind::VAR_LIST:
+        case NodeKind::FUNC:
+        case NodeKind::IMPLICIT_FUNC:
         default:
             acorn_fatal("Unreachable. All nodes need reset");
             break;

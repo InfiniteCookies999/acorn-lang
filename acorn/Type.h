@@ -39,52 +39,52 @@ namespace acorn {
 
     enum class TypeKind {
 
-        Int,
+        INT,
 
-        Int8,
-        Int16,
-        Int32,
-        Int64,
-        ISize,
+        INT8,
+        INT16,
+        INT32,
+        INT64,
+        ISIZE,
 
-        UInt8,
-        UInt16,
-        UInt32,
-        UInt64,
-        USize,
+        UINT8,
+        UINT16,
+        UINT32,
+        UINT64,
+        USIZE,
 
-        Char,
-        Char16,
+        CHAR,
+        CHAR16,
 
-        Float,
-        Double,
+        FLOAT,
+        DOUBLE,
 
-        Void,
-        Bool,
-        FuncsRef,      // A reference to an identifier to overloaded functions.
-        NamespaceRef,  // A reference to an identifier to a namespace.
-        Pointer,
-        Array,
-        Slice,
-        EmptyArray,
-        UnresolvedArray, // Length could not be resolved during parsing.
-        Null,
-        AssignDeterminedArray,
-        Function,
-        UnresolvedComposite,
-        UnresolvedGenericComposite,
-        Struct,
-        Enum,
-        UnresolvedEnumValueType,
-        Interface,
-        EnumContainer,
-        Range,
-        Auto,
-        Expr, // A type that appears as part of an expression in code.
-        Generic,
-        Inderminate,
-        PartiallyBoundStruct,
-        Invalid,
+        VOID_T,
+        BOOL_T,
+        FUNCS_REF,      // A reference to an identifier to overloaded functions.
+        NAMESPACE_REF,  // A reference to an identifier to a namespace.
+        POINTER,
+        ARRAY,
+        SLICE,
+        EMPTY_ARRAY,
+        UNRESOLVED_ARRAY, // Length could not be resolved during parsing.
+        NULL_T,
+        ASSIGN_DETERMINED_ARRAY,
+        FUNCTION,
+        UNRESOLVED_COMPOSITE,
+        UNRESOLVED_GENERIC_COMPOSITE,
+        STRUCT,
+        ENUM,
+        UNRESOLVED_ENUM_VALUE_TYPE,
+        INTERFACE,
+        ENUM_CONTAINER,
+        RANGE,
+        AUTO,
+        EXPR, // A type that appears as part of an expression in code.
+        GENERIC,
+        INDETERMINATE,
+        PARTIALLY_BOUND_STRUCT,
+        INVALID,
 
     };
 
@@ -111,20 +111,20 @@ namespace acorn {
         }
 
         bool is_number() const {
-            return kind >= TypeKind::Int && kind <= TypeKind::Double;
+            return kind >= TypeKind::INT && kind <= TypeKind::DOUBLE;
         }
 
         bool is_integer() const {
-            return kind <= TypeKind::Char16;
+            return kind <= TypeKind::CHAR16;
         }
 
         bool is_signed() const {
-            return (kind >= TypeKind::Int && kind <= TypeKind::ISize) ||
-                    kind == TypeKind::Float || kind == TypeKind::Double;
+            return (kind >= TypeKind::INT && kind <= TypeKind::ISIZE) ||
+                    kind == TypeKind::FLOAT || kind == TypeKind::DOUBLE;
         }
 
         bool is_float() const {
-            return kind == TypeKind::Float || kind == TypeKind::Double;
+            return kind == TypeKind::FLOAT || kind == TypeKind::DOUBLE;
         }
 
         bool is_unsigned() const {
@@ -143,20 +143,20 @@ namespace acorn {
 
         bool is_default_foldable() const;
 
-        bool is_pointer()   const { return kind == TypeKind::Pointer;   }
-        bool is_array()     const { return kind == TypeKind::Array;     }
-        bool is_bool()      const { return kind == TypeKind::Bool;      }
-        bool is_range()     const { return kind == TypeKind::Range;     }
-        bool is_function()  const { return kind == TypeKind::Function;  }
-        bool is_struct()    const { return kind == TypeKind::Struct;    }
-        bool is_enum()      const { return kind == TypeKind::Enum;      }
-        bool is_slice()     const { return kind == TypeKind::Slice;     }
-        bool is_interface() const { return kind == TypeKind::Interface; }
-        bool is_generic()   const { return kind == TypeKind::Generic;   }
+        bool is_pointer()   const { return kind == TypeKind::POINTER;   }
+        bool is_array()     const { return kind == TypeKind::ARRAY;     }
+        bool is_bool()      const { return kind == TypeKind::BOOL_T;    }
+        bool is_range()     const { return kind == TypeKind::RANGE;     }
+        bool is_function()  const { return kind == TypeKind::FUNCTION;  }
+        bool is_struct()    const { return kind == TypeKind::STRUCT;    }
+        bool is_enum()      const { return kind == TypeKind::ENUM;      }
+        bool is_slice()     const { return kind == TypeKind::SLICE;     }
+        bool is_interface() const { return kind == TypeKind::INTERFACE; }
+        bool is_generic()   const { return kind == TypeKind::GENERIC;   }
 
         // Any type that has its underlying memory represented as a pointer.
         bool is_real_pointer() const {
-            return kind == TypeKind::Pointer || kind == TypeKind::Null || kind == TypeKind::Function;
+            return kind == TypeKind::POINTER || kind == TypeKind::NULL_T || kind == TypeKind::FUNCTION;
         }
 
         bool is_callable() const {
@@ -228,7 +228,7 @@ namespace acorn {
 
     protected:
         PointerType(bool is_const, Type* elm_type)
-            : ContainerType(TypeKind::Pointer, is_const, elm_type) {
+            : ContainerType(TypeKind::POINTER, is_const, elm_type) {
         }
     };
 
@@ -244,7 +244,7 @@ namespace acorn {
 
     private:
         UnresolvedArrayType(bool is_const, Expr* expr, Type* elm_type) :
-            ContainerType(TypeKind::UnresolvedArray, is_const, elm_type), expr(expr) {
+            ContainerType(TypeKind::UNRESOLVED_ARRAY, is_const, elm_type), expr(expr) {
         }
 
         Expr* expr;
@@ -266,7 +266,7 @@ namespace acorn {
 
     protected:
         ArrayType(bool is_const, Type* elm_type, uint32_t length)
-            : ContainerType(TypeKind::Array, is_const, elm_type), length(length) {
+            : ContainerType(TypeKind::ARRAY, is_const, elm_type), length(length) {
         }
 
         uint32_t length;
@@ -291,7 +291,7 @@ namespace acorn {
 
     protected:
         SliceType(bool is_const, Type* elm_type)
-            : ContainerType(TypeKind::Slice, is_const, elm_type) {
+            : ContainerType(TypeKind::SLICE, is_const, elm_type) {
         }
 
         // The struct type containing the pointer to memory and the length.
@@ -310,7 +310,7 @@ namespace acorn {
 
     protected:
         AssignDeterminedArrayType(bool is_const, Type* elm_type)
-            : ContainerType(TypeKind::AssignDeterminedArray, is_const, elm_type) {
+            : ContainerType(TypeKind::ASSIGN_DETERMINED_ARRAY, is_const, elm_type) {
         }
     };
 
@@ -327,7 +327,7 @@ namespace acorn {
 
     protected:
         RangeType(bool is_const, Type* value_type)
-            : Type(TypeKind::Range, is_const), value_type(value_type) {
+            : Type(TypeKind::RANGE, is_const), value_type(value_type) {
         }
 
         Type* value_type;
@@ -381,7 +381,7 @@ namespace acorn {
 
     protected:
         FunctionType(bool is_const, FunctionTypeKey* key)
-            : Type(TypeKind::Function, is_const),
+            : Type(TypeKind::FUNCTION, is_const),
               key(key) {
         }
 
@@ -406,7 +406,7 @@ namespace acorn {
 
     protected:
         UnresolvedCompositeType(bool is_const, Identifier name, SourceLoc error_location)
-            : Type(TypeKind::UnresolvedComposite, is_const),
+            : Type(TypeKind::UNRESOLVED_COMPOSITE, is_const),
               name(name),
               error_location(error_location) {
         }
@@ -445,7 +445,7 @@ namespace acorn {
                                        SourceLoc error_location,
                                        llvm::SmallVector<Expr*> bound_exprs,
                                        size_t non_named_generic_args_offsets)
-            : UnresolvedCompositeType(TypeKind::UnresolvedGenericComposite, is_const, name, error_location),
+            : UnresolvedCompositeType(TypeKind::UNRESOLVED_GENERIC_COMPOSITE, is_const, name, error_location),
               bound_exprs(std::move(bound_exprs)),
               non_named_generic_args_offsets(non_named_generic_args_offsets) {
         }
@@ -477,7 +477,7 @@ namespace acorn {
 
     protected:
         StructType(bool is_const, Struct* structn)
-            : Type(TypeKind::Struct, is_const), structn(structn) {
+            : Type(TypeKind::STRUCT, is_const), structn(structn) {
         }
 
         llvm::StructType* ll_struct_type = nullptr;
@@ -506,7 +506,7 @@ namespace acorn {
         PartiallyBoundStructType(bool is_const,
                                  UnboundGenericStruct* unbound_generic_struct,
                                  llvm::SmallVector<Type*> partially_bound_types)
-            : Type(TypeKind::PartiallyBoundStruct, is_const),
+            : Type(TypeKind::PARTIALLY_BOUND_STRUCT, is_const),
               unbound_generic_struct(unbound_generic_struct),
               partially_bound_types(std::move(partially_bound_types)) {
         }
@@ -555,7 +555,7 @@ namespace acorn {
 
     protected:
         EnumType(bool is_const, Enum* enumn)
-            : Type(TypeKind::Enum, is_const), enumn(enumn) {
+            : Type(TypeKind::ENUM, is_const), enumn(enumn) {
         }
 
         uint64_t default_index;
@@ -582,7 +582,7 @@ namespace acorn {
 
     protected:
         UnresolvedEnumValueType(bool is_const, Identifier enum_name, SourceLoc error_location)
-            : Type(TypeKind::UnresolvedEnumValueType, is_const), enum_name(enum_name), error_location(error_location) {
+            : Type(TypeKind::UNRESOLVED_ENUM_VALUE_TYPE, is_const), enum_name(enum_name), error_location(error_location) {
         }
 
         SourceLoc  error_location;
@@ -604,7 +604,7 @@ namespace acorn {
 
     protected:
         InterfaceType(bool is_const, Interface* interfacen)
-            : Type(TypeKind::Interface, is_const), interfacen(interfacen) {
+            : Type(TypeKind::INTERFACE, is_const), interfacen(interfacen) {
         }
 
         Interface* interfacen;
@@ -625,7 +625,7 @@ namespace acorn {
 
     protected:
         GenericType(Generic* generic, bool is_const = false)
-            : Type(TypeKind::Generic, is_const), generic(generic) {
+            : Type(TypeKind::GENERIC, is_const), generic(generic) {
         }
 
         Generic* generic;

@@ -115,46 +115,46 @@ struct OutStream :: Writable {
 
     private fn write_any(ptr: const void*, type: const Type*) | raises IOError {
         switch (type.id) {
-        case Int:     try (write(as(int64)  *as(const int*)    ptr));
-        case Int8:    try (write(as(int64)  *as(const int8*)   ptr));
-        case Int16:   try (write(as(int64)  *as(const int16*)  ptr));
-        case Int32:   try (write(as(int64)  *as(const int32*)  ptr));
-        case Int64:   try (write(as(int64)  *as(const int64*)  ptr));
-        case ISize:   try (write(as(int64)  *as(const isize*)  ptr));
-        case UInt8:   try (write(as(uint64) *as(const uint8*)  ptr));
-        case UInt16:  try (write(as(uint64) *as(const uint16*) ptr));
-        case UInt32:  try (write(as(uint64) *as(const uint32*) ptr));
-        case UInt64:  try (write(as(uint64) *as(const uint64*) ptr));
-        case USize:   try (write(as(uint64) *as(const usize*)  ptr));
-        case Char:    try (write(*as(const char*) ptr));
+        case INT:     try (write(as(int64)  *as(const int*)    ptr));
+        case INT8:    try (write(as(int64)  *as(const int8*)   ptr));
+        case INT16:   try (write(as(int64)  *as(const int16*)  ptr));
+        case INT32:   try (write(as(int64)  *as(const int32*)  ptr));
+        case INT64:   try (write(as(int64)  *as(const int64*)  ptr));
+        case ISIZE:   try (write(as(int64)  *as(const isize*)  ptr));
+        case UINT8:   try (write(as(uint64) *as(const uint8*)  ptr));
+        case UINT16:  try (write(as(uint64) *as(const uint16*) ptr));
+        case UINT32:  try (write(as(uint64) *as(const uint32*) ptr));
+        case UINT64:  try (write(as(uint64) *as(const uint64*) ptr));
+        case USIZE:   try (write(as(uint64) *as(const usize*)  ptr));
+        case CHAR:    try (write(*as(const char*) ptr));
         // Just write out the numeric value of the characters.
-        case Char16:  try (write(as(uint64) *as(const char16*) ptr));
+        case CHAR16:  try (write(as(uint64) *as(const char16*) ptr));
         // TODO: case Float32: case Float64:
-        case Bool:    try (write(*as(const bool*) ptr));
-        case Pointer:
-            if (type.elm_type.id == TypeId.Char) {
+        case BOOL:    try (write(*as(const bool*) ptr));
+        case POINTER:
+            if (type.elm_type.id == TypeId.CHAR) {
                 try (write(*as(const (const char*)*) ptr));
             } elif (type.elm_type == #type_info(String)) {
                 try (write(*as(const (const String*)*) ptr));
             } else {
                 try (write(*as(const (const void*)*) ptr));
             }
-        case Function: try (write(*as(const (const void*)*) ptr));
-        case Struct:
+        case FUNCTION: try (write(*as(const (const void*)*) ptr));
+        case STRUCT:
             if (type == #type_info(String)) {
                 try (write(as(const String*) ptr));
             } else {
                 try (write_struct(ptr, type.struct_info));
             }
-        case Slice:
+        case SLICE:
 
             length := *as(const int*)(ptr + sizeof(void*));
             elements := *as(const (const void*)*) ptr;
 
             try (write_array_like_value(elements, type.elm_type, length));
 
-        case Array: try (write_array_like_value(ptr, type.elm_type, type.array_length));
-        case Enum:  try (write_enum(ptr, type.enum_info));
+        case ARRAY: try (write_array_like_value(ptr, type.elm_type, type.array_length));
+        case ENUM:  try (write_enum(ptr, type.enum_info));
         }
     }
 
@@ -209,19 +209,19 @@ struct OutStream :: Writable {
         | raises IOError {
         index: uint64;
         switch (enum_info.index_type.id) {
-        case Int:     index = as(uint64) *as(const int*)    ptr;
-        case Int8:    index = as(uint64) *as(const int8*)   ptr;
-        case Int16:   index = as(uint64) *as(const int16*)  ptr;
-        case Int32:   index = as(uint64) *as(const int32*)  ptr;
-        case Int64:   index = as(uint64) *as(const int64*)  ptr;
-        case ISize:   index = as(uint64) *as(const isize*)  ptr;
-        case UInt8:   index = as(uint64) *as(const uint8*)  ptr;
-        case UInt16:  index = as(uint64) *as(const uint16*) ptr;
-        case UInt32:  index = as(uint64) *as(const uint32*) ptr;
-        case UInt64:  index = as(uint64) *as(const uint64*) ptr;
-        case USize:   index = as(uint64) *as(const usize*)  ptr;
-        case Char:    index = as(uint64) *as(const char*)   ptr;
-        case Char16:  index = as(uint64) *as(const char16*) ptr;
+        case INT:     index = as(uint64) *as(const int*)    ptr;
+        case INT8:    index = as(uint64) *as(const int8*)   ptr;
+        case INT16:   index = as(uint64) *as(const int16*)  ptr;
+        case INT32:   index = as(uint64) *as(const int32*)  ptr;
+        case INT64:   index = as(uint64) *as(const int64*)  ptr;
+        case ISIZE:   index = as(uint64) *as(const isize*)  ptr;
+        case UINT8:   index = as(uint64) *as(const uint8*)  ptr;
+        case UINT16:  index = as(uint64) *as(const uint16*) ptr;
+        case UINT32:  index = as(uint64) *as(const uint32*) ptr;
+        case UINT64:  index = as(uint64) *as(const uint64*) ptr;
+        case USIZE:   index = as(uint64) *as(const usize*)  ptr;
+        case CHAR:    index = as(uint64) *as(const char*)   ptr;
+        case CHAR16:  index = as(uint64) *as(const char16*) ptr;
         }
 
         name := enum_info.get_value_name(index);

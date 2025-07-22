@@ -5,51 +5,52 @@
  */
 enum TypeId {
 
-    Int,
+    INT,
 
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-    ISize,
+    INT8,
+    INT16,
+    INT32,
+    INT64,
+    ISIZE,
 
-    UInt8,
-    UInt16,
-    UInt32,
-    UInt64,
-    USize,
+    UINT8,
+    UINT16,
+    UINT32,
+    UINT64,
+    USIZE,
 
-    Char,
-    Char16,
+    CHAR,
+    CHAR16,
 
-    Float,
-    Double,
+    FLOAT,
+    DOUBLE,
 
-    Void,
-    Bool,
-    FuncsRef,      // A reference to an identifier to overloaded functions.
-    NamespaceRef,  // A reference to an identifier to a namespace.
-    Pointer,
-    Array,
-    Slice,
-    EmptyArray,
-    UnresolvedArray, // Length could not be resolved during parsing.
-    Null,
-    AssignDeterminedArray,
-    Function,
-    UnresolvedComposite,
-    UnresolvedGenericComposite,
-    Struct,
-    Enum,
-    UnresolvedEnumValueType,
-    Interface,
-    EnumContainer,
-    Range,
-    Auto,
-    Expr, // A type that appears as part of an expression in code.
-    Generic,
-    Inderminate,
-    Invalid,
+    VOID,
+    BOOL,
+    FUNCS_REF,      // A reference to an identifier to overloaded functions.
+    NAMESPACE_REF,  // A reference to an identifier to a namespace.
+    POINTER,
+    ARRAY,
+    SLICE,
+    EMPTY_ARRAY,
+    UNRESOLVED_ARRAY, // Length could not be resolved during parsing.
+    NULL,
+    ASSIGN_DETERMINED_ARRAY,
+    FUNCTION,
+    UNRESOLVED_COMPOSITE,
+    UNRESOLVED_GENERIC_COMPOSITE,
+    STRUCT,
+    ENUM,
+    UNRESOLVED_ENUM_VALUE_TYPE,
+    INTERFACE,
+    ENUM_CONTAINER,
+    RANGE,
+    AUTO,
+    EXPR, // A type that appears as part of an expression in code.
+    GENERIC,
+    INDETERMINATE,
+    PARTIALLY_BOUND_STRUCT,
+    INVALID,
 
 }
 
@@ -115,25 +116,25 @@ struct Type {
     enum_info:     const EnumTypeInfo*;
 
     const fn is_integer() -> bool {
-        return id <= TypeId.USize;
+        return id <= TypeId.USIZE;
     }
 
     const fn is_number() -> bool {
-        return is_integer() || id == TypeId.Float || id == TypeId.Double;
+        return is_integer() || id == TypeId.FLOAT || id == TypeId.DOUBLE;
     }
 
     const fn is_signed() -> bool {
-        return id <= TypeId.ISize;
+        return id <= TypeId.ISIZE;
     }
 
     const fn is_any_pointer() -> bool {
-        return id == TypeId.Pointer || id == TypeId.Function || id == TypeId.Null;
+        return id == TypeId.POINTER || id == TypeId.FUNCTION || id == TypeId.NULL;
     }
 
     const fn is_string() -> bool {
-        if (id == TypeId.Pointer) {
-            return elm_type.id == TypeId.Char;
-        } elif (id == TypeId.Struct) {
+        if (id == TypeId.POINTER) {
+            return elm_type.id == TypeId.CHAR;
+        } elif (id == TypeId.STRUCT) {
             return this == #type_info(String);
         } else {
             return false;

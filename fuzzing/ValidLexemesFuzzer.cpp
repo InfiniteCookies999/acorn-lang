@@ -156,8 +156,8 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
         valid_string_characters.push_back(c);
     }
 
-    for (uint16_t id = TokId::KeywordStart + 1; id < TokId::KeywordEnd; id++) {
-        if (id == TokId::ComptimeKeywordStart || id == TokId::ComptimeKeywordEnd) {
+    for (uint16_t id = TokId::KEYWORD_START + 1; id < TokId::KeywordEnd; id++) {
+        if (id == TokId::COMPTIME_KEYWORD_START || id == TokId::COMPTIME_KEYWORD_END) {
             continue;
         }
         token_ids.push_back(id);
@@ -165,11 +165,11 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
 
     for (uint16_t id = TokId::KeywordEnd + 1; id < TokId::EOB; id++) {
         switch (id) {
-        case TokId::InvalidStringLiteral:
-        case TokId::InvalidCharLiteral:
-        case TokId::InvalidNumberLiteral:
-        case TokId::PostAddAdd:
-        case TokId::PostSubSub:
+        case TokId::INVALID_STRING_LITERAL:
+        case TokId::INVALID_CHAR_LITERAL:
+        case TokId::INVALID_NUMBER_LITERAL:
+        case TokId::POST_ADD_ADD:
+        case TokId::POST_SUB_SUB:
             break;
         default:
             token_ids.push_back(id);
@@ -192,7 +192,7 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
 
         uint16_t id = token_ids[dist(generator)];
 
-        if (id < TokId::UniqueTokens) {
+        if (id < TokId::UNIQUE_TOKENS) {
             ostream << (char) id;
             output_whitespace();
             continue;
@@ -200,24 +200,24 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
 
         std::string lexeme = "";
         switch (id) {
-        case TokId::KwInt:     case TokId::KwInt8:     case TokId::KwInt16:   case TokId::KwInt32:
-        case TokId::KwInt64:   case TokId::KwUInt8:    case TokId::KwUInt16:  case TokId::KwUInt32:
+        case TokId::KW_INT:     case TokId::KW_INT8:     case TokId::KW_INT16:   case TokId::KW_INT32:
+        case TokId::KW_INT64:   case TokId::KW_UINT8:    case TokId::KW_UINT16:  case TokId::KW_UINT32:
         //case TokId::KwUInt64:  case TokId::KwISize:    case TokId::KwUSize:   case TokId::KwFloat32:
         //case TokId::KwFloat64: case TokId::KwBool:     case TokId::KwVoid:    case TokId::KwChar:
         //case TokId::KwConst:   case TokId::KwAuto:
-        case TokId::KwAs:      case TokId::KwIf:       case TokId::KwElIf:    case TokId::KwElse:
-        case TokId::KwImport:  case TokId::KwContinue: case TokId::KwBreak:   case TokId::KwSwitch:
-        case TokId::KwCase:    case TokId::KwStatic:   case TokId::KwStruct:  case TokId::KwEnum:
-        case TokId::KwThis:    case TokId::KwSizeof:   case TokId::KwCopyobj: case TokId::KwMoveobj:
-        case TokId::KwNull:    case TokId::KwTrue:     case TokId::KwFalse:
+        case TokId::KW_AS:      case TokId::KW_IF:       case TokId::KW_ELFIF:    case TokId::KW_ELSE:
+        case TokId::KW_IMPORT:  case TokId::KW_CONTINUE: case TokId::KW_BREAK:   case TokId::KW_SWITCH:
+        case TokId::KW_CASE:    case TokId::KW_STATIC:   case TokId::KW_STRUCT:  case TokId::KW_ENUM:
+        case TokId::KW_THIS:    case TokId::KW_SIZEOF:   case TokId::KW_COPYOBJ: case TokId::KW_MOVEOBJ:
+        case TokId::KW_NULL:    case TokId::KW_TRUE:     case TokId::KW_FALSE:
         // These leads to reduce error output since it goes to end of line.
         //case TokId::KwCTIf:    case TokId::KwCTElIf:   case TokId::KwCTElse:  case TokId::KwCTEndIf:
-        case TokId::LtLt:      case TokId::GtGt:       case TokId::LtEq:      case TokId::GtEq:
-        case TokId::EqEq:      case TokId::ExEq:       case TokId::AddEq:     case TokId::SubEq:
-        case TokId::MulEq:     case TokId::DivEq:      case TokId::ModEq:     case TokId::AndEq:
-        case TokId::OrEq:      case TokId::CaretEq:    case TokId::TildeEq:   case TokId::LtLtEq:
-        case TokId::GtGtEq:    case TokId::AddAdd:     case TokId::SubSub:    case TokId::SubSubSub:
-        case TokId::AndAnd:    case TokId::OrOr:       case TokId::RangeEq:   case TokId::RangeLt:
+        case TokId::LT_LT:      case TokId::GT_GT:       case TokId::LT_EQ:      case TokId::GT_EQ:
+        case TokId::EQ_EQ:      case TokId::EX_EQ:       case TokId::ADD_EQ:     case TokId::SUB_EQ:
+        case TokId::MUL_EQ:     case TokId::DIV_EQ:      case TokId::MOD_EQ:     case TokId::AND_EQ:
+        case TokId::OR_EQ:      case TokId::CARET_EQ:    case TokId::TILDE_EQ:   case TokId::LT_LT_EQ:
+        case TokId::GT_GT_EQ:    case TokId::ADD_ADD:     case TokId::SUB_SUB:    case TokId::SUB_SUB_SUB:
+        case TokId::AND_AND:    case TokId::OR_OR:       case TokId::RANGE_EQ:   case TokId::RANGE_LT:
         //case TokId::DotDot:    case TokId::DotDotDot:  case TokId::ColCol:    case TokId::BackslashBackslash: {
             lexeme = acorn::token_kind_to_string(*compiler.get_context(), id);
             break;

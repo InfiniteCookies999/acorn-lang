@@ -17,46 +17,46 @@ if (e1 > e) { e = e1; }           \
                                          : (node->loc.ptr + node->loc.length);
 
         switch (node->kind) {
-        case NodeKind::BinOp: {
+        case NodeKind::BIN_OP: {
             BinOp* bin_op = static_cast<BinOp*>(node);
             get(bin_op->lhs);
             get(bin_op->rhs);
             break;
         }
-        case NodeKind::UnaryOp: {
+        case NodeKind::UNARY_OP: {
             UnaryOp* unary_op = static_cast<UnaryOp*>(node);
             get(unary_op->expr);
             break;
         }
-        case NodeKind::Var: {
+        case NodeKind::VAR: {
             Var* var = static_cast<Var*>(node);
             get(var->assignment);
             break;
         }
-        case NodeKind::UninitNewCallStmt: {
+        case NodeKind::UNINIT_NEW_CALL_STMT: {
             UninitNewCallStmt* new_call = static_cast<UninitNewCallStmt*>(node);
             go_until(e, '(', ')');
             break;
         }
-        case NodeKind::FuncCall: {
+        case NodeKind::FUNC_CALL: {
             FuncCall* call = static_cast<FuncCall*>(node);
             get(call->site);
             // Include the closing )
             go_until(e, '(', ')');
             break;
         }
-        case NodeKind::Cast: {
+        case NodeKind::CAST: {
             auto cast = static_cast<Cast*>(node);
             // Include the value being cast on.
             get(cast->value);
             break;
         }
-        case NodeKind::NamedValue: {
+        case NodeKind::NAMED_VALUE: {
             NamedValue* named_value = static_cast<NamedValue*>(node);
             get(named_value->assignment);
             break;
         }
-        case NodeKind::Array: {
+        case NodeKind::ARRAY: {
             Array* arr = static_cast<Array*>(node);
             if (!arr->elms.empty()) {
                 get(arr->elms.back());
@@ -65,7 +65,7 @@ if (e1 > e) { e = e1; }           \
             go_until(e, '[', ']');
             break;
         }
-        case NodeKind::MemoryAccess: {
+        case NodeKind::MEMORY_ACCESS: {
             MemoryAccess* mem_access = static_cast<MemoryAccess*>(node);
             get(mem_access->site);
             get(mem_access->index);
@@ -73,7 +73,7 @@ if (e1 > e) { e = e1; }           \
             go_until(e, '[', ']');
             break;
         }
-        case NodeKind::DotOperator: {
+        case NodeKind::DOT_OPERATOR: {
             DotOperator* dot = static_cast<DotOperator*>(node);
             // There can still be whitespace after the .
             //
@@ -90,47 +90,47 @@ if (e1 > e) { e = e1; }           \
             get(dot->site);
             break;
         }
-        case NodeKind::SizeOf: {
+        case NodeKind::SIZE_OF: {
             // Include the closing )
             go_until(e, '(', ')');
             break;
         }
-        case NodeKind::StructInitializer: {
+        case NodeKind::STRUCT_INITIALIZER: {
             // Include the closing }
             go_until(e, '{', '}');
             StructInitializer* initializer = static_cast<StructInitializer*>(node);
             get(initializer->site);
             break;
         }
-        case NodeKind::MoveObj: {
+        case NodeKind::MOVEOBJ: {
             // Include the closing )
             go_until(e, '(', ')');
             break;
         }
-        case NodeKind::Ternary: {
+        case NodeKind::TERNARY: {
             Ternary* ternary = static_cast<Ternary*>(node);
             get(ternary->cond);
             get(ternary->rhs);
             break;
         }
-        case NodeKind::TypeExpr: {
+        case NodeKind::TYPE_EXPR: {
             break;
         }
-        case NodeKind::Reflect: {
+        case NodeKind::REFLECT: {
             go_until(e, '(', ')');
             break;
         }
-        case NodeKind::RaiseStmt: {
+        case NodeKind::RAISE_STMT: {
             RaiseStmt* raise = static_cast<RaiseStmt*>(node);
             get(raise->expr);
             break;
         }
-        case NodeKind::Try: {
+        case NodeKind::TRY: {
             Try* tryn = static_cast<Try*>(node);
             get(tryn->caught_expr);
             break;
         }
-        case NodeKind::IdentRef: {
+        case NodeKind::IDENT_REF: {
             IdentRef* ref = static_cast<IdentRef*>(node);
             if (ref->explicitly_binds_generics) {
                 GenericBindFuncCall* call = static_cast<GenericBindFuncCall*>(ref);
@@ -140,11 +140,11 @@ if (e1 > e) { e = e1; }           \
             break;
         }
 
-        case NodeKind::Number:
-        case NodeKind::String:
-        case NodeKind::Null:
-        case NodeKind::Bool:
-        case NodeKind::This:
+        case NodeKind::NUMBER:
+        case NodeKind::STRING:
+        case NodeKind::NULL_EXPR:
+        case NodeKind::BOOL_EXPR:
+        case NodeKind::THIS_EXPR:
             break;
         default:
             acorn_fatal("get_expansion(): missing case");

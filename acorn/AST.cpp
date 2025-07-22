@@ -22,8 +22,8 @@ void acorn::Decl::show_location_msg(Logger& logger) const {
 
 const char* acorn::Decl::get_composite_kind() const {
     switch (kind) {
-    case NodeKind::Struct: return "struct";
-    case NodeKind::Enum:   return "enum";
+    case NodeKind::STRUCT: return "struct";
+    case NodeKind::ENUM:   return "enum";
     default:
         acorn_fatal("Unknown composite kind");
         return "";
@@ -171,7 +171,7 @@ std::string acorn::Func::get_decl_string() const {
 
 bool acorn::Func::forwards_varargs(Expr* arg_value) const {
     if (!uses_varargs) return false;
-    if (arg_value->is_not(NodeKind::IdentRef)) return false;
+    if (arg_value->is_not(NodeKind::IDENT_REF)) return false;
 
     auto ref = static_cast<IdentRef*>(arg_value);
     auto last_param = params.back();

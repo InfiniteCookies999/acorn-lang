@@ -10,15 +10,15 @@ namespace acorn {
     class Module;
 
     enum class ScopeLocation {
-        Global,
-        Struct,
-        Interface
+        GLOBAL,
+        STRUCT,
+        INTERFACE
     };
 
     class Namespace {
     public:
 
-        Namespace(Module& modl, ScopeLocation scope_location = ScopeLocation::Global) :
+        Namespace(Module& modl, ScopeLocation scope_location = ScopeLocation::GLOBAL) :
             modl(modl), scope_location(scope_location) {
         }
 

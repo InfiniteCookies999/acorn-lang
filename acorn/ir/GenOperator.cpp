@@ -12,18 +12,18 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     switch (bin_op->op) {
     case '=':
         return gen_assignment_op(bin_op->lhs, bin_op->rhs);
-    case Token::AddEq:   return gen_apply_and_assign_op('+', bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::SubEq:   return gen_apply_and_assign_op('-', bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::MulEq:   return gen_apply_and_assign_op('*', bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::DivEq:   return gen_apply_and_assign_op('/', bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::ModEq:   return gen_apply_and_assign_op('%', bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::AndEq:   return gen_apply_and_assign_op('&', bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::OrEq:    return gen_apply_and_assign_op('|', bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::CaretEq: return gen_apply_and_assign_op('^', bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::TildeEq: return gen_apply_and_assign_op('~', bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::LtLtEq:  return gen_apply_and_assign_op(Token::LtLt, bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::GtGtEq:  return gen_apply_and_assign_op(Token::GtGt, bin_op->loc, bin_op->type, lhs, rhs);
-    case Token::AndAnd: {
+    case Token::ADD_EQ:   return gen_apply_and_assign_op('+', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::SUB_EQ:   return gen_apply_and_assign_op('-', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::MUL_EQ:   return gen_apply_and_assign_op('*', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::DIV_EQ:   return gen_apply_and_assign_op('/', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::MOD_EQ:   return gen_apply_and_assign_op('%', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::AND_EQ:   return gen_apply_and_assign_op('&', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::OR_EQ:    return gen_apply_and_assign_op('|', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::CARET_EQ: return gen_apply_and_assign_op('^', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::TILDE_EQ: return gen_apply_and_assign_op('~', bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::LT_LT_EQ:  return gen_apply_and_assign_op(Token::LT_LT, bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::GT_GT_EQ:  return gen_apply_and_assign_op(Token::GT_GT, bin_op->loc, bin_op->type, lhs, rhs);
+    case Token::AND_AND: {
         if (bin_op->is_foldable) {
             auto ll_lhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->lhs));
             auto ll_rhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->rhs));
@@ -72,7 +72,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 
         return ll_result;
     }
-    case Token::OrOr: {
+    case Token::OR_OR: {
         if (bin_op->is_foldable) {
             auto ll_lhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->lhs));
             auto ll_rhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->rhs));
@@ -196,8 +196,8 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(TokenKind op, Type* rtype
             if (mem_type->is_pointer()) {
                 auto ptr_type = static_cast<PointerType*>(mem_type);
                 auto elm_type = ptr_type->get_elm_type();
-                auto ll_elm_type = elm_type->get_kind() != TypeKind::Void ? gen_type(elm_type)
-                                                                          : builder.getInt8Ty();
+                auto ll_elm_type = elm_type->get_kind() != TypeKind::VOID_T ? gen_type(elm_type)
+                                                                            : builder.getInt8Ty();
                 return builder.CreateInBoundsGEP(ll_elm_type, ll_mem, ll_off, "ptr.add");
             }
 
@@ -262,11 +262,11 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(TokenKind op, Type* rtype
         return builder.CreateAnd(ll_lhs, ll_rhs, "and");
     case '^':
         return builder.CreateXor(ll_lhs, ll_rhs, "xor");
-    case Token::GtGt: // >>
+    case Token::GT_GT: // >>
         if (lhs->type->is_signed())
             return builder.CreateAShr(ll_lhs, ll_rhs, "shr");
         else return builder.CreateLShr(ll_lhs, ll_rhs, "shr");
-    case Token::LtLt: // <<
+    case Token::LT_LT: // <<
         return builder.CreateShl(ll_lhs, ll_rhs, "shl");
     // Comparisons Operators
     // -------------------------------------------
@@ -282,21 +282,21 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(TokenKind op, Type* rtype
         if (lhs->type->is_signed() || rhs->type->is_signed())
             return builder.CreateICmpSLT(ll_lhs, ll_rhs, "lt");
         else return builder.CreateICmpULT(ll_lhs, ll_rhs, "lt");
-    case Token::GtEq:
+    case Token::GT_EQ:
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOGE(ll_lhs, ll_rhs, "gt");
         if (lhs->type->is_signed() || rhs->type->is_signed())
             return builder.CreateICmpSGE(ll_lhs, ll_rhs, "gte");
         else return builder.CreateICmpUGE(ll_lhs, ll_rhs, "gte");
-    case Token::LtEq:
+    case Token::LT_EQ:
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOLE(ll_lhs, ll_rhs, "gt");
         if (lhs->type->is_signed() || rhs->type->is_signed())
             return builder.CreateICmpSLE(ll_lhs, ll_rhs, "lte");
         else return builder.CreateICmpULE(ll_lhs, ll_rhs, "lte");
-    case Token::EqEq:
+    case Token::EQ_EQ:
         return gen_equal(ll_lhs, ll_rhs);
-    case Token::ExEq:
+    case Token::EX_EQ:
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpUNE(ll_lhs, ll_rhs, "neq");
         else return builder.CreateICmpNE(ll_lhs, ll_rhs, "neq");
@@ -382,31 +382,31 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
     case '*': {
         auto ll_ptr = gen_node(expr);
 
-        if (expr->is(NodeKind::BinOp)) {
+        if (expr->is(NodeKind::BIN_OP)) {
             // If it is a binary operator then it is pointer arithmetic but
             // pointer arithmetic does not return the address of the pointer
             // but instead returns the pointer value itself (or in llvm terms
             // it is the eqv. of returning i32* (the pointer) rather than i32**
             // the address of the pointer).
             return ll_ptr;
-        } else if (expr->is(NodeKind::UnaryOp)) {
+        } else if (expr->is(NodeKind::UNARY_OP)) {
             auto expr_unary_op = static_cast<UnaryOp*>(expr);
             auto op = expr_unary_op->op;
-            if (op == Token::AddAdd || op == Token::SubSub ||
-                op == Token::PostAddAdd || op == Token::PostSubSub) {
+            if (op == Token::ADD_ADD || op == Token::SUB_SUB ||
+                op == Token::POST_ADD_ADD || op == Token::POST_SUB_SUB) {
                 // Read comment for binary op. It is pointer arithmetic so
                 // don't load.
                 return ll_ptr;
             }
-        } else if (expr->is(NodeKind::FuncCall)) {
+        } else if (expr->is(NodeKind::FUNC_CALL)) {
             // If it is a function since functions dont return addresses what
             // we recieve is just the pointer value itself so there is nothing
             // to dereference.
             return ll_ptr;
-        } else if (expr->is(NodeKind::This)) {
+        } else if (expr->is(NodeKind::THIS_EXPR)) {
             // We store the 'this' pointer by value not by address.
             return ll_ptr;
-        } else if (expr->is(NodeKind::Cast)) {
+        } else if (expr->is(NodeKind::CAST)) {
             // Because casting calls gen_rvalue the value has already been
             // loading.
             return ll_ptr;
@@ -415,13 +415,13 @@ llvm::Value* acorn::IRGenerator::gen_unary_op(UnaryOp* unary_op) {
         return builder.CreateLoad(gen_type(expr->type), ll_ptr);
     }
 
-    case Token::AddAdd:
+    case Token::ADD_ADD:
         return gen_inc_or_dec(true, false);
-    case Token::SubSub:
+    case Token::SUB_SUB:
         return gen_inc_or_dec(false, false);
-    case Token::PostAddAdd:
+    case Token::POST_ADD_ADD:
         return gen_inc_or_dec(true, true);
-    case Token::PostSubSub:
+    case Token::POST_SUB_SUB:
         return gen_inc_or_dec(false, true);
     default:
         acorn_fatal("gen_unary_op(): failed to implement case");

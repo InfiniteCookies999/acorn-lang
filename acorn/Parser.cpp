@@ -13,31 +13,31 @@
 #include "Sema.h"
 
 #define TypeTokens     \
-     Token::KwVoid:    \
-case Token::KwInt:     \
-case Token::KwInt8:    \
-case Token::KwInt16:   \
-case Token::KwInt32:   \
-case Token::KwInt64:   \
-case Token::KwUInt8:   \
-case Token::KwUInt16:  \
-case Token::KwUInt32:  \
-case Token::KwUInt64:  \
-case Token::KwFloat:   \
-case Token::KwDouble:  \
-case Token::KwConst:   \
-case Token::KwChar:    \
-case Token::KwChar16:  \
-case Token::KwUSize:   \
-case Token::KwISize:   \
-case Token::KwBool
+     Token::KW_VOID:   \
+case Token::KW_INT:    \
+case Token::KW_INT8:   \
+case Token::KW_INT16:  \
+case Token::KW_INT32:  \
+case Token::KW_INT64:  \
+case Token::KW_UINT8:  \
+case Token::KW_UINT16: \
+case Token::KW_UINT32: \
+case Token::KW_UINT64: \
+case Token::KW_FLOAT:  \
+case Token::KW_DOUBLE: \
+case Token::KW_CONST:  \
+case Token::KW_CHAR:   \
+case Token::KW_CHAR16: \
+case Token::KW_USIZE:  \
+case Token::KW_ISIZE:  \
+case Token::KW_BOOL
 
-#define ModifierTokens   \
-     Token::KwNative:    \
-case Token::KwDllimport: \
-case Token::KwPublic:    \
-case Token::KwPrivate:   \
-case Token::KwReadonly
+#define ModifierTokens    \
+     Token::KW_NATIVE:    \
+case Token::KW_DLLIMPORT: \
+case Token::KW_PUBLIC:    \
+case Token::KW_PRIVATE:   \
+case Token::KW_READONLY
 
 acorn::Parser::Parser(Context& context, Module& modl, SourceFile* file)
     : context(context)
@@ -59,14 +59,14 @@ void acorn::Parser::parse() {
     prev_token = cur_token;
 
 
-    if (cur_token.is(Token::KwCTFile)) {
+    if (cur_token.is(Token::KW_CT_FILE)) {
         parse_comptime_file_info();
     }
 
     // Parsing imports.
     while (parsing_import_tops &&
-           (cur_token.is(Token::KwImport) || cur_token.is(Token::KwCTIf))) {
-        if (cur_token.is(Token::KwImport)) {
+           (cur_token.is(Token::KW_IMPORT) || cur_token.is(Token::KW_CT_IF))) {
+        if (cur_token.is(Token::KW_IMPORT)) {
             parse_import_top();
         } else {
             parse_comptime_if();
@@ -107,12 +107,12 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
         }
     };
 
-    if (node->is(NodeKind::Func)) {
+    if (node->is(NodeKind::FUNC)) {
 
         auto func = static_cast<Func*>(node);
 
         if (func->is_constructor || func->is_destructor) {
-            modl.mark_bad_scope(ScopeLocation::Global, node, logger);
+            modl.mark_bad_scope(ScopeLocation::GLOBAL, node, logger);
             return;
         }
 
@@ -126,7 +126,7 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
         if (func->name == context.main_identifier) {
             context.add_canidate_main_function(func);
         }
-    } else if (node->is(NodeKind::Struct)) {
+    } else if (node->is(NodeKind::STRUCT)) {
 
         auto structn = static_cast<Struct*>(node);
         if (structn->name != Identifier::Invalid) {
@@ -135,23 +135,23 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
             }
             file->add_composite(structn);
         }
-    } else if (node->is(NodeKind::Enum) || node->is(NodeKind::Interface)) {
+    } else if (node->is(NodeKind::ENUM) || node->is(NodeKind::INTERFACE)) {
 
         auto composite = static_cast<Decl*>(node);
         if (composite->name != Identifier::Invalid) {
             context.add_unchecked_decl(composite);
             file->add_composite(composite);
         }
-    } else if (node->is(NodeKind::Var)) {
+    } else if (node->is(NodeKind::VAR)) {
         process_variable(static_cast<Var*>(node));
-    } else if (node->is(NodeKind::VarList)) {
+    } else if (node->is(NodeKind::VAR_LIST)) {
         auto vlist = static_cast<VarList*>(node);
         for (auto var : vlist->vars) {
             process_variable(var);
         }
         vlist->vars.clear();
     } else {
-        modl.mark_bad_scope(ScopeLocation::Global, node, logger);
+        modl.mark_bad_scope(ScopeLocation::GLOBAL, node, logger);
     }
 }
 
@@ -167,15 +167,15 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
         }
     };
 
-    if (node->is(NodeKind::Var)) {
+    if (node->is(NodeKind::VAR)) {
         process_var(static_cast<Var*>(node));
-    } else if (node->is(NodeKind::VarList)) {
+    } else if (node->is(NodeKind::VAR_LIST)) {
         auto vlist = static_cast<VarList*>(node);
         for (auto var : vlist->vars) {
             process_var(var);
         }
         vlist->vars.clear();
-    } else if (node->is(NodeKind::Func)) {
+    } else if (node->is(NodeKind::FUNC)) {
         auto func = static_cast<Func*>(node);
         if (func->name != Identifier::Invalid) {
             func->structn = structn;
@@ -218,18 +218,18 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
             }
         }
     } else {
-        modl.mark_bad_scope(ScopeLocation::Struct, node, logger);
+        modl.mark_bad_scope(ScopeLocation::STRUCT, node, logger);
     }
 }
 
 void acorn::Parser::add_node_to_interface(Interface* interfacen, Node* node) {
-    if (node->is(NodeKind::Func)) {
+    if (node->is(NodeKind::FUNC)) {
         auto func = static_cast<Func*>(node);
         func->interfacen = interfacen;
         func->interface_idx = cur_interface->functions.size();
         cur_interface->functions.push_back(func);
     } else {
-        modl.mark_bad_scope(ScopeLocation::Interface, node, logger);
+        modl.mark_bad_scope(ScopeLocation::INTERFACE, node, logger);
     }
 
 }
@@ -237,7 +237,7 @@ void acorn::Parser::add_node_to_interface(Interface* interfacen, Node* node) {
 void acorn::Parser::add_node_to_scope(ScopeStmt* scope, Node* node) {
     if (!node) return;
 
-    if (node->is(NodeKind::VarList)) {
+    if (node->is(NodeKind::VAR_LIST)) {
         auto vlist = static_cast<VarList*>(node);
         for (auto var : vlist->vars) {
             scope->push_back(var);
@@ -282,10 +282,10 @@ void acorn::Parser::parse_comptime_file_info() {
                 }
 
                 already_set_access = true;
-                if (cur_token.is(Token::KwPublic)) {
+                if (cur_token.is(Token::KW_PUBLIC)) {
                     next_token();
                     file->set_default_access(Modifier::Public);
-                } else if (cur_token.is(Token::KwPrivate)) {
+                } else if (cur_token.is(Token::KW_PRIVATE)) {
                     next_token();
                     file->set_default_access(Modifier::Private);
                 } else {
@@ -300,7 +300,7 @@ void acorn::Parser::parse_comptime_file_info() {
                 }
 
                 already_set_namespace = true;
-                if (cur_token.is(Token::Identifier)) {
+                if (cur_token.is(Token::IDENTIFIER)) {
                     Identifier name = Identifier::get(cur_token.text());
                     auto nspace = modl.get_or_create_namespace(context, name);
                     file->set_namespace(nspace);
@@ -353,7 +353,7 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
     if (cur_token.is('.')) {
         next_token();
         importn->within_same_modl = true;
-    } else if (cur_token.is(Token::DotDot)) {
+    } else if (cur_token.is(Token::DOT_DOT)) {
         next_token();
         importn->within_parent_modl = true;
     }
@@ -363,7 +363,7 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
     bool more_to_import = false;
     do {
 
-        if (cur_token.is_not(Token::Identifier)) {
+        if (cur_token.is_not(Token::IDENTIFIER)) {
             error(cur_token, "Expected identifier for import location")
                 .end_error(ErrCode::ParseExpectedImportIdentifier);
             skip_recovery();
@@ -380,7 +380,7 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
         }
     } while (more_to_import);
 
-    if (cur_token.is(Token::KwStatic)) {
+    if (cur_token.is(Token::KW_STATIC)) {
         next_token();
         importn->is_static = true;
     }
@@ -394,18 +394,18 @@ acorn::Node* acorn::Parser::parse_statement() {
     switch (cur_token.kind) {
     case ModifierTokens: {
         uint32_t modifiers = parse_modifiers();
-        if (cur_token.is(Token::KwFn)) {
+        if (cur_token.is(Token::KW_FN)) {
             return parse_function(modifiers, false);
-        } else if (cur_token.is(Token::KwConst) && peek_token(0).is(Token::KwFn)) {
+        } else if (cur_token.is(Token::KW_CONST) && peek_token(0).is(Token::KW_FN)) {
             next_token(); // Consuming 'const' token.
             return parse_function(modifiers, true);
-        } else if (cur_token.is(Token::Identifier)) {
+        } else if (cur_token.is(Token::IDENTIFIER)) {
             return parse_variable_list(modifiers);
-        } else if (Token::KwStruct) {
+        } else if (Token::KW_STRUCT) {
             return parse_struct(modifiers);
-        } else if (Token::KwEnum) {
+        } else if (Token::KW_ENUM) {
             return parse_enum(modifiers);
-        } else if (Token::KwInterface) {
+        } else if (Token::KW_INTERFACE) {
             return parse_interface(modifiers);
         } else {
             error(cur_token, "Expected declaration")
@@ -414,20 +414,20 @@ acorn::Node* acorn::Parser::parse_statement() {
             return nullptr;
         }
     }
-    case Token::KwFn:
+    case Token::KW_FN:
         return parse_function(0, false);
-    case Token::KwGenerics: {
+    case Token::KW_GENERICS: {
         size_t prev_size = cur_generics.size();
         parse_generics(cur_generics);
 
         Node* node = nullptr;
         uint32_t modifiers = parse_modifiers();
-        if (cur_token.is(Token::KwFn)) {
+        if (cur_token.is(Token::KW_FN)) {
             node = parse_function(modifiers, false);
-        } else if (cur_token.is(Token::KwConst) && peek_token(0).is(Token::KwFn)) {
+        } else if (cur_token.is(Token::KW_CONST) && peek_token(0).is(Token::KW_FN)) {
             next_token(); // Consuming 'const' token.
             node = parse_function(modifiers, true);
-        } else if (cur_token.is(Token::KwStruct)) {
+        } else if (cur_token.is(Token::KW_STRUCT)) {
             node = parse_struct(modifiers);
         } else {
             error(cur_token, "Expected declaration")
@@ -439,8 +439,8 @@ acorn::Node* acorn::Parser::parse_statement() {
         cur_generics.resize(prev_size);
         return node;
     }
-    case Token::KwConst: {
-        if (peek_token(0).is(Token::KwFn)) {
+    case Token::KW_CONST: {
+        if (peek_token(0).is(Token::KW_FN)) {
             next_token(); // Consuming 'const' token.
             return parse_function(0, true);
         } else {
@@ -449,13 +449,13 @@ acorn::Node* acorn::Parser::parse_statement() {
             return expr;
         }
     }
-    case Token::KwStruct:
+    case Token::KW_STRUCT:
         return parse_struct(0);
-    case Token::KwEnum:
+    case Token::KW_ENUM:
         return parse_enum(0);
-    case Token::KwInterface:
+    case Token::KW_INTERFACE:
         return parse_interface(0);
-    case Token::Identifier: {
+    case Token::IDENTIFIER: {
         auto peek0 = peek_token(0);
         if (peek0.is(':')) {
             Var* var = parse_variable(0);
@@ -475,45 +475,45 @@ acorn::Node* acorn::Parser::parse_statement() {
             return expr;
         }
     }
-    case Token::KwReturn: {
+    case Token::KW_RETURN: {
         auto ret = parse_return();
         expect(';');
         return ret;
     }
-    case Token::KwIf:
+    case Token::KW_IF:
         return parse_if();
-    case Token::KwCTIf: {
+    case Token::KW_CT_IF: {
         parse_comptime_if();
         return nullptr;
     }
-    case Token::KwLoop:
+    case Token::KW_LOOP:
         return parse_loop();
-    case Token::KwBreak: case Token::KwContinue:
+    case Token::KW_BREAK: case Token::KW_CONTINUE:
         return parse_loop_control();
-    case Token::KwSwitch:
+    case Token::KW_SWITCH:
         return parse_switch();
-    case Token::KwTry: {
+    case Token::KW_TRY: {
         auto stmt = parse_try();
         expect(';');
         return stmt;
     }
-    case Token::KwRaise: {
+    case Token::KW_RAISE: {
         auto stmt = parse_raise();
         expect(';');
         return stmt;
     }
-    case Token::KwRecover: {
+    case Token::KW_RECOVER: {
         auto stmt = parse_recover();
         expect(';');
         return stmt;
     }
-    case Token::KwCTAborts: {
+    case Token::KW_CT_ABORTS: {
         next_token(); // Consuming '#aborts' token.
         auto structn = parse_struct(0);
         structn->aborts_error = true;
         return structn;
     }
-    case Token::KwUninitNew: {
+    case Token::KW_UNINIT_NEW: {
         auto new_call = new_node<UninitNewCallStmt>(cur_token);
         next_token();
         expect('(');
@@ -555,7 +555,7 @@ acorn::Node* acorn::Parser::parse_statement() {
 
 acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const) {
 
-    expect(Token::KwFn);
+    expect(Token::KW_FN);
 
     Func* func = new_declaration<Func, true>(modifiers, cur_token);
     func->is_constant = is_const;
@@ -563,24 +563,24 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const) {
 
     // Check for constructor.
     switch (cur_token.kind) {
-    case Token::KwNew:
+    case Token::KW_NEW:
         func->name = context.new_identifier;
         func->is_constructor = true;
         next_token();
         break;
-    case Token::KwCopyobj:
+    case Token::KW_COPYOBJ:
         func->name = context.copyobj_identifier;
         func->is_copy_constructor = true;
         func->is_constructor = true;
         next_token();
         break;
-    case Token::KwMoveobj:
+    case Token::KW_MOVEOBJ:
         func->name = context.moveobj_identifier;
         func->is_move_constructor = true;
         func->is_constructor = true;
         next_token();
         break;
-    case Token::KwDelete:
+    case Token::KW_DELETE:
         func->name = context.delete_identifier;
         func->is_destructor = true;
         next_token();
@@ -601,7 +601,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const) {
         bool more_params = false, full_reported = false;
         uint32_t param_idx = 0;
         do {
-            if (cur_token.is(Token::DotDotDot)) {
+            if (cur_token.is(Token::DOT_DOT_DOT)) {
                 func->uses_native_varargs = true;
                 next_token();
                 break;
@@ -613,7 +613,7 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const) {
             if (param->assignment) {
                 ++num_default_params;
             } else {
-                if (cur_token.is(Token::DotDotDot)) {
+                if (cur_token.is(Token::DOT_DOT_DOT)) {
                     func->uses_varargs = true;
                     param->parsed_type = type_table.get_slice_type(param->parsed_type);
                     next_token();
@@ -644,8 +644,8 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const) {
     }
 
     // Parsing return type.
-    if (cur_token.is_not('{') && cur_token.is_not(';') && cur_token.is_not('|') && cur_token.is_not(Token::KwRaises)) {
-        expect(Token::Arrow);
+    if (cur_token.is_not('{') && cur_token.is_not(';') && cur_token.is_not('|') && cur_token.is_not(Token::KW_RAISES)) {
+        expect(Token::ARROW);
         func->parsed_return_type = parse_type();
     } else {
         func->parsed_return_type = context.void_type;
@@ -659,9 +659,9 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const) {
     }
 
 
-    if (cur_token.is('|') || cur_token.is(Token::KwRaises)) {
+    if (cur_token.is('|') || cur_token.is(Token::KW_RAISES)) {
         expect('|', "for raised errors");
-        expect(Token::KwRaises);
+        expect(Token::KW_RAISES);
         parse_raised_errors(func->raised_errors);
     }
 
@@ -730,7 +730,7 @@ acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers, VarList* 
 
     for (auto& [name_token, ignore1, ignore2] : name_tokens) {
         Var* var = new_declaration<Var, true>(modifiers, name_token);
-        if (name_token.is(Token::Identifier)) {
+        if (name_token.is(Token::IDENTIFIER)) {
             var->name = Identifier::get(name_token.text());
         }
         var->parsed_type = type;
@@ -839,10 +839,10 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, bool may_parse_imp
     if (cur_token.is('=') || cur_token.is(':')) {
         next_token();
 
-        if (cur_token.is(Token::SubSubSub)) {
+        if (cur_token.is(Token::SUB_SUB_SUB)) {
             next_token();
             var->should_default_initialize = false;
-        } else if (cur_token.is(Token::KwTry)) {
+        } else if (cur_token.is(Token::KW_TRY)) {
             var->assignment = parse_try();
             var->assignment->tryn->catch_recoveree = var;
         } else {
@@ -874,7 +874,7 @@ acorn::Struct* acorn::Parser::parse_struct(uint32_t modifiers) {
 
     structn->name = expect_identifier("for struct declaration");
     structn->nspace = allocator.alloc_type<Namespace>();
-    new (structn->nspace) Namespace(modl, ScopeLocation::Struct);
+    new (structn->nspace) Namespace(modl, ScopeLocation::STRUCT);
 
     check_composite_name_conflict_with_imports(structn->name, "struct");
 
@@ -1036,7 +1036,7 @@ uint32_t acorn::Parser::parse_modifiers() {
 
     while (cur_token.is_modifier()) {
         switch (cur_token.kind) {
-        case Token::KwNative: {
+        case Token::KW_NATIVE: {
             if (modifiers & Modifier::Native)
                 error(cur_token, "Duplicate modifier")
                     .end_error(ErrCode::ParseDuplicateModifier);
@@ -1046,13 +1046,13 @@ uint32_t acorn::Parser::parse_modifiers() {
             if (cur_token.is('(')) {
                 next_token();
                 // TODO (maddie): can linknames take utf8?
-                if (cur_token.is(Token::StringLiteral)) {
+                if (cur_token.is(Token::STRING_LITERAL)) {
 
                     linkname = cur_token.text();
                     linkname = linkname.substr(1, linkname.size() - 2);
 
                     next_token();
-                } else if (cur_token.is(Token::InvalidStringLiteral)) {
+                } else if (cur_token.is(Token::INVALID_STRING_LITERAL)) {
                     // They writed to write a string but it was improperly lexed so
                     // we will just eat the token.
                     next_token();
@@ -1065,7 +1065,7 @@ uint32_t acorn::Parser::parse_modifiers() {
             }
             break;
         }
-        case Token::KwDllimport: {
+        case Token::KW_DLLIMPORT: {
             if (modifiers & Modifier::DllImport)
                 error(cur_token, "Duplicate modifier")
                     .end_error(ErrCode::ParseDuplicateModifier);
@@ -1074,7 +1074,7 @@ uint32_t acorn::Parser::parse_modifiers() {
             next_token();
             break;
         }
-        case Token::KwPublic: {
+        case Token::KW_PUBLIC: {
             if (modifiers & Modifier::Public)
                 error(cur_token, "Duplicate modifier")
                     .end_error(ErrCode::ParseDuplicateModifier);
@@ -1083,7 +1083,7 @@ uint32_t acorn::Parser::parse_modifiers() {
             next_token();
             break;
         }
-        case Token::KwPrivate: {
+        case Token::KW_PRIVATE: {
             if (modifiers & Modifier::Private)
                 error(cur_token, "Duplicate modifier")
                     .end_error(ErrCode::ParseDuplicateModifier);
@@ -1092,7 +1092,7 @@ uint32_t acorn::Parser::parse_modifiers() {
             next_token();
             break;
         }
-        case Token::KwReadonly: {
+        case Token::KW_READONLY: {
             if (modifiers & Modifier::Readonly)
                 error(cur_token, "Duplicate modifier")
                 .end_error(ErrCode::ParseDuplicateModifier);
@@ -1175,7 +1175,7 @@ acorn::IfStmt* acorn::Parser::parse_if() {
 
     ++paren_count;
     expect('(');
-    if (cur_token.is(Token::Identifier) &&
+    if (cur_token.is(Token::IDENTIFIER) &&
         (peek_token(0).is(':') || peek_token(0).is('*') && peek_token(1).is(':'))) {
         ifn->cond = parse_variable(0);
         if (cur_token.is(';')) {
@@ -1190,11 +1190,11 @@ acorn::IfStmt* acorn::Parser::parse_if() {
 
     ifn->scope = parse_scope("for if");
 
-    if (cur_token.is(Token::KwElIf)) {
+    if (cur_token.is(Token::KW_ELFIF)) {
         ifn->elseif = parse_if();
-    } else if (cur_token.is(Token::KwElse)) {
+    } else if (cur_token.is(Token::KW_ELSE)) {
         next_token(); // Consuming else token.
-        if (cur_token.is(Token::KwIf)) {
+        if (cur_token.is(Token::KW_IF)) {
             // We do not want the user to use 'else if'.
             SourceLoc error_loc = SourceLoc::from_ptrs(prev_token.buffer_ptr,
                                                        cur_token.buffer_ptr + cur_token.lexeme_length);
@@ -1225,7 +1225,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
 
     auto add_statement = [this](Node* stmt) finline {
         if (cur_func) {
-            if (stmt->is(NodeKind::VarList)) {
+            if (stmt->is(NodeKind::VAR_LIST)) {
                 auto vlist = static_cast<VarList*>(stmt);
                 for (auto var : vlist->vars) {
                     cur_func->scope->push_back(var);
@@ -1244,24 +1244,24 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
     };
 
     bool can_take_else_path = !top_took_path && !takes_path;
-    while (cur_token.is_not(Token::KwCTEndIf) &&
+    while (cur_token.is_not(Token::KW_CT_ENDIF) &&
            cur_token.is_not(Token::EOB)) {
 
-        if (cur_token.is(Token::KwCTElIf)) {
+        if (cur_token.is(Token::KW_CT_ELIF)) {
             parse_comptime_if(false, !takes_path);
             break;
-        } else if (cur_token.is(Token::KwCTElse)) {
+        } else if (cur_token.is(Token::KW_CT_ELSE)) {
 
             next_token();
-            while (cur_token.is_not(Token::KwCTEndIf) &&
+            while (cur_token.is_not(Token::KW_CT_ENDIF) &&
                    cur_token.is_not(Token::EOB)) {
 
-                if (cur_token.is(Token::KwCTIf)) {
+                if (cur_token.is(Token::KW_CT_IF)) {
                     parse_comptime_if(true, can_take_else_path);
                 }
                 // Check if at the top of the file and parsing imports because if `add_statement`
                 // is called it will just complain that the imports are not at the top of file.
-                else if (parsing_import_tops && cur_token.is(Token::KwImport)) {
+                else if (parsing_import_tops && cur_token.is(Token::KW_IMPORT)) {
                     if (takes_path) {
                         parse_import_top();
                     } else {
@@ -1272,7 +1272,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
                     auto node = parse_statement();
                     if (node && can_take_else_path) {
                         add_statement(node);
-                    } else if (node && node->is(NodeKind::VarList)) {
+                    } else if (node && node->is(NodeKind::VAR_LIST)) {
                         // We still have to clear the variable list because we called
                          // parse_statement.
                         auto vlist = static_cast<VarList*>(node);
@@ -1283,12 +1283,12 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
 
             break;
         } else {
-            if (cur_token.is(Token::KwCTIf)) {
+            if (cur_token.is(Token::KW_CT_IF)) {
                 parse_comptime_if(true, takes_path);
             }
             // Check if at the top of the file and parsing imports because if `add_statement`
             // is called it will just complain that the imports are not at the top of file.
-            else if (parsing_import_tops && cur_token.is(Token::KwImport)) {
+            else if (parsing_import_tops && cur_token.is(Token::KW_IMPORT)) {
                 if (takes_path) {
                     parse_import_top();
                 } else {
@@ -1299,7 +1299,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
                 auto node = parse_statement();
                 if (node && takes_path) {
                     add_statement(node);
-                } else if (node && node->is(NodeKind::VarList)) {
+                } else if (node && node->is(NodeKind::VAR_LIST)) {
                     // We still have to clear the variable list because we called
                     // parse_statement.
                     auto vlist = static_cast<VarList*>(node);
@@ -1310,7 +1310,7 @@ void acorn::Parser::parse_comptime_if(bool chain_start, bool takes_path) {
     }
 
     if (chain_start) {
-        if (cur_token.is_not(Token::KwCTEndIf)) {
+        if (cur_token.is_not(Token::KW_CT_ENDIF)) {
             error(cur_token.get_location(), "Expected #endif for comptime #if statement")
                 .end_error(ErrCode::ParseMissingComptimeEndIf);
         } else {
@@ -1336,7 +1336,7 @@ acorn::Node* acorn::Parser::parse_loop() {
 
     Token peek0 = peek_token(0);
 
-    if (cur_token.is(Token::Identifier) && peek0.is(Token::KwIn)) {
+    if (cur_token.is(Token::IDENTIFIER) && peek0.is(Token::KW_IN)) {
         Var* var = new_declaration<Var, false>(0, cur_token);
         var->name = Identifier::get(cur_token.text());
         var->parsed_type = context.auto_type;
@@ -1344,7 +1344,7 @@ acorn::Node* acorn::Parser::parse_loop() {
         next_token(); // Consuming name token.
 
         return parse_iterator_loop(loop_token, { var }, false);
-    } else if (cur_token.is(Token::Identifier) && peek0.is('*') && peek_token(1).is(Token::KwIn)) {
+    } else if (cur_token.is(Token::IDENTIFIER) && peek0.is('*') && peek_token(1).is(Token::KW_IN)) {
         Var* var = new_declaration<Var, false>(0, cur_token);
         var->name = Identifier::get(cur_token.text());
         var->parsed_type = context.auto_type;
@@ -1353,19 +1353,19 @@ acorn::Node* acorn::Parser::parse_loop() {
         next_token(); // Consuming name token.
 
         return parse_iterator_loop(loop_token, { var }, true);
-    } else if (cur_token.is(Token::Identifier) && peek0.is(':')) {
+    } else if (cur_token.is(Token::IDENTIFIER) && peek0.is(':')) {
         Var* var = parse_variable(0);
 
-        if (!var->assignment && cur_token.is(Token::KwIn)) {
+        if (!var->assignment && cur_token.is(Token::KW_IN)) {
             return parse_iterator_loop(loop_token, { var }, false);
         }
 
         return parse_range_loop(loop_token, var);
     } else if (cur_token.is(';')) {
         return parse_range_loop(loop_token, nullptr);
-    } else if (cur_token.is(Token::Identifier) && peek0.is('*') && peek_token(1).is(':')) {
+    } else if (cur_token.is(Token::IDENTIFIER) && peek0.is('*') && peek_token(1).is(':')) {
         return parse_range_loop(loop_token, parse_variable(0));
-    } else if (cur_token.is(Token::Identifier) && (
+    } else if (cur_token.is(Token::IDENTIFIER) && (
                peek0.is(',') || (peek0.is('*') && peek_token(1).is(',')))
         ) {
         auto var_list = new_node<VarList>(cur_token);
@@ -1436,7 +1436,7 @@ acorn::Node* acorn::Parser::parse_range_loop(Token loop_token, Node* init_node) 
 
 acorn::Node* acorn::Parser::parse_loop_control() {
     auto loop_control = new_node<LoopControlStmt>(cur_token);
-    loop_control->kind = cur_token.is(Token::KwContinue) ? NodeKind::ContinueStmt : NodeKind::BreakStmt;
+    loop_control->kind = cur_token.is(Token::KW_CONTINUE) ? NodeKind::CONTINUE_STMT : NodeKind::BREAK_STMT;
     next_token(); // Consuming 'break' or 'continue' token.
     return loop_control;
 }
@@ -1453,7 +1453,7 @@ acorn::Node* acorn::Parser::parse_switch() {
     --paren_count;
 
     expect('{');
-    while (cur_token.is(Token::KwCase)) {
+    while (cur_token.is(Token::KW_CASE)) {
         Token case_token = cur_token;
         next_token();
 
@@ -1467,7 +1467,7 @@ acorn::Node* acorn::Parser::parse_switch() {
 
         // Use the previous token so it associates the scope start with the ':' token.
         ScopeStmt* scope = new_node<ScopeStmt>(prev_token);
-        while (cur_token.is_not('}') && cur_token.is_not(Token::KwCase) && cur_token.is_not(Token::EOB)) {
+        while (cur_token.is_not('}') && cur_token.is_not(Token::KW_CASE) && cur_token.is_not(Token::EOB)) {
             add_node_to_scope(scope, parse_statement());
         }
         scope->end_loc = prev_token.get_location();
@@ -1513,7 +1513,7 @@ acorn::Type* acorn::Parser::parse_type() {
 
 acorn::Type* acorn::Parser::parse_base_type() {
 
-    bool is_const = cur_token.is(Token::KwConst);
+    bool is_const = cur_token.is(Token::KW_CONST);
     if (is_const) {
         next_token();
         if (cur_token.is('(')) {
@@ -1532,24 +1532,24 @@ return t;                                \
 }
 
     switch (cur_token.kind) {
-    case Token::KwVoid:    ty(context.void_type);
-    case Token::KwInt:     ty(context.int_type);
-    case Token::KwInt8:    ty(context.int8_type);
-    case Token::KwInt16:   ty(context.int16_type);
-    case Token::KwInt32:   ty(context.int32_type);
-    case Token::KwInt64:   ty(context.int64_type);
-    case Token::KwUInt8:   ty(context.uint8_type);
-    case Token::KwUInt16:  ty(context.uint16_type);
-    case Token::KwUInt32:  ty(context.uint32_type);
-    case Token::KwUInt64:  ty(context.uint64_type);
-    case Token::KwBool:    ty(context.bool_type);
-    case Token::KwChar:    ty(context.char_type);
-    case Token::KwChar16:  ty(context.char16_type);
-    case Token::KwISize:   ty(context.isize_type);
-    case Token::KwUSize:   ty(context.usize_type);
-    case Token::KwFloat:   ty(context.float_type);
-    case Token::KwDouble:  ty(context.double_type);
-    case Token::Identifier: {
+    case Token::KW_VOID:    ty(context.void_type);
+    case Token::KW_INT:     ty(context.int_type);
+    case Token::KW_INT8:    ty(context.int8_type);
+    case Token::KW_INT16:   ty(context.int16_type);
+    case Token::KW_INT32:   ty(context.int32_type);
+    case Token::KW_INT64:   ty(context.int64_type);
+    case Token::KW_UINT8:   ty(context.uint8_type);
+    case Token::KW_UINT16:  ty(context.uint16_type);
+    case Token::KW_UINT32:  ty(context.uint32_type);
+    case Token::KW_UINT64:  ty(context.uint64_type);
+    case Token::KW_BOOL:    ty(context.bool_type);
+    case Token::KW_CHAR:    ty(context.char_type);
+    case Token::KW_CHAR16:  ty(context.char16_type);
+    case Token::KW_ISIZE:   ty(context.isize_type);
+    case Token::KW_USIZE:   ty(context.usize_type);
+    case Token::KW_FLOAT:   ty(context.float_type);
+    case Token::KW_DOUBLE:  ty(context.double_type);
+    case Token::IDENTIFIER: {
         Token name_token = cur_token;
         auto name = Identifier::get(cur_token.text());
         next_token();
@@ -1594,7 +1594,7 @@ return t;                                \
             return unresolved_type;
         }
     }
-    case Token::KwFn: {
+    case Token::KW_FN: {
         next_token();
 
         bool uses_native_varargs = false;
@@ -1604,14 +1604,14 @@ return t;                                \
             bool more_param_types = false;
             do {
 
-                if (cur_token.is(Token::DotDotDot)) {
+                if (cur_token.is(Token::DOT_DOT_DOT)) {
                     next_token();
                     uses_native_varargs = true;
                     break;
                 }
 
                 // Allow for an optional name for the parameter.
-                if (cur_token.is(Token::Identifier) && peek_token(0).is(':')) {
+                if (cur_token.is(Token::IDENTIFIER) && peek_token(0).is(':')) {
                     next_token();
                     next_token();
                 }
@@ -1632,7 +1632,7 @@ return t;                                \
         expect(')', "for function type");
 
         Type* return_type;
-        if (cur_token.is(Token::Arrow)) {
+        if (cur_token.is(Token::ARROW)) {
             next_token();
             return_type = parse_type();
         } else {
@@ -1642,7 +1642,7 @@ return t;                                \
         llvm::SmallVector<RaisedError> raised_errors;
         if (cur_token.is('|')) {
             next_token();
-            expect(Token::KwRaises);
+            expect(Token::KW_RAISES);
             parse_raised_errors(raised_errors);
         }
 
@@ -1663,7 +1663,7 @@ acorn::Type* acorn::Parser::parse_trailing_type_info(Type* type) {
             type = type_table.get_ptr_type(type);
             next_token();
         } else {
-            if (peek_token(0).is(Token::DotDot)) {
+            if (peek_token(0).is(Token::DOT_DOT)) {
                 next_token(); // Consuming '[' token.
                 next_token(); // Consuming '..' token.
                 expect(']', "for slice type");
@@ -1671,7 +1671,7 @@ acorn::Type* acorn::Parser::parse_trailing_type_info(Type* type) {
             } else {
                 llvm::SmallVector<ArrayTypeExpr, 8> arr_lengths;
 
-                while (cur_token.is('[') && !peek_token(0).is(Token::DotDot)) {
+                while (cur_token.is('[') && !peek_token(0).is(Token::DOT_DOT)) {
                     ++bracket_count;
                     next_token();
 
@@ -1713,7 +1713,7 @@ acorn::Type* acorn::Parser::construct_array_type(Type* base_type, const llvm::Sm
             reported_error_about_elm_must_have_length = true;
         }
 
-        bool resolvable = arr_expr.expr->is(NodeKind::Number);
+        bool resolvable = arr_expr.expr->is(NodeKind::NUMBER);
         Number* number;
         if (resolvable) {
             number = static_cast<Number*>(arr_expr.expr);
@@ -1740,22 +1740,22 @@ acorn::Expr* acorn::Parser::parse_assignment_and_expr() {
     Expr* lhs = parse_expr();
     switch (cur_token.kind) {
     case '=':
-    case Token::AddEq:
-    case Token::SubEq:
-    case Token::MulEq:
-    case Token::DivEq:
-    case Token::ModEq:
-    case Token::AndEq:
-    case Token::OrEq:
-    case Token::CaretEq:
-    case Token::TildeEq:
-    case Token::LtLtEq:
-    case Token::GtGtEq: {
+    case Token::ADD_EQ:
+    case Token::SUB_EQ:
+    case Token::MUL_EQ:
+    case Token::DIV_EQ:
+    case Token::MOD_EQ:
+    case Token::AND_EQ:
+    case Token::OR_EQ:
+    case Token::CARET_EQ:
+    case Token::TILDE_EQ:
+    case Token::LT_LT_EQ:
+    case Token::GT_GT_EQ: {
         BinOp* bin_op = new_node<BinOp>(cur_token);
         bin_op->op = cur_token.kind;
         next_token();
         bin_op->lhs = lhs;
-        if (cur_token.is(Token::KwTry)) {
+        if (cur_token.is(Token::KW_TRY)) {
             bin_op->rhs = parse_try();
             bin_op->rhs->tryn->catch_recoveree = bin_op;
         } else {
@@ -1789,7 +1789,7 @@ acorn::Expr* acorn::Parser::parse_try(Var* tried_on_var) {
 
     next_token(); // Consuming 'try' token.
 
-    bool catches_error = cur_token.is(Token::Identifier) && peek_token(0).is(':');
+    bool catches_error = cur_token.is(Token::IDENTIFIER) && peek_token(0).is(':');
     if (catches_error) {
         tryn->caught_var = new_declaration<Var, true>(0, cur_token);
         tryn->caught_var->name = Identifier::get(cur_token.text());
@@ -1864,7 +1864,7 @@ acorn::Expr* acorn::Parser::parse_binary_expr(Expr* lhs) {
             lhs = rhs;
             op = next_op;
         } else {
-            if (lhs->is(NodeKind::Number) && rhs->is(NodeKind::Number)) {
+            if (lhs->is(NodeKind::NUMBER) && rhs->is(NodeKind::NUMBER)) {
                 lhs = fold_number(op, lhs, rhs);
             } else {
                 lhs = new_binary_op(op, lhs, rhs);
@@ -1879,7 +1879,7 @@ acorn::Expr* acorn::Parser::parse_binary_expr(Expr* lhs) {
                 }
                 op_stack.pop();
                 rhs = unit.expr;
-                if (lhs->is(NodeKind::Number) && rhs->is(NodeKind::Number)) {
+                if (lhs->is(NodeKind::NUMBER) && rhs->is(NodeKind::NUMBER)) {
                     lhs = fold_number(unit.op, rhs, lhs);
                 } else {
                     lhs = new_binary_op(unit.op, rhs, lhs);
@@ -2019,14 +2019,14 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         }
         return calc(lval % rval);
     }
-    case Token::LtLt: {
+    case Token::LT_LT: {
         if (rval < 0 || rval == 0 || ((rval - 1) > (T)to_type->get_number_of_bits())) {
             // These are shift error cases handled during sema.
             return new_binary_op(op, lhs, rhs);
         }
         return calc(lval << rval);
     }
-    case Token::GtGt: {
+    case Token::GT_GT: {
         if (rval < 0 || rval == 0 || (rval - 1) > (T)to_type->get_number_of_bits()) {
             // These are shift error cases handled during sema.
             return new_binary_op(op, lhs, rhs);
@@ -2035,10 +2035,10 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
     }
     case '<':         return calc(lval <  rval);
     case '>':         return calc(lval >  rval);
-    case Token::LtEq: return calc(lval <= rval);
-    case Token::GtEq: return calc(lval >= rval);
-    case Token::EqEq: return calc(lval == rval);
-    case Token::ExEq: return calc(lval != rval);
+    case Token::LT_EQ: return calc(lval <= rval);
+    case Token::GT_EQ: return calc(lval >= rval);
+    case Token::EQ_EQ: return calc(lval == rval);
+    case Token::EX_EQ: return calc(lval != rval);
     case '&':         return calc(lval &  rval);
     case '^':         return calc(lval ^  rval);
     case '|':         return calc(lval |  rval);
@@ -2110,8 +2110,8 @@ acorn::Expr* acorn::Parser::fold_float(Token op, Number* lhs, Number* rhs, Type*
     }
     case '<': return calc(lval < rval);
     case '>': return calc(lval > rval);
-    case Token::LtEq: return calc(lval <= rval);
-    case Token::GtEq: return calc(lval >= rval);
+    case Token::LT_EQ: return calc(lval <= rval);
+    case Token::GT_EQ: return calc(lval >= rval);
     default:
         // Handled during sema.
         return new_binary_op(op, lhs, rhs);
@@ -2142,18 +2142,18 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
         Number* rnum = static_cast<Number*>(rhs);
         Type* to_type = side->type;
         switch (to_type->get_kind()) {
-        case TypeKind::UInt8: case TypeKind::Char:
+        case TypeKind::UINT8: case TypeKind::CHAR:
             return fold_int<uint8_t> (op, lnum, rnum, to_type);
-        case TypeKind::UInt16: case TypeKind::Char16:
+        case TypeKind::UINT16: case TypeKind::CHAR16:
             return fold_int<uint16_t>(op, lnum, rnum, to_type);
-        case TypeKind::UInt32:
+        case TypeKind::UINT32:
             return fold_int<uint32_t>(op, lnum, rnum, to_type);
-        case TypeKind::UInt64: return fold_int<uint64_t>(op, lnum, rnum, to_type);
-        case TypeKind::Int8:   return fold_int<int8_t> (op, lnum, rnum, to_type);
-        case TypeKind::Int16:  return fold_int<int16_t>(op, lnum, rnum, to_type);
-        case TypeKind::Int32: case TypeKind::Int:
+        case TypeKind::UINT64: return fold_int<uint64_t>(op, lnum, rnum, to_type);
+        case TypeKind::INT8:   return fold_int<int8_t> (op, lnum, rnum, to_type);
+        case TypeKind::INT16:  return fold_int<int16_t>(op, lnum, rnum, to_type);
+        case TypeKind::INT32: case TypeKind::INT:
             return fold_int<int32_t>(op, lnum, rnum, to_type);
-        case TypeKind::Int64:  return fold_int<int64_t>(op, lnum, rnum, to_type);
+        case TypeKind::INT64:  return fold_int<int64_t>(op, lnum, rnum, to_type);
         default:
             acorn_fatal("Missing numeric fold cast");
             return nullptr;
@@ -2161,7 +2161,7 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
     };
 
     if (lhs->type->is_integer() && rhs->type->is_integer()) {
-        if (op.is(Token::LtLt) || op.is(Token::GtGt)) {
+        if (op.is(Token::LT_LT) || op.is(Token::GT_GT)) {
             // Shift cases are special because we assume that the left hand side
             // always has preference since it is the value worked on.
             if (lhs->type->is(context.int_type) || lhs->type->is(rhs->type)) {
@@ -2237,11 +2237,11 @@ acorn::Expr* acorn::Parser::parse_expr_trail() {
 acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
     if (cur_token.is('(')) {
         FuncCall* call = parse_function_call(term);
-        if (cur_token.is('{') && call->site->is(NodeKind::IdentRef)) {
+        if (cur_token.is('{') && call->site->is(NodeKind::IDENT_REF)) {
             return parse_expr_trail(parse_struct_initializer(call));
         }
 
-        if (term->is(NodeKind::IdentRef) && peek_if_expr_is_type(cur_token, peek_token(0))) {
+        if (term->is(NodeKind::IDENT_REF) && peek_if_expr_is_type(cur_token, peek_token(0))) {
             auto ref = static_cast<IdentRef*>(call->site);
             auto un_composite_type = UnresolvedGenericCompositeType::create(context.get_allocator(),
                                                                             ref->ident,
@@ -2270,14 +2270,14 @@ acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
         dot->ident = expect_identifier("for '.' operator");
 
         return parse_expr_trail(dot);
-    } else if (cur_token.is(Token::AddAdd) || cur_token.is(Token::SubSub)) {
+    } else if (cur_token.is(Token::ADD_ADD) || cur_token.is(Token::SUB_SUB)) {
 
         UnaryOp* unary_op = new_node<UnaryOp>(cur_token);
         unary_op->expr = term;
-        if (cur_token.is(Token::AddAdd)) {
-            unary_op->op = Token::PostAddAdd;
+        if (cur_token.is(Token::ADD_ADD)) {
+            unary_op->op = Token::POST_ADD_ADD;
         } else {
-            unary_op->op = Token::PostSubSub;
+            unary_op->op = Token::POST_SUB_SUB;
         }
         next_token();
         return unary_op;
@@ -2287,7 +2287,7 @@ acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
         llvm::SmallVector<SourceLoc, 8>     bracket_locations;
 
         while (cur_token.is('[')) {
-            if (peek_token(0).is(Token::DotDot)) {
+            if (peek_token(0).is(Token::DOT_DOT)) {
                 break;
             }
 
@@ -2301,11 +2301,11 @@ acorn::Expr* acorn::Parser::parse_expr_trail(Expr* term) {
             --bracket_count;
         }
 
-        if (term->is(NodeKind::IdentRef) || term->is(NodeKind::FuncCall)) {
+        if (term->is(NodeKind::IDENT_REF) || term->is(NodeKind::FUNC_CALL)) {
             if (peek_if_expr_is_type(cur_token, peek_token(0))) {
                 Type* type;
                 IdentRef* ref;
-                if (term->is(NodeKind::IdentRef)) {
+                if (term->is(NodeKind::IDENT_REF)) {
                     ref = static_cast<IdentRef*>(term);
                     type = UnresolvedCompositeType::create(allocator, ref->ident, ref->loc, false);
                 } else {
@@ -2374,7 +2374,7 @@ void acorn::Parser::parse_function_call_args(llvm::SmallVector<Expr*>& args, siz
         bool more_args = false, full_reported = false;
         do {
             Expr* arg;
-            if (cur_token.is(Token::Identifier) && peek_token(0).is('=')) {
+            if (cur_token.is(Token::IDENTIFIER) && peek_token(0).is('=')) {
 
                 auto named_arg = new_node<NamedValue>(cur_token);
                 named_arg->name = Identifier::get(cur_token.text());
@@ -2412,41 +2412,41 @@ void acorn::Parser::parse_function_call_args(llvm::SmallVector<Expr*>& args, siz
 
 acorn::Expr* acorn::Parser::parse_term() {
     switch (cur_token.kind) {
-    case Token::IntLiteral:           return parse_int_literal();
-    case Token::HexLiteral:           return parse_hex_literal();
-    case Token::BinLiteral:           return parse_bin_literal();
-    case Token::OctLiteral:           return parse_oct_literal();
-    case Token::FloatLiteral:         return parse_float_literal();
-    case Token::DoubleLiteral:        return parse_double_literal();
-    case Token::StringLiteral:        return parse_string_literal();
-    case Token::CharLiteral:          return parse_char_literal();
-    case Token::InvalidStringLiteral:
-    case Token::InvalidCharLiteral:
-    case Token::InvalidNumberLiteral: {
+    case Token::INT_LITERAL:           return parse_int_literal();
+    case Token::HEX_LITERAL:           return parse_hex_literal();
+    case Token::BIN_LITERAL:           return parse_bin_literal();
+    case Token::OCT_LITERAL:           return parse_oct_literal();
+    case Token::FLOAT_LITERAL:         return parse_float_literal();
+    case Token::DOUBLE_LITERAL:        return parse_double_literal();
+    case Token::STRING_LITERAL:        return parse_string_literal();
+    case Token::CHAR_LITERAL:          return parse_char_literal();
+    case Token::INVALID_STRING_LITERAL:
+    case Token::INVALID_CHAR_LITERAL:
+    case Token::INVALID_NUMBER_LITERAL: {
         next_token();
         return new_node<InvalidExpr>(cur_token);
     }
-    case Token::KwTrue: {
+    case Token::KW_TRUE: {
         Bool* b = new_node<Bool>(cur_token);
         next_token(); // Consuming 'true' token.
         b->value = true;
         b->type = context.bool_type;
         return b;
     }
-    case Token::KwFalse: {
+    case Token::KW_FALSE: {
         Bool* b = new_node<Bool>(cur_token);
         next_token(); // Consuming 'false' token.
         b->value = false;
         b->type = context.bool_type;
         return b;
     }
-    case Token::KwNull: {
+    case Token::KW_NULL: {
         Null* null = new_node<Null>(cur_token);
         null->type = context.null_type;
         next_token();
         return null;
     }
-    case Token::Identifier: {
+    case Token::IDENTIFIER: {
 
         auto peek0 = peek_token(0);
         auto peek1 = peek_token(1);
@@ -2478,7 +2478,7 @@ acorn::Expr* acorn::Parser::parse_term() {
 
         return ref;
     }
-    case '\\': case Token::BackslashBackslash: {
+    case '\\': case Token::BACKSLASH_BACKSLASH: {
         bool file_local = cur_token.is('\\');
         next_token();
 
@@ -2486,8 +2486,8 @@ acorn::Expr* acorn::Parser::parse_term() {
 
         IdentRef* ref = new_node<IdentRef>(cur_token);
         ref->ident = expect_identifier();
-        ref->relative_enforcement = file_local ? IdentRef::RelativeEnforcement::File
-            : IdentRef::RelativeEnforcement::Module;
+        ref->relative_enforcement = file_local ? IdentRef::RelativeEnforcement::FILE
+            : IdentRef::RelativeEnforcement::MODULE;
 
         if (cur_token.is('{')) {
             return parse_struct_initializer(ref);
@@ -2497,48 +2497,48 @@ acorn::Expr* acorn::Parser::parse_term() {
     }
     // Unary operators.
     case '+': case '-': case '~': case '!':
-    case '&': case Token::AddAdd: case Token::SubSub:
+    case '&': case Token::ADD_ADD: case Token::SUB_SUB:
     case '*': {
         Token unary_token = cur_token;
         next_token(); // Consuming the unary token.
 
-        bool unary_on_num_literal = cur_token.is(Token::IntLiteral);
+        bool unary_on_num_literal = cur_token.is(Token::INT_LITERAL);
         Token after_op_token = cur_token;
         Expr* expr = parse_expr_trail();
 
-        if (unary_token.kind == '+' && expr->is(NodeKind::Number)) {
+        if (unary_token.kind == '+' && expr->is(NodeKind::NUMBER)) {
             return expr; // + has no effect on value.
-        } else if (unary_token.kind == '-' && expr->is(NodeKind::Number)) {
+        } else if (unary_token.kind == '-' && expr->is(NodeKind::NUMBER)) {
             Number* num = static_cast<Number*>(expr);
 
             switch (num->type->get_kind()) {
-            case TypeKind::UInt64:                         num->value_u64 = -num->value_u64; return num;
-            case TypeKind::UInt32:                         num->value_u32 = -num->value_u32; return num;
-            case TypeKind::UInt16: case TypeKind::Char16:  num->value_u16 = -num->value_u16; return num;
-            case TypeKind::UInt8:  case TypeKind::Char:    num->value_u8  = -num->value_u8;  return num;
-            case TypeKind::Int64:                          num->value_s64 = -num->value_s64; return num;
-            case TypeKind::Int32:  case TypeKind::Int:     num->value_s32 = -num->value_s32; return num;
-            case TypeKind::Int16:                          num->value_s16 = -num->value_s16; return num;
-            case TypeKind::Int8:                           num->value_s8  = -num->value_s8;  return num;
-            case TypeKind::Float:                          num->value_f32 = -num->value_f32; return num;
-            case TypeKind::Double:                         num->value_f64 = -num->value_f64; return num;
+            case TypeKind::UINT64:                         num->value_u64 = -num->value_u64; return num;
+            case TypeKind::UINT32:                         num->value_u32 = -num->value_u32; return num;
+            case TypeKind::UINT16: case TypeKind::CHAR16:  num->value_u16 = -num->value_u16; return num;
+            case TypeKind::UINT8:  case TypeKind::CHAR:    num->value_u8  = -num->value_u8;  return num;
+            case TypeKind::INT64:                          num->value_s64 = -num->value_s64; return num;
+            case TypeKind::INT32:  case TypeKind::INT:     num->value_s32 = -num->value_s32; return num;
+            case TypeKind::INT16:                          num->value_s16 = -num->value_s16; return num;
+            case TypeKind::INT8:                           num->value_s8  = -num->value_s8;  return num;
+            case TypeKind::FLOAT:                          num->value_f32 = -num->value_f32; return num;
+            case TypeKind::DOUBLE:                         num->value_f64 = -num->value_f64; return num;
             default:
                 // Just let sema handle it because it is a arch. dep. type.
                 break;
             }
-        } else if (unary_token.kind == '~' && expr->is(NodeKind::Number) &&
+        } else if (unary_token.kind == '~' && expr->is(NodeKind::NUMBER) &&
                    expr->type->is_integer()) {
             Number* num = static_cast<Number*>(expr);
 
             switch (num->type->get_kind()) {
-            case TypeKind::UInt64:                        num->value_u64 = ~num->value_u64; return num;
-            case TypeKind::UInt32:                        num->value_u32 = ~num->value_u32; return num;
-            case TypeKind::UInt16: case TypeKind::Char16: num->value_u16 = ~num->value_u16; return num;
-            case TypeKind::UInt8:  case TypeKind::Char:   num->value_u8  = ~num->value_u8;  return num;
-            case TypeKind::Int64:                         num->value_s64 = ~num->value_s64; return num;
-            case TypeKind::Int32:  case TypeKind::Int:    num->value_s32 = ~num->value_s32; return num;
-            case TypeKind::Int16:                         num->value_s16 = ~num->value_s16; return num;
-            case TypeKind::Int8:                          num->value_s8  = ~num->value_s8;  return num;
+            case TypeKind::UINT64:                        num->value_u64 = ~num->value_u64; return num;
+            case TypeKind::UINT32:                        num->value_u32 = ~num->value_u32; return num;
+            case TypeKind::UINT16: case TypeKind::CHAR16: num->value_u16 = ~num->value_u16; return num;
+            case TypeKind::UINT8:  case TypeKind::CHAR:   num->value_u8  = ~num->value_u8;  return num;
+            case TypeKind::INT64:                         num->value_s64 = ~num->value_s64; return num;
+            case TypeKind::INT32:  case TypeKind::INT:    num->value_s32 = ~num->value_s32; return num;
+            case TypeKind::INT16:                         num->value_s16 = ~num->value_s16; return num;
+            case TypeKind::INT8:                          num->value_s8  = ~num->value_s8;  return num;
             default:
                 // Just let sema handle it because it is a arch. dep. type.
                 break;
@@ -2559,7 +2559,7 @@ acorn::Expr* acorn::Parser::parse_term() {
         --paren_count;
         return expr;
     }
-    case Token::KwAs: {
+    case Token::KW_AS: {
         Cast* cast = new_node<Cast>(cur_token);
         ++paren_count;
         next_token();
@@ -2570,7 +2570,7 @@ acorn::Expr* acorn::Parser::parse_term() {
         cast->value = parse_expr_trail();
         return cast;
     }
-    case Token::KwSizeof: {
+    case Token::KW_SIZEOF: {
         SizeOf* sof = new_node<SizeOf>(cur_token);
         sof->trivially_reassignable = true;
         next_token();
@@ -2581,7 +2581,7 @@ acorn::Expr* acorn::Parser::parse_term() {
         --paren_count;
         return sof;
     }
-    case Token::KwMoveobj: {
+    case Token::KW_MOVEOBJ: {
         MoveObj* move_obj = new_node<MoveObj>(cur_token);
         next_token();
         ++paren_count;
@@ -2591,12 +2591,12 @@ acorn::Expr* acorn::Parser::parse_term() {
         --paren_count;
         return move_obj;
     }
-    case Token::KwThis: {
+    case Token::KW_THIS: {
         This* thisn = new_node<This>(cur_token);
         next_token();
         return thisn;
     }
-    case Token::KwCTTypeInfo: {
+    case Token::KW_CT_TYPEINFO: {
         Reflect* reflect = new_node<Reflect>(cur_token);
         reflect->reflect_kind = context.get_reflect_kind(cur_token.text());
         next_token();
@@ -2612,7 +2612,7 @@ acorn::Expr* acorn::Parser::parse_term() {
     }
     case '[':
         return parse_array();
-    case Token::KwFn: {
+    case Token::KW_FN: {
         if (peek_token(0).is('(')) {
             return parse_type_expr();
         }
@@ -2997,11 +2997,11 @@ acorn::Expr* acorn::Parser::parse_array() {
             bool uses_assigned_index = false;
             if (cur_token.is('[')) {
                 switch (peek_token(0).kind) {
-                case Token::IntLiteral:
-                case Token::BinLiteral:
-                case Token::HexLiteral:
-                case Token::OctLiteral:
-                case Token::CharLiteral:
+                case Token::INT_LITERAL:
+                case Token::BIN_LITERAL:
+                case Token::HEX_LITERAL:
+                case Token::OCT_LITERAL:
+                case Token::CHAR_LITERAL:
                     if (peek_token(1).is(']') && peek_token(2).is('=')) {
                         uses_assigned_index = true;
 
@@ -3086,7 +3086,7 @@ acorn::Expr* acorn::Parser::parse_struct_initializer(Expr* site) {
         bool more_values = false;
         do {
             Expr* value;
-            if (cur_token.is(Token::Identifier) && peek_token(0).is('=')) {
+            if (cur_token.is(Token::IDENTIFIER) && peek_token(0).is('=')) {
 
                 auto named_value = new_node<NamedValue>(cur_token);
                 named_value->name = Identifier::get(cur_token.text());
@@ -3169,7 +3169,7 @@ bool acorn::Parser::expect(TokenKind kind, const char* for_msg) {
         const auto closing_msg = is_closing ? " closing" : "";
         auto fixed_for_msg = for_msg ? std::string{ " " } + for_msg : "";
 
-        if (prev_token.is(Token::InvalidStringLiteral)) {
+        if (prev_token.is(Token::INVALID_STRING_LITERAL)) {
             auto text = prev_token.text();
             if (text.back() != '\"') {
                 // The string was missing its ending " so checking if the
@@ -3203,7 +3203,7 @@ acorn::Type* acorn::Parser::find_generic_type(Identifier name) const {
 }
 
 acorn::Identifier acorn::Parser::expect_identifier(const char* for_msg) {
-    if (cur_token.is(Token::Identifier)) {
+    if (cur_token.is(Token::IDENTIFIER)) {
         Identifier identifier = Identifier::get(cur_token.text());
         next_token();
         return identifier;
@@ -3233,7 +3233,7 @@ bool acorn::Parser::peek_if_expr_is_type(Token tok0, Token tok1) {
         default:
             break;
         }
-    } else if (tok0.is('[') && tok1.is(Token::DotDot)) {
+    } else if (tok0.is('[') && tok1.is(Token::DOT_DOT)) {
         return true;
     }
     return false;
@@ -3241,7 +3241,7 @@ bool acorn::Parser::peek_if_expr_is_type(Token tok0, Token tok1) {
 
 void acorn::Parser::check_for_auto_ptr_with_type(Var* var, bool infers_ptr_type, Token auto_ptr_token) {
     if (infers_ptr_type) {
-        if (var->parsed_type->get_kind() != TypeKind::Auto) {
+        if (var->parsed_type->get_kind() != TypeKind::AUTO) {
             error(auto_ptr_token, "Cannot specify pointer for inference because the variable also declares a type")
                 .end_error(ErrCode::ParseVariableWithPtrAutoSpecifiesType);
         }
@@ -3256,42 +3256,42 @@ void acorn::Parser::skip_recovery(bool stop_on_modifiers) {
         case '{':
         case '}':
         case ',':
-        case Token::KwImport:
-        case Token::KwIf:
-        case Token::KwReturn:
-        case Token::KwCTIf:
-        case Token::KwStruct:
-        case Token::KwEnum:
-        case Token::KwInterface:
-        case Token::KwSwitch:
-        case Token::KwRaise:
-        case Token::KwCTAborts:
-        case Token::KwTry:
-        case Token::Token::KwRecover:
+        case Token::KW_IMPORT:
+        case Token::KW_IF:
+        case Token::KW_RETURN:
+        case Token::KW_CT_IF:
+        case Token::KW_STRUCT:
+        case Token::KW_ENUM:
+        case Token::KW_INTERFACE:
+        case Token::KW_SWITCH:
+        case Token::KW_RAISE:
+        case Token::KW_CT_ABORTS:
+        case Token::KW_TRY:
+        case Token::Token::KW_RECOVER:
         case ModifierTokens:
             if (stop_on_modifiers) {
                 return;
             }
             next_token();
             break;
-        case Token::KwConst:
-            if (peek_token(0).is(Token::KwFn)) {
+        case Token::KW_CONST:
+            if (peek_token(0).is(Token::KW_FN)) {
                 return;
             }
             next_token();
             break;
-        case Token::KwFn:
+        case Token::KW_FN:
             switch (peek_token(0).kind) {
-            case Token::Identifier:
-            case Token::KwNew:
-            case Token::KwMoveobj:
-            case Token::KwCopyobj:
-            case Token::KwDelete:
+            case Token::IDENTIFIER:
+            case Token::KW_NEW:
+            case Token::KW_MOVEOBJ:
+            case Token::KW_COPYOBJ:
+            case Token::KW_DELETE:
                 return;
             }
             next_token();
             break;
-        case Token::Identifier:
+        case Token::IDENTIFIER:
             if (peek_token(0).is(':')) {
                 return;
             }

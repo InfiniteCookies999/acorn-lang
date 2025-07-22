@@ -16,41 +16,41 @@ std::string acorn::to_string(llvm::Type* type) {
 
 llvm::Type* acorn::gen_type(Type* type, llvm::LLVMContext& ll_context, llvm::Module& ll_module) {
     switch (type->get_kind()) {
-    case TypeKind::Pointer:
-    case TypeKind::Function:
+    case TypeKind::POINTER:
+    case TypeKind::FUNCTION:
         return llvm::PointerType::get(ll_context, 0);
 
-    case TypeKind::Void: return llvm::Type::getVoidTy(ll_context);
+    case TypeKind::VOID_T: return llvm::Type::getVoidTy(ll_context);
 
-    case TypeKind::Int8: case TypeKind::UInt8: case TypeKind::Char:
+    case TypeKind::INT8: case TypeKind::UINT8: case TypeKind::CHAR:
         return llvm::Type::getInt8Ty(ll_context);
-    case TypeKind::Int16: case TypeKind::UInt16: case TypeKind::Char16:
+    case TypeKind::INT16: case TypeKind::UINT16: case TypeKind::CHAR16:
         return llvm::Type::getInt16Ty(ll_context);
-    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32:
+    case TypeKind::INT: case TypeKind::INT32: case TypeKind::UINT32:
         return llvm::Type::getInt32Ty(ll_context);
-    case TypeKind::Int64: case TypeKind::UInt64:
+    case TypeKind::INT64: case TypeKind::UINT64:
         return llvm::Type::getInt64Ty(ll_context);
-    case TypeKind::USize: case TypeKind::ISize:
+    case TypeKind::USIZE: case TypeKind::ISIZE:
         return gen_ptrsize_int_type(ll_context, ll_module);
-    case TypeKind::Bool: return llvm::Type::getInt1Ty(ll_context);
-    case TypeKind::Float:
+    case TypeKind::BOOL_T: return llvm::Type::getInt1Ty(ll_context);
+    case TypeKind::FLOAT:
         return llvm::Type::getFloatTy(ll_context);
-    case TypeKind::Double:
+    case TypeKind::DOUBLE:
         return llvm::Type::getDoubleTy(ll_context);
-    case TypeKind::Array: {
+    case TypeKind::ARRAY: {
         auto arr_type = static_cast<ArrayType*>(type);
         auto ll_elm_type = gen_type(arr_type->get_elm_type(), ll_context, ll_module);
         return llvm::ArrayType::get(ll_elm_type, arr_type->get_length());
     }
-    case TypeKind::Struct: {
+    case TypeKind::STRUCT: {
         auto struct_type = static_cast<StructType*>(type);
         return gen_struct_type(struct_type, ll_context, ll_module);
     }
-    case TypeKind::Enum: {
+    case TypeKind::ENUM: {
         auto enum_type = static_cast<EnumType*>(type);
         return gen_type(enum_type->get_index_type(), ll_context, ll_module);
     }
-    case TypeKind::Slice: {
+    case TypeKind::SLICE: {
         auto slice_type = static_cast<SliceType*>(type);
         if (auto ll_slice_type = slice_type->get_ll_struct_type()) {
             return ll_slice_type;

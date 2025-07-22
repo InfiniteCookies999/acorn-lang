@@ -94,7 +94,7 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
     }
 
     for (const auto& [_, composite] : nspace->get_composites()) {
-        if (composite->is(NodeKind::Struct)) {
+        if (composite->is(NodeKind::STRUCT)) {
             auto structn = static_cast<Struct*>(composite);
 
             check_for_duplicate_functions(structn->nspace, context);
@@ -106,7 +106,7 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
                                      duplicate_info.duplicate_function->is_constructor ? "constructor" : "destructor",
                                      ErrCode::SemaDuplicateFunc);
             }
-        } else if (composite->is(NodeKind::Interface)) {
+        } else if (composite->is(NodeKind::INTERFACE)) {
             auto interfacen = static_cast<Interface*>(composite);
             auto& funcs = interfacen->functions;
             for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
@@ -150,13 +150,13 @@ void acorn::Sema::check_for_duplicate_functions(const FuncList& funcs, Context& 
 void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
     // Reporting all other duplcates.
     auto get_duplicate_kind_str = [](Decl* decl) finline {
-        if (decl->is(NodeKind::Var)) {
+        if (decl->is(NodeKind::VAR)) {
             return "variable";
-        } else if (decl->is(NodeKind::Struct)) {
+        } else if (decl->is(NodeKind::STRUCT)) {
             return "struct";
-        } else if (decl->is(NodeKind::Enum)) {
+        } else if (decl->is(NodeKind::ENUM)) {
             return "enum";
-        } else if (decl->is(NodeKind::Interface)) {
+        } else if (decl->is(NodeKind::INTERFACE)) {
             return "interface";
         } else {
             acorn_fatal("unreachable");
@@ -164,13 +164,13 @@ void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
         }
     };
     auto get_duplcate_err_code = [](Decl* decl) finline {
-        if (decl->is(NodeKind::Var)) {
+        if (decl->is(NodeKind::VAR)) {
             return ErrCode::SemaDuplicateGlobalVar;
-        } else if (decl->is(NodeKind::Struct)) {
+        } else if (decl->is(NodeKind::STRUCT)) {
             return ErrCode::SemaDuplicateGlobalStruct;
-        } else if (decl->is(NodeKind::Enum)) {
+        } else if (decl->is(NodeKind::ENUM)) {
             return ErrCode::SemaDuplicateGlobalEnum;
-        } else if (decl->is(NodeKind::Interface)) {
+        } else if (decl->is(NodeKind::INTERFACE)) {
             return ErrCode::SemaDuplicateGlobalInterface;
         } else {
             acorn_fatal("unreachable");
@@ -210,11 +210,11 @@ void acorn::Sema::report_nodes_wrong_scopes(Module& modl) {
                                  ScopeLocation location,
                                  auto expr_or_stmt_str) finline {
         const char* scope_str;
-        if (location == ScopeLocation::Global) {
+        if (location == ScopeLocation::GLOBAL) {
             scope_str = "global";
-        } else if (location == ScopeLocation::Struct) {
+        } else if (location == ScopeLocation::STRUCT) {
             scope_str = "struct";
-        } else if (location == ScopeLocation::Interface) {
+        } else if (location == ScopeLocation::INTERFACE) {
             scope_str = "interface";
         } else {
             acorn_fatal("unreachable");
@@ -470,7 +470,7 @@ void acorn::Sema::check_function(Func* func) {
     bool uses_implicit_return = func->scope->empty();
     if (func->return_type->is(context.void_type) && !uses_implicit_return) {
         auto last_stmt = func->scope->back();
-        if (last_stmt->is_not(NodeKind::ReturnStmt)) {
+        if (last_stmt->is_not(NodeKind::RETURN_STMT)) {
             uses_implicit_return = true;
         }
     }
@@ -545,8 +545,8 @@ void acorn::Sema::check_variable(Var* var) {
 
         TypeKind type_kind = var->parsed_type->get_kind();
         // Check an array assignment taking into account the type of the variable.
-        if (var->assignment->is(NodeKind::Array) &&
-            type_kind == TypeKind::Array || type_kind == TypeKind::UnresolvedArray
+        if (var->assignment->is(NodeKind::ARRAY) &&
+            type_kind == TypeKind::ARRAY || type_kind == TypeKind::UNRESOLVED_ARRAY
             ) {
 
             // TODO: Optimization: The type is being fixed here and below.
@@ -559,8 +559,8 @@ void acorn::Sema::check_variable(Var* var) {
             check_array(static_cast<Array*>(var->assignment), arr_type->get_elm_type());
         }
         // Check instances like:  `a: int[] = [1,2,3,4];`
-        else if (var->assignment->is(NodeKind::Array) &&
-                 type_kind == TypeKind::AssignDeterminedArray) {
+        else if (var->assignment->is(NodeKind::ARRAY) &&
+                 type_kind == TypeKind::ASSIGN_DETERMINED_ARRAY) {
 
             auto assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(var->parsed_type);
 
@@ -572,7 +572,7 @@ void acorn::Sema::check_variable(Var* var) {
 
             auto arr_type = static_cast<ArrayType*>(var->type);
             check_array(static_cast<Array*>(var->assignment), fixed_elm_type);
-        } else if (var->assignment->is(NodeKind::MoveObj)) {
+        } else if (var->assignment->is(NodeKind::MOVEOBJ)) {
             check_moveobj(static_cast<MoveObj*>(var->assignment), true);
         } else {
             check_node(var->assignment);
@@ -587,7 +587,7 @@ void acorn::Sema::check_variable(Var* var) {
         }
     }
 
-    if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray && !var->assignment) {
+    if (var->parsed_type->get_kind() == TypeKind::ASSIGN_DETERMINED_ARRAY && !var->assignment) {
         error(var, "Must have assignment to determine array type's length")
             .end_error(ErrCode::SemaVarRequiresAssignForDetArrType);
         return cleanup();
@@ -606,17 +606,17 @@ void acorn::Sema::check_variable(Var* var) {
         }
 
         switch (var->assignment->type->get_kind()) {
-        case TypeKind::Void:
-        case TypeKind::NamespaceRef:
-        case TypeKind::EmptyArray:
-        case TypeKind::Null:
-        case TypeKind::Interface:
-        case TypeKind::Expr:
+        case TypeKind::VOID_T:
+        case TypeKind::NAMESPACE_REF:
+        case TypeKind::EMPTY_ARRAY:
+        case TypeKind::NULL_T:
+        case TypeKind::INTERFACE:
+        case TypeKind::EXPR:
             error(expand(var), "Cannot assign incomplete type '%s' to variable with inferred type",
                   var->assignment->type)
                 .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
             return cleanup();
-        case TypeKind::Range:
+        case TypeKind::RANGE:
             error(expand(var), "Cannot assign type 'range' to variable with inferred type",
                   var->assignment->type)
                 .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
@@ -642,7 +642,7 @@ void acorn::Sema::check_variable(Var* var) {
 
         // Apply const at all depths.
         if (var->parsed_type == context.const_auto_type) {
-            if (var->assignment->is(NodeKind::Array)) {
+            if (var->assignment->is(NodeKind::ARRAY)) {
                 auto arr_type = static_cast<ArrayType*>(var->type);
 
                 llvm::SmallVector<uint32_t, 8> lengths;
@@ -668,7 +668,7 @@ void acorn::Sema::check_variable(Var* var) {
                 var->type = type_table.get_const_type(var->type);
             }
         }
-    } else if (var->parsed_type->get_kind() == TypeKind::AssignDeterminedArray) {
+    } else if (var->parsed_type->get_kind() == TypeKind::ASSIGN_DETERMINED_ARRAY) {
         // We have to handle this case as if it is speciial because
         // in no other instance other than variable assignments is the
         // applicable.
@@ -722,7 +722,7 @@ void acorn::Sema::check_variable(Var* var) {
     if (var->assignment && !is_assignable_to(var->type, var->assignment)) {
         bool is_assignable_to = false;
 
-        if (var->assignment->is(NodeKind::FuncCall)) {
+        if (var->assignment->is(NodeKind::FUNC_CALL)) {
             FuncCall* call = static_cast<FuncCall*>(var->assignment);
             if (may_implicitly_convert_return_ptr(var->type, call)) {
                 is_assignable_to = true;
@@ -740,8 +740,8 @@ void acorn::Sema::check_variable(Var* var) {
         // fn foo() -> int^ { return &b; }
         // a := foo();
         //
-        if (var->parsed_type->get_kind() == TypeKind::Auto) {
-            if (var->assignment->is(NodeKind::FuncCall)) {
+        if (var->parsed_type->get_kind() == TypeKind::AUTO) {
+            if (var->assignment->is(NodeKind::FUNC_CALL)) {
                 FuncCall* call = static_cast<FuncCall*>(var->assignment);
                 if (call->called_func && call->called_func->has_implicit_return_ptr) {
                     call->implicitly_converts_return = true;
@@ -792,7 +792,7 @@ void acorn::Sema::check_struct(Struct* structn) {
         }
 
         if (auto composite = find_composite(extension.name)) {
-            if (composite->is_not(NodeKind::Interface)) {
+            if (composite->is_not(NodeKind::INTERFACE)) {
                 error(extension.error_loc, "Cannot extend from type '%s'", composite->name)
                     .end_error(ErrCode::SemaCannotExtendFromType);
                 continue;
@@ -948,7 +948,7 @@ void acorn::Sema::check_struct(Struct* structn) {
                         auto param_ptr_type = static_cast<PointerType*>(param_type);
                         auto param_elm_type = param_ptr_type->get_elm_type();
 
-                        if (param_elm_type->get_kind() == TypeKind::PartiallyBoundStruct) {
+                        if (param_elm_type->get_kind() == TypeKind::PARTIALLY_BOUND_STRUCT) {
                             auto partially_bound_struct_type = static_cast<PartiallyBoundStructType*>(param_elm_type);
                             auto unbound_generic_struct = partially_bound_struct_type->get_unbound_generic_struct();
 
@@ -1254,7 +1254,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
             .end_error(ErrCode::SemaFuncsCannotHaveReadonlyModifier);
     }
 
-    if (func->parsed_return_type->get_kind() == TypeKind::AssignDeterminedArray) {
+    if (func->parsed_return_type->get_kind() == TypeKind::ASSIGN_DETERMINED_ARRAY) {
         error(func, "Functions cannot have return type '%s'", func->parsed_return_type)
             .end_error(ErrCode::SemaFuncsCannotHaveAssignDetArrType);
         error_cleanup(func);
@@ -1343,7 +1343,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
 
 
         if (param->assignment_contains_generics) {
-            if (param->parsed_type->get_kind() == TypeKind::AssignDeterminedArray) {
+            if (param->parsed_type->get_kind() == TypeKind::ASSIGN_DETERMINED_ARRAY) {
                 error(param, "Cannot determine size of array because the expression it depends on contains generic types")
                     .end_error(ErrCode::SemaCannotDetArrSizeAssignContainsGenericTypes);
                 func->has_errors = true;
@@ -1484,7 +1484,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
 
 bool acorn::Sema::check_raised_error(RaisedError& raised_error) {
     if (auto composite = find_composite(raised_error.name)) {
-        if (composite->is_not(NodeKind::Struct)) {
+        if (composite->is_not(NodeKind::STRUCT)) {
             error(raised_error.error_loc, "Raised error '%s' must be an error struct", raised_error.name)
                 .end_error(ErrCode::SemaRaisedErrorNotStruct);
             return false;
@@ -1797,71 +1797,71 @@ bool acorn::Sema::do_interface_functions_matches(Func* interface_func, Func* fun
 
 void acorn::Sema::check_node(Node* node) {
     switch (node->kind) {
-    case NodeKind::Var:
+    case NodeKind::VAR:
         return check_variable(static_cast<Var*>(node));
-    case NodeKind::VarList:
+    case NodeKind::VAR_LIST:
         return check_variable_list(static_cast<VarList*>(node));
-    case NodeKind::IdentRef:
+    case NodeKind::IDENT_REF:
         return check_ident_ref(static_cast<IdentRef*>(node), nspace, nullptr, false);
-    case NodeKind::DotOperator:
+    case NodeKind::DOT_OPERATOR:
         return check_dot_operator(static_cast<DotOperator*>(node), false);
-    case NodeKind::ReturnStmt:
+    case NodeKind::RETURN_STMT:
         return check_return(static_cast<ReturnStmt*>(node));
-    case NodeKind::IfStmt: {
+    case NodeKind::IF_STMT: {
         bool ignore1, ignore2;
         return check_if(static_cast<IfStmt*>(node), ignore1, ignore2);
     }
-    case NodeKind::BinOp:
+    case NodeKind::BIN_OP:
         return check_binary_op(static_cast<BinOp*>(node));
-    case NodeKind::UnaryOp:
+    case NodeKind::UNARY_OP:
         return check_unary_op(static_cast<UnaryOp*>(node));
-    case NodeKind::FuncCall:
+    case NodeKind::FUNC_CALL:
         return check_function_call(static_cast<FuncCall*>(node));
-    case NodeKind::UninitNewCallStmt:
+    case NodeKind::UNINIT_NEW_CALL_STMT:
         return check_new_call(static_cast<UninitNewCallStmt*>(node));
-    case NodeKind::Cast:
+    case NodeKind::CAST:
         return check_cast(static_cast<Cast*>(node));
-    case NodeKind::NamedValue:
+    case NodeKind::NAMED_VALUE:
         return check_named_value(static_cast<NamedValue*>(node));
-    case NodeKind::Number:
-    case NodeKind::Bool:
-    case NodeKind::String:
-    case NodeKind::Null:
+    case NodeKind::NUMBER:
+    case NodeKind::BOOL_EXPR:
+    case NodeKind::STRING:
+    case NodeKind::NULL_EXPR:
         break;
-    case NodeKind::ScopeStmt:
+    case NodeKind::SCOPE_STMT:
         return check_scope(static_cast<ScopeStmt*>(node));
-    case NodeKind::Array:
+    case NodeKind::ARRAY:
         return check_array(static_cast<Array*>(node), nullptr);
-    case NodeKind::MemoryAccess:
+    case NodeKind::MEMORY_ACCESS:
         return check_memory_access(static_cast<MemoryAccess*>(node));
-    case NodeKind::PredicateLoopStmt:
+    case NodeKind::PREDICATE_LOOP_STMT:
         return check_predicate_loop(static_cast<PredicateLoopStmt*>(node));
-    case NodeKind::RangeLoopStmt:
+    case NodeKind::RANGE_LOOP_STMT:
         return check_range_loop(static_cast<RangeLoopStmt*>(node));
-    case NodeKind::IteratorLoopStmt:
+    case NodeKind::ITERATOR_LOOP_STMT:
         return check_iterator_loop(static_cast<IteratorLoopStmt*>(node));
-    case NodeKind::BreakStmt:
-    case NodeKind::ContinueStmt:
+    case NodeKind::BREAK_STMT:
+    case NodeKind::CONTINUE_STMT:
         return check_loop_control(static_cast<LoopControlStmt*>(node));
-    case NodeKind::SwitchStmt:
+    case NodeKind::SWITCH_STMT:
         return check_switch(static_cast<SwitchStmt*>(node));
-    case NodeKind::RaiseStmt:
+    case NodeKind::RAISE_STMT:
         return check_raise(static_cast<RaiseStmt*>(node));
-    case NodeKind::RecoverStmt:
+    case NodeKind::RECOVER_STMT:
         return check_recover(static_cast<RecoverStmt*>(node));
-    case NodeKind::StructInitializer:
+    case NodeKind::STRUCT_INITIALIZER:
         return check_struct_initializer(static_cast<StructInitializer*>(node));
-    case NodeKind::This:
+    case NodeKind::THIS_EXPR:
         return check_this(static_cast<This*>(node));
-    case NodeKind::SizeOf:
+    case NodeKind::SIZE_OF:
         return check_sizeof(static_cast<SizeOf*>(node));
-    case NodeKind::MoveObj:
+    case NodeKind::MOVEOBJ:
         return check_moveobj(static_cast<MoveObj*>(node), false);
-    case NodeKind::Ternary:
+    case NodeKind::TERNARY:
         return check_ternary(static_cast<Ternary*>(node));
-    case NodeKind::TypeExpr:
+    case NodeKind::TYPE_EXPR:
         return check_type_expr(static_cast<TypeExpr*>(node));
-    case NodeKind::Reflect:
+    case NodeKind::REFLECT:
         return check_reflect(static_cast<Reflect*>(node));
     default:
         acorn_fatal("check_node(): missing case");
@@ -1895,10 +1895,10 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
             continue;
         }
 
-        if (stmt->is(NodeKind::Func)) {
+        if (stmt->is(NodeKind::FUNC)) {
             error(stmt, "Functions cannot be declared within another function")
                 .end_error(ErrCode::SemaNoLocalFuncs);
-        } else if (stmt->is(NodeKind::Struct)) {
+        } else if (stmt->is(NodeKind::STRUCT)) {
             error(stmt, "Structs cannot be declared within a function")
                 .end_error(ErrCode::SemaNoLocalStructs);
         } else {
@@ -1926,7 +1926,7 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
 
     bool is_assignable;
     if (ret->value) {
-        if (ret->value->is(NodeKind::Array) && cur_func->return_type->is_array()) {
+        if (ret->value->is(NodeKind::ARRAY) && cur_func->return_type->is_array()) {
             auto dest_array_type = static_cast<ArrayType*>(cur_func->return_type);
             check_array(static_cast<Array*>(ret->value), dest_array_type->get_elm_type());
             if (!ret->value->type) {
@@ -1937,7 +1937,7 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
         }
         is_assignable = is_assignable_to(cur_func->return_type, ret->value);
 
-        if (cur_func->return_type->is_aggregate() && ret->value->is(NodeKind::IdentRef)) {
+        if (cur_func->return_type->is_aggregate() && ret->value->is(NodeKind::IDENT_REF)) {
             auto ref = static_cast<IdentRef*>(ret->value);
             if (ref->is_var_ref()) {
                 // Have to check if it is global because obviously
@@ -2001,7 +2001,7 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return, bool& all_paths_
     // Must create the scope early so that the scope of
     // the variable is the body of the if statement.
     SemScope sem_scope = push_scope();
-    if (ifs->cond->is(NodeKind::Var)) {
+    if (ifs->cond->is(NodeKind::VAR)) {
 
         Var* var = static_cast<Var*>(ifs->cond);
         check_variable(var);
@@ -2036,7 +2036,7 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return, bool& all_paths_
     all_paths_branch = sem_scope.all_paths_branch;
     pop_scope();
 
-    if (ifs->elseif && ifs->elseif->is(NodeKind::IfStmt)) {
+    if (ifs->elseif && ifs->elseif->is(NodeKind::IF_STMT)) {
         bool all_paths_return2, all_paths_branch2;
         check_if(static_cast<IfStmt*>(ifs->elseif), all_paths_return2, all_paths_branch2);
         all_paths_return &= all_paths_return2;
@@ -2062,22 +2062,22 @@ void acorn::Sema::check_predicate_loop(PredicateLoopStmt* loop) {
         }
     }
 
-    if (loop->cond && loop->cond->is(NodeKind::BinOp)) {
+    if (loop->cond && loop->cond->is(NodeKind::BIN_OP)) {
         auto bin_op = static_cast<BinOp*>(loop->cond);
 
         switch (bin_op->op) {
         case '=':
-        case Token::AddEq:
-        case Token::SubEq:
-        case Token::MulEq:
-        case Token::DivEq:
-        case Token::ModEq:
-        case Token::AndEq:
-        case Token::OrEq:
-        case Token::CaretEq:
-        case Token::TildeEq:
-        case Token::LtLtEq:
-        case Token::GtGtEq:
+        case Token::ADD_EQ:
+        case Token::SUB_EQ:
+        case Token::MUL_EQ:
+        case Token::DIV_EQ:
+        case Token::MOD_EQ:
+        case Token::AND_EQ:
+        case Token::OR_EQ:
+        case Token::CARET_EQ:
+        case Token::TILDE_EQ:
+        case Token::LT_LT_EQ:
+        case Token::GT_GT_EQ:
             error(expand(loop->cond), "Cannot assign value in a loop cond")
                 .end_error(ErrCode::SemaCannotAssignValueInLoopCond);
             break;
@@ -2199,7 +2199,7 @@ void acorn::Sema::check_loop_control(LoopControlStmt* loop_control) {
     cur_scope->all_paths_branch = true;
 
     if (loop_depth == 0) {
-        if (loop_control->is(NodeKind::BreakStmt)) {
+        if (loop_control->is(NodeKind::BREAK_STMT)) {
             error(loop_control, "break statements may only be used in loops")
                 .end_error(ErrCode::SemaLoopControlOnlyInLoops);
         } else {
@@ -2270,42 +2270,42 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
         static CmpNumber get(Sema& sema, Expr* value) {
             CmpNumber number;
             switch (value->get_final_type()->get_kind()) {
-            case TypeKind::Int:
-            case TypeKind::Int8:
-            case TypeKind::Int16:
-            case TypeKind::Int32:
-            case TypeKind::Int64:
-            case TypeKind::ISize: {
+            case TypeKind::INT:
+            case TypeKind::INT8:
+            case TypeKind::INT16:
+            case TypeKind::INT32:
+            case TypeKind::INT64:
+            case TypeKind::ISIZE: {
                 auto ll_value = llvm::cast<llvm::ConstantInt>(sema.gen_constant(value));
                 number.value_s64 = ll_value->getZExtValue();
                 number.kind = Kind::SIGNED_INT;
                 break;
             }
-            case TypeKind::UInt8:
-            case TypeKind::UInt16:
-            case TypeKind::UInt32:
-            case TypeKind::UInt64:
-            case TypeKind::USize:
-            case TypeKind::Char:
-            case TypeKind::Char16: {
+            case TypeKind::UINT8:
+            case TypeKind::UINT16:
+            case TypeKind::UINT32:
+            case TypeKind::UINT64:
+            case TypeKind::USIZE:
+            case TypeKind::CHAR:
+            case TypeKind::CHAR16: {
                 auto ll_value = llvm::cast<llvm::ConstantInt>(sema.gen_constant(value));
                 number.value_u64 = ll_value->getZExtValue();
                 number.kind = Kind::UNSIGNED_INT;
                 break;
             }
-            case TypeKind::Float: {
+            case TypeKind::FLOAT: {
                 auto ll_value = llvm::cast<llvm::ConstantFP>(sema.gen_constant(value));
                 number.value_f32 = ll_value->getValue().convertToFloat();
                 number.kind = Kind::FLOAT;
                 break;
             }
-            case TypeKind::Double: {
+            case TypeKind::DOUBLE: {
                 auto ll_value = llvm::cast<llvm::ConstantFP>(sema.gen_constant(value));
                 number.value_f64 = ll_value->getValue().convertToDouble();
                 number.kind = Kind::DOUBLE;
                 break;
             }
-            case TypeKind::Enum: {
+            case TypeKind::ENUM: {
                 auto ll_value = llvm::cast<llvm::ConstantInt>(sema.gen_constant(value));
                 auto enum_type = static_cast<EnumType*>(value->type);
                 if (enum_type->get_index_type()->is_signed()) {
@@ -2344,14 +2344,14 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
         (BinOp* range, CmpNumber value, CmpNumber cmp_lhs, CmpNumber cmp_rhs) finline {
 
         switch (range->op) {
-        case Token::RangeEq: {
+        case Token::RANGE_EQ: {
             if (value.kind == CmpNumber::Kind::SIGNED_INT) {
                 return value.value_s64 >= cmp_lhs.value_s64 && value.value_s64 <= cmp_rhs.value_s64;
             } else {
                 return value.value_u64 >= cmp_lhs.value_u64 && value.value_u64 <= cmp_rhs.value_u64;
             }
         }
-        case Token::RangeLt: {
+        case Token::RANGE_LT: {
             if (value.kind == CmpNumber::Kind::SIGNED_INT) {
                 return value.value_s64 >= cmp_lhs.value_s64 && value.value_s64 < cmp_rhs.value_s64;
             } else {
@@ -2476,7 +2476,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
 
                 bool found_error = false;
                 switch (cmp_range->op) {
-                case Token::RangeEq: {
+                case Token::RANGE_EQ: {
 
                     // end1 >= start2 and start1 <= end2
                     // or
@@ -2495,7 +2495,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
 
                     break;
                 }
-                case Token::RangeLt: {
+                case Token::RANGE_LT: {
 
                     // end1 > start2 and start1 < end2
                     // or
@@ -2554,7 +2554,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
     for (SwitchCase scase : switchn->cases) {
         if (scase.cond) {
             bool cond_foldable = false;
-            if (switch_on_enum && scase.cond->is(NodeKind::IdentRef)) {
+            if (switch_on_enum && scase.cond->is(NodeKind::IDENT_REF)) {
                 auto ref = static_cast<IdentRef*>(scase.cond);
 
                 // First check if the identifier refers to an identifier in the enum.
@@ -2567,20 +2567,20 @@ if (prior_value.value_s64 == value.value_s64) {     \
                     check_ident_ref(ref, nspace, nullptr, false);
                     cond_foldable = ref->is_foldable || ref->is_enum_value_ref();
                 }
-            } else if (switch_on_enum && scase.cond->is(NodeKind::BinOp)) {
+            } else if (switch_on_enum && scase.cond->is(NodeKind::BIN_OP)) {
                 auto bin_op = static_cast<BinOp*>(scase.cond);
 
                 Enum::Value* lhs_enum_value = nullptr;
                 Enum::Value* rhs_enum_value = nullptr;
 
-                if (bin_op->op == Token::RangeEq || bin_op->op == Token::RangeLt) {
+                if (bin_op->op == Token::RANGE_EQ || bin_op->op == Token::RANGE_LT) {
 
-                    if (bin_op->lhs->is(NodeKind::IdentRef)) {
+                    if (bin_op->lhs->is(NodeKind::IDENT_REF)) {
                         auto ref = static_cast<IdentRef*>(bin_op->lhs);
                         lhs_enum_value = find_ident_refrence_enum(ref);
                     }
 
-                    if (bin_op->rhs->is(NodeKind::IdentRef)) {
+                    if (bin_op->rhs->is(NodeKind::IDENT_REF)) {
                         auto ref = static_cast<IdentRef*>(bin_op->rhs);
                         rhs_enum_value = find_ident_refrence_enum(ref);
                     }
@@ -2646,7 +2646,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
             } else {
                 check_node(scase.cond);
                 cond_foldable = scase.cond->is_foldable;
-                if (scase.cond->is(NodeKind::DotOperator)) {
+                if (scase.cond->is(NodeKind::DOT_OPERATOR)) {
                     auto dot = static_cast<DotOperator*>(scase.cond);
                     cond_foldable = dot->is_enum_value_ref();
                 }
@@ -2689,7 +2689,7 @@ if (prior_value.value_s64 == value.value_s64) {     \
                     prior_values.push_back({}); // Need to still add empty to keep indices correct.
                 }
 
-                if (scase.cond->is(NodeKind::Bool)) {
+                if (scase.cond->is(NodeKind::BOOL_EXPR)) {
                     auto bool_cond = static_cast<Bool*>(scase.cond);
                     error(scase.cond, "Cannot compare to %s", bool_cond->value ? "true" : "false")
                         .end_error(ErrCode::SemaCaseCannotBeBoolLiteral);
@@ -2735,7 +2735,7 @@ void acorn::Sema::check_raise(RaiseStmt* raise) {
     //    return;
     //}
 
-    if (raise->expr->is_not(NodeKind::StructInitializer)) {
+    if (raise->expr->is_not(NodeKind::STRUCT_INITIALIZER)) {
         error(raise->expr, "Expected error struct initializer")
             .end_error(ErrCode::SemaWrongRaiseExpr);
         return;
@@ -3035,7 +3035,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     if (!lhs->type) {
         return cleanup_try();
     }
-    if (bin_op->op == '=' && rhs->is(NodeKind::MoveObj)) {
+    if (bin_op->op == '=' && rhs->is(NodeKind::MOVEOBJ)) {
         check_moveobj(static_cast<MoveObj*>(rhs), true);
         if (!rhs->type) {
             return cleanup_try();
@@ -3079,17 +3079,17 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
 
     switch (bin_op->op) {
     case '=':
-    case Token::AddEq:
-    case Token::SubEq:
-    case Token::MulEq:
-    case Token::DivEq:
-    case Token::ModEq:
-    case Token::AndEq:
-    case Token::OrEq:
-    case Token::CaretEq:
-    case Token::TildeEq:
-    case Token::LtLtEq:
-    case Token::GtGtEq: {
+    case Token::ADD_EQ:
+    case Token::SUB_EQ:
+    case Token::MUL_EQ:
+    case Token::DIV_EQ:
+    case Token::MOD_EQ:
+    case Token::AND_EQ:
+    case Token::OR_EQ:
+    case Token::CARET_EQ:
+    case Token::TILDE_EQ:
+    case Token::LT_LT_EQ:
+    case Token::GT_GT_EQ: {
 
         if (!check_modifiable(bin_op->lhs, bin_op)) {
             return cleanup_try();
@@ -3100,7 +3100,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             if (!is_assignable_to(bin_op->lhs->type, bin_op->rhs)) {
                 bool is_assignable_to = false;
 
-                if (bin_op->rhs->is(NodeKind::FuncCall)) {
+                if (bin_op->rhs->is(NodeKind::FUNC_CALL)) {
                     FuncCall* call = static_cast<FuncCall*>(bin_op->rhs);
                     if (may_implicitly_convert_return_ptr(bin_op->lhs->type, call)) {
                         is_assignable_to = true;
@@ -3122,22 +3122,22 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
 
             break;
         }
-        case Token::AddEq: case Token::SubEq: case Token::MulEq: {
+        case Token::ADD_EQ: case Token::SUB_EQ: case Token::MUL_EQ: {
             if (!get_add_sub_mul_type(true, lhs_type, rhs_type))
                 return cleanup_try();
             break;
         }
-        case Token::DivEq: case Token::ModEq: {
+        case Token::DIV_EQ: case Token::MOD_EQ: {
             if (!get_div_mod_type(true, lhs_type, rhs_type))
                 return cleanup_try();
             break;
         }
-        case Token::AndEq: case Token::OrEq: case Token::CaretEq: {
+        case Token::AND_EQ: case Token::OR_EQ: case Token::CARET_EQ: {
             if (!get_logical_bitwise_type(true, lhs_type, rhs_type))
                 return cleanup_try();
             break;
         }
-        case Token::TildeEq: {
+        case Token::TILDE_EQ: {
             if (!lhs_type->is_integer()) {
                 report_binary_op_cannot_apply(bin_op, lhs);
                 return cleanup_try();
@@ -3151,7 +3151,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
                 return cleanup_try();
             }
             break;
-        case Token::LtLtEq: case Token::GtGtEq: {
+        case Token::LT_LT_EQ: case Token::GT_GT_EQ: {
             if (!get_shifts_type(true, lhs_type, rhs_type)) {
                 return cleanup_try();
             }
@@ -3203,7 +3203,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         create_cast(rhs, result_type);
         break;
     }
-    case Token::LtLt: case Token::GtGt: {
+    case Token::LT_LT: case Token::GT_GT: {
         auto result_type = get_shifts_type(false, lhs_type, rhs_type);
         if (!result_type) return;
         bin_op->type = result_type;
@@ -3212,8 +3212,8 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         break;
     }
     case '<': case '>':
-    case Token::GtEq: case Token::LtEq:
-    case Token::EqEq: case Token::ExEq: {
+    case Token::GT_EQ: case Token::LT_EQ:
+    case Token::EQ_EQ: case Token::EX_EQ: {
         if (!lhs_type->is_comparable()) {
             report_binary_op_cannot_apply(bin_op, lhs);
             return;
@@ -3228,8 +3228,8 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         // it can still work with pointers.
         auto result_type = get_integer_type_for_binary_op(false, bin_op, lhs_type, rhs_type);
         if (!(result_type ||
-             (rhs_type->is_pointer() && lhs_type->get_kind() == TypeKind::Null) ||
-             (lhs_type->is_pointer() && rhs_type->get_kind() == TypeKind::Null)
+             (rhs_type->is_pointer() && lhs_type->get_kind() == TypeKind::NULL_T) ||
+             (lhs_type->is_pointer() && rhs_type->get_kind() == TypeKind::NULL_T)
               )) {
             report_binary_op_mistmatch_types(bin_op);
             return;
@@ -3240,7 +3240,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         bin_op->type = context.bool_type;
         break;
     }
-    case Token::AndAnd: case Token::OrOr: {
+    case Token::AND_AND: case Token::OR_OR: {
         if (!is_condition(lhs_type)) {
             report_binary_op_cannot_apply(bin_op, lhs);
             return;
@@ -3253,7 +3253,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         bin_op->type = context.bool_type;
         break;
     }
-    case Token::RangeEq: case Token::RangeLt: {
+    case Token::RANGE_EQ: case Token::RANGE_LT: {
         if (!lhs_type->is_integer()) {
             report_binary_op_cannot_apply(bin_op, lhs);
             return;
@@ -3311,17 +3311,17 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
         bin_op->type = type_table.get_enum_container_type(lhs_enum_type);
         break;
     }
-    case Token::AddEq:
-    case Token::SubEq:
-    case Token::MulEq:
-    case Token::DivEq:
-    case Token::ModEq:
-    case Token::AndEq:
-    case Token::OrEq:
-    case Token::CaretEq:
-    case Token::TildeEq:
-    case Token::LtLtEq:
-    case Token::GtGtEq: {
+    case Token::ADD_EQ:
+    case Token::SUB_EQ:
+    case Token::MUL_EQ:
+    case Token::DIV_EQ:
+    case Token::MOD_EQ:
+    case Token::AND_EQ:
+    case Token::OR_EQ:
+    case Token::CARET_EQ:
+    case Token::TILDE_EQ:
+    case Token::LT_LT_EQ:
+    case Token::GT_GT_EQ: {
         if (!lhs_type->is_integer()) {
             report_binary_op_cannot_apply(bin_op, bin_op->lhs);
             return;
@@ -3346,7 +3346,7 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
     }
     case '+': case '-': case '*':
     case '^': case '&': case '|':
-    case Token::LtLt: case Token::GtGt: {
+    case Token::LT_LT: case Token::GT_GT: {
         if (!lhs_type->is_integer()) {
             report_binary_op_cannot_apply(bin_op, bin_op->lhs);
             return;
@@ -3375,8 +3375,8 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
         break;
     }
     case '<': case '>':
-    case Token::GtEq: case Token::LtEq:
-    case Token::EqEq: case Token::ExEq: {
+    case Token::GT_EQ: case Token::LT_EQ:
+    case Token::EQ_EQ: case Token::EX_EQ: {
 
         bool lhs_is_enum = bin_op->lhs->type->is_enum(),
              rhs_is_enum = bin_op->rhs->type->is_enum();
@@ -3403,11 +3403,11 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
         bin_op->type = context.bool_type;
         break;
     }
-    case Token::AndAnd: case Token::OrOr: {
+    case Token::AND_AND: case Token::OR_OR: {
         report_binary_op_cannot_apply(bin_op, bin_op->lhs);
         return;
     }
-    case Token::RangeEq: case Token::RangeLt: {
+    case Token::RANGE_EQ: case Token::RANGE_LT: {
 
         lhs_type = bin_op->lhs->type->remove_all_const();
         rhs_type = bin_op->rhs->type->remove_all_const();
@@ -3570,8 +3570,8 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
         unary_op->is_foldable = false;
         break;
     }
-    case Token::AddAdd: case Token::SubSub:
-    case Token::PostAddAdd: case Token::PostSubSub: {
+    case Token::ADD_ADD: case Token::SUB_SUB:
+    case Token::POST_ADD_ADD: case Token::POST_SUB_SUB: {
 
         if (!check_modifiable(expr, unary_op, false)) {
             return;
@@ -3604,8 +3604,8 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
     bool search_relative = search_nspace == nspace;
     bool search_nested = true;
 
-    if (ref->relative_enforcement != IdentRef::RelativeEnforcement::None) {
-        if (ref->relative_enforcement == IdentRef::RelativeEnforcement::File) {
+    if (ref->relative_enforcement != IdentRef::RelativeEnforcement::NONE) {
+        if (ref->relative_enforcement == IdentRef::RelativeEnforcement::FILE) {
             // search file first BUT NOT nested scopes then search module.
             search_nested = false;
             search_nspace = &file->get_module();
@@ -3811,7 +3811,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
     }
 
     switch (ref->found_kind) {
-    case IdentRef::VarKind: {
+    case IdentRef::VAR_KIND: {
 
         Var* var_ref = ref->var_ref;
         if (var_ref->is_global) {
@@ -3833,7 +3833,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
 
             if (var_ref->structn->is_being_checked) {
                 PointSourceLoc error_loc = ref->loc.to_point_source();
-                if (ref->is(NodeKind::DotOperator)) {
+                if (ref->is(NodeKind::DOT_OPERATOR)) {
                     auto dot = static_cast<DotOperator*>(ref);
                     error_loc = dot->expand_access_only();
                 }
@@ -3866,7 +3866,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
 
         break;
     }
-    case IdentRef::FuncsKind: {
+    case IdentRef::FUNCS_KIND: {
 
         // TODO (maddie): generics cases involving not calling the thing.
         if (!is_for_call) {
@@ -3877,7 +3877,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
             auto func = (*ref->funcs_ref)[0];
             if (func->structn) {
                 auto dot = static_cast<DotOperator*>(ref);
-                if (dot->site->is_not(NodeKind::TypeExpr)) {
+                if (dot->site->is_not(NodeKind::TYPE_EXPR)) {
                     auto struct_name = func->structn->name.to_string().str();
                     auto func_name   = ref->ident.to_string().str();
                     auto example_str = struct_name + "." + func_name;
@@ -3907,23 +3907,23 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
         ref->type = context.funcs_ref_type;
         break;
     }
-    case IdentRef::UniversalKind: {
+    case IdentRef::UNIVERAL_KIND: {
         ref->type = ref->universal_ref->type;
         break;
     }
-    case IdentRef::NamespaceKind: {
+    case IdentRef::NAMESPACE_KIND: {
         ref->type = context.namespace_ref_type;
         break;
     }
-    case IdentRef::CompositeKind: {
-        if (ref->composite_ref->is(NodeKind::Struct)) {
+    case IdentRef::COMPOSITE_KIND: {
+        if (ref->composite_ref->is(NodeKind::STRUCT)) {
             Struct* structn = static_cast<Struct*>(ref->composite_ref);
             if (!structn->is_generic) {
                 ensure_struct_checked(ref->loc, static_cast<Struct*>(ref->composite_ref));
             }
-        } else if (ref->composite_ref->is(NodeKind::Enum)) {
+        } else if (ref->composite_ref->is(NodeKind::ENUM)) {
             ensure_enum_checked(ref->loc, static_cast<Enum*>(ref->composite_ref));
-        } else if (ref->composite_ref->is(NodeKind::Interface)) {
+        } else if (ref->composite_ref->is(NodeKind::INTERFACE)) {
             ensure_interface_checked(ref->loc, static_cast<Interface*>(ref->composite_ref));
         } else {
             acorn_fatal("Unknown composite type");
@@ -3932,17 +3932,17 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
         ref->type = context.expr_type;
         break;
     }
-    case IdentRef::GenericTypeKind: {
+    case IdentRef::GENERIC_TYPE_KIND: {
         ref->type = context.expr_type;
         break;
     }
-    case IdentRef::NoneKind: {
+    case IdentRef::NONE_KIND: {
         auto& logger = error(expand(ref), "Could not find %s '%s'", is_for_call ? "function" : "identifier", ref->ident);
         check_ident_ref<true>(ref, search_nspace, search_struct_type, is_for_call, is_dot_op_site);
         logger.end_error(!is_for_call ? ErrCode::SemaNoFindIdentRef : ErrCode::SemaNoFindFuncIdentRef);
         return;
     }
-    case IdentRef::EnumValueKind: {
+    case IdentRef::ENUM_VALUE_KIND: {
         acorn_fatal("Cannot reference enum values here");
         return;
     }
@@ -3954,7 +3954,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
 }
 
 void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
-    if (dot->site->is(NodeKind::IdentRef)) {
+    if (dot->site->is(NodeKind::IDENT_REF)) {
         IdentRef* ref = static_cast<IdentRef*>(dot->site);
         check_ident_ref(ref, nspace, nullptr, false, true);
         dot->is_foldable = ref->is_foldable;
@@ -4050,10 +4050,10 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         } else {
             report_error_cannot_access_field();
         }
-    } else if (dot->site->is(NodeKind::IdentRef) && dot->site->type->get_kind() == TypeKind::Expr) {
+    } else if (dot->site->is(NodeKind::IDENT_REF) && dot->site->type->get_kind() == TypeKind::EXPR) {
         auto ref = static_cast<IdentRef*>(dot->site);
         auto composite = ref->composite_ref;
-        if (composite->is(NodeKind::Enum)) {
+        if (composite->is(NodeKind::ENUM)) {
             auto enumn = static_cast<Enum*>(composite);
             auto itr = std::ranges::find_if(enumn->values, [dot](const Enum::Value& value) {
                 return value.name == dot->ident;
@@ -4069,7 +4069,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
                       dot->ident, enumn->name)
                     .end_error(ErrCode::SemaEnumCouldNotFindValue);
             }
-        } else if (composite->is(NodeKind::Struct) && !is_for_call) {
+        } else if (composite->is(NodeKind::STRUCT) && !is_for_call) {
             // Check to see if the user is trying to access the member function of
             // a struct.
             auto structn = static_cast<Struct*>(composite);
@@ -4133,7 +4133,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
 
     bool args_have_errors = false;
     for (Expr* arg : call->args) {
-        if (arg->is(NodeKind::MoveObj)) {
+        if (arg->is(NodeKind::MOVEOBJ)) {
             check_moveobj(static_cast<MoveObj*>(arg), true);
         } else {
             check_node(arg);
@@ -4142,11 +4142,11 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
     if (args_have_errors) return;
 
-    if (call->site->is(NodeKind::IdentRef)) {
+    if (call->site->is(NodeKind::IDENT_REF)) {
         auto ref = static_cast<IdentRef*>(call->site);
         check_ident_ref(ref, nspace, nullptr, true);
         yield_if(ref);
-    } else if (call->site->is(NodeKind::DotOperator)) {
+    } else if (call->site->is(NodeKind::DOT_OPERATOR)) {
         auto ref = static_cast<DotOperator*>(call->site);
         check_dot_operator(ref, true);
         yield_if(ref);
@@ -4162,7 +4162,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
 
     if (call->site->type->remove_all_const() != context.funcs_ref_type) {
-        if (call->site->type == context.expr_type && call->site->is(NodeKind::IdentRef)) {
+        if (call->site->type == context.expr_type && call->site->is(NodeKind::IDENT_REF)) {
             auto ref = static_cast<IdentRef*>(call->site);
             Type* fixed_type = fixup_unresolved_generic_composite_type(ref->composite_ref, ref->loc, call->args);
             if (!fixed_type) {
@@ -4180,9 +4180,9 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
 
     bool is_const_object = false;
-    if (call->site->is(NodeKind::DotOperator)) {
+    if (call->site->is(NodeKind::DOT_OPERATOR)) {
         auto dot = static_cast<DotOperator*>(call->site);
-        if (dot->site->is(NodeKind::IdentRef)) {
+        if (dot->site->is(NodeKind::IDENT_REF)) {
             auto ref = static_cast<IdentRef*>(dot->site);
             if (ref->type->is_struct() && ref->type->is_const()) {
                 is_const_object = true;
@@ -4204,11 +4204,11 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     // Check if calling a member function of a generic struct in which case
     // the the currently bound generic types must be pre bound.
     if (cur_func && cur_func->structn && cur_func->structn->is_generic) {
-        bool passes_generics_along = (ref->is_not(NodeKind::DotOperator) &&
+        bool passes_generics_along = (ref->is_not(NodeKind::DOT_OPERATOR) &&
                                       cur_func->non_generic_struct_instance == (*ref->funcs_ref)[0]->non_generic_struct_instance);
-        if (!passes_generics_along && ref->is(NodeKind::DotOperator)) {
+        if (!passes_generics_along && ref->is(NodeKind::DOT_OPERATOR)) {
             auto dot = static_cast<DotOperator*>(ref);
-            if (dot->site->is(NodeKind::This)) {
+            if (dot->site->is(NodeKind::THIS_EXPR)) {
                 passes_generics_along = true;
             }
         }
@@ -4224,7 +4224,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     if (ref->explicitly_binds_generics) {
         auto generic_bind_call = static_cast<GenericBindFuncCall*>(ref);
         pre_bound_types = std::move(generic_bind_call->bound_types);
-    } else if (ref->is(NodeKind::DotOperator)) {
+    } else if (ref->is(NodeKind::DOT_OPERATOR)) {
         // Bind the types of the generic struct if there is one.
         auto dot_op = static_cast<DotOperator*>(ref);
         if (dot_op->site->type->is_struct()) {
@@ -4238,7 +4238,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
                                        generic_struct_instance->bound_types.end());
             }
         }
-    } else if (ref->is(NodeKind::This) && cur_func && cur_func->structn && cur_func->structn->is_generic) {
+    } else if (ref->is(NodeKind::THIS_EXPR) && cur_func && cur_func->structn && cur_func->structn->is_generic) {
         // Check if calling a member function of a generic struct in which case
         // the the currently bound generic types must be pre bound.
     }
@@ -4391,7 +4391,7 @@ bool acorn::Sema::compare_generic_bind_candidate_with_named_args(const llvm::Sma
         auto arg      = args[i];
         auto genericn = generics[i];
 
-        if (arg->is(NodeKind::NamedValue)) {
+        if (arg->is(NodeKind::NAMED_VALUE)) {
 
             auto named_arg = static_cast<NamedValue*>(arg);
 
@@ -4439,7 +4439,7 @@ bool acorn::Sema::check_generic_bind_arguments(const llvm::SmallVector<Expr*>& a
 
         check_node(arg);
         Expr* arg_value = arg;
-        if (arg->is(NodeKind::NamedValue)) {
+        if (arg->is(NodeKind::NAMED_VALUE)) {
             uses_named_values = true;
             auto named_value = static_cast<NamedValue*>(arg);
             arg_value = named_value->assignment;
@@ -4512,7 +4512,7 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
 
         Type* param_type = param_types[i];
 
-        if (arg->is(NodeKind::NamedValue)) {
+        if (arg->is(NodeKind::NAMED_VALUE)) {
             display_error();
             return;
         }
@@ -4546,7 +4546,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                canidate->name);
 
             const char* func_end_ptr = canidate->loc.ptr;
-            if (call_node->is(NodeKind::FuncCall)) {
+            if (call_node->is(NodeKind::FUNC_CALL)) {
                 go_until(func_end_ptr, '(', ')');
             } else {
                 go_until(func_end_ptr, '{', '}');
@@ -4576,14 +4576,14 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         bool dup_named_args = false;
         for (size_t i = non_named_args_offset; i < args.size(); i++) {
             auto arg = args[i];
-            if (!arg->is(NodeKind::NamedValue)) {
+            if (!arg->is(NodeKind::NAMED_VALUE)) {
                 continue;
             }
 
             auto named_arg = static_cast<NamedValue*>(arg);
             for (size_t j = i + 1; j < args.size(); j++) {
                 auto other_arg = args[j];
-                if (!other_arg->is(NodeKind::NamedValue)) {
+                if (!other_arg->is(NodeKind::NAMED_VALUE)) {
                     continue;
                 }
 
@@ -4657,7 +4657,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                     return nullptr;
                 }
 
-                if (call_node->is(NodeKind::FuncCall)) {
+                if (call_node->is(NodeKind::FUNC_CALL)) {
                     auto call = static_cast<FuncCall*>(call_node);
                     call->indeterminate_inferred_default_args.push_back(bound_expr);
                 } else {
@@ -4691,7 +4691,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         auto arg_value = args[i];
         Var* param;
         Type* param_type;
-        if (arg_value->is(NodeKind::NamedValue)) {
+        if (arg_value->is(NodeKind::NAMED_VALUE)) {
             auto named_arg = static_cast<NamedValue*>(arg_value);
             param = called_func->find_parameter(named_arg->name);
             param_type = param->type;
@@ -4731,7 +4731,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         }
 
 
-        if (selected_implicitly_converts_ptr_arg && arg_value->is(NodeKind::FuncCall)) {
+        if (selected_implicitly_converts_ptr_arg && arg_value->is(NodeKind::FUNC_CALL)) {
             auto arg_call = static_cast<FuncCall*>(arg_value);
             if (may_implicitly_convert_return_ptr(param_type, arg_call)) {
                 arg_call->implicitly_converts_return = true;
@@ -4761,7 +4761,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         // a generic struct because the constructor call is allowed to finish binding the
         // types first. We must take the types that have been bound by the function call and
         // create a finalized version of the generic struct instance out of it.
-        if (call_node->is(NodeKind::StructInitializer)) {
+        if (call_node->is(NodeKind::STRUCT_INITIALIZER)) {
             auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(generic_parent_struct);
 
             llvm::SmallVector<Type*> parent_struct_bound_types;
@@ -4783,7 +4783,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                                           std::move(generic_bindings),
                                                           std::move(qualified_decl_types),
                                                           generic_parent_struct);
-        if (call_node->is(NodeKind::FuncCall)) {
+        if (call_node->is(NodeKind::FUNC_CALL)) {
             auto call = static_cast<FuncCall*>(call_node);
             call->generic_instance = instance;
         } else {
@@ -4917,7 +4917,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
             continue;
         }
 
-        if (arg_value->is(NodeKind::NamedValue)) {
+        if (arg_value->is(NodeKind::NAMED_VALUE)) {
             // Handle named arguments by finding the corresponding parameter
 
             auto named_arg = static_cast<NamedValue*>(arg_value);
@@ -4993,7 +4993,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
             if (param_type->does_contain_generics()) {
                 if (!check_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings)) {
 
-                    if (param->has_implicit_ptr && arg_value->is_not(NodeKind::MoveObj)) {
+                    if (param->has_implicit_ptr && arg_value->is_not(NodeKind::MOVEOBJ)) {
                         if (!arg_value->type->is_pointer()) {
                             auto param_ptr_type = static_cast<PointerType*>(param_type);
                             auto param_elm_type = param_ptr_type->get_elm_type();
@@ -5007,7 +5007,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                         }
                     }
 
-                    if (arg_value->is(NodeKind::FuncCall)) {
+                    if (arg_value->is(NodeKind::FUNC_CALL)) {
                         auto arg_call = static_cast<FuncCall*>(arg_value);
                         if (arg_call->called_func && arg_call->called_func->has_implicit_return_ptr) {
 
@@ -5035,16 +5035,16 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         if (!is_assignable_to(param_type, arg_value)) {
 
             bool is_assignable = false;
-            if (param->has_implicit_ptr && arg_value->is_not(NodeKind::MoveObj)) {
+            if (param->has_implicit_ptr && arg_value->is_not(NodeKind::MOVEOBJ)) {
                 auto ptr_type = static_cast<PointerType*>(param_type);
                 if (may_implicitly_convert_ptr(ptr_type, arg_value)) {
-                    if (arg_value->is_not(NodeKind::MoveObj)) {
+                    if (arg_value->is_not(NodeKind::MOVEOBJ)) {
                         is_assignable = true;
                     }
                 }
             }
 
-            if (!is_assignable && arg_value->is(NodeKind::FuncCall)) {
+            if (!is_assignable && arg_value->is(NodeKind::FUNC_CALL)) {
                 auto arg_call = static_cast<FuncCall*>(arg_value);
                 if (may_implicitly_convert_return_ptr(param_type, arg_call)) {
                     implicitly_converts_ptr_arg = true;
@@ -5194,8 +5194,8 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
 
 
     switch (to_type->get_kind()) {
-    case TypeKind::Pointer:
-    case TypeKind::Slice: {
+    case TypeKind::POINTER:
+    case TypeKind::SLICE: {
         if (from_type->get_kind() != to_type->get_kind()) {
             return false;
         }
@@ -5208,7 +5208,7 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
 
         return check_bind_type_to_generic_type(elm_to_type, elm_from_type, bindings, true);
     }
-    case TypeKind::Array: {
+    case TypeKind::ARRAY: {
         if (!from_type->is_array()) {
             return false;
         }
@@ -5225,7 +5225,7 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
 
         return check_bind_type_to_generic_type(elm_to_type, elm_from_type, bindings, true);
     }
-    case TypeKind::Function: {
+    case TypeKind::FUNCTION: {
         if (!from_type->is_function()) {
             return false;
         }
@@ -5276,7 +5276,7 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
 
         return true;
     }
-    case TypeKind::PartiallyBoundStruct: {
+    case TypeKind::PARTIALLY_BOUND_STRUCT: {
         if (!from_type->is_struct()) {
             return false;
         }
@@ -5361,8 +5361,8 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
     for (Expr* elm : arr->elms) {
         if (!elm) continue;
 
-        if (elm->is(NodeKind::Array) && dest_elm_type &&
-            (dest_elm_type->get_kind() == TypeKind::Array || dest_elm_type->get_kind() == TypeKind::AssignDeterminedArray)) {
+        if (elm->is(NodeKind::ARRAY) && dest_elm_type &&
+            (dest_elm_type->get_kind() == TypeKind::ARRAY || dest_elm_type->get_kind() == TypeKind::ASSIGN_DETERMINED_ARRAY)) {
             auto next_dest_elm_type = static_cast<ContainerType*>(dest_elm_type)->get_elm_type();
             check_array(static_cast<Array*>(elm), next_dest_elm_type);
         } else {
@@ -5380,7 +5380,7 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
             // arrays. The checks for dimensional compatibility are checked later when
             // the type is fixed up.
             //
-            if (dest_elm_type->get_kind() != TypeKind::AssignDeterminedArray) {
+            if (dest_elm_type->get_kind() != TypeKind::ASSIGN_DETERMINED_ARRAY) {
                 if (!is_assignable_to(dest_elm_type, elm)) {
                     error(expand(elm), "%s", get_type_mismatch_error(dest_elm_type, elm))
                         .end_error(ErrCode::SemaIncompatibleArrayElmTypes);
@@ -5411,7 +5411,7 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
     }
 
     if (!elm_type) {
-        if (dest_elm_type->get_kind() != TypeKind::AssignDeterminedArray) {
+        if (dest_elm_type->get_kind() != TypeKind::ASSIGN_DETERMINED_ARRAY) {
             elm_type = dest_elm_type;
         } else {
             elm_type = arr->elms[0]->type;
@@ -5566,7 +5566,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
             return nullptr;
         }
 
-        if (composite->is_not(NodeKind::Struct)) {
+        if (composite->is_not(NodeKind::STRUCT)) {
             error(ref, "Expected to find struct for initializer but found %s",
                   composite->get_composite_kind())
                 .end_error(ErrCode::SemaWrongCompositeKindForStructInitializer);
@@ -5579,7 +5579,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
     UnboundGenericStruct* unbound_generic_struct = nullptr;
     llvm::SmallVector<Type*> bound_types;
     Struct* structn = nullptr;
-    if (initializer->site->is(NodeKind::IdentRef)) {
+    if (initializer->site->is(NodeKind::IDENT_REF)) {
 
         auto ref = static_cast<IdentRef*>(initializer->site);
         structn = get_composite(ref);
@@ -5610,7 +5610,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
 
     bool args_have_errors = false;
     for (auto arg : initializer->values) {
-        if (arg->is(NodeKind::MoveObj)) {
+        if (arg->is(NodeKind::MOVEOBJ)) {
             check_moveobj(static_cast<MoveObj*>(arg), true);
         } else {
             check_node(arg);
@@ -5647,14 +5647,14 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
         bool dup_named_vals = false;
         for (size_t i = initializer->non_named_vals_offset; i < initializer->values.size(); i++) {
             auto val = initializer->values[i];
-            if (!val->is(NodeKind::NamedValue)) {
+            if (!val->is(NodeKind::NAMED_VALUE)) {
                 continue;
             }
 
             auto named_val = static_cast<NamedValue*>(val);
             for (size_t j = i + 1; j < initializer->values.size(); j++) {
                 auto other_val = initializer->values[j];
-                if (!other_val->is(NodeKind::NamedValue)) {
+                if (!other_val->is(NodeKind::NAMED_VALUE)) {
                     continue;
                 }
 
@@ -5704,7 +5704,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
         Expr* value = values[i];
 
         Var* field;
-        if (value->is(NodeKind::NamedValue)) {
+        if (value->is(NodeKind::NAMED_VALUE)) {
             // Handle named arguments by finding the corresponding parameter
 
             auto named_value = static_cast<NamedValue*>(value);
@@ -5778,7 +5778,7 @@ void acorn::Sema::check_this(This* thisn) {
 void acorn::Sema::check_sizeof(SizeOf* sof) {
 
     check_and_verify_type(sof->value);
-    if (sof->value->type->get_kind() == TypeKind::Expr) {
+    if (sof->value->type->get_kind() == TypeKind::EXPR) {
         sof->type_with_size = get_type_of_type_expr(sof->value);
     } else {
         sof->type_with_size = sof->value->type;
@@ -5819,8 +5819,8 @@ bool acorn::Sema::check_modifiable(Expr* expr, Expr* error_node, bool is_assignm
     }
 
     if (expr->type->is_const()) {
-        if (expr->is(NodeKind::IdentRef) &&
-            static_cast<IdentRef*>(expr)->found_kind == IdentRef::VarKind) {
+        if (expr->is(NodeKind::IDENT_REF) &&
+            static_cast<IdentRef*>(expr)->found_kind == IdentRef::VAR_KIND) {
 
             auto ref = static_cast<IdentRef*>(expr);
             if (ref->var_ref->is_field() && !ref->var_ref->type->is_const() &&
@@ -5916,15 +5916,15 @@ bool acorn::Sema::check_comptime_cond(Expr* cond, const char* comptime_type_str)
 //--------------------------------------
 
 acorn::Type* acorn::Sema::fixup_type(Type* type, bool is_ptr_elm_type) {
-    if (type->get_kind() == TypeKind::UnresolvedArray) {
+    if (type->get_kind() == TypeKind::UNRESOLVED_ARRAY) {
         return fixup_unresolved_array_type(type);
-    } else if (type->get_kind() == TypeKind::UnresolvedComposite) {
+    } else if (type->get_kind() == TypeKind::UNRESOLVED_COMPOSITE) {
         return fixup_unresolved_composite_type(type, is_ptr_elm_type);
-    } else if (type->get_kind() == TypeKind::UnresolvedGenericComposite) {
+    } else if (type->get_kind() == TypeKind::UNRESOLVED_GENERIC_COMPOSITE) {
         return fixup_unresolved_generic_composite_type(type, is_ptr_elm_type);
-    } else if (type->get_kind() == TypeKind::UnresolvedEnumValueType) {
+    } else if (type->get_kind() == TypeKind::UNRESOLVED_ENUM_VALUE_TYPE) {
         return fixup_unresolved_enum_value_type(type, is_ptr_elm_type);
-    } else if (type->get_kind() == TypeKind::Function) {
+    } else if (type->get_kind() == TypeKind::FUNCTION) {
         return fixup_function_type(type);
     } else if (type->is_pointer()) {
 
@@ -5981,7 +5981,7 @@ acorn::Type* acorn::Sema::fixup_type(Type* type, bool is_ptr_elm_type) {
         }
     } else if (type->is_generic()) {
         return fixup_generic_type(type);
-    } else if (type->get_kind() == TypeKind::PartiallyBoundStruct) {
+    } else if (type->get_kind() == TypeKind::PARTIALLY_BOUND_STRUCT) {
         return fixup_partially_bound_struct_type(type, func_call_generic_bindings);
     } else {
         return type;
@@ -6053,7 +6053,7 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
     auto from_type = var->assignment->type;
     auto assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(type);
 
-    if (from_type->get_kind() != TypeKind::Array) {
+    if (from_type->get_kind() != TypeKind::ARRAY) {
         error(expand(var), "Expected array type for '%s', but found '%s'",
                 type, from_type)
             .end_error(ErrCode::SemaAssignDetArrTypeReqsArrAssignment);
@@ -6075,9 +6075,9 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
     };
 
     ContainerType* ctr_type = assign_det_arr_type;
-    while (elm_type->get_kind() == TypeKind::AssignDeterminedArray  ||
-           elm_type->get_kind() == TypeKind::Array) {
-        if (from_elm_type->get_kind() != TypeKind::Array) {
+    while (elm_type->get_kind() == TypeKind::ASSIGN_DETERMINED_ARRAY  ||
+           elm_type->get_kind() == TypeKind::ARRAY) {
+        if (from_elm_type->get_kind() != TypeKind::ARRAY) {
             report_dimensions_error();
             return nullptr;
         }
@@ -6100,7 +6100,7 @@ acorn::Type* acorn::Sema::fixup_assign_det_arr_type(Type* type, Var* var) {
         arr_lengths.push_back(arr_type->get_length());
     }
 
-    if (from_elm_type->get_kind() == TypeKind::Array) {
+    if (from_elm_type->get_kind() == TypeKind::ARRAY) {
         report_dimensions_error();
         return nullptr;
     }
@@ -6131,7 +6131,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
     }
 
     switch (found_composite->kind) {
-    case NodeKind::Struct: {
+    case NodeKind::STRUCT: {
         auto found_struct = static_cast<Struct*>(found_composite);
 
         if (found_struct->is_generic) {
@@ -6176,7 +6176,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
 
         return struct_type;
     }
-    case NodeKind::Enum: {
+    case NodeKind::ENUM: {
         auto found_enum = static_cast<Enum*>(found_composite);
 
         ensure_enum_checked(unresolved_composite_type->get_error_location(), found_enum);
@@ -6188,7 +6188,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
 
         return enum_type;
     }
-    case NodeKind::Interface: {
+    case NodeKind::INTERFACE: {
         auto found_interface = static_cast<Interface*>(found_composite);
 
         ensure_interface_checked(unresolved_composite_type->get_error_location(), found_interface);
@@ -6279,7 +6279,7 @@ bool acorn::Sema::get_bound_types_for_generic_type(Decl* found_composite,
     }
 
     bool uses_named_args_values;
-    if (found_composite->kind != NodeKind::Struct) {
+    if (found_composite->kind != NodeKind::STRUCT) {
         error(error_loc, "Type does not take generic arguments")
             .end_error(ErrCode::SemaTypeDoesNotTakeGenerics);
         return false;
@@ -6340,7 +6340,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_enum_value_type(Type* type, bool is_p
         return nullptr;
     }
 
-    if (found_composite->is_not(NodeKind::Enum)) {
+    if (found_composite->is_not(NodeKind::ENUM)) {
         error(error_loc, "Enum value type expects enum type")
             .end_error(ErrCode::SemaEnumValueTypeExpectsEnum);
         return nullptr;
@@ -6691,7 +6691,7 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
     if constexpr (is_func_decl) {
         if (candidate->structn && !candidate->is_constant && !candidate->is_constructor) {
             auto call = static_cast<FuncCall*>(call_node);
-            if (call->site->is(NodeKind::IdentRef) && cur_func) {
+            if (call->site->is(NodeKind::IDENT_REF) && cur_func) {
                 // Calling one member function from another.
                 if (cur_func->is_constant) {
                     err_line(nullptr, "cannot call non-const function from const function");
@@ -6763,7 +6763,7 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
         Expr* arg_value = args[i];
         Var* param = nullptr;
 
-        if (arg_value->is(NodeKind::NamedValue)) {
+        if (arg_value->is(NodeKind::NAMED_VALUE)) {
 
             if constexpr (is_func_decl) {
                 auto named_arg = static_cast<NamedValue*>(arg_value);
@@ -6892,7 +6892,7 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
             continue;
         }
 
-        if (arg_value->is(NodeKind::NamedValue)) {
+        if (arg_value->is(NodeKind::NAMED_VALUE)) {
             if constexpr (is_func_decl) {
                 auto named_arg = static_cast<NamedValue*>(arg_value);
                 arg_value = named_arg->assignment;
@@ -6942,7 +6942,7 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
                                 auto param_elm_type = param_ptr_type->get_elm_type();
 
                                 if (check_bind_type_to_generic_type(param_elm_type, arg_value->type, generic_bindings)) {
-                                    if (arg_value->is(NodeKind::MoveObj)) {
+                                    if (arg_value->is(NodeKind::MOVEOBJ)) {
                                         add_err_line_moveobj_to_implicit_ptr(i, param_type, arg_value);
                                         get_type_with_generics_where_msg(param_type,
                                                                                                generic_bindings,
@@ -6954,7 +6954,7 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
                             }
                         }
 
-                        if (arg_value->is(NodeKind::FuncCall)) {
+                        if (arg_value->is(NodeKind::FUNC_CALL)) {
                             auto arg_call = static_cast<FuncCall*>(arg_value);
                             if (arg_call->called_func && arg_call->called_func->has_implicit_return_ptr) {
 
@@ -6988,13 +6988,13 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
                 auto ptr_type = static_cast<PointerType*>(param->type);
                 if (may_implicitly_convert_ptr(ptr_type, arg_value)) {
                     is_assignable = true;
-                    if (arg_value->is(NodeKind::MoveObj)) {
+                    if (arg_value->is(NodeKind::MOVEOBJ)) {
                         add_err_line_moveobj_to_implicit_ptr(i, param_type, arg_value);
                     }
                 }
             }
 
-            if (!is_assignable && arg_value->is(NodeKind::FuncCall)) {
+            if (!is_assignable && arg_value->is(NodeKind::FUNC_CALL)) {
                 auto arg_call = static_cast<FuncCall*>(arg_value);
                 if (may_implicitly_convert_return_ptr(param_type, arg_call)) {
                     is_assignable = true;
@@ -7202,7 +7202,7 @@ void acorn::Sema::display_generic_bind_named_args_fail_info(const llvm::SmallVec
         auto arg = args[i];
         auto genericn = generics[i];
 
-        if (arg->is(NodeKind::NamedValue)) {
+        if (arg->is(NodeKind::NAMED_VALUE)) {
 
             auto named_arg = static_cast<NamedValue*>(arg);
 
@@ -7366,16 +7366,16 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr, bool
             auto from_elm_type = from_ptr_type->get_elm_type();
 
             if (to_elm_type->is(from_elm_type) || to_elm_type->is(context.void_type)) {
-                if (expr->is(NodeKind::Array)) {
+                if (expr->is(NodeKind::ARRAY)) {
                     return "Cannot an assign array directly to a pointer";
-                } else if (expr->is(NodeKind::FuncCall)) {
+                } else if (expr->is(NodeKind::FUNC_CALL)) {
                     return "Cannot assign an array from a function call to a pointer";
                 }
             }
         }
 
         return get_type_mismatch_error(to_type, expr->type, has_implicit_pointer);
-    } else if (expr->is(NodeKind::Array)) {
+    } else if (expr->is(NodeKind::ARRAY)) {
         // Recreating the array because when assigning to variables it is possible
         // they end up with different dimensions.
         auto arr = static_cast<Array*>(expr);
@@ -7441,7 +7441,7 @@ acorn::Type* acorn::Sema::get_array_type_for_mismatch_error(Array* arr,
 
     Type* elm_type = nullptr;
     for (auto elm : arr->elms) {
-        if (elm->is(NodeKind::Array)) {
+        if (elm->is(NodeKind::ARRAY)) {
             auto elm_arr = static_cast<Array*>(elm);
             elm_type = get_array_type_for_mismatch_error(elm_arr, lengths, depth + 1);
         } else {
@@ -7565,13 +7565,13 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
     }
 
     switch (to_type->get_kind()) {
-    case TypeKind::Int:
-    case TypeKind::Int8: case TypeKind::UInt8:
-    case TypeKind::Int16: case TypeKind::UInt16:
-    case TypeKind::Int32: case TypeKind::UInt32:
-    case TypeKind::Int64: case TypeKind::UInt64:
-    case TypeKind::USize: case TypeKind::ISize:
-    case TypeKind::Char: case TypeKind::Char16: {
+    case TypeKind::INT:
+    case TypeKind::INT8: case TypeKind::UINT8:
+    case TypeKind::INT16: case TypeKind::UINT16:
+    case TypeKind::INT32: case TypeKind::UINT32:
+    case TypeKind::INT64: case TypeKind::UINT64:
+    case TypeKind::USIZE: case TypeKind::ISIZE:
+    case TypeKind::CHAR: case TypeKind::CHAR16: {
         if (to_type->is(from_type)) {
             return true;
         }
@@ -7587,21 +7587,21 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
             auto does_fit_range = [to_type]<typename T>(T value) finline {
                 switch (to_type->get_kind()) {
                 // Signed cases
-                case TypeKind::Int8:  return fits_in_range<int8_t>(value);
-                case TypeKind::Int16: return fits_in_range<int16_t>(value);
-                case TypeKind::Int:
-                case TypeKind::Int32:
-                case TypeKind::ISize:
+                case TypeKind::INT8:  return fits_in_range<int8_t>(value);
+                case TypeKind::INT16: return fits_in_range<int16_t>(value);
+                case TypeKind::INT:
+                case TypeKind::INT32:
+                case TypeKind::ISIZE:
                     return fits_in_range<int32_t>(value);
-                case TypeKind::Int64: return fits_in_range<int64_t>(value);
+                case TypeKind::INT64: return fits_in_range<int64_t>(value);
                 // Unsigned cases
-                case TypeKind::UInt8: case TypeKind::Char:
+                case TypeKind::UINT8: case TypeKind::CHAR:
                     return fits_in_range<uint8_t>(value);
-                case TypeKind::UInt16: case TypeKind::Char16:
+                case TypeKind::UINT16: case TypeKind::CHAR16:
                     return fits_in_range<uint16_t>(value);
-                case TypeKind::UInt32: case TypeKind::USize:
+                case TypeKind::UINT32: case TypeKind::USIZE:
                     return fits_in_range<uint32_t>(value);
-                case TypeKind::UInt64: return fits_in_range<uint64_t>(value);
+                case TypeKind::UINT64: return fits_in_range<uint64_t>(value);
 
                 default:
                     acorn_fatal("unreachable signed integer type");
@@ -7610,7 +7610,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
             };
 
             auto get_constant_value = [this](Expr* expr) finline -> uint64_t {
-                if (expr->kind == NodeKind::Number) {
+                if (expr->kind == NodeKind::NUMBER) {
                     // Quick pass for common cases.
                     auto number = static_cast<const Number*>(expr);
                     return number->value_u64;
@@ -7633,7 +7633,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
 
         return to_type->is(from_type);
     }
-    case TypeKind::Float: case TypeKind::Double: {
+    case TypeKind::FLOAT: case TypeKind::DOUBLE: {
         if (from_type->is_float()) {
             return to_type->is(from_type);
         } else if (from_type->is_integer()) {
@@ -7646,8 +7646,8 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
 
         return false;
     }
-    case TypeKind::Pointer: {
-        if (expr->is(NodeKind::String)) {
+    case TypeKind::POINTER: {
+        if (expr->is(NodeKind::STRING)) {
             if (expr->type->is(context.const_char_ptr_type)) {
                 return true;
             }
@@ -7664,7 +7664,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
                 return false;
             }
 
-            if (expr->is(NodeKind::Array) || expr->is(NodeKind::FuncCall)) {
+            if (expr->is(NodeKind::ARRAY) || expr->is(NodeKind::FUNC_CALL)) {
                 return false;
             }
 
@@ -7695,16 +7695,16 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
             } else {
                 return to_type->is(from_type) || to_type->is(context.void_ptr_type);
             }
-        } else if (expr->is(NodeKind::Null)) {
+        } else if (expr->is(NodeKind::NULL_EXPR)) {
             return true;
         } else {
             return false;
         }
     }
-    case TypeKind::Array: {
-        if (from_type->get_kind() == TypeKind::EmptyArray) {
+    case TypeKind::ARRAY: {
+        if (from_type->get_kind() == TypeKind::EMPTY_ARRAY) {
             return true;
-        } else if (expr->is(NodeKind::Array)) {
+        } else if (expr->is(NodeKind::ARRAY)) {
             auto to_arr_type = static_cast<ArrayType*>(to_type);
             auto from_arr_type = static_cast<ArrayType*>(from_type);
 
@@ -7736,7 +7736,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
 
         return to_type->is(from_type);
     }
-    case TypeKind::Slice: {
+    case TypeKind::SLICE: {
         if (from_type->is_array()) {
             auto from_arr_type = static_cast<ArrayType*>(from_type);
             auto from_elm_type = from_arr_type->get_elm_type();
@@ -7749,7 +7749,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
 
         return to_type->is(from_type);
     }
-    case TypeKind::Struct: {
+    case TypeKind::STRUCT: {
         if (context.is_std_any_type(to_type)) {
             if (is_incomplete_type(from_type)) {
                 return false;
@@ -7783,15 +7783,15 @@ bool acorn::Sema::is_castable_to(Type* to_type, Expr* expr) {
 }
 
 bool acorn::Sema::is_lvalue(Expr* expr) const {
-    if (expr->is(NodeKind::MemoryAccess)) {
+    if (expr->is(NodeKind::MEMORY_ACCESS)) {
         return true;
     }
-    if (expr->is(NodeKind::IdentRef) || expr->is(NodeKind::DotOperator)) {
+    if (expr->is(NodeKind::IDENT_REF) || expr->is(NodeKind::DOT_OPERATOR)) {
         auto ref = static_cast<const IdentRef*>(expr);
         return ref->is_var_ref();
     }
 
-    if (expr->is(NodeKind::UnaryOp)) {
+    if (expr->is(NodeKind::UNARY_OP)) {
         auto unary = static_cast<const UnaryOp*>(expr);
         return unary->op == '*';
     }
@@ -7800,7 +7800,7 @@ bool acorn::Sema::is_lvalue(Expr* expr) const {
 }
 
 bool acorn::Sema::is_readonly_field_without_access(Expr* expr) const {
-    if (expr->is(NodeKind::DotOperator)) {
+    if (expr->is(NodeKind::DOT_OPERATOR)) {
         auto dot = static_cast<DotOperator*>(expr);
         if (dot->is_var_ref() && dot->var_ref->has_modifier(Modifier::Readonly) &&
             (!cur_func || cur_func->non_generic_struct_instance != dot->var_ref->non_generic_struct_instance)) {
@@ -7812,16 +7812,16 @@ bool acorn::Sema::is_readonly_field_without_access(Expr* expr) const {
 
 bool acorn::Sema::is_incomplete_type(Type* type) const {
     switch (type->get_kind()) {
-    case TypeKind::Void:
-    case TypeKind::NamespaceRef:
-    case TypeKind::EmptyArray:
-    case TypeKind::Null:
-    case TypeKind::Range:
-    case TypeKind::Auto:
-    case TypeKind::Expr:
-    case TypeKind::FuncsRef:
-    case TypeKind::Interface:
-    case TypeKind::Enum:
+    case TypeKind::VOID_T:
+    case TypeKind::NAMESPACE_REF:
+    case TypeKind::EMPTY_ARRAY:
+    case TypeKind::NULL_T:
+    case TypeKind::RANGE:
+    case TypeKind::AUTO:
+    case TypeKind::EXPR:
+    case TypeKind::FUNCS_REF:
+    case TypeKind::INTERFACE:
+    case TypeKind::ENUM:
         return true;
     default:
         return false;
@@ -7830,40 +7830,40 @@ bool acorn::Sema::is_incomplete_type(Type* type) const {
 
 bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
     switch (stmt->kind) {
-    case NodeKind::ReturnStmt:
-    case NodeKind::Var:
-    case NodeKind::Func:
-    case NodeKind::Struct:
-    case NodeKind::FuncCall:
-    case NodeKind::IfStmt:
-    case NodeKind::ScopeStmt:
-    case NodeKind::PredicateLoopStmt:
-    case NodeKind::RangeLoopStmt:
-    case NodeKind::IteratorLoopStmt:
-    case NodeKind::BreakStmt:
-    case NodeKind::ContinueStmt:
-    case NodeKind::SwitchStmt:
-    case NodeKind::RaiseStmt:
-    case NodeKind::RecoverStmt:
-    case NodeKind::VarList:
-    case NodeKind::UninitNewCallStmt:
+    case NodeKind::RETURN_STMT:
+    case NodeKind::VAR:
+    case NodeKind::FUNC:
+    case NodeKind::STRUCT:
+    case NodeKind::FUNC_CALL:
+    case NodeKind::IF_STMT:
+    case NodeKind::SCOPE_STMT:
+    case NodeKind::PREDICATE_LOOP_STMT:
+    case NodeKind::RANGE_LOOP_STMT:
+    case NodeKind::ITERATOR_LOOP_STMT:
+    case NodeKind::BREAK_STMT:
+    case NodeKind::CONTINUE_STMT:
+    case NodeKind::SWITCH_STMT:
+    case NodeKind::RAISE_STMT:
+    case NodeKind::RECOVER_STMT:
+    case NodeKind::VAR_LIST:
+    case NodeKind::UNINIT_NEW_CALL_STMT:
         return false;
-    case NodeKind::BinOp: {
+    case NodeKind::BIN_OP: {
         auto bin_op = static_cast<const BinOp*>(stmt);
 
         switch (bin_op->op) {
         case '=':
-        case Token::AddEq:
-        case Token::SubEq:
-        case Token::MulEq:
-        case Token::DivEq:
-        case Token::ModEq:
-        case Token::AndEq:
-        case Token::OrEq:
-        case Token::CaretEq:
-        case Token::TildeEq:
-        case Token::LtLtEq:
-        case Token::GtGtEq:
+        case Token::ADD_EQ:
+        case Token::SUB_EQ:
+        case Token::MUL_EQ:
+        case Token::DIV_EQ:
+        case Token::MOD_EQ:
+        case Token::AND_EQ:
+        case Token::OR_EQ:
+        case Token::CARET_EQ:
+        case Token::TILDE_EQ:
+        case Token::LT_LT_EQ:
+        case Token::GT_GT_EQ:
             return false;
         default:
             break;
@@ -7871,11 +7871,11 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
 
         return true;
     }
-    case NodeKind::UnaryOp: {
+    case NodeKind::UNARY_OP: {
         auto unary_op = static_cast<const UnaryOp*>(stmt);
 
-        if (unary_op->op == Token::AddAdd || unary_op->op == Token::SubSub ||
-            unary_op->op == Token::PostAddAdd || unary_op->op == Token::PostSubSub) {
+        if (unary_op->op == Token::ADD_ADD || unary_op->op == Token::SUB_SUB ||
+            unary_op->op == Token::POST_ADD_ADD || unary_op->op == Token::POST_SUB_SUB) {
             return false;
         }
 
@@ -7921,22 +7921,22 @@ void acorn::Sema::create_cast(Expr* expr, Type* to_type) {
 bool acorn::Sema::is_condition(Type* type) const {
     return type->is_bool() ||
            type->is_pointer() ||
-           type->get_kind() == TypeKind::Null;
+           type->get_kind() == TypeKind::NULL_T;
 }
 
 acorn::Type* acorn::Sema::get_type_of_type_expr(Expr* expr) {
     // TODO: should the expr_type just contain the type to which it is an expression
     // type of?
-    if (expr->is(NodeKind::IdentRef)) {
+    if (expr->is(NodeKind::IDENT_REF)) {
         IdentRef* ref = static_cast<IdentRef*>(expr);
         if (ref->is_composite_ref()) {
-            if (ref->composite_ref->is(NodeKind::Struct)) {
+            if (ref->composite_ref->is(NodeKind::STRUCT)) {
                 auto structn = static_cast<Struct*>(ref->composite_ref);
                 return structn->struct_type;
-            } else if (ref->composite_ref->is(NodeKind::Enum)) {
+            } else if (ref->composite_ref->is(NodeKind::ENUM)) {
                 auto enumn = static_cast<Enum*>(ref->composite_ref);
                 return enumn->enum_type;
-            } else if (ref->composite_ref->is(NodeKind::Interface)) {
+            } else if (ref->composite_ref->is(NodeKind::INTERFACE)) {
                 auto interfacen = static_cast<Interface*>(ref->composite_ref);
                 return interfacen->interface_type;
             } else {
@@ -7949,7 +7949,7 @@ acorn::Type* acorn::Sema::get_type_of_type_expr(Expr* expr) {
             acorn_fatal("unreachable");
             return nullptr;
         }
-    } else if (expr->is(NodeKind::FuncCall)) {
+    } else if (expr->is(NodeKind::FUNC_CALL)) {
         FuncCall* call = static_cast<FuncCall*>(expr);
         return call->type_for_type_expr;
     } else {
@@ -7968,7 +7968,7 @@ uint64_t acorn::Sema::get_total_number_of_values_in_range(BinOp* range) {
     uint64_t rhs_value = ll_rhs_value->getZExtValue();
 
     switch (range->op) {
-    case Token::RangeEq:
+    case Token::RANGE_EQ:
         if (range->type) {
             int64_t lhs_value_signed = static_cast<int64_t>(lhs_value);
             int64_t rhs_value_signed = static_cast<int64_t>(rhs_value);
@@ -7976,7 +7976,7 @@ uint64_t acorn::Sema::get_total_number_of_values_in_range(BinOp* range) {
         } else {
             return rhs_value - lhs_value + 1;
         }
-    case Token::RangeLt:
+    case Token::RANGE_LT:
         if (range->type) {
             int64_t lhs_value_signed = static_cast<int64_t>(lhs_value);
             int64_t rhs_value_signed = static_cast<int64_t>(rhs_value);

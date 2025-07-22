@@ -22,73 +22,73 @@ namespace acorn {
 
     static Node* deep_copy_process(PageAllocator& allocator, Node* node) {
         switch (node->kind) {
-        case NodeKind::Func: {
+        case NodeKind::FUNC: {
             acorn_fatal("Functions cannot be deep copied");
             return nullptr;
         }
-        case NodeKind::ImplicitFunc: {
+        case NodeKind::IMPLICIT_FUNC: {
             acorn_fatal("Implicit functions cannot be part of the original AST");
             return nullptr;
         }
-        case NodeKind::Var: {
+        case NodeKind::VAR: {
             auto var = raw_copy(allocator, static_cast<Var*>(node));
             if (var->assignment) {
                 var->assignment = deep_copy(allocator, var->assignment);
             }
             return var;
         }
-        case NodeKind::VarList: {
+        case NodeKind::VAR_LIST: {
             acorn_fatal("Variable lists are resolved during parsing into just variables");
             return nullptr;
         }
-        case NodeKind::Struct: {
+        case NodeKind::STRUCT: {
             acorn_fatal("Structs cannot be deep copied only generic structs");
             return nullptr;
         }
-        case NodeKind::Enum: {
+        case NodeKind::ENUM: {
             auto enumn = raw_copy(allocator, static_cast<Enum*>(node));
             for (auto& value : enumn->values) {
                 value.assignment = deep_copy(allocator, value.assignment);
             }
             return enumn;
         }
-        case NodeKind::Interface: {
+        case NodeKind::INTERFACE: {
             return raw_copy(allocator, static_cast<Interface*>(node));
         }
-        case NodeKind::Generic: {
+        case NodeKind::GENERIC: {
             acorn_fatal("cannot deep copy generics");
             return nullptr;
         }
-        case NodeKind::IfStmt:
-        case NodeKind::ReturnStmt:
-        case NodeKind::ScopeStmt:
-        case NodeKind::ImportStmt:
-        case NodeKind::PredicateLoopStmt:
-        case NodeKind::RangeLoopStmt:
-        case NodeKind::IteratorLoopStmt:
-        case NodeKind::ContinueStmt:
-        case NodeKind::BreakStmt:
-        case NodeKind::SwitchStmt:
-        case NodeKind::RaiseStmt:
-        case NodeKind::RecoverStmt: {
+        case NodeKind::IF_STMT:
+        case NodeKind::RETURN_STMT:
+        case NodeKind::SCOPE_STMT:
+        case NodeKind::IMPORT_STMT:
+        case NodeKind::PREDICATE_LOOP_STMT:
+        case NodeKind::RANGE_LOOP_STMT:
+        case NodeKind::ITERATOR_LOOP_STMT:
+        case NodeKind::CONTINUE_STMT:
+        case NodeKind::BREAK_STMT:
+        case NodeKind::SWITCH_STMT:
+        case NodeKind::RAISE_STMT:
+        case NodeKind::RECOVER_STMT: {
             acorn_fatal("cannot deep copy statements");
             return nullptr;
         }
-        case NodeKind::ExprStart: {
+        case NodeKind::EXPR_START: {
             acorn_fatal("lol");
             return nullptr;
         }
-        case NodeKind::InvalidExpr: {
+        case NodeKind::INVALID_EXPR: {
             acorn_fatal("cannot deep copy invalid expressions");
             return nullptr;
         }
-        case NodeKind::BinOp: {
+        case NodeKind::BIN_OP: {
             auto bin_op = raw_copy(allocator, static_cast<BinOp*>(node));
             bin_op->lhs = deep_copy(allocator, bin_op->lhs);
             bin_op->rhs = deep_copy(allocator, bin_op->rhs);
             return bin_op;
         }
-        case NodeKind::UnaryOp: {
+        case NodeKind::UNARY_OP: {
             auto unary_op = raw_copy(allocator, static_cast<UnaryOp*>(node));
             unary_op->expr = deep_copy(allocator, unary_op->expr);
             return unary_op;
@@ -96,38 +96,38 @@ namespace acorn {
         // TODO (maddie): for some of these trivial types can we get away with not copying them?
         // At the moment there is a cast type that would cause problems but maybe there is a way
         // to check if casts happen first?
-        case NodeKind::Number: {
+        case NodeKind::NUMBER: {
             return raw_copy(allocator, static_cast<Number*>(node));
         }
-        case NodeKind::Bool: {
+        case NodeKind::BOOL_EXPR: {
             return raw_copy(allocator, static_cast<Bool*>(node));
         }
-        case NodeKind::IdentRef: {
+        case NodeKind::IDENT_REF: {
             return raw_copy(allocator, static_cast<IdentRef*>(node));
         }
-        case NodeKind::DotOperator: {
+        case NodeKind::DOT_OPERATOR: {
             auto dot = raw_copy(allocator, static_cast<DotOperator*>(node));
             dot->site = deep_copy(allocator, dot->site);
             return dot;
         }
-        case NodeKind::MemoryAccess: {
+        case NodeKind::MEMORY_ACCESS: {
             auto mem_access = raw_copy(allocator, static_cast<MemoryAccess*>(node));
             mem_access->site = deep_copy(allocator, mem_access->site);
             mem_access->index = deep_copy(allocator, mem_access->index);
             return mem_access;
         }
-        case NodeKind::NamedValue: {
+        case NodeKind::NAMED_VALUE: {
             auto named_value = raw_copy(allocator, static_cast<NamedValue*>(node));
             named_value->assignment = deep_copy(allocator, named_value);
             return named_value;
         }
-        case NodeKind::UninitNewCallStmt: {
+        case NodeKind::UNINIT_NEW_CALL_STMT: {
             auto new_call = raw_copy(allocator, static_cast<UninitNewCallStmt*>(node));
             new_call->address = deep_copy(allocator, new_call->address);
             new_call->value = deep_copy(allocator, new_call->value);
             return new_call;
         }
-        case NodeKind::FuncCall: {
+        case NodeKind::FUNC_CALL: {
             auto call = raw_copy(allocator, static_cast<FuncCall*>(node));
             call->site = deep_copy(allocator, call->site);
 
@@ -139,7 +139,7 @@ namespace acorn {
             call->args = std::move(new_args);
             return call;
         }
-        case NodeKind::StructInitializer: {
+        case NodeKind::STRUCT_INITIALIZER: {
             auto initializer = raw_copy(allocator, static_cast<StructInitializer*>(node));
             initializer->site = deep_copy(allocator, initializer->site);
 
@@ -151,18 +151,18 @@ namespace acorn {
             initializer->values = std::move(new_values);
             return initializer;
         }
-        case NodeKind::String: {
+        case NodeKind::STRING: {
             return raw_copy(allocator, static_cast<String*>(node));
         }
-        case NodeKind::Null: {
+        case NodeKind::NULL_EXPR: {
             return raw_copy(allocator, static_cast<Null*>(node));
         }
-        case NodeKind::Cast: {
+        case NodeKind::CAST: {
             auto cast = raw_copy(allocator, static_cast<Cast*>(node));
             cast->value = deep_copy(allocator, cast->value);
             return cast;
         }
-        case NodeKind::Array: {
+        case NodeKind::ARRAY: {
             auto arr = raw_copy(allocator, static_cast<Array*>(node));
 
             llvm::SmallVector<Expr*> new_elms;
@@ -173,41 +173,41 @@ namespace acorn {
             arr->elms = std::move(new_elms);
             return arr;
         }
-        case NodeKind::This: {
+        case NodeKind::THIS_EXPR: {
             return raw_copy(allocator, static_cast<This*>(node));
         }
-        case NodeKind::SizeOf: {
+        case NodeKind::SIZE_OF: {
             auto sizeofn = raw_copy(allocator, static_cast<SizeOf*>(node));
             sizeofn->value = deep_copy(allocator, sizeofn->value);
             return sizeofn;
         }
-        case NodeKind::Ternary: {
+        case NodeKind::TERNARY: {
             auto ternary = raw_copy(allocator, static_cast<Ternary*>(node));
             ternary->cond = deep_copy(allocator, ternary->cond);
             ternary->lhs = deep_copy(allocator, ternary->lhs);
             ternary->rhs = deep_copy(allocator, ternary->rhs);
             return ternary;
         }
-        case NodeKind::MoveObj: {
+        case NodeKind::MOVEOBJ: {
             auto moveobj = raw_copy(allocator, static_cast<MoveObj*>(node));
             moveobj->value = deep_copy(allocator, moveobj->value);
             return moveobj;
         }
-        case NodeKind::TypeExpr: {
+        case NodeKind::TYPE_EXPR: {
             return raw_copy(allocator, static_cast<TypeExpr*>(node));
         }
-        case NodeKind::Reflect: {
+        case NodeKind::REFLECT: {
             auto reflect = raw_copy(allocator, static_cast<Reflect*>(node));
             if (reflect->expr) {
                 reflect->expr = deep_copy(allocator, reflect->expr);
             }
             return reflect;
         }
-        case NodeKind::Try: {
+        case NodeKind::TRY: {
             acorn_fatal("cannot copy try statement");
             return nullptr;
         }
-        case NodeKind::ExprEnd: {
+        case NodeKind::EXPR_END: {
             acorn_fatal("lol");
             return nullptr;
         }

@@ -48,53 +48,53 @@ namespace acorn {
 
     enum class NodeKind {
 
-        Func,
-        ImplicitFunc,
-        Var,
-        VarList,
-        Struct,
-        Enum,
-        Interface,
-        Generic,
+        FUNC,
+        IMPLICIT_FUNC,
+        VAR,
+        VAR_LIST,
+        STRUCT,
+        ENUM,
+        INTERFACE,
+        GENERIC,
 
-        ReturnStmt,
-        IfStmt,
-        ScopeStmt,
-        ImportStmt,
-        PredicateLoopStmt,
-        RangeLoopStmt,
-        IteratorLoopStmt,
-        ContinueStmt,
-        BreakStmt,
-        SwitchStmt,
-        RaiseStmt,
-        RecoverStmt,
-        UninitNewCallStmt,
+        RETURN_STMT,
+        IF_STMT,
+        SCOPE_STMT,
+        IMPORT_STMT,
+        PREDICATE_LOOP_STMT,
+        RANGE_LOOP_STMT,
+        ITERATOR_LOOP_STMT,
+        CONTINUE_STMT,
+        BREAK_STMT,
+        SWITCH_STMT,
+        RAISE_STMT,
+        RECOVER_STMT,
+        UNINIT_NEW_CALL_STMT,
 
-        ExprStart,
-        InvalidExpr,
-        BinOp,
-        UnaryOp,
-        Number,
-        Bool,
-        IdentRef,
-        DotOperator,
-        MemoryAccess,
-        NamedValue,
-        FuncCall,
-        StructInitializer,
-        String,
-        Null,
-        Cast,
-        Array,
-        This,
-        SizeOf,
-        Ternary,
-        MoveObj,
-        TypeExpr,
-        Reflect,
-        Try,
-        ExprEnd
+        EXPR_START,
+        INVALID_EXPR,
+        BIN_OP,
+        UNARY_OP,
+        NUMBER,
+        BOOL_EXPR,
+        IDENT_REF,
+        DOT_OPERATOR,
+        MEMORY_ACCESS,
+        NAMED_VALUE,
+        FUNC_CALL,
+        STRUCT_INITIALIZER,
+        STRING,
+        NULL_EXPR,
+        CAST,
+        ARRAY,
+        THIS_EXPR,
+        SIZE_OF,
+        TERNARY,
+        MOVEOBJ,
+        TYPE_EXPR,
+        REFLECT,
+        TRY,
+        EXPR_END
 
     };
 
@@ -137,7 +137,7 @@ namespace acorn {
         [[nodiscard]] constexpr bool is_not(NodeKind kind) const noexcept { return !is(kind); }
 
         bool is_expression() const {
-            return kind > NodeKind::ExprStart && kind < NodeKind::ExprEnd;
+            return kind > NodeKind::EXPR_START && kind < NodeKind::EXPR_END;
         }
     };
 
@@ -145,7 +145,7 @@ namespace acorn {
     //--------------------------------------
 
     struct Generic : Node {
-        Generic() : Node(NodeKind::Generic) {
+        Generic() : Node(NodeKind::GENERIC) {
         }
 
         Identifier   name;
@@ -211,7 +211,7 @@ namespace acorn {
     };
 
     struct Func : Decl {
-        Func() : Decl(NodeKind::Func) {
+        Func() : Decl(NodeKind::FUNC) {
         }
 
         // If not null then the function is a member function.
@@ -321,15 +321,15 @@ namespace acorn {
     };
 
     struct ImplicitFunc : Node {
-        ImplicitFunc() : Node(NodeKind::ImplicitFunc) {
+        ImplicitFunc() : Node(NodeKind::IMPLICIT_FUNC) {
         }
 
         enum class ImplicitKind {
-            DefaultConstructor,
-            CopyConstructor,
-            MoveConstructor,
-            Destructor,
-            VTableInit
+            DEFAULT_CONSTRUCTOR,
+            COPY_CONSTRUCTOR,
+            MOVE_CONSTRUCTOR,
+            DESTRUCTOR,
+            VTABLE_INIT
         } implicit_kind;
 
         Struct* structn;
@@ -339,7 +339,7 @@ namespace acorn {
         static const uint32_t NotParam = static_cast<uint32_t>(-1);
         static const uint32_t NotField = static_cast<uint32_t>(-1);
 
-        Var() : Decl(NodeKind::Var) {
+        Var() : Decl(NodeKind::VAR) {
         }
 
         llvm::StringRef linkname;
@@ -379,14 +379,14 @@ namespace acorn {
     };
 
     struct VarList : Node {
-        VarList() : Node(NodeKind::VarList) {
+        VarList() : Node(NodeKind::VAR_LIST) {
         }
 
         llvm::SmallVector<Var*, 2> vars;
     };
 
     struct Struct : Decl {
-        Struct() : Decl(NodeKind::Struct) {
+        Struct() : Decl(NodeKind::STRUCT) {
         }
 
         StructType* struct_type;
@@ -476,7 +476,7 @@ namespace acorn {
     };
 
     struct Enum : Decl {
-        Enum() : Decl(NodeKind::Enum) {
+        Enum() : Decl(NodeKind::ENUM) {
         }
 
         EnumType* enum_type;
@@ -498,7 +498,7 @@ namespace acorn {
     };
 
     struct Interface : Decl {
-        Interface() : Decl(NodeKind::Interface) {
+        Interface() : Decl(NodeKind::INTERFACE) {
         }
 
         bool has_been_checked = false;
@@ -508,7 +508,7 @@ namespace acorn {
     };
 
     struct ImportStmt : Node {
-        ImportStmt() : Node(NodeKind::ImportStmt) {
+        ImportStmt() : Node(NodeKind::IMPORT_STMT) {
         }
 
         SourceFile* file;
@@ -528,8 +528,8 @@ namespace acorn {
 
         // Discriminated union.
         enum {
-            NamespaceKind,
-            CompositeKind
+            NAMESPACE_KIND,
+            COMPOSITE_KIND
         } imported_kind;
 
         union {
@@ -537,31 +537,31 @@ namespace acorn {
             Decl*      imported_composite;
         };
 
-        bool is_imported_namespace() const { return imported_kind == NamespaceKind; }
-        bool is_imported_composite() const { return imported_kind == CompositeKind; }
+        bool is_imported_namespace() const { return imported_kind == NAMESPACE_KIND; }
+        bool is_imported_composite() const { return imported_kind == COMPOSITE_KIND; }
 
         PointSourceLoc get_key_location(bool center_by_last) const;
 
         void set_imported_namespace(Namespace* nspace) {
-            imported_kind = NamespaceKind;
+            imported_kind = NAMESPACE_KIND;
             imported_nspace = nspace;
         }
 
         void set_imported_composite(Decl* composite) {
-            imported_kind = CompositeKind;
+            imported_kind = COMPOSITE_KIND;
             imported_composite = composite;
         }
     };
 
     struct ReturnStmt : Node {
-        ReturnStmt() : Node(NodeKind::ReturnStmt) {
+        ReturnStmt() : Node(NodeKind::RETURN_STMT) {
         }
 
         Expr* value = nullptr;
     };
 
     struct IfStmt : Node {
-        IfStmt() : Node(NodeKind::IfStmt) {
+        IfStmt() : Node(NodeKind::IF_STMT) {
         }
         IfStmt(NodeKind kind) : Node(kind) {
         }
@@ -573,7 +573,7 @@ namespace acorn {
     };
 
     struct PredicateLoopStmt : Node {
-        PredicateLoopStmt() : Node(NodeKind::PredicateLoopStmt) {
+        PredicateLoopStmt() : Node(NodeKind::PREDICATE_LOOP_STMT) {
         }
 
         Expr*      cond = nullptr;
@@ -581,7 +581,7 @@ namespace acorn {
     };
 
     struct RangeLoopStmt : Node {
-        RangeLoopStmt() : Node(NodeKind::RangeLoopStmt) {
+        RangeLoopStmt() : Node(NodeKind::RANGE_LOOP_STMT) {
         }
 
         Node*      init_node = nullptr;
@@ -591,7 +591,7 @@ namespace acorn {
     };
 
     struct IteratorLoopStmt : Node {
-        IteratorLoopStmt() : Node(NodeKind::IteratorLoopStmt) {
+        IteratorLoopStmt() : Node(NodeKind::ITERATOR_LOOP_STMT) {
         }
 
         Node*                   vars;
@@ -604,12 +604,12 @@ namespace acorn {
     };
 
     struct LoopControlStmt : Node {
-        LoopControlStmt() : Node(NodeKind::InvalidExpr) {
+        LoopControlStmt() : Node(NodeKind::INVALID_EXPR) {
         }
     };
 
     struct RecoverStmt : Node {
-        RecoverStmt() : Node(NodeKind::RecoverStmt) {
+        RecoverStmt() : Node(NodeKind::RECOVER_STMT) {
         }
 
         Expr* value;
@@ -621,7 +621,7 @@ namespace acorn {
     };
 
     struct SwitchStmt : Node {
-        SwitchStmt() : Node(NodeKind::SwitchStmt) {
+        SwitchStmt() : Node(NodeKind::SWITCH_STMT) {
         }
 
         bool       all_conds_foldable = true;
@@ -631,7 +631,7 @@ namespace acorn {
     };
 
     struct RaiseStmt : Node {
-        RaiseStmt() : Node(NodeKind::RaiseStmt) {
+        RaiseStmt() : Node(NodeKind::RAISE_STMT) {
         }
 
         Expr*   expr;
@@ -639,14 +639,14 @@ namespace acorn {
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {
-        ScopeStmt() : Node(NodeKind::ScopeStmt) {
+        ScopeStmt() : Node(NodeKind::SCOPE_STMT) {
         }
 
         SourceLoc end_loc;
     };
 
     struct UninitNewCallStmt : Node {
-        UninitNewCallStmt() : Node(NodeKind::UninitNewCallStmt) {}
+        UninitNewCallStmt() : Node(NodeKind::UNINIT_NEW_CALL_STMT) {}
 
         Expr* address;
         Expr* value;
@@ -697,12 +697,12 @@ namespace acorn {
     };
 
     struct InvalidExpr : Expr {
-        InvalidExpr() : Expr(NodeKind::InvalidExpr) {
+        InvalidExpr() : Expr(NodeKind::INVALID_EXPR) {
         }
     };
 
     struct BinOp : Expr {
-        BinOp() : Expr(NodeKind::BinOp) {
+        BinOp() : Expr(NodeKind::BIN_OP) {
         }
 
         TokenKind op;
@@ -712,7 +712,7 @@ namespace acorn {
     };
 
     struct UnaryOp : Expr {
-        UnaryOp() : Expr(NodeKind::UnaryOp) {
+        UnaryOp() : Expr(NodeKind::UNARY_OP) {
         }
 
         TokenKind op;
@@ -720,7 +720,7 @@ namespace acorn {
     };
 
     struct Number : Expr {
-        Number() : Expr(NodeKind::Number) {
+        Number() : Expr(NodeKind::NUMBER) {
         }
 
         union {
@@ -738,14 +738,14 @@ namespace acorn {
     };
 
     struct Bool : Expr {
-        Bool() : Expr(NodeKind::Bool) {
+        Bool() : Expr(NodeKind::BOOL_EXPR) {
         }
 
         bool value;
     };
 
     struct IdentRef : Expr {
-        IdentRef() : Expr(NodeKind::IdentRef) {
+        IdentRef() : Expr(NodeKind::IDENT_REF) {
         }
 
         IdentRef(NodeKind kind) : Expr(kind) {
@@ -755,26 +755,26 @@ namespace acorn {
         bool explicitly_binds_generics = false;
 
         enum class RelativeEnforcement {
-            File,
-            Module,
-            None
-        } relative_enforcement = RelativeEnforcement::None;
+            FILE,
+            MODULE,
+            NONE
+        } relative_enforcement = RelativeEnforcement::NONE;
 
         bool found_ref() const {
-            return found_kind != NoneKind;
+            return found_kind != NONE_KIND;
         }
 
         // Discriminated union.
         enum {
-            NoneKind,
-            VarKind,
-            FuncsKind,
-            UniversalKind,
-            NamespaceKind,
-            CompositeKind,
-            EnumValueKind,
-            GenericTypeKind
-        } found_kind = NoneKind;
+            NONE_KIND,
+            VAR_KIND,
+            FUNCS_KIND,
+            UNIVERAL_KIND,
+            NAMESPACE_KIND,
+            COMPOSITE_KIND,
+            ENUM_VALUE_KIND,
+            GENERIC_TYPE_KIND
+        } found_kind = NONE_KIND;
 
         union {
             Var*         var_ref = nullptr;
@@ -786,52 +786,52 @@ namespace acorn {
             GenericType* generic_type_ref;
         };
 
-        bool is_var_ref() const          { return found_kind == VarKind;         }
-        bool is_funcs_ref() const        { return found_kind == FuncsKind;       }
-        bool is_universal_ref() const    { return found_kind == UniversalKind;   }
-        bool is_namespace_ref() const    { return found_kind == NamespaceKind;   }
-        bool is_composite_ref() const    { return found_kind == CompositeKind;   }
-        bool is_enum_value_ref() const   { return found_kind == EnumValueKind;   }
-        bool is_generic_type_ref() const { return found_kind == GenericTypeKind; }
+        bool is_var_ref() const          { return found_kind == VAR_KIND;          }
+        bool is_funcs_ref() const        { return found_kind == FUNCS_KIND;        }
+        bool is_universal_ref() const    { return found_kind == UNIVERAL_KIND;     }
+        bool is_namespace_ref() const    { return found_kind == NAMESPACE_KIND;    }
+        bool is_composite_ref() const    { return found_kind == COMPOSITE_KIND;    }
+        bool is_enum_value_ref() const   { return found_kind == ENUM_VALUE_KIND;   }
+        bool is_generic_type_ref() const { return found_kind == GENERIC_TYPE_KIND; }
 
         void set_var_ref(Var* var) {
             var_ref    = var;
-            found_kind = VarKind;
+            found_kind = VAR_KIND;
         }
 
         void set_funcs_ref(FuncList* funcs) {
             funcs_ref  = funcs;
-            found_kind = FuncsKind;
+            found_kind = FUNCS_KIND;
         }
 
         void set_universal_ref(Expr* universal) {
             universal_ref = universal;
-            found_kind = UniversalKind;
+            found_kind = UNIVERAL_KIND;
         }
 
         void set_namespace_ref(Namespace* nspace) {
             nspace_ref = nspace;
-            found_kind = NamespaceKind;
+            found_kind = NAMESPACE_KIND;
         }
 
         void set_composite_ref(Decl* composite) {
             composite_ref = composite;
-            found_kind = CompositeKind;
+            found_kind = COMPOSITE_KIND;
         }
 
         void set_enum_value_ref(Enum::Value* value) {
             enum_value_ref = value;
-            found_kind = EnumValueKind;
+            found_kind = ENUM_VALUE_KIND;
         }
 
         void set_generic_type_ref(GenericType* generic_type) {
             generic_type_ref = generic_type;
-            found_kind = GenericTypeKind;
+            found_kind = GENERIC_TYPE_KIND;
         }
     };
 
     struct DotOperator : IdentRef {
-        DotOperator() : IdentRef(NodeKind::DotOperator) {
+        DotOperator() : IdentRef(NodeKind::DOT_OPERATOR) {
         }
 
         bool is_array_length = false;
@@ -844,7 +844,7 @@ namespace acorn {
     };
 
     struct GenericBindFuncCall : IdentRef {
-        GenericBindFuncCall() : IdentRef(NodeKind::IdentRef) {
+        GenericBindFuncCall() : IdentRef(NodeKind::IDENT_REF) {
         }
 
         size_t non_named_args_offset = -1;
@@ -853,7 +853,7 @@ namespace acorn {
     };
 
     struct TypeExpr : Expr {
-        TypeExpr() : Expr(NodeKind::TypeExpr) {
+        TypeExpr() : Expr(NodeKind::TYPE_EXPR) {
         }
 
         TypeExpr(NodeKind kind) : Expr(kind) {
@@ -864,7 +864,7 @@ namespace acorn {
     };
 
     struct MemoryAccess : TypeExpr {
-        MemoryAccess() : TypeExpr(NodeKind::MemoryAccess) {
+        MemoryAccess() : TypeExpr(NodeKind::MEMORY_ACCESS) {
         }
 
         Expr* site;
@@ -872,7 +872,7 @@ namespace acorn {
     };
 
     struct NamedValue : Expr {
-        NamedValue() : Expr(NodeKind::NamedValue) {
+        NamedValue() : Expr(NodeKind::NAMED_VALUE) {
         }
 
         size_t     mapped_idx;
@@ -883,7 +883,7 @@ namespace acorn {
     };
 
     struct FuncCall : Expr {
-        FuncCall() : Expr(NodeKind::FuncCall) {
+        FuncCall() : Expr(NodeKind::FUNC_CALL) {
         }
         FuncCall(NodeKind kind) : Expr(kind) {
         }
@@ -901,7 +901,7 @@ namespace acorn {
     };
 
     struct StructInitializer : Expr {
-        StructInitializer() : Expr(NodeKind::StructInitializer) {
+        StructInitializer() : Expr(NodeKind::STRUCT_INITIALIZER) {
         }
 
         size_t non_named_vals_offset = 0;
@@ -914,19 +914,19 @@ namespace acorn {
     };
 
     struct String : Expr {
-        String() : Expr(NodeKind::String) {
+        String() : Expr(NodeKind::STRING) {
         }
 
         std::string text;
     };
 
     struct Null : Expr {
-        Null() : Expr(NodeKind::Null) {
+        Null() : Expr(NodeKind::NULL_EXPR) {
         }
     };
 
     struct Cast : Expr {
-        Cast() : Expr(NodeKind::Cast) {
+        Cast() : Expr(NodeKind::CAST) {
         }
 
         Type* explicit_cast_type;
@@ -934,19 +934,19 @@ namespace acorn {
     };
 
     struct Array : Expr {
-        Array() : Expr(NodeKind::Array) {
+        Array() : Expr(NodeKind::ARRAY) {
         }
 
         llvm::SmallVector<Expr*, 8> elms;
     };
 
     struct This : Expr {
-        This() : Expr(NodeKind::This) {
+        This() : Expr(NodeKind::THIS_EXPR) {
         }
     };
 
     struct SizeOf : Expr {
-        SizeOf() : Expr(NodeKind::SizeOf) {
+        SizeOf() : Expr(NodeKind::SIZE_OF) {
         }
 
         //Type* parsed_type_with_size;
@@ -955,7 +955,7 @@ namespace acorn {
     };
 
     struct Ternary : Expr {
-        Ternary() : Expr(NodeKind::Ternary) {
+        Ternary() : Expr(NodeKind::TERNARY) {
         }
 
         Expr* cond;
@@ -964,14 +964,14 @@ namespace acorn {
     };
 
     struct MoveObj : Expr {
-        MoveObj() : Expr(NodeKind::MoveObj) {
+        MoveObj() : Expr(NodeKind::MOVEOBJ) {
         }
 
         Expr* value;
     };
 
     struct Reflect : Expr {
-        Reflect() : Expr(NodeKind::Reflect) {
+        Reflect() : Expr(NodeKind::REFLECT) {
         }
 
         ReflectKind reflect_kind;
@@ -980,7 +980,7 @@ namespace acorn {
     };
 
     struct Try : Expr {
-        Try() : Expr(NodeKind::Try) {
+        Try() : Expr(NodeKind::TRY) {
         }
 
         // If true then the current function is specified as raising an error and

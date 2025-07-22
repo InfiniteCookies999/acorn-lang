@@ -123,13 +123,13 @@ start:
     case ';': lex1(';');
     case '?': lex1('?');
     case '$': lex1('$');
-    case '=':  lex2('=', '=', Token::EqEq);
-    case '*':  lex2('*', '=', Token::MulEq);
-    case '%':  lex2('%', '=', Token::ModEq);
-    case '^':  lex2('^', '=', Token::CaretEq);
-    case '~':  lex2('~', '=', Token::TildeEq);
-    case '!':  lex2('!', '=', Token::ExEq);
-    case '\\': lex2('\\', '\\', Token::BackslashBackslash);
+    case '=':  lex2('=', '=', Token::EQ_EQ);
+    case '*':  lex2('*', '=', Token::MUL_EQ);
+    case '%':  lex2('%', '=', Token::MOD_EQ);
+    case '^':  lex2('^', '=', Token::CARET_EQ);
+    case '~':  lex2('~', '=', Token::TILDE_EQ);
+    case '!':  lex2('!', '=', Token::EX_EQ);
+    case '\\': lex2('\\', '\\', Token::BACKSLASH_BACKSLASH);
     case '/': {
         ++ptr;
         if (*ptr == '/') {
@@ -140,7 +140,7 @@ start:
             goto start;
         } else if (*ptr == '=') {
             ++ptr;
-            return Token(Token::DivEq, ptr - 2, 2);
+            return Token(Token::DIV_EQ, ptr - 2, 2);
         }
         return Token('/', ptr - 1, 1);
     }
@@ -148,10 +148,10 @@ start:
         ++ptr;
         if (*ptr == '=') {
             ++ptr;
-            return Token(Token::AndEq, ptr - 2, 2);
+            return Token(Token::AND_EQ, ptr - 2, 2);
         } else if (*ptr == '&') {
             ++ptr;
-            return Token(Token::AndAnd, ptr - 2, 2);
+            return Token(Token::AND_AND, ptr - 2, 2);
         }
         return Token('&', ptr - 1, 1);
     }
@@ -159,10 +159,10 @@ start:
         ++ptr;
         if (*ptr == '=') {
             ++ptr;
-            return Token(Token::OrEq, ptr - 2, 2);
+            return Token(Token::OR_EQ, ptr - 2, 2);
         } else if (*ptr == '|') {
             ++ptr;
-            return Token(Token::OrOr, ptr - 2, 2);
+            return Token(Token::OR_OR, ptr - 2, 2);
         }
         return Token('|', ptr - 1, 1);
     }
@@ -170,10 +170,10 @@ start:
         ++ptr;
         if (*ptr == '=') {
             ++ptr;
-            return Token(Token::AddEq, ptr - 2, 2);
+            return Token(Token::ADD_EQ, ptr - 2, 2);
         } else if (*ptr == '+') {
             ++ptr;
-            return Token(Token::AddAdd, ptr - 2, 2);
+            return Token(Token::ADD_ADD, ptr - 2, 2);
         } else if (is_digit(*ptr)) {
             return next_number(ptr - 1);
         }
@@ -183,17 +183,17 @@ start:
         ++ptr;
         if (*ptr == '>') {
             ++ptr;
-            return Token(Token::Arrow, ptr - 2, 2);
+            return Token(Token::ARROW, ptr - 2, 2);
         } else if (*ptr == '=') {
             ++ptr;
-            return Token(Token::SubEq, ptr - 2, 2);
+            return Token(Token::SUB_EQ, ptr - 2, 2);
         } else if (*ptr == '-') {
             ++ptr;
             if (*ptr == '-') {
                 ++ptr;
-                return Token(Token::SubSubSub, ptr - 3, 3);
+                return Token(Token::SUB_SUB_SUB, ptr - 3, 3);
             }
-            return Token(Token::SubSub, ptr - 2, 2);
+            return Token(Token::SUB_SUB, ptr - 2, 2);
         } else if (is_digit(*ptr)) {
             return next_number(ptr - 1);
         }
@@ -204,13 +204,13 @@ start:
         if (*ptr == '>') {
             if (*(++ptr) == '=') {
                 ++ptr;
-                return Token(Token::GtGtEq, ptr - 3, 3);
+                return Token(Token::GT_GT_EQ, ptr - 3, 3);
             }
-            return Token(Token::GtGt, ptr - 2, 2);
+            return Token(Token::GT_GT, ptr - 2, 2);
         }
         else if (*ptr == '=') {
             ++ptr;
-            return Token(Token::GtEq, ptr - 2, 2);
+            return Token(Token::GT_EQ, ptr - 2, 2);
         }
         return Token('>', ptr - 1, 1);
     }
@@ -219,13 +219,13 @@ start:
         if (*ptr == '<') {
             if (*(++ptr) == '=') {
                 ++ptr;
-                return Token(Token::LtLtEq, ptr - 3, 3);
+                return Token(Token::LT_LT_EQ, ptr - 3, 3);
             }
-            return Token(Token::LtLt, ptr - 2, 2);
+            return Token(Token::LT_LT, ptr - 2, 2);
         }
         else if (*ptr == '=') {
             ++ptr;
-            return Token(Token::LtEq, ptr - 2, 2);
+            return Token(Token::LT_EQ, ptr - 2, 2);
         }
         return Token('<', ptr - 1, 1);
     }
@@ -233,17 +233,17 @@ start:
         ++ptr;
         if (*ptr == '.' && *(ptr + 1) == '=') {
             ptr += 2;
-            return Token(Token::RangeEq, ptr - 3, 3);
+            return Token(Token::RANGE_EQ, ptr - 3, 3);
         } else if (*ptr == '.' && *(ptr + 1) == '<') {
             ptr += 2;
-            return Token(Token::RangeLt, ptr - 3, 3);
+            return Token(Token::RANGE_LT, ptr - 3, 3);
         } else if (*ptr == '.') {
             ptr += 1;
             if (*ptr == '.') {
                 ptr += 1;
-                return Token(Token::DotDotDot, ptr - 3, 3);
+                return Token(Token::DOT_DOT_DOT, ptr - 3, 3);
             } else {
-                return Token(Token::DotDot, ptr - 2, 2);
+                return Token(Token::DOT_DOT, ptr - 2, 2);
             }
         }
         return Token('.', ptr - 1, 1);
@@ -259,13 +259,13 @@ start:
                   .add_arrow_msg(Logger::CaretPlacement::At, "remove this character")
                   .end_error(ErrCode::LexInvalidChar);
             ++ptr;
-            return Token(Token::Invalid, beg, 1);
+            return Token(Token::INVALID, beg, 1);
         }
 
         if (byte <= 127) {
             error("Invalid character (ASCII code): '%s'", byte).end_error(ErrCode::LexInvalidChar);
             ++ptr;
-            return Token(Token::Invalid, beg, 1);
+            return Token(Token::INVALID, beg, 1);
         }
 
         // Dealing with non-ascii characters.
@@ -278,7 +278,7 @@ start:
             error("Invalid character. Could not interpret character using UTF-8 encoding")
                 .end_error(ErrCode::LexInvalidChar);
             ++ptr;
-            return Token(Token::Invalid, beg, 1);
+            return Token(Token::INVALID, beg, 1);
         }
 
         SourceLoc loc = {
@@ -289,7 +289,7 @@ start:
             .end_error(ErrCode::LexInvalidChar);
 
         ptr += num_bytes;
-        return Token(Token::Invalid, beg, static_cast<uint32_t>(ptr - beg));
+        return Token(Token::INVALID, beg, static_cast<uint32_t>(ptr - beg));
     }
     }
 }
@@ -361,7 +361,7 @@ acorn::Token acorn::Lexer::next_word() {
     auto word = llvm::StringRef(beg, static_cast<size_t>(lexeme_length));
     auto kind = context.get_keyword_kind(word);
 
-    kind = kind != Token::Invalid ? kind : Token::Identifier;
+    kind = kind != Token::INVALID ? kind : Token::IDENTIFIER;
     return Token(kind, beg, static_cast<uint32_t>(lexeme_length));
 }
 
@@ -375,20 +375,20 @@ acorn::Token acorn::Lexer::next_number(const char* beg) {
             while (is_hexidecimal(*ptr) || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
-            return finish_int_number(Token::HexLiteral, beg);
+            return finish_int_number(Token::HEX_LITERAL, beg);
         } else if (*ptr == 'b') {
             // Lexing binary
             ++ptr;
             while (*ptr == '0' || *ptr == '1' || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
-            return finish_int_number(Token::BinLiteral, beg);
+            return finish_int_number(Token::BIN_LITERAL, beg);
         } else if (is_octal(*ptr)) {
             // Parsing octal number
             while (is_octal(*ptr) || *ptr == NUMBER_SEPERATOR) {
                 ++ptr;
             }
-            return finish_int_number(Token::OctLiteral, beg);
+            return finish_int_number(Token::OCT_LITERAL, beg);
         }
     }
 
@@ -441,7 +441,7 @@ acorn::Token acorn::Lexer::next_number(const char* beg) {
         return finish_float_number(beg, has_errors);
     }
 
-    return finish_int_number(Token::IntLiteral, beg);
+    return finish_int_number(Token::INT_LITERAL, beg);
 }
 
 acorn::Token acorn::Lexer::finish_int_number(TokenKind kind, const char* beg) {
@@ -450,7 +450,7 @@ acorn::Token acorn::Lexer::finish_int_number(TokenKind kind, const char* beg) {
         auto error_loc = SourceLoc::from_ptrs(beg, ptr);
         logger.begin_error(error_loc, "Numbers cannot end with _")
               .end_error(ErrCode::LexNumberCannotEndUnderscore);
-        return Token(Token::InvalidNumberLiteral, beg, static_cast<uint32_t>(ptr - beg));
+        return Token(Token::INVALID_NUMBER_LITERAL, beg, static_cast<uint32_t>(ptr - beg));
     }
 
     if (*ptr == '\'') {
@@ -461,7 +461,7 @@ acorn::Token acorn::Lexer::finish_int_number(TokenKind kind, const char* beg) {
             logger.begin_error(error_loc, "Invalid type specifier")
                   .add_line("One of: i8, i16, i32, i64, u8, u16, u32, u64")
                   .end_error(ErrCode::LexNumberBadTypeSpec);
-            return Token(Token::InvalidNumberLiteral, beg, static_cast<uint32_t>(ptr - type_spec_start));
+            return Token(Token::INVALID_NUMBER_LITERAL, beg, static_cast<uint32_t>(ptr - type_spec_start));
         };
 
         // Explicit type specification.
@@ -498,16 +498,16 @@ acorn::Token acorn::Lexer::finish_int_number(TokenKind kind, const char* beg) {
 }
 
 acorn::Token acorn::Lexer::finish_float_number(const char* beg, bool has_errors) {
-    TokenKind kind = Token::DoubleLiteral;;
+    TokenKind kind = Token::DOUBLE_LITERAL;;
 
     if (*ptr == 'f') {
         ++ptr;
-        kind = Token::FloatLiteral;
+        kind = Token::FLOAT_LITERAL;
     } else if (*ptr == 'd') {
         ++ptr;
     }
 
-    kind = has_errors ? Token::InvalidNumberLiteral : kind;
+    kind = has_errors ? Token::INVALID_NUMBER_LITERAL : kind;
     return Token(kind, beg, static_cast<uint32_t>(ptr - beg));
 }
 
@@ -567,7 +567,7 @@ FinishedStringLexLab:
             .end_error(ErrCode::LexStringMissingEndQuote);
     }
 
-    auto kind = !invalid ? Token::StringLiteral : Token::InvalidStringLiteral;
+    auto kind = !invalid ? Token::STRING_LITERAL : Token::INVALID_STRING_LITERAL;
     return Token(kind, beg, static_cast<uint32_t>(ptr - beg));
 }
 
@@ -583,7 +583,7 @@ acorn::Token acorn::Lexer::next_char() {
     case '\n': {
         error("Expected closing ' for character")
             .end_error(ErrCode::LexCharMissingEndQuote);
-        return Token(Token::InvalidCharLiteral, beg, static_cast<uint32_t>(ptr - beg));
+        return Token(Token::INVALID_CHAR_LITERAL, beg, static_cast<uint32_t>(ptr - beg));
     }
     case '\\': {
         ++ptr;
@@ -601,10 +601,10 @@ acorn::Token acorn::Lexer::next_char() {
     if (*ptr != '\'') {
         error("Expected closing ' for character")
             .end_error(ErrCode::LexCharMissingEndQuote);
-        return Token(Token::InvalidCharLiteral, beg, static_cast<uint32_t>(ptr - beg));
+        return Token(Token::INVALID_CHAR_LITERAL, beg, static_cast<uint32_t>(ptr - beg));
     } else {
         ++ptr; // Eating closing '
-        return Token(Token::CharLiteral, beg, static_cast<uint32_t>(ptr - beg));
+        return Token(Token::CHAR_LITERAL, beg, static_cast<uint32_t>(ptr - beg));
     }
 }
 
@@ -622,7 +622,7 @@ acorn::Token acorn::Lexer::next_comptime() {
     auto kind = context.get_keyword_kind(word);
 
     Token token = Token(kind, beg, static_cast<uint32_t>(ptr - beg));
-    if (kind == Token::Invalid) {
+    if (kind == Token::INVALID) {
         SourceLoc error_loc = SourceLoc::from_ptrs(beg, ptr);
         logger.begin_error(error_loc, "Unknown comptime directive")
             .end_error(ErrCode::LexUnknownComptimeDirective);

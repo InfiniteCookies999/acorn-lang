@@ -11,7 +11,7 @@
 
 bool acorn::try_remove_const_for_compare(Type*& to_type, Type*& from_type, Expr* expr) {
 
-    if (to_type->is_pointer() && expr && expr->is(NodeKind::Null)) {
+    if (to_type->is_pointer() && expr && expr->is(NodeKind::NULL_EXPR)) {
         // Ignore this case because null can assign to all pointers
         // so we do not want to decense the pointers.
     } else if (!has_valid_constness(to_type, from_type)) {
@@ -80,23 +80,23 @@ acorn::Type* acorn::Type::create(PageAllocator& allocator, TypeKind kind, bool i
 
 bool acorn::Type::is_comparable() const {
     switch (kind) {
-    case TypeKind::Int:
-    case TypeKind::Int8:
-    case TypeKind::Int16:
-    case TypeKind::Int32:
-    case TypeKind::Int64:
-    case TypeKind::ISize:
-    case TypeKind::UInt8:
-    case TypeKind::UInt16:
-    case TypeKind::UInt32:
-    case TypeKind::UInt64:
-    case TypeKind::USize:
-    case TypeKind::Char:
-    case TypeKind::Char16:
-    case TypeKind::Pointer:
-    case TypeKind::Enum:
-    case TypeKind::Null:
-    case TypeKind::Bool:
+    case TypeKind::INT:
+    case TypeKind::INT8:
+    case TypeKind::INT16:
+    case TypeKind::INT32:
+    case TypeKind::INT64:
+    case TypeKind::ISIZE:
+    case TypeKind::UINT8:
+    case TypeKind::UINT16:
+    case TypeKind::UINT32:
+    case TypeKind::UINT64:
+    case TypeKind::USIZE:
+    case TypeKind::CHAR:
+    case TypeKind::CHAR16:
+    case TypeKind::POINTER:
+    case TypeKind::ENUM:
+    case TypeKind::NULL_T:
+    case TypeKind::BOOL_T:
         return true;
     default:
         return false;
@@ -106,30 +106,30 @@ bool acorn::Type::is_comparable() const {
 bool acorn::Type::is_default_foldable() const {
     // TODO (maddie): enums?
     switch (kind) {
-    case TypeKind::Int:
-    case TypeKind::Int8:
-    case TypeKind::Int16:
-    case TypeKind::Int32:
-    case TypeKind::Int64:
-    case TypeKind::ISize:
-    case TypeKind::UInt8:
-    case TypeKind::UInt16:
-    case TypeKind::UInt32:
-    case TypeKind::UInt64:
-    case TypeKind::USize:
-    case TypeKind::Char:
-    case TypeKind::Char16:
-    case TypeKind::Float:
-    case TypeKind::Double:
-    case TypeKind::Bool:
-    case TypeKind::Pointer:
+    case TypeKind::INT:
+    case TypeKind::INT8:
+    case TypeKind::INT16:
+    case TypeKind::INT32:
+    case TypeKind::INT64:
+    case TypeKind::ISIZE:
+    case TypeKind::UINT8:
+    case TypeKind::UINT16:
+    case TypeKind::UINT32:
+    case TypeKind::UINT64:
+    case TypeKind::USIZE:
+    case TypeKind::CHAR:
+    case TypeKind::CHAR16:
+    case TypeKind::FLOAT:
+    case TypeKind::DOUBLE:
+    case TypeKind::BOOL_T:
+    case TypeKind::POINTER:
         return true;
-    case TypeKind::Struct: {
+    case TypeKind::STRUCT: {
         auto struct_type = static_cast<const StructType*>(this);
         auto field_struct = struct_type->get_struct();
         return field_struct->is_default_foldable;
     }
-    case TypeKind::Array: {
+    case TypeKind::ARRAY: {
         auto arr_type = static_cast<const ArrayType*>(this);
         auto elm_type = arr_type->get_elm_type();
         return elm_type->is_default_foldable();
@@ -141,24 +141,24 @@ bool acorn::Type::is_default_foldable() const {
 
 bool acorn::Type::is_sized() const {
     switch (kind) {
-    case TypeKind::Int8:
-    case TypeKind::Int16:
-    case TypeKind::Int32:
-    case TypeKind::Int64:
-    case TypeKind::UInt8:
-    case TypeKind::UInt16:
-    case TypeKind::UInt32:
-    case TypeKind::UInt64:
-    case TypeKind::Bool:
-    case TypeKind::Char:
-    case TypeKind::Char16:
-    case TypeKind::Float:
-    case TypeKind::Double:
-    case TypeKind::Pointer:
-    case TypeKind::Function:
-    case TypeKind::Array:
-    case TypeKind::ISize:
-    case TypeKind::USize:
+    case TypeKind::INT8:
+    case TypeKind::INT16:
+    case TypeKind::INT32:
+    case TypeKind::INT64:
+    case TypeKind::UINT8:
+    case TypeKind::UINT16:
+    case TypeKind::UINT32:
+    case TypeKind::UINT64:
+    case TypeKind::BOOL_T:
+    case TypeKind::CHAR:
+    case TypeKind::CHAR16:
+    case TypeKind::FLOAT:
+    case TypeKind::DOUBLE:
+    case TypeKind::POINTER:
+    case TypeKind::FUNCTION:
+    case TypeKind::ARRAY:
+    case TypeKind::ISIZE:
+    case TypeKind::USIZE:
         return true;
     default:
         return false;
@@ -167,22 +167,22 @@ bool acorn::Type::is_sized() const {
 
 uint32_t acorn::Type::get_number_of_bits() const {
     switch (kind) {
-    case TypeKind::Void:    return 0;
-    case TypeKind::Int:     return 32;
-    case TypeKind::Int8:    return 8;
-    case TypeKind::Int16:   return 16;
-    case TypeKind::Int32:   return 32;
-    case TypeKind::Int64:   return 64;
-    case TypeKind::UInt8:   return 8;
-    case TypeKind::UInt16:  return 16;
-    case TypeKind::UInt32:  return 32;
-    case TypeKind::UInt64:  return 64;
-    case TypeKind::Bool:    return 8;
-    case TypeKind::Char:    return 8;
-    case TypeKind::Char16:  return 16;
-    case TypeKind::Float:   return 32;
-    case TypeKind::Double:  return 64;
-    case TypeKind::Enum: {
+    case TypeKind::VOID_T:  return 0;
+    case TypeKind::INT:     return 32;
+    case TypeKind::INT8:    return 8;
+    case TypeKind::INT16:   return 16;
+    case TypeKind::INT32:   return 32;
+    case TypeKind::INT64:   return 64;
+    case TypeKind::UINT8:   return 8;
+    case TypeKind::UINT16:  return 16;
+    case TypeKind::UINT32:  return 32;
+    case TypeKind::UINT64:  return 64;
+    case TypeKind::BOOL_T:  return 8;
+    case TypeKind::CHAR:    return 8;
+    case TypeKind::CHAR16:  return 16;
+    case TypeKind::FLOAT:   return 32;
+    case TypeKind::DOUBLE:  return 64;
+    case TypeKind::ENUM: {
         auto enum_type = static_cast<const EnumType*>(this);
         return enum_type->get_index_type()->get_number_of_bits();
     }
@@ -193,11 +193,11 @@ uint32_t acorn::Type::get_number_of_bits() const {
 }
 
 bool acorn::Type::needs_destruction() const {
-    if (kind == TypeKind::Struct) {
+    if (kind == TypeKind::STRUCT) {
         auto struct_type = static_cast<const StructType*>(this);
         auto structn = struct_type->get_struct();
         return structn->needs_destruction;
-    } else if (kind == TypeKind::Array) {
+    } else if (kind == TypeKind::ARRAY) {
         auto arr_type = static_cast<const ArrayType*>(this);
         auto base_type = arr_type->get_base_type();
         if (base_type->is_struct()) {
@@ -224,42 +224,42 @@ std::string acorn::Type::to_string() const {
 #define str(s) !is_const() ? (s) : std::string("const ") + (s);
 #define str2(s) !is_const() ? (s) : std::string("const (") + s + ")";
     switch (kind) {
-    case TypeKind::Void:         return str("void");
-    case TypeKind::Int:          return str("int");
-    case TypeKind::Int8:         return str("int8");
-    case TypeKind::Int16:        return str("int16");
-    case TypeKind::Int32:        return str("int32");
-    case TypeKind::Int64:        return str("int64");
-    case TypeKind::UInt8:        return str("uint8");
-    case TypeKind::UInt16:       return str("uint16");
-    case TypeKind::UInt32:       return str("uint32");
-    case TypeKind::UInt64:       return str("uint64");
-    case TypeKind::Invalid:      return str("invalid");
-    case TypeKind::FuncsRef:     return str("function reference");
-    case TypeKind::NamespaceRef: return str("module reference");
-    case TypeKind::Bool:         return str("bool");
-    case TypeKind::Char:         return str("char");
-    case TypeKind::Char16:       return str("char16");
-    case TypeKind::Null:         return str("null");
-    case TypeKind::ISize:        return str("isize");
-    case TypeKind::USize:        return str("usize");
-    case TypeKind::Float:        return str("float");
-    case TypeKind::Double:       return str("double");
-    case TypeKind::EmptyArray:   return str("[]");
-    case TypeKind::Expr:         return str("expr type");
-    case TypeKind::Auto:         return str("auto");
-    case TypeKind::Inderminate:  return str("indeterminate");
-    case TypeKind::Range:        return str2(static_cast<const RangeType*>(this)->to_string());
-    case TypeKind::Pointer:      return str2(static_cast<const PointerType*>(this)->to_string());
-    case TypeKind::Array:        return str2(static_cast<const ArrayType*>(this)->to_string());
-    case TypeKind::Slice:        return str2(static_cast<const SliceType*>(this)->to_string());
-    case TypeKind::Function:     return str2(static_cast<const FunctionType*>(this)->to_string());
-    case TypeKind::Struct:       return str(static_cast<const StructType*>(this)->to_string());
-    case TypeKind::Enum:         return str(static_cast<const EnumType*>(this)->to_string());
-    case TypeKind::Interface:    return str(static_cast<const InterfaceType*>(this)->to_string());
-    case TypeKind::AssignDeterminedArray:
-                                 return str2(static_cast<const AssignDeterminedArrayType*>(this)->to_string());
-    case TypeKind::Generic:      return str(static_cast<const GenericType*>(this)->to_string());
+    case TypeKind::VOID_T:        return str("void");
+    case TypeKind::INT:           return str("int");
+    case TypeKind::INT8:          return str("int8");
+    case TypeKind::INT16:         return str("int16");
+    case TypeKind::INT32:         return str("int32");
+    case TypeKind::INT64:         return str("int64");
+    case TypeKind::UINT8:         return str("uint8");
+    case TypeKind::UINT16:        return str("uint16");
+    case TypeKind::UINT32:        return str("uint32");
+    case TypeKind::UINT64:        return str("uint64");
+    case TypeKind::INVALID:       return str("invalid");
+    case TypeKind::FUNCS_REF:     return str("function reference");
+    case TypeKind::NAMESPACE_REF: return str("module reference");
+    case TypeKind::BOOL_T:        return str("bool");
+    case TypeKind::CHAR:          return str("char");
+    case TypeKind::CHAR16:        return str("char16");
+    case TypeKind::NULL_T:        return str("null");
+    case TypeKind::ISIZE:         return str("isize");
+    case TypeKind::USIZE:         return str("usize");
+    case TypeKind::FLOAT:         return str("float");
+    case TypeKind::DOUBLE:        return str("double");
+    case TypeKind::EMPTY_ARRAY:   return str("[]");
+    case TypeKind::EXPR:          return str("expr type");
+    case TypeKind::AUTO:          return str("auto");
+    case TypeKind::INDETERMINATE: return str("indeterminate");
+    case TypeKind::RANGE:         return str2(static_cast<const RangeType*>(this)->to_string());
+    case TypeKind::POINTER:       return str2(static_cast<const PointerType*>(this)->to_string());
+    case TypeKind::ARRAY:         return str2(static_cast<const ArrayType*>(this)->to_string());
+    case TypeKind::SLICE:         return str2(static_cast<const SliceType*>(this)->to_string());
+    case TypeKind::FUNCTION:      return str2(static_cast<const FunctionType*>(this)->to_string());
+    case TypeKind::STRUCT:        return str(static_cast<const StructType*>(this)->to_string());
+    case TypeKind::ENUM:          return str(static_cast<const EnumType*>(this)->to_string());
+    case TypeKind::INTERFACE:     return str(static_cast<const InterfaceType*>(this)->to_string());
+    case TypeKind::ASSIGN_DETERMINED_ARRAY:
+                                  return str2(static_cast<const AssignDeterminedArrayType*>(this)->to_string());
+    case TypeKind::GENERIC:       return str(static_cast<const GenericType*>(this)->to_string());
     default:
         acorn_fatal_fmt("Type::to_string() missing to_string case. Kind=%s", static_cast<int>(kind));
         return "";
@@ -272,20 +272,20 @@ void acorn::Type::get_generic_types(llvm::SmallVector<const GenericType*>& gener
     // TODO (maddie): once composites can contain generics it will need to handle
     // that as well.
     switch (kind) {
-    case TypeKind::Generic: {
+    case TypeKind::GENERIC: {
         auto generic_type = static_cast<const GenericType*>(this);
         generics.push_back(generic_type);
         return;
     }
-    case TypeKind::Pointer:
-    case TypeKind::Array:
-    case TypeKind::Slice: {
+    case TypeKind::POINTER:
+    case TypeKind::ARRAY:
+    case TypeKind::SLICE: {
         auto ptr_type = static_cast<const ContainerType*>(this);
         auto elm_type = ptr_type->get_base_type();
         elm_type->get_generic_types(generics);
         return;
     }
-    case TypeKind::Function: {
+    case TypeKind::FUNCTION: {
         auto func_type = static_cast<const FunctionType*>(this);
         for (auto param_type : func_type->get_key()->param_types) {
             param_type->get_generic_types(generics);
@@ -293,7 +293,7 @@ void acorn::Type::get_generic_types(llvm::SmallVector<const GenericType*>& gener
         func_type->get_key()->return_type->get_generic_types(generics);
         return;
     }
-    case TypeKind::Range: {
+    case TypeKind::RANGE: {
         auto range_type = static_cast<const RangeType*>(this);
         auto value_type = range_type->get_value_type();
         value_type->get_generic_types(generics);
@@ -382,8 +382,8 @@ namespace acorn {
         {
             auto elm_type = container_type->get_elm_type();
             Type* type_itr = elm_type;
-            while (type_itr->get_kind() == TypeKind::Array ||
-                   type_itr->get_kind() == TypeKind::AssignDeterminedArray) {
+            while (type_itr->get_kind() == TypeKind::ARRAY ||
+                   type_itr->get_kind() == TypeKind::ASSIGN_DETERMINED_ARRAY) {
                 auto ctr_type = static_cast<const ContainerType*>(type_itr);
                 type_itr = ctr_type->get_elm_type();
             }
@@ -402,7 +402,7 @@ namespace acorn {
             }
 
             auto elm_type = container_type->get_elm_type();
-            if (elm_type->is_array() || elm_type->get_kind() == TypeKind::AssignDeterminedArray) {
+            if (elm_type->is_array() || elm_type->get_kind() == TypeKind::ASSIGN_DETERMINED_ARRAY) {
                 container_type = static_cast<const ContainerType*>(elm_type);
             } else {
                 break;
@@ -490,7 +490,7 @@ std::string acorn::FunctionType::to_string() const {
         str += "...";
     }
     str += ")";
-    if (key->return_type->get_kind() != TypeKind::Void) {
+    if (key->return_type->get_kind() != TypeKind::VOID_T) {
         str += " -> " + key->return_type->to_string();
     }
 

@@ -43,19 +43,19 @@ void acorn::IRGenerator::gen_global_variable(Var* var) {
 void acorn::IRGenerator::gen_implicit_function(ImplicitFunc* implicit_func) {
     di_emitter = implicit_func->structn->file->di_emitter;
     switch (implicit_func->implicit_kind) {
-    case ImplicitFunc::ImplicitKind::DefaultConstructor:
+    case ImplicitFunc::ImplicitKind::DEFAULT_CONSTRUCTOR:
         gen_implicit_default_constructor(implicit_func->structn);
         break;
-    case ImplicitFunc::ImplicitKind::Destructor:
+    case ImplicitFunc::ImplicitKind::DESTRUCTOR:
         gen_implicit_destructor(implicit_func->structn);
         break;
-    case ImplicitFunc::ImplicitKind::CopyConstructor:
+    case ImplicitFunc::ImplicitKind::COPY_CONSTRUCTOR:
         gen_implicit_copy_constructor(implicit_func->structn);
         break;
-    case ImplicitFunc::ImplicitKind::MoveConstructor:
+    case ImplicitFunc::ImplicitKind::MOVE_CONSTRUCTOR:
         gen_implicit_move_constructor(implicit_func->structn);
         break;
-    case ImplicitFunc::ImplicitKind::VTableInit:
+    case ImplicitFunc::ImplicitKind::VTABLE_INIT:
         gen_implicit_vtable_init_function(implicit_func->structn);
         break;
     default:
@@ -85,66 +85,66 @@ void acorn::IRGenerator::add_return_to_global_init_function() {
 
 llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
     switch (node->kind) {
-    case NodeKind::BinOp:
+    case NodeKind::BIN_OP:
         return gen_binary_op(static_cast<BinOp*>(node));
-    case NodeKind::UnaryOp:
+    case NodeKind::UNARY_OP:
         return gen_unary_op(static_cast<UnaryOp*>(node));
-    case NodeKind::Var:
+    case NodeKind::VAR:
         return gen_variable(static_cast<Var*>(node));
-    case NodeKind::VarList:
+    case NodeKind::VAR_LIST:
         return gen_variable_list(static_cast<VarList*>(node));
-    case NodeKind::Number:
+    case NodeKind::NUMBER:
         return gen_number(static_cast<Number*>(node));
-    case NodeKind::IdentRef:
+    case NodeKind::IDENT_REF:
         return gen_ident_reference(static_cast<IdentRef*>(node));
-    case NodeKind::ReturnStmt:
+    case NodeKind::RETURN_STMT:
         return gen_return(static_cast<ReturnStmt*>(node));
-    case NodeKind::IfStmt:
+    case NodeKind::IF_STMT:
         return gen_if(static_cast<IfStmt*>(node));
-    case NodeKind::ScopeStmt:
+    case NodeKind::SCOPE_STMT:
         return gen_scope_with_dbg_scope(static_cast<ScopeStmt*>(node));
-    case NodeKind::FuncCall:
+    case NodeKind::FUNC_CALL:
         return gen_function_call(static_cast<FuncCall*>(node), nullptr);
-    case NodeKind::UninitNewCallStmt:
+    case NodeKind::UNINIT_NEW_CALL_STMT:
         return gen_new_call(static_cast<UninitNewCallStmt*>(node));
-    case NodeKind::Bool:
+    case NodeKind::BOOL_EXPR:
         return gen_bool(static_cast<Bool*>(node));
-    case NodeKind::String:
+    case NodeKind::STRING:
         return gen_string(static_cast<String*>(node));
-    case NodeKind::Null:
+    case NodeKind::NULL_EXPR:
         return gen_null();
-    case NodeKind::Cast:
+    case NodeKind::CAST:
         return gen_cast(static_cast<Cast*>(node));
-    case NodeKind::MemoryAccess:
+    case NodeKind::MEMORY_ACCESS:
         return gen_memory_access(static_cast<MemoryAccess*>(node));
-    case NodeKind::Array:
+    case NodeKind::ARRAY:
         return gen_array(static_cast<Array*>(node), nullptr);
-    case NodeKind::DotOperator:
+    case NodeKind::DOT_OPERATOR:
         return gen_dot_operator(static_cast<DotOperator*>(node));
-    case NodeKind::PredicateLoopStmt:
+    case NodeKind::PREDICATE_LOOP_STMT:
         return gen_predicate_loop(static_cast<PredicateLoopStmt*>(node));
-    case NodeKind::RangeLoopStmt:
+    case NodeKind::RANGE_LOOP_STMT:
         return gen_range_loop(static_cast<RangeLoopStmt*>(node));
-    case NodeKind::IteratorLoopStmt:
+    case NodeKind::ITERATOR_LOOP_STMT:
         return gen_iterator_loop(static_cast<IteratorLoopStmt*>(node));
-    case NodeKind::BreakStmt:
-    case NodeKind::ContinueStmt:
+    case NodeKind::BREAK_STMT:
+    case NodeKind::CONTINUE_STMT:
         return gen_loop_control(static_cast<LoopControlStmt*>(node));
-    case NodeKind::SwitchStmt:
+    case NodeKind::SWITCH_STMT:
         return gen_switch(static_cast<SwitchStmt*>(node));
-    case NodeKind::RaiseStmt:
+    case NodeKind::RAISE_STMT:
         return gen_raise(static_cast<RaiseStmt*>(node));
-    case NodeKind::RecoverStmt:
+    case NodeKind::RECOVER_STMT:
         return gen_recover(static_cast<RecoverStmt*>(node));
-    case NodeKind::StructInitializer:
+    case NodeKind::STRUCT_INITIALIZER:
         return gen_struct_initializer(static_cast<StructInitializer*>(node), nullptr);
-    case NodeKind::This:
+    case NodeKind::THIS_EXPR:
         return gen_this(static_cast<This*>(node));
-    case NodeKind::SizeOf:
+    case NodeKind::SIZE_OF:
         return gen_sizeof(static_cast<SizeOf*>(node));
-    case NodeKind::Ternary:
+    case NodeKind::TERNARY:
         return gen_ternary(static_cast<Ternary*>(node), nullptr);
-    case NodeKind::Reflect:
+    case NodeKind::REFLECT:
         return gen_reflect(static_cast<Reflect*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
@@ -158,8 +158,8 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
     if (node->cast_type && context.is_std_any_type(node->cast_type)) {
         // Do not load the value when casting to the `Any` type because
         // the `Any` type requires having the address of the value.
-    } else if (node->kind == NodeKind::IdentRef ||
-        node->kind == NodeKind::DotOperator) {
+    } else if (node->kind == NodeKind::IDENT_REF ||
+        node->kind == NodeKind::DOT_OPERATOR) {
         IdentRef* ref = static_cast<IdentRef*>(node);
         if (ref->is_var_ref() &&
             !ref->is_foldable &&       // If the reference is foldable then no memory address is provided for storage to load.
@@ -168,7 +168,7 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
             ) {
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
-    } else if (node->kind == NodeKind::UnaryOp) {
+    } else if (node->kind == NodeKind::UNARY_OP) {
         // Although the code for the unary operator may already have loaded
         // the value it must be loaded again when a rvalue is needed.
         // For example if you have:
@@ -197,7 +197,7 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
             ) {
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
-    } else if (node->kind == NodeKind::MemoryAccess) {
+    } else if (node->kind == NodeKind::MEMORY_ACCESS) {
         if (!node->type->is_array()) { // Arrays are always lvalues
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
@@ -609,7 +609,7 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
         bool emitted_for_return = false;
         if (func->num_returns == 1 && !func->scope->empty()) {
             Node* last = func->scope->back();
-            if (last->is(NodeKind::ReturnStmt)) {
+            if (last->is(NodeKind::RETURN_STMT)) {
                 emitted_for_return = true;
                 push_dbg_loc(last->loc);
             }
@@ -630,7 +630,7 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
     if (func->return_type->is(context.void_type) && !is_main) {
         builder.CreateRetVoid();
     } else if (is_main &&
-               ((!func->scope->empty() && func->scope->back()->is_not(NodeKind::ReturnStmt))
+               ((!func->scope->empty() && func->scope->back()->is_not(NodeKind::RETURN_STMT))
                || func->scope->empty())) {
         // Implicit return for main function but since the main function always returns an
         // integer it is handled specially.
@@ -866,7 +866,7 @@ llvm::Constant* acorn::IRGenerator::gen_constant_struct_initializer(StructInitia
     size_t field_idx = 0;
     for (Expr* value : initializer->values) {
         Expr* assign_value = value;
-        if (value->is(NodeKind::NamedValue)) {
+        if (value->is(NodeKind::NAMED_VALUE)) {
             auto named_val = static_cast<NamedValue*>(value);
             fields_set_list[named_val->mapped_idx] = true;
             assign_value = named_val->assignment;
@@ -1360,7 +1360,7 @@ void acorn::IRGenerator::queue_destructor_function(StructType* struct_type) {
             context.queue_gen(structn->destructor, generic_struct_instance->generic_destructor_instance);
         }
     } else {
-        auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::Destructor, structn);
+        auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::DESTRUCTOR, structn);
         context.queue_gen_implicit_function(implicit_func);
     }
 }
@@ -1518,7 +1518,7 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
             // Not-void so store the return value into the return address
             // if it was not already stored due to an aggregate return variable.
             bool try_move = false;
-            if (ret->value->is(NodeKind::IdentRef)) {
+            if (ret->value->is(NodeKind::IDENT_REF)) {
                 auto ref = static_cast<IdentRef*>(ret->value);
                 // Make sure to only move the address if it is a local variable.
                 try_move = ref->is_var_ref() && !ref->var_ref->is_global && !ref->var_ref->is_field();
@@ -1572,11 +1572,11 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
                 // end of the scope.
                 //
                 llvm::Value* ll_value;
-                if (ret->value->is(NodeKind::StructInitializer) ||
-                    ret->value->is(NodeKind::Array)) {
+                if (ret->value->is(NodeKind::STRUCT_INITIALIZER) ||
+                    ret->value->is(NodeKind::ARRAY)) {
                     ll_value = gen_unseen_alloca(cur_func->return_type, "tmp.inline.aggr");
                     gen_assignment(ll_value, cur_func->return_type, ret->value);
-                } else if (ret->value->is(NodeKind::FuncCall)) {
+                } else if (ret->value->is(NodeKind::FUNC_CALL)) {
                     // Treating the function call case as a special case since the function
                     // call may return an integer representation in which case there is no
                     // reason to create a temporary object except if the type has a destructor.
@@ -1696,7 +1696,7 @@ llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs, llvm::BasicBlock* ll_end_bb
 
     // Jump to either the then or else block depending on the condition.
     push_dbg_loc(ifs->loc);
-    if (ifs->cond->is(NodeKind::Var)) {
+    if (ifs->cond->is(NodeKind::VAR)) {
         auto ll_cond = load_variable_cond(static_cast<Var*>(ifs->cond));
         builder.CreateCondBr(ll_cond, ll_then_bb, ll_else_bb);
     } else {
@@ -1723,7 +1723,7 @@ llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs, llvm::BasicBlock* ll_end_bb
         insert_bblock_at_end(ll_else_bb);
 
         builder.SetInsertPoint(ll_else_bb);
-        if (elif->is(NodeKind::IfStmt)) {
+        if (elif->is(NodeKind::IF_STMT)) {
             // Pass the ll_end_bb so that all the if statements jump to
             // the same ll_end_bb. This is actually needed to generate
             // proper debugging information because if you have multiple
@@ -1777,7 +1777,7 @@ llvm::Value* acorn::IRGenerator::gen_if(IfStmt* ifs, llvm::BasicBlock* ll_end_bb
     builder.SetInsertPoint(ll_end_bb);
 
     // Make sure to insert the end after all the other blocks!
-    if (!ifs->elseif || ifs->elseif->is(NodeKind::ScopeStmt)) {
+    if (!ifs->elseif || ifs->elseif->is(NodeKind::SCOPE_STMT)) {
         insert_bblock_at_end(ll_end_bb);
     }
 
@@ -1997,7 +1997,7 @@ llvm::Value* acorn::IRGenerator::gen_iterator_loop(IteratorLoopStmt* loop) {
         // possible to end up in an infinite loop.
         //
         llvm::Value* ll_compare_index = gen_rvalue(range->rhs);
-        if (range->op == Token::RangeEq) {
+        if (range->op == Token::RANGE_EQ) {
             ll_compare_index = builder.CreateNSWAdd(ll_compare_index, ll_one);
         }
 
@@ -2096,7 +2096,7 @@ void acorn::IRGenerator::gen_cond_branch_for_loop(Expr* cond, llvm::BasicBlock* 
 }
 
 llvm::Value* acorn::IRGenerator::gen_loop_control(LoopControlStmt* loop_control) {
-    auto& target_stack = loop_control->is(NodeKind::BreakStmt) ? loop_break_stack : loop_continue_stack;
+    auto& target_stack = loop_control->is(NodeKind::BREAK_STMT) ? loop_break_stack : loop_continue_stack;
 
     push_dbg_loc(loop_control->loc);
 
@@ -2158,14 +2158,14 @@ llvm::Value* acorn::IRGenerator::gen_switch_non_foldable(SwitchStmt* switchn) {
             llvm::Value* ll_lhs = nullptr, *ll_rhs = nullptr;
             if (value_type->is_signed()) {
                 ll_lhs = builder.CreateICmpSGE(ll_value, gen_rvalue(range->lhs), "gte");
-                if (range->op == Token::RangeEq) {
+                if (range->op == Token::RANGE_EQ) {
                     ll_rhs = builder.CreateICmpSLE(ll_value, gen_rvalue(range->rhs), "lte");
                 } else {
                     ll_rhs = builder.CreateICmpSLT(ll_value, gen_rvalue(range->rhs), "lt");
                 }
             } else {
                 ll_lhs = builder.CreateICmpUGE(ll_value, gen_rvalue(range->lhs), "gte");
-                if (range->op == Token::RangeEq) {
+                if (range->op == Token::RANGE_EQ) {
                     ll_rhs = builder.CreateICmpULE(ll_value, gen_rvalue(range->rhs), "lte");
                 } else {
                     ll_rhs = builder.CreateICmpULT(ll_value, gen_rvalue(range->rhs), "lt");
@@ -2557,7 +2557,7 @@ void acorn::IRGenerator::finish_try(Try* prev_try) {
 
 llvm::Value* acorn::IRGenerator::gen_recover(RecoverStmt* recover) {
 
-    if (cur_try->catch_recoveree->is(NodeKind::Var)) {
+    if (cur_try->catch_recoveree->is(NodeKind::VAR)) {
         Var* var = static_cast<Var*>(cur_try->catch_recoveree);
         push_dbg_loc(var->loc);
         gen_assignment(var->ll_address, var->type, recover->value, var, true);
@@ -2570,17 +2570,17 @@ llvm::Value* acorn::IRGenerator::gen_recover(RecoverStmt* recover) {
         case '=':
             gen_assignment_op(lhs, recover->value);
             break;
-        case Token::AddEq:   return gen_apply_and_assign_op('+', bin_op->loc, bin_op->type, lhs, recover->value);
-        case Token::SubEq:   return gen_apply_and_assign_op('-', bin_op->loc, bin_op->type, lhs, recover->value);
-        case Token::MulEq:   return gen_apply_and_assign_op('*', bin_op->loc, bin_op->type, lhs, recover->value);
-        case Token::DivEq:   return gen_apply_and_assign_op('/', bin_op->loc, bin_op->type, lhs, recover->value);
-        case Token::ModEq:   return gen_apply_and_assign_op('%', bin_op->loc, bin_op->type, lhs, recover->value);
-        case Token::AndEq:   return gen_apply_and_assign_op('&', bin_op->loc, bin_op->type, lhs, recover->value);
-        case Token::OrEq:    return gen_apply_and_assign_op('|', bin_op->loc, bin_op->type, lhs, recover->value);
-        case Token::CaretEq: return gen_apply_and_assign_op('^', bin_op->loc, bin_op->type, lhs, recover->value);
-        case Token::TildeEq: return gen_apply_and_assign_op('~', bin_op->loc, bin_op->type, lhs, recover->value);
-        case Token::LtLtEq:  return gen_apply_and_assign_op(Token::LtLt, bin_op->loc, bin_op->type, lhs, recover->value);
-        case Token::GtGtEq:  return gen_apply_and_assign_op(Token::GtGt, bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::ADD_EQ:   return gen_apply_and_assign_op('+', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::SUB_EQ:   return gen_apply_and_assign_op('-', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::MUL_EQ:   return gen_apply_and_assign_op('*', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::DIV_EQ:   return gen_apply_and_assign_op('/', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::MOD_EQ:   return gen_apply_and_assign_op('%', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::AND_EQ:   return gen_apply_and_assign_op('&', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::OR_EQ:    return gen_apply_and_assign_op('|', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::CARET_EQ: return gen_apply_and_assign_op('^', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::TILDE_EQ: return gen_apply_and_assign_op('~', bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::LT_LT_EQ:  return gen_apply_and_assign_op(Token::LT_LT, bin_op->loc, bin_op->type, lhs, recover->value);
+        case Token::GT_GT_EQ:  return gen_apply_and_assign_op(Token::GT_GT, bin_op->loc, bin_op->type, lhs, recover->value);
         default:
             acorn_fatal("unreachable");
             break;
@@ -2648,7 +2648,7 @@ llvm::Value* acorn::IRGenerator::gen_struct_initializer(StructInitializer* initi
 
     size_t field_idx = 0;
     for (Expr* value : initializer->values) {
-        if (value->is(NodeKind::NamedValue)) {
+        if (value->is(NodeKind::NAMED_VALUE)) {
             auto named_val = static_cast<NamedValue*>(value);
             Var* field = structn->fields[named_val->mapped_idx];
             auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_dest_addr, static_cast<unsigned>(named_val->mapped_idx));
@@ -2773,9 +2773,9 @@ llvm::Value* acorn::IRGenerator::gen_variable_list(VarList* var_list) {
 
 llvm::Value* acorn::IRGenerator::gen_number(Number* number) {
     auto type_kind = number->type->get_kind();
-    if (type_kind == TypeKind::Double) {
+    if (type_kind == TypeKind::DOUBLE) {
         return llvm::ConstantFP::get(ll_context, llvm::APFloat(number->value_f64));
-    } else if (type_kind == TypeKind::Float) {
+    } else if (type_kind == TypeKind::FLOAT) {
         return llvm::ConstantFP::get(ll_context, llvm::APFloat(number->value_f32));
     }
 
@@ -2864,7 +2864,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
         //
         llvm::Value* ll_in_this = nullptr;
         if (call->called_func->structn || call->called_func->interfacen) {
-            if (call->site->is(NodeKind::DotOperator)) {
+            if (call->site->is(NodeKind::DOT_OPERATOR)) {
                 auto dot_operator = static_cast<DotOperator*>(call->site);
                 ll_in_this = gen_node(dot_operator->site);
 
@@ -2909,7 +2909,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
     // If moveobj is used on an array it is ignored since arrays are always
     // passed by reference.
     bool try_move = false;
-    if (arg->is(NodeKind::MoveObj)) {
+    if (arg->is(NodeKind::MOVEOBJ)) {
         try_move = true;
         auto move_obj = static_cast<MoveObj*>(arg);
         arg = move_obj->value;
@@ -2948,10 +2948,10 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
         // First checking for if it is an rvalue since if it is
         // then there is no reason to make a copy of the argument
         // since it is temporary anyway.
-        if (arg->is(NodeKind::FuncCall)) {
+        if (arg->is(NodeKind::FUNC_CALL)) {
             auto call = static_cast<FuncCall*>(arg);
             return gen_function_call(call, nullptr, nullptr, true);
-        } else if (arg->is(NodeKind::StructInitializer)) {
+        } else if (arg->is(NodeKind::STRUCT_INITIALIZER)) {
             auto initializer = static_cast<StructInitializer*>(arg);
             return finish_aggregate_arg(gen_struct_initializer(initializer, nullptr, nullptr, true));
         }
@@ -2967,11 +2967,11 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
         }
 
         return finish_aggregate_arg(ll_tmp_arg);
-    } else if (arg->type->is_array() && arg->is(NodeKind::FuncCall)) {
+    } else if (arg->type->is_array() && arg->is(NodeKind::FUNC_CALL)) {
         return gen_rvalue(arg);
     }
 
-    if (arg->is(NodeKind::FuncCall)) {
+    if (arg->is(NodeKind::FUNC_CALL)) {
         auto arg_call = static_cast<FuncCall*>(arg);
         if (arg_call->implicitly_converts_return) {
             auto ptr_type = static_cast<PointerType*>(arg_call->type);
@@ -3008,22 +3008,22 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg_for_implicit_ptr(Expr* ar
         arg->cast_type = nullptr;
 
         // Read comment under gen_unary_op for the & operator for an explaination.
-        if ((arg->is(NodeKind::DotOperator) || arg->is(NodeKind::IdentRef)) && arg->is_foldable) {
+        if ((arg->is(NodeKind::DOT_OPERATOR) || arg->is(NodeKind::IDENT_REF)) && arg->is_foldable) {
             return gen_foldable_global_variable(static_cast<IdentRef*>(arg));
         }
 
-        if (arg->kind == NodeKind::IdentRef ||
-            arg->kind == NodeKind::DotOperator) {
+        if (arg->kind == NodeKind::IDENT_REF ||
+            arg->kind == NodeKind::DOT_OPERATOR) {
             auto ref = static_cast<IdentRef*>(arg);
             return gen_node(arg);
-        } else if (arg->kind == NodeKind::UnaryOp) {
+        } else if (arg->kind == NodeKind::UNARY_OP) {
             // Read the description under gen_rvalue for why this can be considered
             // an lvalue.
             auto unary_op = static_cast<UnaryOp*>(arg);
             if (unary_op->op == '*') {
                 return gen_node(arg);
             }
-        } else if (arg->kind == NodeKind::MemoryAccess) {
+        } else if (arg->kind == NodeKind::MEMORY_ACCESS) {
             return gen_node(arg);
         }
 
@@ -3153,7 +3153,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
     size_t arg_idx = 0;
     for (arg_idx = 0; arg_idx < args.size(); ++arg_idx) {
         Expr* arg = args[arg_idx];
-        if (arg->is(NodeKind::NamedValue)) {
+        if (arg->is(NodeKind::NAMED_VALUE)) {
             auto named_arg = static_cast<NamedValue*>(arg);
             size_t ll_arg_idx = arg_offset + named_arg->mapped_idx;
             Var* param = called_func->params[named_arg->mapped_idx];
@@ -3622,7 +3622,7 @@ llvm::Value* acorn::IRGenerator::gen_intrinsic_call(FuncCall* call) {
 
         for (size_t i = call->non_named_args_offset; i < call->args.size(); i++) {
             Expr* arg = call->args[i];
-            if (!arg->is(NodeKind::NamedValue)) continue;
+            if (!arg->is(NodeKind::NAMED_VALUE)) continue;
 
             auto named_arg = static_cast<NamedValue*>(arg);
             if (named_arg->mapped_idx == idx) {
@@ -4005,8 +4005,8 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
             // Checking for common cases to avoid having to generate code generation if
             // we can garentee the addresses are not the same.
 
-            if (value->is(NodeKind::IdentRef) &&
-                lvalue->is(NodeKind::IdentRef)) {
+            if (value->is(NodeKind::IDENT_REF) &&
+                lvalue->is(NodeKind::IDENT_REF)) {
                 auto from_ident_ref = static_cast<IdentRef*>(value);
                 auto to_ident_ref   = static_cast<IdentRef*>(lvalue);
 
@@ -4090,7 +4090,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
         return;
     }
 
-    if (value->is(NodeKind::Array)) {
+    if (value->is(NodeKind::ARRAY)) {
         if (to_type->is_slice()) {
 
             auto arr_type = static_cast<ArrayType*>(value->type);
@@ -4109,7 +4109,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
         } else {
             gen_array(static_cast<Array*>(value), ll_address);
         }
-    } else if (value->is(NodeKind::FuncCall)) {
+    } else if (value->is(NodeKind::FUNC_CALL)) {
         if (is_assign_op && to_type->needs_destruction()) {
             create_tmp_then_assign_and_destroy([this, value, lvalue](llvm::Value* ll_address) {
                 gen_function_call(static_cast<FuncCall*>(value), ll_address, lvalue);
@@ -4117,7 +4117,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
         } else {
             gen_function_call(static_cast<FuncCall*>(value), ll_address, lvalue);
         }
-    } else if (value->is(NodeKind::StructInitializer)) {
+    } else if (value->is(NodeKind::STRUCT_INITIALIZER)) {
         if (is_assign_op && to_type->needs_destruction()) {
             create_tmp_then_assign_and_destroy([this, value, lvalue](llvm::Value* ll_address) {
                 auto initializer = static_cast<StructInitializer*>(value);
@@ -4127,13 +4127,13 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
             auto initializer = static_cast<StructInitializer*>(value);
             gen_struct_initializer(initializer, ll_address, lvalue);
         }
-    } else if (value->is(NodeKind::Ternary)) {
+    } else if (value->is(NodeKind::TERNARY)) {
         auto ll_value = gen_ternary(static_cast<Ternary*>(value), ll_address, is_assign_op, try_move);
         if (!value->type->is_aggregate()) { // If it is an aggregate it calls gen_assignment for the passed ll_address.
             builder.CreateStore(ll_value, ll_address);
         }
     } else if (to_type->is_struct()) {
-        if (value->is(NodeKind::MoveObj)) {
+        if (value->is(NodeKind::MOVEOBJ)) {
             try_move = true;
             auto move_obj = static_cast<MoveObj*>(value);
             value = move_obj->value;
@@ -4160,7 +4160,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
             copy_or_move_struct(ll_from_addr);
         }
     } else if (to_type->is_array()) {
-        if (value->is(NodeKind::MoveObj)) {
+        if (value->is(NodeKind::MOVEOBJ)) {
             try_move = true;
             auto move_obj = static_cast<MoveObj*>(value);
             value = move_obj->value;
@@ -4213,7 +4213,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
             );
         }
     } else {
-        if (value->is(NodeKind::MoveObj)) {
+        if (value->is(NodeKind::MOVEOBJ)) {
             auto move_obj = static_cast<MoveObj*>(value);
             value = move_obj->value;
         }
@@ -4226,7 +4226,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
 void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) {
 
     auto type_kind = type->get_kind();
-    if (type_kind == TypeKind::Array) {
+    if (type_kind == TypeKind::ARRAY) {
         // There is no reason to take into lvalue here since when assigning
         // with arrays `gen_default_value` is not called. The `lvalue` variable
         // is passed in because struct initialization requires it.
@@ -4236,7 +4236,7 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
 
         uint64_t total_linear_length = arr_type->get_total_linear_length();
 
-        if (base_type->get_kind() == TypeKind::Struct) {
+        if (base_type->get_kind() == TypeKind::STRUCT) {
             auto struct_type = static_cast<StructType*>(base_type);
             auto structn = struct_type->get_struct();
 
@@ -4270,7 +4270,7 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
         );
 
         // Initializing the v-tables if needed.
-        if (base_type->get_kind() == TypeKind::Struct) {
+        if (base_type->get_kind() == TypeKind::STRUCT) {
             auto struct_type = static_cast<StructType*>(base_type);
             auto structn = struct_type->get_struct();
 
@@ -4290,7 +4290,7 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
             }
         }
 
-    } else if (type_kind == TypeKind::Struct) {
+    } else if (type_kind == TypeKind::STRUCT) {
 
         auto struct_type = static_cast<StructType*>(type);
         auto structn = struct_type->get_struct();
@@ -4313,7 +4313,7 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
             gen_call_default_constructor(ll_address, structn);
         }
 
-    } else if (type_kind == TypeKind::Enum) {
+    } else if (type_kind == TypeKind::ENUM) {
 
         auto enum_type = static_cast<EnumType*>(type);
         uint64_t default_index = enum_type->get_default_index();
@@ -4327,34 +4327,34 @@ void acorn::IRGenerator::gen_default_value(llvm::Value* ll_address, Type* type) 
 
 llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
     switch (type->get_kind()) {
-    case TypeKind::Int8: case TypeKind::UInt8: case TypeKind::Char:
+    case TypeKind::INT8: case TypeKind::UINT8: case TypeKind::CHAR:
         return builder.getInt8(0);
-    case TypeKind::Int16: case TypeKind::UInt16: case TypeKind::Char16:
+    case TypeKind::INT16: case TypeKind::UINT16: case TypeKind::CHAR16:
         return builder.getInt16(0);
-    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32:
+    case TypeKind::INT: case TypeKind::INT32: case TypeKind::UINT32:
         return builder.getInt32(0);
-    case TypeKind::Int64: case TypeKind::UInt64:
+    case TypeKind::INT64: case TypeKind::UINT64:
         return builder.getInt64(0);
-    case TypeKind::Float:
+    case TypeKind::FLOAT:
         return llvm::ConstantFP::get(ll_context, llvm::APFloat((float)0.0F));
-    case TypeKind::Double:
+    case TypeKind::DOUBLE:
         return llvm::ConstantFP::get(ll_context, llvm::APFloat((double)0.0));
-    case TypeKind::Bool:
+    case TypeKind::BOOL_T:
         return builder.getInt1(0);
-    case TypeKind::ISize:
+    case TypeKind::ISIZE:
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), 0, true);
-    case TypeKind::USize:
+    case TypeKind::USIZE:
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), 0, false);
-    case TypeKind::Pointer:
-    case TypeKind::Function:
+    case TypeKind::POINTER:
+    case TypeKind::FUNCTION:
         return llvm::Constant::getNullValue(builder.getPtrTy());
-    case TypeKind::Enum: {
+    case TypeKind::ENUM: {
         auto enum_type = static_cast<EnumType*>(type);
         return gen_zero(enum_type->get_index_type());
     }
-    case TypeKind::Array:
-    case TypeKind::Struct:
-    case TypeKind::Slice:
+    case TypeKind::ARRAY:
+    case TypeKind::STRUCT:
+    case TypeKind::SLICE:
         return llvm::ConstantAggregateZero::get(gen_type(type));
     default:
         acorn_fatal("gen_zero(): Missing case");
@@ -4364,21 +4364,21 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
 
 llvm::Constant* acorn::IRGenerator::gen_one(Type* type) {
     switch (type->get_kind()) {
-    case TypeKind::Int8: case TypeKind::UInt8: case TypeKind::Char:
+    case TypeKind::INT8: case TypeKind::UINT8: case TypeKind::CHAR:
         return builder.getInt8(1);
-    case TypeKind::Int16: case TypeKind::UInt16: case TypeKind::Char16:
+    case TypeKind::INT16: case TypeKind::UINT16: case TypeKind::CHAR16:
         return builder.getInt16(1);
-    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32:
+    case TypeKind::INT: case TypeKind::INT32: case TypeKind::UINT32:
         return builder.getInt32(1);
-    case TypeKind::Int64: case TypeKind::UInt64:
+    case TypeKind::INT64: case TypeKind::UINT64:
         return builder.getInt64(1);
-    case TypeKind::ISize:
+    case TypeKind::ISIZE:
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), 1, true);
-    case TypeKind::USize:
+    case TypeKind::USIZE:
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), 1, false);
-    case TypeKind::Bool:
+    case TypeKind::BOOL_T:
         return builder.getInt1(1);
-    case TypeKind::Enum: {
+    case TypeKind::ENUM: {
         auto enum_type = static_cast<EnumType*>(type);
         return gen_one(enum_type->get_index_type());
     }
@@ -4397,7 +4397,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
 
     Type* from_type = value->type;
     switch (to_type->get_kind()) {
-    case TypeKind::Pointer: {
+    case TypeKind::POINTER: {
         if (from_type->is_integer() || from_type->is_bool()) {
             return builder.CreateIntToPtr(ll_value, builder.getPtrTy(), "cast");
         } else if (from_type->is_real_pointer() || from_type->is(context.null_type)) {
@@ -4441,20 +4441,20 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
         }
         goto NoCastFound;
     }
-    case TypeKind::Int:
-    case TypeKind::Int8:
-    case TypeKind::Int16:
-    case TypeKind::Int32:
-    case TypeKind::Int64:
-    case TypeKind::UInt8:
-    case TypeKind::UInt16:
-    case TypeKind::UInt32:
-    case TypeKind::UInt64:
-    case TypeKind::USize:
-    case TypeKind::ISize:
-    case TypeKind::Char:
-    case TypeKind::Char16:
-    case TypeKind::Bool: {
+    case TypeKind::INT:
+    case TypeKind::INT8:
+    case TypeKind::INT16:
+    case TypeKind::INT32:
+    case TypeKind::INT64:
+    case TypeKind::UINT8:
+    case TypeKind::UINT16:
+    case TypeKind::UINT32:
+    case TypeKind::UINT64:
+    case TypeKind::USIZE:
+    case TypeKind::ISIZE:
+    case TypeKind::CHAR:
+    case TypeKind::CHAR16:
+    case TypeKind::BOOL_T: {
         if (from_type->is_integer() || from_type->is_bool()) {
             return builder.CreateIntCast(ll_value, gen_type(to_type), from_type->is_signed(), "cast");
         } else if (from_type->is_real_pointer()) {
@@ -4468,8 +4468,8 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
         }
         goto NoCastFound;
     }
-    case TypeKind::Float:
-    case TypeKind::Double: {
+    case TypeKind::FLOAT:
+    case TypeKind::DOUBLE: {
         if (from_type->is_float()) {
             if (to_type->get_number_of_bits() > from_type->get_number_of_bits()) {
                 // Upcasting float.
@@ -4487,9 +4487,9 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
         }
         goto NoCastFound;
     }
-    case TypeKind::Function: {
+    case TypeKind::FUNCTION: {
         // NOTE: FuncsRef is not the same as is_function()!
-        if (from_type->get_kind() == TypeKind::FuncsRef) {
+        if (from_type->get_kind() == TypeKind::FUNCS_REF) {
             return ll_value;
         } else if (from_type->is_real_pointer()) {
             return ll_value;
@@ -4497,7 +4497,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
 
         goto NoCastFound;
     }
-    case TypeKind::Slice: {
+    case TypeKind::SLICE: {
         if (from_type->is_array()) {
             // Creating a temporary slice and storing the array into it.
             auto ll_slice_type = gen_type(to_type);
@@ -4509,7 +4509,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
 
         goto NoCastFound;
     }
-    case TypeKind::Struct: {
+    case TypeKind::STRUCT: {
         if (context.is_std_any_type(to_type)) {
             auto ll_any_struct_type = gen_struct_type(context.std_any_struct_type);
             auto ll_address = gen_unseen_alloca(ll_any_struct_type, "tmp.any.obj");
@@ -4544,17 +4544,17 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
 
 llvm::Value* acorn::IRGenerator::gen_enum_index(uint64_t index, Type* index_type) {
     switch (index_type->get_kind()) {
-    case TypeKind::Int8: case TypeKind::UInt8: case TypeKind::Char:
+    case TypeKind::INT8: case TypeKind::UINT8: case TypeKind::CHAR:
         return builder.getInt8(static_cast<uint8_t>(index));
-    case TypeKind::Int16: case TypeKind::UInt16: case TypeKind::Char16:
+    case TypeKind::INT16: case TypeKind::UINT16: case TypeKind::CHAR16:
         return builder.getInt16(static_cast<uint16_t>(index));
-    case TypeKind::Int: case TypeKind::Int32: case TypeKind::UInt32:
+    case TypeKind::INT: case TypeKind::INT32: case TypeKind::UINT32:
         return builder.getInt32(static_cast<uint32_t>(index));
-    case TypeKind::Int64: case TypeKind::UInt64:
+    case TypeKind::INT64: case TypeKind::UINT64:
         return builder.getInt64(index);
-    case TypeKind::ISize:
+    case TypeKind::ISIZE:
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), index, true);
-    case TypeKind::USize:
+    case TypeKind::USIZE:
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), index, false);
     default:
         acorn_fatal("Unknown integer type");
@@ -4652,7 +4652,7 @@ void acorn::IRGenerator::gen_call_default_constructor(llvm::Value* ll_address, S
                 context.queue_gen(structn->default_constructor, generic_struct_instance->generic_default_constructor_instance);
             }
         } else {
-            auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::DefaultConstructor, structn);
+            auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::DEFAULT_CONSTRUCTOR, structn);
             context.queue_gen_implicit_function(implicit_func);
         }
     }
@@ -4663,7 +4663,7 @@ void acorn::IRGenerator::gen_call_to_init_vtable(llvm::Value* ll_address, Struct
     if (!structn->ll_init_vtable_func) {
         llvm::Twine ll_name = structn->name.to_string() + ".vtable.init.acorn";
         structn->ll_init_vtable_func = gen_no_param_member_function_decl(structn, ll_name);
-        auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::VTableInit, structn);
+        auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::VTABLE_INIT, structn);
         context.queue_gen_implicit_function(implicit_func);
     }
     builder.CreateCall(structn->ll_init_vtable_func, ll_address);
@@ -4760,11 +4760,11 @@ void acorn::IRGenerator::gen_branch_on_condition(Expr* cond, llvm::BasicBlock* l
     // See: https://github.com/llvm/llvm-project/blob/839ac62c5085d895d3165bc5024db623a7a78813/clang/lib/CodeGen/CodeGenFunction.cpp
     // EmitBranchOnBoolExpr
 
-    if (cond->is(NodeKind::BinOp)) {
+    if (cond->is(NodeKind::BIN_OP)) {
         auto bin_op = static_cast<BinOp*>(cond);
 
         // Binary operators in the form:  a && b
-        if (bin_op->op == Token::AndAnd) {
+        if (bin_op->op == Token::AND_AND) {
             // Check for case where it is foldable and can just unconditionally branch.
             if (bin_op->is_foldable) {
                 auto ll_lhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->lhs));
@@ -4790,7 +4790,7 @@ void acorn::IRGenerator::gen_branch_on_condition(Expr* cond, llvm::BasicBlock* l
             return;
         }
         // Binary operators in the form:  a || b
-        else if (bin_op->op == Token::OrOr) {
+        else if (bin_op->op == Token::OR_OR) {
             // Check for case where it is foldable and can just unconditionally branch.
             if (bin_op->is_foldable) {
                 auto ll_lhs = llvm::cast<llvm::ConstantInt>(gen_condition(bin_op->lhs));
@@ -4883,8 +4883,8 @@ void acorn::IRGenerator::gen_store_value_to_any(llvm::Value* ll_any_address, Exp
 
     // If it is an aggregate it always has an address (unless optimized integer returning).
     bool has_address = value->type->is_aggregate();
-    if (value->kind == NodeKind::IdentRef ||
-        value->kind == NodeKind::DotOperator) {
+    if (value->kind == NodeKind::IDENT_REF ||
+        value->kind == NodeKind::DOT_OPERATOR) {
         IdentRef* ref = static_cast<IdentRef*>(value);
         if (ref->is_var_ref()) {
             has_address = true;
@@ -4894,14 +4894,14 @@ void acorn::IRGenerator::gen_store_value_to_any(llvm::Value* ll_any_address, Exp
                 ll_value = gen_foldable_global_variable(ref);
             }
         }
-    } else if (value->kind == NodeKind::UnaryOp) {
+    } else if (value->kind == NodeKind::UNARY_OP) {
         UnaryOp* unary_op = static_cast<UnaryOp*>(value);
         if (unary_op->op == '*') {
             has_address = true;
         }
-    } else if (value->kind == NodeKind::MemoryAccess) {
+    } else if (value->kind == NodeKind::MEMORY_ACCESS) {
         has_address = true;
-    } else if (value->type->is_aggregate() && value->is(NodeKind::FuncCall)) {
+    } else if (value->type->is_aggregate() && value->is(NodeKind::FUNC_CALL)) {
         // Optimized integers as returns from functions even tho they are aggregates
         // do not actually have an address.
 
@@ -4978,9 +4978,9 @@ llvm::AllocaInst* acorn::IRGenerator::gen_unseen_alloca(llvm::Type* ll_type, llv
 }
 
 bool acorn::IRGenerator::is_pointer_lvalue(Expr* expr) {
-    return expr->is_not(NodeKind::Cast) &&     // Casting call 'gen_rvalue' so there is no address to load.
-           expr->is_not(NodeKind::FuncCall) && // There is no address to load.
-           expr->is_not(NodeKind::This);       // The 'this' pointer has no address.
+    return expr->is_not(NodeKind::CAST) &&      // Casting call 'gen_rvalue' so there is no address to load.
+           expr->is_not(NodeKind::FUNC_CALL) && // There is no address to load.
+           expr->is_not(NodeKind::THIS_EXPR);   // The 'this' pointer has no address.
 }
 
 llvm::Type* acorn::IRGenerator::try_get_optimized_int_type(Type* type) const {
@@ -5134,7 +5134,7 @@ void acorn::IRGenerator::gen_call_copy_constructor(llvm::Value* ll_to_address,
                 context.queue_gen(structn->copy_constructor, generic_struct_instance->generic_copy_constructor_instance);
             }
         } else {
-            auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::CopyConstructor, structn);
+            auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::COPY_CONSTRUCTOR, structn);
             context.queue_gen_implicit_function(implicit_func);
         }
     }
@@ -5182,7 +5182,7 @@ void acorn::IRGenerator::gen_call_move_constructor(llvm::Value* ll_to_address,
                 context.queue_gen(structn->move_constructor, generic_struct_instance->generic_move_constructor_instance);
             }
         } else {
-            auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::MoveConstructor, structn);
+            auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::MOVE_CONSTRUCTOR, structn);
             context.queue_gen_implicit_function(implicit_func);
         }
     }
@@ -5267,13 +5267,13 @@ namespace acorn {
 
         T total_range_values = end - start;
         switch (range->op) {
-        case Token::RangeEq: {
+        case Token::RANGE_EQ: {
             for (T v = start; v <= end; v++) {
                 cb(static_cast<uint64_t>(v));
             }
             break;
         }
-        case Token::RangeLt: {
+        case Token::RANGE_LT: {
             for (T v = start; v < end; v++) {
                 cb(static_cast<uint64_t>(v));
             }

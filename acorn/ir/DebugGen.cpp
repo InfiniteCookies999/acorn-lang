@@ -359,30 +359,30 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
     };
 
     switch (type->get_kind()) {
-    case TypeKind::Void:    return nullptr; // Yes this is correct it expects nullptr.
-    case TypeKind::Int:     return make_basic_type("int"   , 32, llvm::dwarf::DW_ATE_signed);
-    case TypeKind::Int8:    return make_basic_type("int8"  , 8 , llvm::dwarf::DW_ATE_signed);
-    case TypeKind::Int16:   return make_basic_type("int16" , 16, llvm::dwarf::DW_ATE_signed);
-    case TypeKind::Int32:   return make_basic_type("int32" , 32, llvm::dwarf::DW_ATE_signed);
-    case TypeKind::Int64:   return make_basic_type("int64" , 64, llvm::dwarf::DW_ATE_signed);
-    case TypeKind::UInt8:   return make_basic_type("uint8" , 8 , llvm::dwarf::DW_ATE_unsigned);
-    case TypeKind::UInt16:  return make_basic_type("uint16", 16, llvm::dwarf::DW_ATE_unsigned);
-    case TypeKind::UInt32:  return make_basic_type("uint32", 32, llvm::dwarf::DW_ATE_unsigned);
-    case TypeKind::UInt64:  return make_basic_type("uint64", 64, llvm::dwarf::DW_ATE_unsigned);
-    case TypeKind::ISize: {
+    case TypeKind::VOID_T:  return nullptr; // Yes this is correct it expects nullptr.
+    case TypeKind::INT:     return make_basic_type("int"   , 32, llvm::dwarf::DW_ATE_signed);
+    case TypeKind::INT8:    return make_basic_type("int8"  , 8 , llvm::dwarf::DW_ATE_signed);
+    case TypeKind::INT16:   return make_basic_type("int16" , 16, llvm::dwarf::DW_ATE_signed);
+    case TypeKind::INT32:   return make_basic_type("int32" , 32, llvm::dwarf::DW_ATE_signed);
+    case TypeKind::INT64:   return make_basic_type("int64" , 64, llvm::dwarf::DW_ATE_signed);
+    case TypeKind::UINT8:   return make_basic_type("uint8" , 8 , llvm::dwarf::DW_ATE_unsigned);
+    case TypeKind::UINT16:  return make_basic_type("uint16", 16, llvm::dwarf::DW_ATE_unsigned);
+    case TypeKind::UINT32:  return make_basic_type("uint32", 32, llvm::dwarf::DW_ATE_unsigned);
+    case TypeKind::UINT64:  return make_basic_type("uint64", 64, llvm::dwarf::DW_ATE_unsigned);
+    case TypeKind::ISIZE: {
         unsigned ptr_size_in_bits = context.get_ll_module().getDataLayout().getPointerSizeInBits();
         return make_basic_type("isize", ptr_size_in_bits, llvm::dwarf::DW_ATE_signed);
     }
-    case TypeKind::USize: {
+    case TypeKind::USIZE: {
         unsigned ptr_size_in_bits = context.get_ll_module().getDataLayout().getPointerSizeInBits();
         return make_basic_type("isize", ptr_size_in_bits, llvm::dwarf::DW_ATE_unsigned);
     }
-    case TypeKind::Char:    return make_basic_type("char"   , 8 , llvm::dwarf::DW_ATE_unsigned_char);
-    case TypeKind::Char16:  return make_basic_type("char16" , 16, llvm::dwarf::DW_ATE_UTF);
-    case TypeKind::Float: return make_basic_type("float32", 32, llvm::dwarf::DW_ATE_float);
-    case TypeKind::Double: return make_basic_type("float64", 64, llvm::dwarf::DW_ATE_float);
-    case TypeKind::Bool:    return make_basic_type("bool"   , 8 , llvm::dwarf::DW_ATE_boolean);
-    case TypeKind::Pointer: {
+    case TypeKind::CHAR:   return make_basic_type("char"   , 8 , llvm::dwarf::DW_ATE_unsigned_char);
+    case TypeKind::CHAR16: return make_basic_type("char16" , 16, llvm::dwarf::DW_ATE_UTF);
+    case TypeKind::FLOAT:  return make_basic_type("float32", 32, llvm::dwarf::DW_ATE_float);
+    case TypeKind::DOUBLE: return make_basic_type("float64", 64, llvm::dwarf::DW_ATE_float);
+    case TypeKind::BOOL_T: return make_basic_type("bool"   , 8 , llvm::dwarf::DW_ATE_boolean);
+    case TypeKind::POINTER: {
         unsigned ptr_size_in_bits = context.get_ll_module().getDataLayout().getPointerSizeInBits();
 
         auto ptr_type = static_cast<PointerType*>(type);
@@ -396,7 +396,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
         di_cached_types.insert({ type, di_ptr_type });
         return di_ptr_type;
     }
-    case TypeKind::Array: {
+    case TypeKind::ARRAY: {
         unsigned ptr_size_in_bits = context.get_ll_module().getDataLayout().getPointerSizeInBits();
         auto ll_length_type = llvm::Type::getIntNTy(context.get_ll_context(), ptr_size_in_bits);
 
@@ -434,7 +434,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
         di_cached_types.insert({ type, di_arr_type });
         return di_arr_type;
     }
-    case TypeKind::Slice: {
+    case TypeKind::SLICE: {
         auto slice_type = static_cast<SliceType*>(type);
         auto ll_slice_type = gen_type(slice_type, context.get_ll_context(), context.get_ll_module());
         auto ll_struct_type = llvm::cast<llvm::StructType>(ll_slice_type);
@@ -488,7 +488,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 
         return di_struct_type;
     }
-    case TypeKind::Function: {
+    case TypeKind::FUNCTION: {
         unsigned ptr_size_in_bits = context.get_ll_module().getDataLayout().getPointerSizeInBits();
 
         llvm::SmallVector<llvm::Metadata*> di_func_types;
@@ -507,7 +507,7 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
         di_cached_types.insert({ type, di_func_type });
         return di_func_type;
     }
-    case TypeKind::Struct: {
+    case TypeKind::STRUCT: {
         auto struct_type = static_cast<StructType*>(type);
         auto structn = struct_type->get_struct();
         auto file = structn->file;
@@ -576,11 +576,11 @@ llvm::DIType* acorn::DebugInfoEmitter::emit_type(Type* type) {
 
         return di_struct_type;
     }
-    case TypeKind::Enum: {
+    case TypeKind::ENUM: {
         auto enum_type = static_cast<EnumType*>(type);
         return emit_type(enum_type->get_index_type());
     }
-    case TypeKind::Interface: {
+    case TypeKind::INTERFACE: {
 
         auto interface_type = static_cast<InterfaceType*>(type);
         auto interfacen = interface_type->get_interface();

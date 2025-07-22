@@ -56,19 +56,19 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
 
     Type* new_type;
     switch (type->get_kind()) {
-    case TypeKind::Pointer: {
+    case TypeKind::POINTER: {
         auto ptr_type = static_cast<PointerType*>(type);
         new_type = PointerType::create(allocator, ptr_type->get_elm_type(), is_const);
         break;
     }
-    case TypeKind::Struct: {
+    case TypeKind::STRUCT: {
         auto struct_type = static_cast<StructType*>(type);
         auto new_struct_type = StructType::create(allocator, struct_type->get_struct(), is_const);
         new_struct_type->set_ll_struct_type(struct_type->get_ll_struct_type());
         new_type = new_struct_type;
         break;
     }
-    case TypeKind::Enum: {
+    case TypeKind::ENUM: {
         auto enum_type = static_cast<EnumType*>(type);
         auto new_enum_type = EnumType::create(allocator, enum_type->get_enum(), is_const);
         new_enum_type->set_default_index(enum_type->get_default_index());
@@ -77,40 +77,40 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = new_enum_type;
         break;
     }
-    case TypeKind::Interface: {
+    case TypeKind::INTERFACE: {
         auto intr_type = static_cast<InterfaceType*>(type);
         auto new_intr_type = InterfaceType::create(allocator, intr_type->get_interface(), is_const);
         new_type = new_intr_type;
         break;
     }
-    case TypeKind::Array: {
+    case TypeKind::ARRAY: {
         auto arr_type = static_cast<ArrayType*>(type);
         new_type = ArrayType::create(allocator, arr_type->get_elm_type(), arr_type->get_length(), is_const);
         break;
     }
-    case TypeKind::Slice: {
+    case TypeKind::SLICE: {
         auto slice_type = static_cast<SliceType*>(type);
         auto new_slice_type = SliceType::create(allocator, slice_type->get_elm_type(), is_const);
         new_slice_type->set_ll_struct_type(slice_type->get_ll_struct_type());
         new_type = new_slice_type;
         break;
     }
-    case TypeKind::Function: {
+    case TypeKind::FUNCTION: {
         auto func_type = static_cast<FunctionType*>(type);
         new_type = FunctionType::create(allocator, func_type->get_key(), is_const);
         break;
     }
-    case TypeKind::Range: {
+    case TypeKind::RANGE: {
         auto range_type = static_cast<RangeType*>(type);
         new_type = RangeType::create(allocator, range_type->get_value_type());
         break;
     }
-    case TypeKind::UnresolvedArray: {
+    case TypeKind::UNRESOLVED_ARRAY: {
         auto un_arr_type = static_cast<UnresolvedArrayType*>(type);
         new_type = UnresolvedArrayType::create(allocator, un_arr_type->get_elm_type(), un_arr_type->get_expr(), is_const);
         break;
     }
-    case TypeKind::UnresolvedComposite: {
+    case TypeKind::UNRESOLVED_COMPOSITE: {
         auto un_composite_type = static_cast<UnresolvedCompositeType*>(type);
         new_type = UnresolvedCompositeType::create(allocator,
                                                    un_composite_type->get_composite_name(),
@@ -118,7 +118,7 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
                                                    is_const);
         break;
     }
-    case TypeKind::UnresolvedGenericComposite: {
+    case TypeKind::UNRESOLVED_GENERIC_COMPOSITE: {
         auto un_composite_type = static_cast<UnresolvedGenericCompositeType*>(type);
         new_type = UnresolvedGenericCompositeType::create(allocator,
                                                           un_composite_type->get_composite_name(),
@@ -129,7 +129,7 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         break;
     }
 
-    case TypeKind::UnresolvedEnumValueType: {
+    case TypeKind::UNRESOLVED_ENUM_VALUE_TYPE: {
         auto un_enum_value_type = static_cast<UnresolvedEnumValueType*>(type);
         new_type = UnresolvedEnumValueType::create(allocator,
                                                    un_enum_value_type->get_enum_name(),
@@ -137,17 +137,17 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
                                                    is_const);
         break;
     }
-    case TypeKind::AssignDeterminedArray: {
+    case TypeKind::ASSIGN_DETERMINED_ARRAY: {
         auto assign_det_arr_type = static_cast<AssignDeterminedArrayType*>(type);
         new_type = AssignDeterminedArrayType::create(allocator, assign_det_arr_type->get_elm_type(), is_const);
         break;
     }
-    case TypeKind::Generic: {
+    case TypeKind::GENERIC: {
         auto generic_type = static_cast<GenericType*>(type);
         new_type = GenericType::create(allocator, generic_type->get_generic(), is_const);
         break;
     }
-    case TypeKind::PartiallyBoundStruct: {
+    case TypeKind::PARTIALLY_BOUND_STRUCT: {
         auto generic_struct_type = static_cast<PartiallyBoundStructType*>(type);
         new_type = PartiallyBoundStructType::create(allocator,
                                                     generic_struct_type->get_unbound_generic_struct(),

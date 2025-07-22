@@ -314,24 +314,24 @@ void acorn::Compiler::sema_and_irgen() {
         sema_timer.start();
 
         Sema sema(context, decl->file, decl->get_logger());
-        if (decl->is(NodeKind::Func)) {
+        if (decl->is(NodeKind::FUNC)) {
             sema.check_function(static_cast<Func*>(decl));
-        } else if (decl->is(NodeKind::Var)) {
+        } else if (decl->is(NodeKind::VAR)) {
             auto var = static_cast<Var*>(decl);
             if (!var->has_been_checked) {
                 sema.check_variable(var);
             }
-        } else if (decl->is(NodeKind::Struct)) {
+        } else if (decl->is(NodeKind::STRUCT)) {
             auto structn = static_cast<Struct*>(decl);
             if (!structn->has_been_checked) {
                 sema.check_struct(structn);
             }
-        } else if (decl->is(NodeKind::Enum)) {
+        } else if (decl->is(NodeKind::ENUM)) {
             auto enumn = static_cast<Enum*>(decl);
             if (!enumn->has_been_checked) {
                 sema.check_enum(enumn);
             }
-        } else if (decl->is(NodeKind::Interface)) {
+        } else if (decl->is(NodeKind::INTERFACE)) {
             auto interfacen = static_cast<Interface*>(decl);
             if (!interfacen->has_been_checked) {
                 sema.check_interface(interfacen);
@@ -349,7 +349,7 @@ void acorn::Compiler::sema_and_irgen() {
         auto generic_instance = decl_gen.generic_instance;
 
         if (generic_instance) {
-            if (decl->is(NodeKind::Func)) {
+            if (decl->is(NodeKind::FUNC)) {
                 auto func = static_cast<Func*>(decl);
                 auto func_generic_instance = static_cast<GenericFuncInstance*>(generic_instance);
                 func->bind_generic_instance(func_generic_instance);
@@ -359,7 +359,7 @@ void acorn::Compiler::sema_and_irgen() {
         }
 
         // Semantic analysis.
-        if (decl->is_not(NodeKind::ImplicitFunc)) {
+        if (decl->is_not(NodeKind::IMPLICIT_FUNC)) {
             check_decl(static_cast<Decl*>(decl));
         }
 
@@ -368,11 +368,11 @@ void acorn::Compiler::sema_and_irgen() {
         if (context.has_errors()) continue;
 
         IRGenerator generator(context);
-        if (decl->is(NodeKind::Func)) {
+        if (decl->is(NodeKind::FUNC)) {
             generator.gen_function(static_cast<Func*>(decl), static_cast<GenericFuncInstance*>(generic_instance));
-        } else if (decl->is(NodeKind::Var)) {
+        } else if (decl->is(NodeKind::VAR)) {
             generator.gen_global_variable(static_cast<Var*>(decl));
-        } else if (decl->is(NodeKind::ImplicitFunc)) {
+        } else if (decl->is(NodeKind::IMPLICIT_FUNC)) {
             generator.gen_implicit_function(static_cast<ImplicitFunc*>(decl));
         } else {
             acorn_fatal("Unreachable: Missing generation case");
@@ -734,13 +734,13 @@ void acorn::Compiler::find_std_lib_declarations() {
         NodeKind decl_kind;
         const char* decl_type_str;
         if constexpr (std::is_same_v<Struct, T>) {
-            decl_kind = NodeKind::Struct;
+            decl_kind = NodeKind::STRUCT;
             decl_type_str = "struct";
         } else if constexpr (std::is_same_v<Enum, T>) {
-            decl_kind = NodeKind::Enum;
+            decl_kind = NodeKind::ENUM;
             decl_type_str = "enum";
         } else if constexpr (std::is_same_v<Interface, T>) {
-            decl_kind = NodeKind::Interface;
+            decl_kind = NodeKind::INTERFACE;
             decl_type_str = "interface";
         } else {
             acorn_fatal("unknown composite type");
@@ -798,7 +798,7 @@ void acorn::Compiler::find_std_lib_declarations() {
             auto ptr_type = static_cast<PointerType*>(parsed_type);
             Type* elm_type = ptr_type->get_elm_type();
 
-            if (elm_type->get_kind() != TypeKind::UnresolvedComposite) continue;
+            if (elm_type->get_kind() != TypeKind::UNRESOLVED_COMPOSITE) continue;
 
             auto composite_type = static_cast<UnresolvedCompositeType*>(elm_type);
             if (composite_type->get_composite_name() == context.error_interface_identifier) {
