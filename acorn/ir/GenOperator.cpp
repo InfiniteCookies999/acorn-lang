@@ -11,6 +11,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
 
     switch (bin_op->op) {
     case '=':
+    case Token::POUND_EQ:
         return gen_assignment_op(bin_op->lhs, bin_op->rhs);
     case Token::ADD_EQ:   return gen_apply_and_assign_op('+', bin_op->loc, bin_op->type, lhs, rhs);
     case Token::SUB_EQ:   return gen_apply_and_assign_op('-', bin_op->loc, bin_op->type, lhs, rhs);

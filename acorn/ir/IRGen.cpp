@@ -499,17 +499,17 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
             gen_call_to_init_vtable(ll_this, structn);
         }
 
-        // TODO: once there are initializer lists this will need
-        //       to only initialize the values not in the initializer
-        //       list.
-
         push_dbg_loc(func->scope->loc);
         for (Var* field : structn->fields) {
-            auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->ll_field_idx);
-            if (field->assignment) {
-                gen_assignment(ll_field_addr, field->type, field->assignment);
+            if (!field->uses_field_init_op) {
+                auto ll_field_addr = builder.CreateStructGEP(ll_struct_type, ll_this, field->ll_field_idx);
+                if (field->assignment) {
+                    gen_assignment(ll_field_addr, field->type, field->assignment);
+                } else {
+                    gen_default_value(ll_field_addr, field->type);
+                }
             } else {
-                gen_default_value(ll_field_addr, field->type);
+                field->uses_field_init_op = false;
             }
         }
         pop_dbg_loc();
@@ -548,10 +548,14 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
             auto ll_from_struct_address = ll_cur_func->getArg(1);
 
             for (Var* field : structn->fields) {
-                copy_struct_field_constructor(field,
-                                              ll_this,
-                                              ll_from_struct_address,
-                                              ll_struct_type);
+                if (!field->uses_field_init_op) {
+                    copy_struct_field_constructor(field,
+                                                  ll_this,
+                                                  ll_from_struct_address,
+                                                  ll_struct_type);
+                } else {
+                    field->uses_field_init_op = false;
+                }
             }
         }
     }
@@ -564,10 +568,14 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
             auto ll_from_struct_address = ll_cur_func->getArg(1);
 
             for (Var* field : structn->fields) {
-                try_move_then_copy_struct_field_constructor(field,
-                                                            ll_this,
-                                                            ll_from_struct_address,
-                                                            ll_struct_type);
+                if (!field->uses_field_init_op) {
+                    try_move_then_copy_struct_field_constructor(field,
+                                                                ll_this,
+                                                                ll_from_struct_address,
+                                                                ll_struct_type);
+                } else {
+                    field->uses_field_init_op = true;
+                }
             }
         }
     }

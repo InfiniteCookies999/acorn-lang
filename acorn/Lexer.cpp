@@ -110,6 +110,10 @@ start:
     case '\'':
         return next_char();
     case '#':
+        if (*(ptr + 1) == '=') {
+            ptr += 2;
+            return Token(Token::POUND_EQ, ptr - 2, 2);
+        }
         return next_comptime();
     // Special characters
     case ',': lex1(',');

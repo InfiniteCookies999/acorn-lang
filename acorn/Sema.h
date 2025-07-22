@@ -145,6 +145,8 @@ namespace acorn {
                                               const Struct::UnresolvedExtension& extension);
         bool do_interface_functions_matches(Func* interface_func, Func* func);
 
+        void check_variable_can_initialize(Var* var, SourceLoc error_loc);
+
         // Statements checking
         //--------------------------------------
 

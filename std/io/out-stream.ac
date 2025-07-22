@@ -22,7 +22,7 @@ struct OutStream :: Writable {
     handle: W;
 
     fn new(handle: W) {
-        this.handle = handle;
+        this.handle #= handle;
     }
 
     fn write_buffer(buffer: const char*, length: int) -> int | raises IOError {

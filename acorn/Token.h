@@ -113,6 +113,7 @@ namespace acorn {
             TILDE_EQ,
             LT_LT_EQ,
             GT_GT_EQ,
+            POUND_EQ,
             ADD_ADD,
             SUB_SUB,
             SUB_SUB_SUB,

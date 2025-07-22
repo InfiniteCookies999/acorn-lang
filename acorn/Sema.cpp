@@ -478,6 +478,15 @@ void acorn::Sema::check_function(Func* func) {
     if (uses_implicit_return) {
         ++func->num_returns;
     }
+
+    if (func->is_constructor) {
+        Struct* structn = func->structn;
+        for (Var* field : structn->fields) {
+            if (!field->uses_field_init_op) {
+                check_variable_can_initialize(field, func->loc);
+            }
+        }
+    }
 }
 
 void acorn::Sema::check_variable(Var* var) {
@@ -698,6 +707,10 @@ void acorn::Sema::check_variable(Var* var) {
         error(var, "Variables cannot have type 'void'")
             .end_error(ErrCode::SemaVariableCannotHaveVoidType);
         return cleanup();
+    }
+
+    if (!var->is_field()) {
+        check_variable_can_initialize(var, var->loc);
     }
 
     if (!var->assignment && !var->has_modifier(Modifier::Native) && !var->is_param()) {
@@ -1790,6 +1803,35 @@ bool acorn::Sema::do_interface_functions_matches(Func* interface_func, Func* fun
     }
 
     return true;
+}
+
+void acorn::Sema::check_variable_can_initialize(Var* var, SourceLoc error_loc) {
+    // Check that make sure that when a variable has a struct type or array
+    // of structs that without an assignment, if must have no constructors or
+    // a default constructor.
+    auto check_can_default_init = [this, var, error_loc](StructType* struct_type) finline {
+        auto structn = struct_type->get_struct();
+        if (structn->constructors.empty()) return;
+        if (!structn->default_constructor) {
+
+            error(error_loc, "%s '%s' has type '%s' which has no default constructor to initialize the variable",
+                  !var->is_field() ? "Variable" : "Field", var->name, var->type)
+                .end_error(ErrCode::SemaVariableNoAssignmentOrDefaultConstructor);
+        }
+    };
+    if (!var->assignment && var->should_default_initialize) {
+        if (var->type->is_struct()) {
+            auto struct_type = static_cast<StructType*>(var->type);
+            check_can_default_init(struct_type);
+        } else if (var->type->is_array()) {
+            auto arr_type = static_cast<ArrayType*>(var->type);
+            auto base_type = arr_type->get_base_type();
+            if (base_type->is_struct()) {
+                auto struct_type = static_cast<StructType*>(base_type);
+                check_can_default_init(struct_type);
+            }
+        }
+    }
 }
 
 // Statements checking
@@ -3035,7 +3077,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     if (!lhs->type) {
         return cleanup_try();
     }
-    if (bin_op->op == '=' && rhs->is(NodeKind::MOVEOBJ)) {
+    if ((bin_op->op == '=' || bin_op->op == Token::POUND_EQ) && rhs->is(NodeKind::MOVEOBJ)) {
         check_moveobj(static_cast<MoveObj*>(rhs), true);
         if (!rhs->type) {
             return cleanup_try();
@@ -3079,6 +3121,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
 
     switch (bin_op->op) {
     case '=':
+    case Token::POUND_EQ:
     case Token::ADD_EQ:
     case Token::SUB_EQ:
     case Token::MUL_EQ:
@@ -3096,7 +3139,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         }
 
         switch (bin_op->op) {
-        case '=': {
+        case '=': case Token::POUND_EQ: {
             if (!is_assignable_to(bin_op->lhs->type, bin_op->rhs)) {
                 bool is_assignable_to = false;
 
@@ -3118,6 +3161,47 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             if (lhs_type->is_array()) {
                 error(expand(bin_op), "Cannot reassign to arrays")
                     .end_error(ErrCode::SemaCannotRassignToArrays);
+            }
+
+            if (bin_op->op == Token::POUND_EQ) {
+                // 1. in a constructor
+                // 2. is a field
+                if (!cur_func || !cur_func->is_constructor) {
+                    error(expand(bin_op), "Cannot use operator except in a constructor applied to fields")
+                        .end_error(ErrCode::SemaCannotUseFieldInitOpExceptInConstructor);
+                    return cleanup_try();
+                }
+
+                bool assigns_to_field = false;
+                if (lhs->is(NodeKind::IDENT_REF) || lhs->is(NodeKind::DOT_OPERATOR)) {
+                    auto ref = static_cast<IdentRef*>(lhs);
+                    if (ref->is_var_ref() && ref->var_ref->is_field()) {
+                        assigns_to_field = true;
+                        ref->var_ref->uses_field_init_op = true;
+                    }
+                }
+
+                if (!assigns_to_field) {
+                    std::string error_msg = "Expected field";
+
+                    if (lhs->is(NodeKind::IDENT_REF)) {
+                        auto ref = static_cast<IdentRef*>(lhs);
+                        if (ref->is_var_ref()) {
+                            error_msg += " but found ";
+                            if (ref->var_ref->is_global) {
+                                error_msg += "global variable";
+                            } else if (ref->var_ref->is_param()) {
+                                error_msg += "parameter";
+                            } else {
+                                error_msg += "local variable";
+                            }
+                        }
+                    }
+
+                    error(expand(lhs), error_msg.c_str())
+                        .end_error(ErrCode::SemaFieldInitOpExpectsField);
+                    return cleanup_try();
+                }
             }
 
             break;
@@ -5698,6 +5782,8 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
         }
     }
 
+    llvm::SmallVector<bool, 32> initializes_fields(structn->fields.size());
+
     bool named_values_out_of_order = false;
     uint32_t named_value_high_idx = 0;
     for (size_t i = 0; i < values.size(); i++) {
@@ -5738,6 +5824,8 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
             }
         }
 
+        initializes_fields[field->field_idx] = true;
+
         if (!is_assignable_to(field->type, value)) {
             error(expand(value), "Field '%s'. %s",
                   field->name,
@@ -5752,6 +5840,12 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
         }
 
         create_cast(value, field->type);
+    }
+
+    for (Var* field : structn->fields) {
+        if (!initializes_fields[field->field_idx]) {
+            check_variable_can_initialize(field, initializer->loc);
+        }
     }
 
 
@@ -7853,6 +7947,7 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
 
         switch (bin_op->op) {
         case '=':
+        case Token::POUND_EQ:
         case Token::ADD_EQ:
         case Token::SUB_EQ:
         case Token::MUL_EQ:

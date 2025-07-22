@@ -1740,6 +1740,7 @@ acorn::Expr* acorn::Parser::parse_assignment_and_expr() {
     Expr* lhs = parse_expr();
     switch (cur_token.kind) {
     case '=':
+    case Token::POUND_EQ:
     case Token::ADD_EQ:
     case Token::SUB_EQ:
     case Token::MUL_EQ:

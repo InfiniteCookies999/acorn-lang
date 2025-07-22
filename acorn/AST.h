@@ -367,6 +367,7 @@ namespace acorn {
         bool has_implicit_ptr             = false;
         bool should_default_initialize    = true;
         bool assignment_contains_generics = false;
+        bool uses_field_init_op           = false;
 
         // If the variable is foldable then this contains the
         // generated value of the variable.

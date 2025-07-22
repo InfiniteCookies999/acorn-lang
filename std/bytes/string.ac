@@ -12,20 +12,20 @@ struct String {
      * Creates a String with a length of 0.
      */
     fn new() {
-        buffer = &DEFAULT_CHAR;
+        buffer #= &DEFAULT_CHAR;
     }
 
     fn copyobj(o: const String*) {
-        this.length   = o.length;
-        this.capacity = o.capacity;
-        this.buffer   = as(char*) malloc(length + 1); // +1 for null terminator.
+        this.length   #= o.length;
+        this.capacity #= o.capacity;
+        this.buffer   #= as(char*) malloc(length + 1); // +1 for null terminator.
         memcpy(this.buffer, o.buffer, length + 1);
     }
 
     fn moveobj(o: String*) {
-        this.length   = o.length;
-        this.buffer   = o.buffer;
-        this.capacity = o.capacity;
+        this.length   #= o.length;
+        this.buffer   #= o.buffer;
+        this.capacity #= o.capacity;
         o.length   = 0;
         o.buffer   = &DEFAULT_CHAR;
         o.capacity = 0;
@@ -36,9 +36,9 @@ struct String {
      * character `buffer`.
      */
     fn new(buffer: const char*) {
-        this.length   = strlen(buffer);
-        this.capacity = this.length;
-        this.buffer   = as(char*) malloc(length + 1); // +1 for null terminator.
+        this.length   #= strlen(buffer);
+        this.capacity #= this.length;
+        this.buffer   #= as(char*) malloc(length + 1); // +1 for null terminator.
         memcpy(this.buffer, buffer, length + 1);
     }
 
@@ -51,9 +51,9 @@ struct String {
      * null termination in the `length`.
      */
     fn new(buffer: const char*, length: int) {
-        this.length   = length;
-        this.capacity = length;
-        this.buffer   = as(char*) malloc(length + 1); // +1 for null terminator.
+        this.length   #= length;
+        this.capacity #= length;
+        this.buffer   #= as(char*) malloc(length + 1); // +1 for null terminator.
         memcpy(this.buffer, buffer, length);
         this.buffer[length] = '\0';
     }
@@ -77,14 +77,14 @@ struct String {
      *                    `length` passed.
      */
     fn new(buffer: char*, length: int, copy_buffer: bool) {
-        this.length   = length;
-        this.capacity = length;
+        this.length   #= length;
+        this.capacity #= length;
         if (copy_buffer) {
-            this.buffer = as(char*) malloc(length + 1); // +1 for null terminator.
+            this.buffer #= as(char*) malloc(length + 1); // +1 for null terminator.
             memcpy(this.buffer, buffer, length);
             this.buffer[length] = '\0';
         } else {
-            this.buffer = buffer;
+            this.buffer #= buffer;
         }
     }
 

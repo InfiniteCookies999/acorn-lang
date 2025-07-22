@@ -68,19 +68,19 @@ struct FileHandle :: Writable, Readable {
 
 #if OS_GROUP_WINDOWS
     fn new(handle: void*, auto_close := true) {
-        this.handle = handle;
-        this.auto_close = auto_close;
+        this.handle     #= handle;
+        this.auto_close #= auto_close;
     }
 #elif OS_GROUP_UNIX
     fn new(handle: int32, auto_close := true) {
-        this.handle = handle;
-        this.auto_close = auto_close;
+        this.handle     #= handle;
+        this.auto_close #= auto_close;
     }
 #endif
 
     fn moveobj(file_handle: FileHandle*) {
-        this.handle     = file_handle.handle;
-        this.auto_close = file_handle.auto_close;
+        this.handle     #= file_handle.handle;
+        this.auto_close #= file_handle.auto_close;
 
 #if OS_GROUP_WINDOWS
         file_handle.handle = null;

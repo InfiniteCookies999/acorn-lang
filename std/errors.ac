@@ -33,11 +33,11 @@ struct OutOfBoundsError :: *Error {
     msg: String;
 
     fn new(msg: const char*) {
-        this.msg = String{ msg };
+        this.msg #= String{ msg };
     }
 
     fn new(msg: String) {
-        this.msg = moveobj(msg);
+        this.msg #= moveobj(msg);
     }
 
     const fn get_name()    -> const char* { return "OutOfBoundsError"; }
@@ -49,11 +49,11 @@ struct StateError :: *Error {
     msg: String;
 
     fn new(msg: const char*) {
-        this.msg = String{ msg };
+        this.msg #= String{ msg };
     }
 
     fn new(msg: String) {
-        this.msg = moveobj(msg);
+        this.msg #= moveobj(msg);
     }
 
     const fn get_name()    -> const char* { return "StateError"; }
@@ -65,11 +65,11 @@ struct OutOfMemoryError :: *Error {
     msg: String;
 
     fn new(msg: const char*) {
-        this.msg = String{ msg };
+        this.msg #= String{ msg };
     }
 
     fn new(msg: String) {
-        this.msg = moveobj(msg);
+        this.msg #= moveobj(msg);
     }
 
     const fn get_name()    -> const char* { return "OutOfMemoryError"; }
@@ -80,11 +80,11 @@ struct IOError :: *Error {
     msg: String;
 
     fn new(msg: const char*) {
-        this.msg = String{ msg };
+        this.msg #= String{ msg };
     }
 
     fn new(msg: String) {
-        this.msg = moveobj(msg);
+        this.msg #= moveobj(msg);
     }
 
     const fn get_name()    -> const char* { return "IOError"; }
