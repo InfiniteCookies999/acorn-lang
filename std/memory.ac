@@ -1,5 +1,12 @@
 #file(access=public)
 
+generics(T)
+fn exchange(value: T^, new_value: T) -> T {
+    prev_value := moveobj(*value);
+    *value = moveobj(new_value);
+    return prev_value;
+}
+
 /*
  * Copies `count` amount of bytes from the `src`
  * to the `dest`.

@@ -15,6 +15,8 @@ static thread_local TestSection*       current_section = nullptr;
 static thread_local int                current_depth   = 0;
 static llvm::SmallVector<TestSection*> sections;
 
+static std::mutex                   failed_test_mutex;
+static llvm::SmallVector<TestCase*> failed_tests;
 static std::atomic<int> num_failed_tests = 0;
 static std::atomic<int> num_tests_ran    = 0;
 
@@ -141,6 +143,8 @@ void TestSection::run() {
                     ++num_tests_ran;
                     if (test->failed()) {
                         ++num_failed_tests;
+                        std::lock_guard lock(failed_test_mutex);
+                        failed_tests.push_back(test);
                     }
                 }
             }));
@@ -158,6 +162,7 @@ void TestSection::run() {
             ++num_tests_ran;
             if (test->failed()) {
                 ++num_failed_tests;
+                failed_tests.push_back(test);
             }
         }
     }
@@ -228,4 +233,10 @@ void run_tests() {
         std::cout << "Failed tests!\n\n";
     }
     std::cout << "    (" << (num_tests_ran - num_failed_tests) << "/" << num_tests_ran << ") tests passed.\n";
+
+    if (num_failed_tests > 0) {
+        for (TestCase* failed_test : failed_tests) {
+            std::cout << "Failed test: '" << failed_test->get_name() << "'\n";
+        }
+    }
 }

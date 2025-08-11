@@ -70,6 +70,7 @@ namespace acorn {
         RAISE_STMT,
         RECOVER_STMT,
         UNINIT_NEW_CALL_STMT,
+        DELETE_CALL_STMT,
 
         EXPR_START,
         INVALID_EXPR,
@@ -86,6 +87,7 @@ namespace acorn {
         STRING,
         NULL_EXPR,
         CAST,
+        BITCAST,
         ARRAY,
         THIS_EXPR,
         SIZE_OF,
@@ -653,6 +655,12 @@ namespace acorn {
         Expr* value;
     };
 
+    struct DeleteCallStmt : Node {
+        DeleteCallStmt() : Node(NodeKind::DELETE_CALL_STMT) {}
+
+        Expr* address;
+    };
+
 
     // Expressions
     //--------------------------------------
@@ -928,6 +936,14 @@ namespace acorn {
 
     struct Cast : Expr {
         Cast() : Expr(NodeKind::CAST) {
+        }
+
+        Type* explicit_cast_type;
+        Expr* value;
+    };
+
+    struct BitCast : Expr {
+        BitCast() : Expr(NodeKind::BITCAST) {
         }
 
         Type* explicit_cast_type;

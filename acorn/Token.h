@@ -63,6 +63,7 @@ namespace acorn {
             KW_GENERICS,
             // Expression keywords
             KW_AS,
+            KW_BITCAST,
             KW_THIS,
             KW_SIZEOF,
             KW_COPYOBJ,

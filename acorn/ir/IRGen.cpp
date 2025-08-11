@@ -106,7 +106,9 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
     case NodeKind::FUNC_CALL:
         return gen_function_call(static_cast<FuncCall*>(node), nullptr);
     case NodeKind::UNINIT_NEW_CALL_STMT:
-        return gen_new_call(static_cast<UninitNewCallStmt*>(node));
+        return gen_uninit_new_call(static_cast<UninitNewCallStmt*>(node));
+    case NodeKind::DELETE_CALL_STMT:
+        return gen_delete_call(static_cast<DeleteCallStmt*>(node));
     case NodeKind::BOOL_EXPR:
         return gen_bool(static_cast<Bool*>(node));
     case NodeKind::STRING:
@@ -115,6 +117,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_null();
     case NodeKind::CAST:
         return gen_cast(static_cast<Cast*>(node));
+    case NodeKind::BITCAST:
+        return gen_bitcast(static_cast<BitCast*>(node));
     case NodeKind::MEMORY_ACCESS:
         return gen_memory_access(static_cast<MemoryAccess*>(node));
     case NodeKind::ARRAY:
@@ -580,7 +584,6 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
         }
     }
     pop_dbg_loc(); // End of implicit functionality.
-
 
     if (func->num_returns > 1) {
         // Have to check for termination because the last statement might
@@ -2368,7 +2371,11 @@ llvm::Value* acorn::IRGenerator::gen_raise(RaiseStmt* raise) {
         builder.CreateCall(context.std_abort_function->ll_func, ll_error);
 
         if (not_void) {
-            ll_ret_value = gen_zero(cur_func->return_type);
+            if (cur_func->num_returns > 1 && !cur_func->uses_aggr_param) {
+                builder.CreateStore(gen_zero(cur_func->return_type), ll_ret_addr);
+            } else {
+                ll_ret_value = gen_zero(cur_func->return_type);
+            }
         }
     } else {
         // Return the error.
@@ -2897,17 +2904,34 @@ llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* 
     }
 }
 
-llvm::Value* acorn::IRGenerator::gen_new_call(UninitNewCallStmt* new_call) {
+llvm::Value* acorn::IRGenerator::gen_uninit_new_call(UninitNewCallStmt* new_call) {
 
     push_dbg_loc(new_call->loc);
     defer(pop_dbg_loc());
 
-    auto ll_address = gen_node(new_call->address);
+    auto ll_address = gen_rvalue(new_call->address);
 
     auto ptr_type = static_cast<PointerType*>(new_call->address->type);
     auto elm_type = ptr_type->get_elm_type();
 
     gen_assignment(ll_address, elm_type, new_call->value, new_call);
+
+    return nullptr;
+}
+
+llvm::Value* acorn::IRGenerator::gen_delete_call(DeleteCallStmt* delete_call) {
+
+    push_dbg_loc(delete_call->loc);
+    defer(pop_dbg_loc());
+
+    auto ptr_type = static_cast<PointerType*>(delete_call->address->type);
+    auto elm_type = ptr_type->get_elm_type();
+
+    auto ll_address = gen_rvalue(delete_call->address);
+
+    if (elm_type->needs_destruction()) {
+        gen_call_destructors(elm_type, { ll_address });
+    }
 
     return nullptr;
 }
@@ -3392,7 +3416,14 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
             // If the function returns an implicit dereferencable pointer then
             // this code goes ahead and will store the dereferenced pointer into
             // the provided address.
-            auto ptr_type = static_cast<PointerType*>(called_func->return_type);
+
+            PointerType* ptr_type;
+            if (!generic_instance) {
+                ptr_type = static_cast<PointerType*>(called_func->return_type);
+            } else {
+                ptr_type = static_cast<PointerType*>(generic_instance->qualified_decl_types[0]);
+            }
+
             auto elm_type = ptr_type->get_elm_type();
             if (elm_type->is_struct()) {
                 auto struct_type = static_cast<StructType*>(elm_type);
@@ -4401,6 +4432,11 @@ llvm::Value* acorn::IRGenerator::gen_cast(Cast* cast) {
                                                                                  : gen_rvalue(cast->value));
 }
 
+llvm::Value* acorn::IRGenerator::gen_bitcast(BitCast* cast) {
+    auto ll_value = gen_rvalue(cast->value);
+    return builder.CreateBitCast(ll_value, gen_type(cast->type));
+}
+
 llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Value* ll_value) {
 
     Type* from_type = value->type;
@@ -4987,6 +5023,7 @@ llvm::AllocaInst* acorn::IRGenerator::gen_unseen_alloca(llvm::Type* ll_type, llv
 
 bool acorn::IRGenerator::is_pointer_lvalue(Expr* expr) {
     return expr->is_not(NodeKind::CAST) &&      // Casting call 'gen_rvalue' so there is no address to load.
+           expr->is_not(NodeKind::BITCAST) &&
            expr->is_not(NodeKind::FUNC_CALL) && // There is no address to load.
            expr->is_not(NodeKind::THIS_EXPR);   // The 'this' pointer has no address.
 }

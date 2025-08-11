@@ -66,7 +66,8 @@ namespace acorn {
         // Limits to calculate comparison scores for which function to call.
         //
         //     const uint32_t IMPLICIT_MISMATCHED_TYPES_LIMIT = 0;
-        static const uint64_t PREFER_NON_CONST_LIMIT                = MAX_FUNC_PARAMS * 2;
+        static const uint64_t PREFER_IMPLICIT_PTR_TO_ELM_TYPE       = MAX_FUNC_PARAMS * 2;
+        static const uint64_t PREFER_NON_CONST_LIMIT                = PREFER_IMPLICIT_PTR_TO_ELM_TYPE * 2;
         static const uint64_t IS_VARARGS_LIMIT                      = PREFER_NON_CONST_LIMIT * 2;
         static const uint64_t IS_GENERIC_LIMIT                      = IS_VARARGS_LIMIT * 2;
         static const uint64_t IMPLICIT_CAST_TO_ANY_LIMIT            = IS_GENERIC_LIMIT * MAX_FUNC_PARAMS * 2;
@@ -189,7 +190,8 @@ namespace acorn {
                              bool is_dot_op_site = false);
         void check_dot_operator(DotOperator* dot, bool is_for_call);
         void check_function_call(FuncCall* call);
-        void check_new_call(UninitNewCallStmt* call);
+        void check_new_uninit_call(UninitNewCallStmt* call);
+        void check_delete_call(DeleteCallStmt* call);
         void check_generic_bind_function_call(GenericBindFuncCall* call);
         bool compare_generic_bind_candidate_with_named_args(const llvm::SmallVector<Expr*>& args,
                                                             const llvm::SmallVector<Generic*>& generics,
@@ -241,8 +243,10 @@ namespace acorn {
         bool check_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
                                              Type* from_type, // Type at current level of comparison
                                              llvm::SmallVector<Type*>& bindings,
-                                             bool enforce_elm_const = false);
+                                             bool enforce_elm_const = false,
+                                             bool may_use_implicit_param_ptr = false);
         void check_cast(Cast* cast);
+        void check_bitcast(BitCast* cast);
         void check_named_value(NamedValue* named_value);
         void check_array(Array* arr, Type* dest_elm_type);
         void check_memory_access(MemoryAccess* mem_access);

@@ -1,0 +1,77 @@
+#file(access=public)
+
+/*
+ * Calculates the number of trailing zero bits in `x`. That is it
+ * determines the amount of rightmost bits which are zero.
+ *
+ * Example:
+ *     110..010000
+ *            ^^^^
+ *            There are 4 trailing zeros.
+ */
+fn count_trailing_zeros(x: uint32) -> int {
+    // See "Hacker's Delight" section on "Counting Trailing 0's".
+    if (x == 0) return 32;
+    n := 1;
+    if ((x & 0x0000FFFF) == 0) { n += 16; x >>= 16; }
+    if ((x & 0x000000FF) == 0) { n +=  8; x >>=  8; }
+    if ((x & 0x0000000F) == 0) { n +=  4; x >>=  4; }
+    if ((x & 0x00000003) == 0) { n +=  2; x >>=  2; }
+    return n - as(int)(x & 1);
+}
+
+/*
+ * Calculates the number of trailing zero bits in `x`. That is it
+ * determines the amount of rightmost bits which are zero.
+ *
+ * Example:
+ *     110..010000
+ *            ^^^^
+ *            There are 4 trailing zeros.
+ */
+fn count_trailing_zeros(x: uint64) -> int {
+    low := as(uint32) x;
+    if (low == 0) {
+        return 32 + count_trailing_zeros(as(uint32) (x >> 32)); // deal with high bits.
+    } else {
+        return count_trailing_zeros(low); // deal with low bits.
+    }
+}
+
+/*
+ * Calculates the number of leading zero bits in `x`. That is it
+ * determines the amount of leftmost bits which are zero.
+ *
+ * Example:
+ *      00001..010
+ *      ^^^^
+ *      There are 4 leading zeros.
+ */
+fn count_leading_zeros(x: uint32) -> int {
+    // See "Hacker's Delight" section on "Counting Leading 0's".
+    if (x == 0) return 32;
+    n := 1;
+    if (x >> 16 == 0) { n += 16; x <<= 16; }
+    if (x >> 24 == 0) { n += 8;  x <<= 8;  }
+    if (x >> 28 == 0) { n += 4;  x <<= 4;  }
+    if (x >> 30 == 0) { n += 2;  x <<= 2;  }
+    return n - as(int)(x >> 31);
+}
+
+/*
+ * Calculates the number of leading zero bits in `x`. That is it
+ * determines the amount of leftmost bits which are zero.
+ *
+ * Example:
+ *      00001..010
+ *      ^^^^
+ *      There are 4 leading zeros.
+ */
+fn count_leading_zeros(x: uint64) -> int {
+    high := as(uint32) (x >> 32);
+    if (high == 0) {
+        return 32 + count_leading_zeros(as(uint32) x);
+    } else {
+        return count_leading_zeros(high);
+    }
+}

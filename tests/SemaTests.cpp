@@ -275,5 +275,19 @@ void test_sema() {
             )");
             expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
         });
+        test("Generic function with implicit ptr param still enforces constness", [&] {
+            mock_sema(R"(
+                generics(T)
+                fn foo(a: fn(T)^) {}
+
+                fn bar(a: int) {}
+
+                fn main() {
+                    a: const fn(int) = bar;
+                    foo(a);
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaInvalidFuncCallSingle);
+        });
     });
 }

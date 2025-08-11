@@ -22,7 +22,7 @@ struct OutStream :: Writable {
     handle: W;
 
     fn new(handle: W) {
-        this.handle #= handle;
+        this.handle #= moveobj(handle);
     }
 
     fn write_buffer(buffer: const char*, length: int) -> int | raises IOError {
@@ -59,12 +59,13 @@ struct OutStream :: Writable {
     }
 
     fn write(value: int64, base := 10) | raises IOError {
+        value_u64 := as(uint64) value;
         if (value < 0) {
             try (write('-'));
-            value = -value;
+            value_u64 = -(as(uint64) value);
         }
 
-        try (write(as(uint64) value, base));
+        try (write(value_u64, base));
     }
 
     fn write(c: char) | raises IOError {

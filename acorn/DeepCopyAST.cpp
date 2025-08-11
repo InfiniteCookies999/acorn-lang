@@ -38,8 +38,14 @@ namespace acorn {
             return var;
         }
         case NodeKind::VAR_LIST: {
-            acorn_fatal("Variable lists are resolved during parsing into just variables");
-            return nullptr;
+            auto original_var_list = static_cast<VarList*>(node);
+            auto var_list = raw_copy(allocator, original_var_list);
+            var_list->vars.clear();
+
+            for (Var* var : original_var_list->vars) {
+                var_list->vars.push_back(deep_copy(allocator, var));
+            }
+            return var_list;
         }
         case NodeKind::STRUCT: {
             acorn_fatal("Structs cannot be deep copied only generic structs");
@@ -127,6 +133,11 @@ namespace acorn {
             new_call->value = deep_copy(allocator, new_call->value);
             return new_call;
         }
+        case NodeKind::DELETE_CALL_STMT: {
+            auto delete_call = raw_copy(allocator, static_cast<DeleteCallStmt*>(node));
+            delete_call->address = deep_copy(allocator, delete_call->address);
+            return delete_call;
+        }
         case NodeKind::FUNC_CALL: {
             auto call = raw_copy(allocator, static_cast<FuncCall*>(node));
             call->site = deep_copy(allocator, call->site);
@@ -159,6 +170,11 @@ namespace acorn {
         }
         case NodeKind::CAST: {
             auto cast = raw_copy(allocator, static_cast<Cast*>(node));
+            cast->value = deep_copy(allocator, cast->value);
+            return cast;
+        }
+        case NodeKind::BITCAST: {
+            auto cast = raw_copy(allocator, static_cast<BitCast*>(node));
             cast->value = deep_copy(allocator, cast->value);
             return cast;
         }

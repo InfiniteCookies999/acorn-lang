@@ -122,7 +122,7 @@ acorn::PointSourceLoc acorn::Func::get_function_first_default_param_location() c
 std::string acorn::Func::get_decl_string() const {
     std::string str;
     if (is_generic()) {
-        str += "generics[";
+        str += "generics(";
         size_t generic_count = 0;
         for (Generic* genericn : generics) {
             str += genericn->type->to_string();
@@ -131,7 +131,7 @@ std::string acorn::Func::get_decl_string() const {
             }
             ++generic_count;
         }
-        str += "] ";
+        str += ") ";
     }
     if (is_constant) {
         str += "const ";

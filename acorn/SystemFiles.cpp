@@ -102,9 +102,16 @@ std::wstring acorn::SystemPath::to_wide_string() const {
 std::string acorn::SystemPath::utf8_extension() const {
     if (storage == Storage::UTF8) {
         size_t idx = utf8.find_last_of('.');
+        if (idx == std::string::npos) {
+            return "";
+        }
         return utf8.substr(idx);
     } else {
         size_t idx = wide.find_last_of('.');
+        if (idx == std::wstring::npos) {
+            return "";
+        }
+
         auto wide_extension = wide.substr(idx);
         return acorn::wide_to_utf8(wide_extension.c_str(), wide_extension.length());
     }

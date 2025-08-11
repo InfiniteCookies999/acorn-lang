@@ -38,6 +38,7 @@ std::string acorn::token_kind_to_string(TokenKind kind, Context& context) {
     case Token::TILDE_EQ:               return "~=";
     case Token::LT_LT_EQ:               return "<<=";
     case Token::GT_GT_EQ:               return ">>=";
+    case Token::POUND_EQ:               return "#=";
     case Token::ADD_ADD:
     case Token::POST_ADD_ADD:           return "++";
     case Token::SUB_SUB:

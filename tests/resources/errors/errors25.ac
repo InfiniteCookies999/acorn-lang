@@ -1,0 +1,42 @@
+import std;
+import std.Error;
+
+#aborts
+struct TestError :: *Error {
+    const fn get_name() -> const char* {
+        return "TestError";
+    }
+    const fn get_message() -> const char* {
+        return "test error msg!";
+    }
+}
+
+fn write_val(val: int) {
+
+#if OS_GROUP_WINDOWS
+    handle: void* = std.GetStdHandle(-11);
+    written: uint32;
+    c: char = as(char) val;
+    std.WriteFile(handle, &c, 1, &written, null);
+#elif OS_GROUP_UNIX
+    c: char = as(char) val;
+    std.write(1, &c, 1);
+#endif
+
+}
+
+fn foo(b: bool) -> int {
+    if (b) {
+        raise TestError{};
+    }
+
+    return 64;
+}
+
+fn main() {
+    v1 := foo(false);
+    write_val(v1);
+
+    v2 := foo(true);
+    write_val(v2);
+}

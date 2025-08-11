@@ -47,6 +47,8 @@ public:
 
     bool failed() const { return has_failed; }
 
+    const char* get_name() const { return name; }
+
 private:
     const char* name;
     int depth;

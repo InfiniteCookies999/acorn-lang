@@ -1,0 +1,14 @@
+#file(access=public, namespace=io)
+
+generics(R) // TODO (maddie): add constraints for Readable once supported!
+struct BufferedInStream {
+
+    handle: R;
+
+    private buffer: char[1024];
+
+    fn new(handle: R) {
+        this.handle #= moveobj(handle);
+    }
+
+}

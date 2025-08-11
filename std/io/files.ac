@@ -164,7 +164,7 @@ struct FileHandle :: Writable, Readable {
 }
 
 /*
- * Reads an entire file into a string.
+ * Reads an entire file into a `String`.
  */
 fn read_file(path: const char*) -> String | raises IOError {
     handle := try (open_file(path, FileFlag.IN | FileFlag.SHARE));
@@ -185,7 +185,7 @@ fn read_file(path: const char*) -> String | raises IOError {
 }
 
 /*
- * Reads an entire file into a string.
+ * Reads an entire file into a `String`.
  */
 fn read_file(path: const String^) -> String | raises IOError {
     contents := try (read_file(path.buffer));

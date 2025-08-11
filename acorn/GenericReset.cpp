@@ -49,6 +49,13 @@ namespace acorn {
             }
             break;
         }
+        case NodeKind::VAR_LIST: {
+            auto var_list = static_cast<VarList*>(node);
+            for (Var* var : var_list->vars) {
+                reset_node(var);
+            }
+            break;
+        }
         case NodeKind::RETURN_STMT: {
             auto ret = static_cast<ReturnStmt*>(node);
             reset_node(ret->value);
@@ -190,6 +197,11 @@ namespace acorn {
             reset_node(new_call->value);
             break;
         }
+        case NodeKind::DELETE_CALL_STMT: {
+            auto delete_call = static_cast<DeleteCallStmt*>(node);
+            reset_node(delete_call->address);
+            break;
+        }
         case NodeKind::FUNC_CALL: {
             auto call = static_cast<FuncCall*>(node);
             reset_node(call->site);
@@ -220,6 +232,11 @@ namespace acorn {
         }
         case NodeKind::CAST: {
             auto cast = static_cast<Cast*>(node);
+            reset_node(cast->value);
+            break;
+        }
+        case NodeKind::BITCAST: {
+            auto cast = static_cast<BitCast*>(node);
             reset_node(cast->value);
             break;
         }
@@ -284,7 +301,6 @@ namespace acorn {
         case NodeKind::INTERFACE:
         case NodeKind::STRUCT:
         case NodeKind::GENERIC:
-        case NodeKind::VAR_LIST:
         case NodeKind::FUNC:
         case NodeKind::IMPLICIT_FUNC:
         default:

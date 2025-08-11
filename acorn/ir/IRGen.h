@@ -66,7 +66,7 @@ namespace acorn {
             // be the address that will be used to store values to.
             // Each return statement will store its value to this
             // address then jump to the return block (ll_ret_block).
-            llvm::Value* ll_ret_addr;
+            llvm::Value* ll_ret_addr = nullptr;
         };
 
         // When generating code inside a member function this is a pointer
@@ -210,7 +210,8 @@ namespace acorn {
 
         llvm::Value* gen_unary_op(UnaryOp* unary_op);
         llvm::Value* gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue = nullptr, bool for_call_arg = false);
-        llvm::Value* gen_new_call(UninitNewCallStmt* new_call);
+        llvm::Value* gen_uninit_new_call(UninitNewCallStmt* new_call);
+        llvm::Value* gen_delete_call(DeleteCallStmt* delete_call);
         llvm::Value* gen_function_decl_call(Func* called_func,
                                             llvm::SmallVector<Expr*>& args,
                                             llvm::SmallVector<Expr*>& indeterminate_inferred_default_args,
@@ -229,6 +230,7 @@ namespace acorn {
         llvm::Value* gen_string(String* string);
         llvm::Value* gen_null();
         llvm::Value* gen_cast(Cast* cast);
+        llvm::Value* gen_bitcast(BitCast* cast);
         llvm::Value* gen_array(Array* arr, llvm::Value* ll_dest_addr);
         llvm::GlobalVariable* gen_store_constant_array_to_global(llvm::Type* ll_arr_type,
                                                                  llvm::Type* ll_elm_type,

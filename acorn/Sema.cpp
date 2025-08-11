@@ -1860,9 +1860,13 @@ void acorn::Sema::check_node(Node* node) {
     case NodeKind::FUNC_CALL:
         return check_function_call(static_cast<FuncCall*>(node));
     case NodeKind::UNINIT_NEW_CALL_STMT:
-        return check_new_call(static_cast<UninitNewCallStmt*>(node));
+        return check_new_uninit_call(static_cast<UninitNewCallStmt*>(node));
+    case NodeKind::DELETE_CALL_STMT:
+        return check_delete_call(static_cast<DeleteCallStmt*>(node));
     case NodeKind::CAST:
         return check_cast(static_cast<Cast*>(node));
+    case NodeKind::BITCAST:
+        return check_bitcast(static_cast<BitCast*>(node));
     case NodeKind::NAMED_VALUE:
         return check_named_value(static_cast<NamedValue*>(node));
     case NodeKind::NUMBER:
@@ -4351,10 +4355,15 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
 }
 
-void acorn::Sema::check_new_call(UninitNewCallStmt* call) {
+void acorn::Sema::check_new_uninit_call(UninitNewCallStmt* call) {
 
     check_node(call->address);
-    check_node(call->value);
+
+    if (call->value->is(NodeKind::MOVEOBJ)) {
+        check_moveobj(static_cast<MoveObj*>(call->value), true);
+    } else {
+        check_node(call->value);
+    }
 
     if (!call->address || !call->value) {
         return;
@@ -4372,6 +4381,17 @@ void acorn::Sema::check_new_call(UninitNewCallStmt* call) {
     if (!is_assignable_to(elm_type, call->value)) {
         error(expand(call->value), get_type_mismatch_error(elm_type, call->value).c_str())
             .end_error(ErrCode::SemaNewCallTypeMismatch);
+        return;
+    }
+}
+
+void acorn::Sema::check_delete_call(DeleteCallStmt* call) {
+
+    check_and_verify_type(call->address);
+
+    if (!call->address->type->is_pointer()) {
+        error(expand(call->address), "Expected a pointer to the address of the value")
+            .end_error(ErrCode::SemaDeleteCallExpectsPtrForAddress);
         return;
     }
 }
@@ -4974,6 +4994,15 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
         score += IS_GENERIC_LIMIT;
     }
 
+    auto check_prefer_implicit_ptr_to_elm_type = [&score](Var* param, Type* param_type, Expr* arg_value) finline {
+        if (param_type->is_pointer() && !param->has_implicit_ptr && arg_value->is(NodeKind::FUNC_CALL)) {
+            auto arg_call = static_cast<FuncCall*>(arg_value);
+            if (arg_call->called_func && arg_call->called_func->has_implicit_return_ptr) {
+                score += PREFER_IMPLICIT_PTR_TO_ELM_TYPE;
+            }
+        }
+    };
+
     size_t last_index = candidate->params.size() - 1;
     bool named_args_out_of_order = false;
     uint32_t named_arg_high_idx = 0;
@@ -5075,21 +5104,8 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
             }
 
             if (param_type->does_contain_generics()) {
-                if (!check_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings)) {
-
-                    if (param->has_implicit_ptr && arg_value->is_not(NodeKind::MOVEOBJ)) {
-                        if (!arg_value->type->is_pointer()) {
-                            auto param_ptr_type = static_cast<PointerType*>(param_type);
-                            auto param_elm_type = param_ptr_type->get_elm_type();
-
-                            if (check_bind_type_to_generic_type(param_elm_type, arg_value->type, generic_bindings)) {
-                                // argument success, continue.
-                                continue;
-                            } else {
-                                return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
-                            }
-                        }
-                    }
+                bool may_use_implicit_param_ptr = param->has_implicit_ptr && arg_value->is_not(NodeKind::MOVEOBJ);
+                if (!check_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings, false, may_use_implicit_param_ptr)) {
 
                     if (arg_value->is(NodeKind::FUNC_CALL)) {
                         auto arg_call = static_cast<FuncCall*>(arg_value);
@@ -5110,6 +5126,8 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
 
                     return CallCompareStatus::ARGS_NOT_ASSIGNABLE;
                 }
+
+                check_prefer_implicit_ptr_to_elm_type(param, param_type, arg_value);
 
                 // argument success, continue.
                 continue;
@@ -5155,6 +5173,8 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                 ++score;
             }
         }
+
+        check_prefer_implicit_ptr_to_elm_type(param, param_type, arg_value);
     }
 
     return CallCompareStatus::SUCCESS;
@@ -5191,7 +5211,8 @@ bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const
 bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
                                                   Type* from_type, // Type at current level of comparison
                                                   llvm::SmallVector<Type*>& bindings,
-                                                  bool enforce_elm_const) {
+                                                  bool enforce_elm_const,
+                                                  bool may_use_implicit_param_ptr) {
     if (to_type->is_generic()) {
         // Generic type can have any type bound so we are finished.
         auto generic_type = static_cast<GenericType*>(to_type);
@@ -5209,21 +5230,26 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
                 return false;
             }
 
-            // TODO (maddie): does the implicit conversion of pointers happen here
-            // or elsewhere?
-
             // TODO (maddie): this is way too strict. it will be at the very least
             // nice to check if the type is convertable to the other type. It might
             // also be a good idea to pass up information up the stack that basically
             // tells if all the types have been bound and if they have then use normal
             // assignment comparison instead.
-            return bound_type->is(from_type);
+
+            if (bound_type->is(from_type)) {
+                return true;
+            }
+
+            if (bound_type->is_pointer() && from_type->get_kind() == TypeKind::NULL_T) {
+                return true;
+            }
+            return false;
         }
 
         // Constness situations and how they are reduced:
         //
         // 1.
-        // generics[T]
+        // generics(T)
         // fn foo(a: T*) {}
         //
         // v: int*;
@@ -5232,7 +5258,7 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
         // Neither `v` or `T` are const so T=int.
         //
         // 2.
-        // generics[T]
+        // generics(T)
         // fn foo(a: const T*) {}
         //
         // v: int*;
@@ -5241,18 +5267,18 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
         // Since `T` is const but `v` is not `T` it becomes T=int
         //
         // 3.
-        // generics[T]
-        // void foo(a: T*) {}
+        // generics(T)
+        // fn foo(a: T*) {}
         //
         // v: const int*;
         // foo(v);
         //
         // Since `T` is not const but `v` is const `T` takes on the
-        // constness of v and and so T=const int
+        // constness of v and and so T='const int'
         //
         // 4.
-        // generics[T]
-        // void foo(a: const T*) {}
+        // generics(T)
+        // fn foo(a: const T*) {}
         //
         // v: const int*;
         // foo(v);
@@ -5278,9 +5304,30 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
 
 
     switch (to_type->get_kind()) {
-    case TypeKind::POINTER:
+    case TypeKind::POINTER: {
+
+        auto ptr_to_type = static_cast<ContainerType*>(to_type);
+        auto elm_to_type = ptr_to_type->get_elm_type();
+
+        if (may_use_implicit_param_ptr) {
+            return check_bind_type_to_generic_type(elm_to_type, from_type, bindings, true);
+        }
+
+        if (!from_type->is_pointer()) {
+            // check for null assign to pointer.
+            if (from_type->get_kind() == TypeKind::NULL_T) {
+                return true;
+            }
+            return false;
+        }
+
+        auto ptr_from_type = static_cast<ContainerType*>(from_type);
+        auto elm_from_type = ptr_from_type->get_elm_type();
+
+        return check_bind_type_to_generic_type(elm_to_type, elm_from_type, bindings, true);
+    }
     case TypeKind::SLICE: {
-        if (from_type->get_kind() != to_type->get_kind()) {
+        if (!from_type->is_slice()) {
             return false;
         }
 
@@ -5395,8 +5442,10 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
         return false;
     }
     default:
-        acorn_fatal("Unreachable. Hit type that cannot contain a generic");
-        return false;
+        if (to_type->does_contain_generics()) {
+            acorn_fatal("Failed to implement type case that contains generic types");
+        }
+        return to_type->is(from_type);
     }
 }
 
@@ -5418,6 +5467,7 @@ void acorn::Sema::check_cast(Cast* cast) {
     }
 
     cast->type = fixed_cast_type;
+    cast->is_foldable = cast->value->is_foldable;
 
     check_and_verify_type(cast->value);
     if (!is_castable_to(fixed_cast_type, cast->value)) {
@@ -5425,6 +5475,59 @@ void acorn::Sema::check_cast(Cast* cast) {
               cast->value->type, fixed_cast_type)
             .end_error(ErrCode::SemaInvalidCast);
     }
+}
+
+void acorn::Sema::check_bitcast(BitCast* cast) {
+    auto fixed_cast_type = fixup_type(cast->explicit_cast_type);
+    if (!fixed_cast_type) {
+        return;
+    }
+    if (fixed_cast_type == context.indeterminate_type) {
+        cast->type = context.indeterminate_type;
+        return;
+    }
+
+    if (is_incomplete_type(fixed_cast_type)) {
+        error(expand(cast), "Cannot cast to incomplete type '%s'", fixed_cast_type)
+            .end_error(ErrCode::SemaCannotCastIncompleteType);
+        return;
+    }
+
+    check_and_verify_type(cast->value);
+
+    if (!fixed_cast_type->is_sized()) {
+        error(expand(cast), "Cannot bitcast to type '%s' as it has no size",
+              fixed_cast_type)
+            .end_error(ErrCode::SemaCannotBitcastToUnsizedType);
+        return;
+    }
+
+    if (!cast->value->type->is_sized()) {
+        error(expand(cast), "Cannot bitcast from type '%s' as it has no size",
+              cast->value->type)
+            .end_error(ErrCode::SemaCannotBitcastToUnsizedType);
+        return;
+    }
+
+    auto& ll_module = context.get_ll_module();
+    auto& ll_context = context.get_ll_context();
+
+    auto ll_to_type = gen_type(fixed_cast_type, ll_context, ll_module);
+    uint64_t to_size = ll_module.getDataLayout().getTypeAllocSize(ll_to_type);
+
+    auto ll_from_type = gen_type(cast->value->type, ll_context, ll_module);
+    uint64_t from_size = ll_module.getDataLayout().getTypeAllocSize(ll_from_type);
+
+    if (to_size != from_size) {
+        error(expand(cast), "Bitcast expects both types '%s' and '%s' to have the same size",
+              fixed_cast_type, cast->value->type)
+            .end_error(ErrCode::SemaBitcastExpectsBothSameSize);
+        return;
+    }
+
+    cast->is_foldable = cast->value->is_foldable;
+    cast->type = fixed_cast_type;
+
 }
 
 void acorn::Sema::check_named_value(NamedValue* named_value) {
@@ -7028,25 +7131,8 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
                 }
 
                 if (param_type->does_contain_generics()) {
-                    if (!check_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings)) {
-
-                        if (param->has_implicit_ptr) {
-                            if (!arg_value->type->is_pointer()) {
-                                auto param_ptr_type = static_cast<PointerType*>(param_type);
-                                auto param_elm_type = param_ptr_type->get_elm_type();
-
-                                if (check_bind_type_to_generic_type(param_elm_type, arg_value->type, generic_bindings)) {
-                                    if (arg_value->is(NodeKind::MOVEOBJ)) {
-                                        add_err_line_moveobj_to_implicit_ptr(i, param_type, arg_value);
-                                        get_type_with_generics_where_msg(param_type,
-                                                                                               generic_bindings,
-                                                                                               indent);
-                                    }
-                                    // argument success, continue.
-                                    continue;
-                                }
-                            }
-                        }
+                    bool may_use_implicit_param_ptr = param->has_implicit_ptr && arg_value->is_not(NodeKind::MOVEOBJ);
+                    if (!check_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings, false, may_use_implicit_param_ptr)) {
 
                         if (arg_value->is(NodeKind::FUNC_CALL)) {
                             auto arg_call = static_cast<FuncCall*>(arg_value);
@@ -7941,6 +8027,7 @@ bool acorn::Sema::is_incomplete_statement(Node* stmt) const {
     case NodeKind::RECOVER_STMT:
     case NodeKind::VAR_LIST:
     case NodeKind::UNINIT_NEW_CALL_STMT:
+    case NodeKind::DELETE_CALL_STMT:
         return false;
     case NodeKind::BIN_OP: {
         auto bin_op = static_cast<const BinOp*>(stmt);

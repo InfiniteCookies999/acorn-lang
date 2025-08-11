@@ -516,12 +516,24 @@ acorn::Node* acorn::Parser::parse_statement() {
     case Token::KW_UNINIT_NEW: {
         auto new_call = new_node<UninitNewCallStmt>(cur_token);
         next_token();
+        ++paren_count;
         expect('(');
         new_call->address = parse_expr();
         expect(',');
         new_call->value = parse_expr();
         expect(')');
+        --paren_count;
         return new_call;
+    }
+    case Token::KW_DELETE: {
+        auto delete_call = new_node<DeleteCallStmt>(cur_token);
+        next_token();
+        ++paren_count;
+        expect('(');
+        delete_call->address = parse_expr();
+        expect(')');
+        --paren_count;
+        return delete_call;
     }
     case '{':
         return parse_scope();
@@ -1646,7 +1658,11 @@ return t;                                \
             parse_raised_errors(raised_errors);
         }
 
-        return type_table.get_function_type(return_type, std::move(param_types), std::move(raised_errors), uses_native_varargs);
+        auto func_type = type_table.get_function_type(return_type, std::move(param_types), std::move(raised_errors), uses_native_varargs);
+        if (is_const) {
+            return type_table.get_const_type(func_type);
+        }
+        return func_type;
     }
     default:
         error(cur_token, "Expected type")
@@ -2562,6 +2578,17 @@ acorn::Expr* acorn::Parser::parse_term() {
     }
     case Token::KW_AS: {
         Cast* cast = new_node<Cast>(cur_token);
+        ++paren_count;
+        next_token();
+        expect('(');
+        cast->explicit_cast_type = parse_type();
+        expect(')');
+        --paren_count;
+        cast->value = parse_expr_trail();
+        return cast;
+    }
+    case Token::KW_BITCAST: {
+        BitCast* cast = new_node<BitCast>(cur_token);
         ++paren_count;
         next_token();
         expect('(');

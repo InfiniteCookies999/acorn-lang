@@ -141,6 +141,7 @@ bool acorn::Type::is_default_foldable() const {
 
 bool acorn::Type::is_sized() const {
     switch (kind) {
+    case TypeKind::INT:
     case TypeKind::INT8:
     case TypeKind::INT16:
     case TypeKind::INT32:

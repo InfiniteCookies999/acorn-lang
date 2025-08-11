@@ -2239,6 +2239,12 @@ static void error_tests() {
     //
     //     expect(result, std::identity()).to_be("test error msg!test error msg!from foo!");
     // });
+    test("Raise abort error with multiple return paths stores to return address", [&] {
+        auto [err_msg, result] = run_codegen_test(src("errors/errors25.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@test error msg!");
+    });
     // ... Destructors
     test("Raise error does not call destructor for assigned object", [&] {
         auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors1.ac"), true);
@@ -2534,6 +2540,12 @@ static void uninitialized_new_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("*#");
+    });
+    test("Create variable, assign to pointer, and initialize with pointer variable", [&] {
+        auto [err_msg, result] = run_codegen_test(src("uninitialized_new/uninitialized_new4.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@");
     });
 }
 
