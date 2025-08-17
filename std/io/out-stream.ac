@@ -31,7 +31,7 @@ struct OutStream :: Writable {
     }
 
     fn write(s: const char*) | raises IOError {
-        try (write_buffer(s, module.strlen(s)));
+        try (write_buffer(s, as(int) module.strlen(s)));
     }
 
     fn write(s: const String^) | raises IOError {
@@ -135,7 +135,7 @@ struct OutStream :: Writable {
         case POINTER:
             if (type.elm_type.id == TypeId.CHAR) {
                 try (write(*as(const (const char*)*) ptr));
-            } elif (type.elm_type == #type_info(String)) {
+            } elif (type.elm_type == #type_info(String) || type.elm_type == #type_info(const String)) {
                 try (write(*as(const (const String*)*) ptr));
             } else {
                 try (write(*as(const (const void*)*) ptr));

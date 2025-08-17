@@ -2278,20 +2278,6 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
     }
 
     bool all_paths_return = true, all_paths_branch = true;
-    auto check_case_scope = [this, switchn, &all_paths_return, &all_paths_branch](ScopeStmt* scope) finline {
-        SemScope sem_scope = push_scope();
-        check_scope(scope, &sem_scope);
-        all_paths_return &= sem_scope.all_paths_return;
-        all_paths_branch &= sem_scope.all_paths_branch;
-        pop_scope();
-    };
-
-    // TODO (maddie): This should probably not be so strict and as long as all cases are
-    // handled such as when dealing with enums it should be able to determine it returns/branches.
-    if (!switchn->default_scope) {
-        all_paths_return = false;
-        all_paths_branch = false;
-    }
 
     struct CmpNumber {
         union {
@@ -2356,8 +2342,10 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
                 auto enum_type = static_cast<EnumType*>(value->type);
                 if (enum_type->get_index_type()->is_signed()) {
                     number.value_s64 = ll_value->getZExtValue();
+                    number.kind = Kind::SIGNED_INT;
                 } else {
                     number.value_u64 = ll_value->getZExtValue();
+                    number.kind = Kind::UNSIGNED_INT;
                 }
                 break;
             }
@@ -2381,6 +2369,15 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
             return number;
         }
     };
+
+    Enum* switch_on_enum = nullptr;
+    if (switchn->on->type->is_enum()) {
+        auto enum_type = static_cast<EnumType*>(switchn->on->type);
+        switch_on_enum = enum_type->get_enum();
+    }
+
+    uint64_t total_prior_values = 0;
+    bool encountered_duplicate = false;
 
     // TODO: If the user has a crazy amount of cases it might be better to just
     // use a hashmap.
@@ -2410,17 +2407,18 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
         }
     };
 
-    auto report_error_for_duplicate = [this](SwitchCase scase, SwitchCase prior_case) finline{
+    auto report_error_for_duplicate = [this, &total_prior_values, &encountered_duplicate](SwitchCase scase, SwitchCase prior_case) finline {
             error(expand(scase.cond), "Duplicate value for switch")
                     .add_line([file = this->file, cond = prior_case.cond](Logger& l) {
                         l.print("Previous case at: ");
                         print_source_location(l, file, cond->loc);
                     })
                     .end_error(ErrCode::SemaDuplicateSwitchCase);
+        encountered_duplicate = true;
     };
 
-    auto add_foldable_value = [this, &prior_values, switchn, &is_value_in_range, &report_error_for_duplicate]
-        (CmpNumber value, SwitchCase scase) {
+    auto add_foldable_value = [this, &prior_values, switchn, &is_value_in_range, &report_error_for_duplicate, &total_prior_values]
+        (CmpNumber value, SwitchCase scase) finline {
 
         for (size_t i = 0; i < prior_values.size(); i++) {
             auto& prior_case = switchn->cases[i];
@@ -2470,23 +2468,17 @@ if (prior_value.value_s64 == value.value_s64) {     \
 #undef cmp
         }
 
+        ++total_prior_values;
         prior_values.push_back(value);
     };
 
-    auto check_for_range_duplicates = [this, switchn, &prior_values, is_value_in_range, &report_error_for_duplicate]
+    auto check_for_range_duplicates = [this, switchn, &prior_values, is_value_in_range, &report_error_for_duplicate, &total_prior_values]
         (SwitchCase scase, Type* value_type) finline {
-
-        auto report_error = [this, scase](SwitchCase prior_case) finline {
-            error(expand(scase.cond), "Duplicate value for switch")
-                    .add_line([file = this->file, cond = prior_case.cond](Logger& l) {
-                        l.print("Previous case at: ");
-                        print_source_location(l, file, cond->loc);
-                    })
-                    .end_error(ErrCode::SemaDuplicateSwitchCase);
-        };
 
         auto range = static_cast<BinOp*>(scase.cond);
         uint64_t total_range_values = get_total_number_of_values_in_range(range);
+
+        total_prior_values += total_range_values;
 
         if (total_range_values > 64) {
             // If there are too many values we want to use an if chain
@@ -2582,19 +2574,13 @@ if (prior_value.value_s64 == value.value_s64) {     \
         }
     };
 
-
-    Enum* switch_on_enum = nullptr;
-    if (switchn->on->type->is_enum()) {
-        auto enum_type = static_cast<EnumType*>(switchn->on->type);
-        switch_on_enum = enum_type->get_enum();
-    }
-
     auto find_ident_refrence_enum = [switch_on_enum](IdentRef* ref) finline {
         auto itr = std::ranges::find_if(switch_on_enum->values, [ref](const Enum::Value& value){
             return value.name == ref->ident;
         });
         return itr;
     };
+
 
     size_t case_count = 0;
     for (SwitchCase scase : switchn->cases) {
@@ -2752,9 +2738,73 @@ if (prior_value.value_s64 == value.value_s64) {     \
                 .end_error(ErrCode::SemaDefaultCaseMustGoLast);
             prior_values.push_back({}); // Need to still add empty to keep indices correct.
         }
-        check_case_scope(scase.scope);
+
+        SemScope sem_scope = push_scope();
+        check_scope(scase.scope, &sem_scope);
+        bool is_last = case_count == switchn->cases.size() - 1;
+        all_paths_return &= sem_scope.all_paths_return | (scase.scope->empty() && !is_last);
+        all_paths_branch &= sem_scope.all_paths_branch | (scase.scope->empty() && !is_last);
+        pop_scope();
 
         ++case_count;
+    }
+
+    // Doing further checkes to determine if all paths branch/return for
+    // enum values.
+    bool all_cases_matched = false;
+    if (switch_on_enum && switchn->all_conds_foldable) {
+        if (!encountered_duplicate) {
+            if (total_prior_values == switch_on_enum->values.size()) {
+                all_cases_matched = true;
+            }
+        } else {
+            all_cases_matched = true;
+            for (auto value : switch_on_enum->values) {
+                bool found_match = false;
+                for (SwitchCase scase : switchn->cases) {
+                    if (!scase.cond->type) continue;
+
+                    if (scase.cond->type->is_range()) {
+                        auto range_type = static_cast<RangeType*>(scase.cond->type);
+                        auto value_type = range_type->get_value_type();
+
+                        if (!switchn->on->type->is_ignore_const(value_type)) {
+                            continue;
+                        }
+
+                        auto range = static_cast<BinOp*>(scase.cond);
+                        auto lhs_index_num = CmpNumber::get(*this, range->lhs);
+                        auto rhs_index_num = CmpNumber::get(*this, range->rhs);
+
+                        auto value_index_num = CmpNumber::get_unsigned_int(value.index);
+
+                        if (is_value_in_range(range, value_index_num, lhs_index_num, rhs_index_num)) {
+                            found_match = true;
+                            break;
+                        }
+                    } else {
+                        if (!switchn->on->type->is_ignore_const(scase.cond->type)) {
+                            continue;
+                        }
+
+                        auto index_num = CmpNumber::get(*this, scase.cond);
+                        if (value.index == index_num.value_u64) {
+                            found_match = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found_match) {
+                    all_cases_matched = false;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!all_cases_matched && !switchn->default_scope) {
+        all_paths_return = false;
+        all_paths_branch = false;
     }
 
     cur_scope->all_paths_return = all_paths_return;
@@ -3409,7 +3459,8 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
     case Token::CARET_EQ:
     case Token::TILDE_EQ:
     case Token::LT_LT_EQ:
-    case Token::GT_GT_EQ: {
+    case Token::GT_GT_EQ:
+    case Token::POUND_EQ: {
         if (!lhs_type->is_integer()) {
             report_binary_op_cannot_apply(bin_op, bin_op->lhs);
             return;
@@ -3521,7 +3572,7 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
         break;
     }
     default:
-        acorn_fatal("checkcheck_binary_op_for_enums_binary_op(): Failed to implement case");
+        acorn_fatal("check_binary_op_for_enums_binary_op(): Failed to implement case");
         break;
     }
 }
@@ -5530,6 +5581,34 @@ void acorn::Sema::check_bitcast(BitCast* cast) {
 
 }
 
+void acorn::Sema::check_const_cast(ConstCast* cast) {
+    auto fixed_cast_type = fixup_type(cast->explicit_cast_type);
+    if (!fixed_cast_type) {
+        return;
+    }
+    if (fixed_cast_type == context.indeterminate_type) {
+        cast->type = context.indeterminate_type;
+        return;
+    }
+
+    if (is_incomplete_type(fixed_cast_type)) {
+        error(expand(cast), "Cannot const_cast to incomplete type '%s'", fixed_cast_type)
+            .end_error(ErrCode::SemaCannotCastIncompleteType);
+        return;
+    }
+
+    check_and_verify_type(cast->value);
+
+    Type* original_type = cast->value->type;
+    cast->value->type = cast->value->type->remove_all_const();
+    if (!is_castable_to(fixed_cast_type->remove_all_const(), cast->value)) {
+        error(expand(cast), "Cannot const_cast from '%s' to '%s'",
+              cast->value->type, fixed_cast_type)
+            .end_error(ErrCode::SemaInvalidCast);
+    }
+    cast->value->type = original_type;
+}
+
 void acorn::Sema::check_named_value(NamedValue* named_value) {
     check_node(named_value->assignment);
     named_value->type = named_value->assignment->type;
@@ -5900,6 +5979,10 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
             value = named_value->assignment;
 
             field = structn->nspace->find_variable(named_value->name);
+            if (structn->is_generic) {
+                field = structn->fields[field->field_idx];
+            }
+
 
             // Check to make sure we found the field by the given name.
             if (!field) {
@@ -7827,13 +7910,7 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
         return false;
     }
     case TypeKind::POINTER: {
-        if (expr->is(NodeKind::STRING)) {
-            if (expr->type->is(context.const_char_ptr_type)) {
-                return true;
-            }
-
-            return to_type->is(from_type) || to_type->is(context.void_ptr_type);
-        } else if (from_type->is_array()) {
+        if (from_type->is_array()) {
             auto to_arr_Type = static_cast<ArrayType*>(to_type);
             auto from_ptr_type = static_cast<PointerType*>(from_type);
 

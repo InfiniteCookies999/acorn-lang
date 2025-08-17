@@ -12,7 +12,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     switch (bin_op->op) {
     case '=':
     case Token::POUND_EQ:
-        return gen_assignment_op(bin_op->lhs, bin_op->rhs);
+        return gen_assignment_like_op(bin_op->lhs, bin_op->rhs, bin_op->op == '=');
     case Token::ADD_EQ:   return gen_apply_and_assign_op('+', bin_op->loc, bin_op->type, lhs, rhs);
     case Token::SUB_EQ:   return gen_apply_and_assign_op('-', bin_op->loc, bin_op->type, lhs, rhs);
     case Token::MUL_EQ:   return gen_apply_and_assign_op('*', bin_op->loc, bin_op->type, lhs, rhs);
@@ -126,7 +126,7 @@ llvm::Value* acorn::IRGenerator::gen_binary_op(BinOp* bin_op) {
     }
 }
 
-llvm::Value* acorn::IRGenerator::gen_assignment_op(Expr* lhs, Expr* rhs) {
+llvm::Value* acorn::IRGenerator::gen_assignment_like_op(Expr* lhs, Expr* rhs, bool is_assign_op) {
     Try* prev_try = nullptr;
     if (rhs->tryn) {
         gen_try(rhs->tryn, prev_try);
@@ -134,7 +134,7 @@ llvm::Value* acorn::IRGenerator::gen_assignment_op(Expr* lhs, Expr* rhs) {
 
     push_dbg_loc(lhs->loc);
     auto ll_address = gen_node(lhs);
-    gen_assignment(ll_address, lhs->type, rhs, lhs, true);
+    gen_assignment(ll_address, lhs->type, rhs, lhs, is_assign_op);
     pop_dbg_loc();
 
     if (rhs->tryn) {
@@ -271,28 +271,36 @@ llvm::Value* acorn::IRGenerator::gen_numeric_binary_op(TokenKind op, Type* rtype
         return builder.CreateShl(ll_lhs, ll_rhs, "shl");
     // Comparisons Operators
     // -------------------------------------------
+
+    // The reason we use `get_final_type()` is because the language makes sure that the
+    // `lhs` and `rhs` have their types be cast to each the same type. So either the `rhs` took on
+    // the `lhs` type in which case the `lhs` has no cast type or it's cast type is the `rhs` type.
+    //
+    // Since `get_final_type()` returns the cast type if it exists or the original type this effectively
+    // provides us the resulting type of the operation.
+    //
     case '>':
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOGT(ll_lhs, ll_rhs, "gt");
-        if (lhs->type->is_signed() || rhs->type->is_signed())
+        if (lhs->get_final_type()->is_signed())
             return builder.CreateICmpSGT(ll_lhs, ll_rhs, "gt");
         else return builder.CreateICmpUGT(ll_lhs, ll_rhs, "gt");
     case '<':
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOLT(ll_lhs, ll_rhs, "gt");
-        if (lhs->type->is_signed() || rhs->type->is_signed())
+        if (lhs->get_final_type()->is_signed())
             return builder.CreateICmpSLT(ll_lhs, ll_rhs, "lt");
         else return builder.CreateICmpULT(ll_lhs, ll_rhs, "lt");
     case Token::GT_EQ:
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOGE(ll_lhs, ll_rhs, "gt");
-        if (lhs->type->is_signed() || rhs->type->is_signed())
+        if (lhs->get_final_type()->is_signed())
             return builder.CreateICmpSGE(ll_lhs, ll_rhs, "gte");
         else return builder.CreateICmpUGE(ll_lhs, ll_rhs, "gte");
     case Token::LT_EQ:
         if (ll_lhs->getType()->isFloatTy() || ll_rhs->getType()->isFloatTy())
             return builder.CreateFCmpOLE(ll_lhs, ll_rhs, "gt");
-        if (lhs->type->is_signed() || rhs->type->is_signed())
+        if (lhs->get_final_type()->is_signed())
             return builder.CreateICmpSLE(ll_lhs, ll_rhs, "lte");
         else return builder.CreateICmpULE(ll_lhs, ll_rhs, "lte");
     case Token::EQ_EQ:

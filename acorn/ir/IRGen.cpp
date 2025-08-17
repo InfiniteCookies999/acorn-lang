@@ -119,6 +119,8 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_cast(static_cast<Cast*>(node));
     case NodeKind::BITCAST:
         return gen_bitcast(static_cast<BitCast*>(node));
+    case NodeKind::CONST_CAST:
+        return gen_const_cast(static_cast<ConstCast*>(node));
     case NodeKind::MEMORY_ACCESS:
         return gen_memory_access(static_cast<MemoryAccess*>(node));
     case NodeKind::ARRAY:
@@ -2583,7 +2585,7 @@ llvm::Value* acorn::IRGenerator::gen_recover(RecoverStmt* recover) {
 
         switch (bin_op->op) {
         case '=':
-            gen_assignment_op(lhs, recover->value);
+            gen_assignment_like_op(lhs, recover->value);
             break;
         case Token::ADD_EQ:   return gen_apply_and_assign_op('+', bin_op->loc, bin_op->type, lhs, recover->value);
         case Token::SUB_EQ:   return gen_apply_and_assign_op('-', bin_op->loc, bin_op->type, lhs, recover->value);
@@ -2719,7 +2721,26 @@ void acorn::IRGenerator::gen_scope(ScopeStmt* scope) {
             }
         }
         gen_node(stmt);
+
         if (!temporary_destructor_objects.empty()) {
+            // Move the insert location before the terminator so that it won't
+            // call the destructor after branching.
+            //
+            // Example where this case happens:
+            //    struct A {
+            //        fn delete() {}
+            //    }
+            //
+            //    ...
+            //    return A{}.y;
+            //
+            auto ll_cur_bb = builder.GetInsertBlock();
+            if (ll_cur_bb->getTerminator()) {
+                if (auto* term = ll_cur_bb->getTerminator()) {
+                    builder.SetInsertPoint(term);
+                }
+            }
+
             push_dbg_loc(stmt->loc);
             gen_call_destructors(temporary_destructor_objects);
             pop_dbg_loc();
@@ -4435,6 +4456,11 @@ llvm::Value* acorn::IRGenerator::gen_cast(Cast* cast) {
 llvm::Value* acorn::IRGenerator::gen_bitcast(BitCast* cast) {
     auto ll_value = gen_rvalue(cast->value);
     return builder.CreateBitCast(ll_value, gen_type(cast->type));
+}
+
+llvm::Value* acorn::IRGenerator::gen_const_cast(ConstCast* cast) {
+    return gen_cast(cast->type, cast->value, context.is_std_any_type(cast->type) ? gen_node(cast->value)
+                                                                                 : gen_rvalue(cast->value));
 }
 
 llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Value* ll_value) {

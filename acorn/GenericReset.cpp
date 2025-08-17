@@ -240,6 +240,11 @@ namespace acorn {
             reset_node(cast->value);
             break;
         }
+        case NodeKind::CONST_CAST: {
+            auto cast = static_cast<ConstCast*>(node);
+            reset_node(cast->value);
+            break;
+        }
         case NodeKind::ARRAY: {
             auto arr = static_cast<Array*>(node);
             for (Expr* elm : arr->elms) {

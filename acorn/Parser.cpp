@@ -752,12 +752,19 @@ acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers, VarList* 
     if (cur_token.is('=') || cur_token.is(':')) {
         next_token();
 
+        NoDefaultInit no_default_init_expr;
+
         llvm::SmallVector<Expr*, 4> assignments;
         bool more_expressions = false;
         do {
 
-            Expr* assignment = parse_expr();
-            assignments.push_back(assignment);
+            if (cur_token.is(Token::SUB_SUB_SUB)) {
+                next_token();
+                assignments.push_back(&no_default_init_expr);
+            } else {
+                Expr* assignment = parse_expr();
+                assignments.push_back(assignment);
+            }
 
             more_expressions = cur_token.is(',');
             if (more_expressions) {
@@ -789,6 +796,12 @@ acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers, VarList* 
             for (size_t i = 0; i < var_list->vars.size(); i++) {
                 auto assignment = assignments[i];
                 Var* var = var_list->vars[i];
+
+                if (assignment == &no_default_init_expr) {
+                    var->should_default_initialize = false;
+                    continue;
+                }
+
                 var->assignment = assignment;
 
                 bool infers_ptr_type = std::get<1>(name_tokens[i]);
@@ -2588,6 +2601,17 @@ acorn::Expr* acorn::Parser::parse_term() {
         return cast;
     }
     case Token::KW_BITCAST: {
+        BitCast* cast = new_node<BitCast>(cur_token);
+        ++paren_count;
+        next_token();
+        expect('(');
+        cast->explicit_cast_type = parse_type();
+        expect(')');
+        --paren_count;
+        cast->value = parse_expr_trail();
+        return cast;
+    }
+    case Token::KW_CONST_CAST: {
         BitCast* cast = new_node<BitCast>(cur_token);
         ++paren_count;
         next_token();

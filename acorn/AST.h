@@ -88,6 +88,7 @@ namespace acorn {
         NULL_EXPR,
         CAST,
         BITCAST,
+        CONST_CAST,
         ARRAY,
         THIS_EXPR,
         SIZE_OF,
@@ -96,6 +97,7 @@ namespace acorn {
         TYPE_EXPR,
         REFLECT,
         TRY,
+        NO_DEFAULT_INIT,
         EXPR_END
 
     };
@@ -710,6 +712,11 @@ namespace acorn {
         }
     };
 
+    struct NoDefaultInit : Expr {
+        NoDefaultInit() : Expr(NodeKind::NO_DEFAULT_INIT) {
+        }
+    };
+
     struct BinOp : Expr {
         BinOp() : Expr(NodeKind::BIN_OP) {
         }
@@ -944,6 +951,14 @@ namespace acorn {
 
     struct BitCast : Expr {
         BitCast() : Expr(NodeKind::BITCAST) {
+        }
+
+        Type* explicit_cast_type;
+        Expr* value;
+    };
+
+    struct ConstCast : Expr {
+        ConstCast() : Expr(NodeKind::CONST_CAST) {
         }
 
         Type* explicit_cast_type;

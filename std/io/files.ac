@@ -5,6 +5,7 @@ import .win32;
 import .unix;
 import .String;
 import .IOError;
+import .StateError;
 
 #if OS_GROUP_UNIX
 import .unix.Stat;
@@ -16,7 +17,6 @@ import .unix.Stat;
  * Flags that indicate how to open a file for
  * reading and writing.
  */
-
 enum FileFlag :: uint32 {
 
     /*
@@ -50,12 +50,28 @@ enum FileFlag :: uint32 {
      * in conjunction with CREATE to create the file
      * if it does not exist and append to the new file.
      */
-    APPEND = 0x0010
+    APPEND = 0x0010,
+
+    /*
+     * If used in conjunction with `FileFlag::CREATE`
+     * then it will create the file as a hidden file.
+     *
+     * However, if the file already exists it will not
+     * modify it to be hidden.
+     */
+    HIDDEN = 0x0020,
+
+    /*
+     * If used in conjunction with `FileFlag::CREATE`
+     * then it will create the file as a readonly file.
+     *
+     * However, if the file already exists it will not
+     * modify it to be readonly.
+     */
+    READONLY = 0x0040
 
 }
 
-// TODO: We need to fix the file handle to work with
-//       large files?
 struct FileHandle :: Writable, Readable {
 
 #if OS_GROUP_WINDOWS
@@ -90,24 +106,16 @@ struct FileHandle :: Writable, Readable {
         file_handle.auto_close = false;
     }
 
-    const fn get_size() -> int {
-        // TODO: eventually it would be nice if the functionality of this
-        // worked with larger file sizes. However, there are some limitations
-        // to overcome when working with larger memory. One of those limitations
-        // is simply malloc. If the user wants to allocate a buffer larger than
-        // 32 bytes on some systems with malloc it would fail. Additionally the
-        // read_buffer function would require additional consideration to allow
-        // reading in such large amounts of data.
-        //
-        // Then there is the additional question of if this should be directly
-        // supported or if the user should be forced to buffer the data, a more
-        // sensable approach when working with such large memory.
-
-        // TODO: error handling!
+    const fn get_size() -> uint64 {
 #if OS_GROUP_WINDOWS
-        size: uint32 = win32.GetFileSize(handle, null);
-        return as(int) size;
+        size: int64;
+        if (win32.GetFileSizeEx(handle, &size) == 0) {
+            err_msg := module.win32_error_code_to_string(win32.GetLastError(), String{"Failed to get file size"});
+            raise StateError{ moveobj(err_msg) };
+        }
+        return as(uint64) size;
 #elif OS_GROUP_UNIX
+        // TODO: error handling!
         stats: Stat;
         if (unix.fstat(handle, &stats) == 0) {
             return as(int) stats.st_size;
@@ -120,10 +128,17 @@ struct FileHandle :: Writable, Readable {
 #if OS_GROUP_WINDOWS
         bytes_read: uint32;
         if (win32.ReadFile(handle, buffer, as(uint32) length, &bytes_read, null) == 0) {
-            raise IOError{ "Failed to read from file handle" };
+            // EOF may return an error so just return the number of bytes read if we hit EOF.
+            ec := win32.GetLastError();
+            if (ec == win32.ERROR_HANDLE_EOF) {
+                return length;
+            }
+            err_msg := module.win32_error_code_to_string(ec, pretext=String{"Failed to read from file handle"});
+            raise IOError{ moveobj(err_msg) };
         }
         return as(int) bytes_read;
 #elif OS_GROUP_UNIX
+        // TODO (maddie): This needs to be in a loop.
         bytes_read: isize = unix.read(handle, buffer, as(usize) length);
         if (bytes_read == -1) {
             raise IOError{ "Failed to read from file handle" };
@@ -157,27 +172,58 @@ struct FileHandle :: Writable, Readable {
     fn close() {
 #if OS_GROUP_WINDOWS
         win32.CloseHandle(handle);
+        handle = null;
 #elif OS_GROUP_UNIX
         unix.close(handle);
 #endif
     }
 }
 
+#if OS_GROUP_WINDOWS
+fn win32_get_file_error(ec: uint32, pretext: const String^) -> String {
+    switch (ec) {
+    case win32.ERROR_FILE_NOT_FOUND:
+    case win32.ERROR_PATH_NOT_FOUND:
+        return module.format("%s. Path not found", pretext);
+    case win32.ERROR_ACCESS_DENIED:
+        return module.format("%s. Access denied", pretext);
+    case win32.ERROR_FILE_EXISTS:
+        return module.format("%s. Path already exists", pretext);
+    case:
+        return module.win32_error_code_to_string(ec, pretext);
+    }
+}
+
+fn win32_get_file_error(pretext: const String^) -> String {
+    return win32_get_file_error(win32.GetLastError(), pretext);
+}
+#endif
+
 /*
- * Reads an entire file into a `String`.
+ * Reads an entire file into a `String`. This function assumes the file size
+ * read in can fit into a signed 32 bit integer.
  */
-fn read_file(path: const char*) -> String | raises IOError {
+fn read_file(path: const Path^) -> String | raises IOError {
     handle := try (open_file(path, FileFlag.IN | FileFlag.SHARE));
 
-    size := handle.get_size();
+    // Read the size and make sure we are not dealing with really big files.
+    large_size := handle.get_size();
+    if (large_size > 2147483647) {
+        err_msg := module.format(
+            "Could not read file: \"%s\" because the file size exceeded 2^31 bytes", path.to_utf8_string()
+        );
+        raise StateError{ moveobj(err_msg) };
+    }
+
+    size := as(int) large_size;
 
     buffer := as(char*) module.malloc(size + 1); // +1 for null terminator.
     bytes_read := try err: (handle.read_buffer(buffer, size)) {
-        raise IOError{ module.format("Reading file \"%s\": %s", path, err.get_message()) };
+        raise IOError{ module.format("Reading file: \"%s\": %s", path.to_utf8_string(), err.get_message()) };
     };
 
     if (bytes_read != size) {
-        raise IOError{ module.format("Failed to read all bytes of file: \"%s\"", path) };
+        raise IOError{ module.format("Failed to read all bytes of file: \"%s\"", path.to_utf8_string()) };
     }
 
     buffer[size] = '\0'; // Adding null terminator.
@@ -185,10 +231,24 @@ fn read_file(path: const char*) -> String | raises IOError {
 }
 
 /*
- * Reads an entire file into a `String`.
+ * Reads an entire file into a `String`. This function assumes the file size
+ * read in can fit into a signed 32 bit integer.
+ *
+ * @param path a utf-8 path to a file or directory.
+ */
+fn read_file(path: const char*) -> String | raises IOError {
+    contents := try (read_file(Path{ path }));
+    return contents;
+}
+
+/*
+ * Reads an entire file into a `String`. This function assumes the file size
+ * read in can fit into a signed 32 bit integer.
+ *
+ * @param path a utf-8 path to a file or directory.
  */
 fn read_file(path: const String^) -> String | raises IOError {
-    contents := try (read_file(path.buffer));
+    contents := try (read_file(Path{ path.buffer }));
     return contents;
 }
 
@@ -196,9 +256,11 @@ fn read_file(path: const String^) -> String | raises IOError {
  * Returns true if the file system has a file or
  * directory at the given path.
  */
-fn path_exists(path: const char*) -> bool {
+fn path_exists(path: const Path^) -> bool {
 #if OS_GROUP_WINDOWS
-    attribs: uint32 = win32.GetFileAttributesA(path);
+    temp_buffer := path.to_utf16_string_temporary();
+
+    attribs: uint32 = win32.GetFileAttributesW(temp_buffer.buffer);
     return attribs != win32.INVALID_FILE_ATTRIBUTES;
 #elif OS_GROUP_UNIX
     return unix.access(path, unix.F_OK) == 0;
@@ -208,18 +270,38 @@ fn path_exists(path: const char*) -> bool {
 /*
  * Returns true if the file system has a file or
  * directory at the given path.
+ *
+ * @param path a utf-8 path to a file or directory.
+ */
+fn path_exists(path: const char*) -> bool {
+    return path_exists(Path{ path });
+}
+
+/*
+ * Returns true if the file system has a file or
+ * directory at the given path.
+ *
+ * @param path a utf-8 path to a file or directory.
  */
 fn path_exists(path: const String^) -> bool {
-    return path_exists(path.buffer);
+    return path_exists(Path{ path.buffer });
 }
 
 /*
  * Returns true if the file system has a file but
  * is not a directory at the given path.
  */
-fn file_exists(path: const char*) -> bool {
+fn file_exists(path: const Path^) -> bool | raises IOError {
 #if OS_GROUP_WINDOWS
-    attribs: uint32 = win32.GetFileAttributesA(path);
+    temp_buffer := path.to_utf16_string_temporary();
+
+    attribs: uint32 = win32.GetFileAttributesW(temp_buffer.buffer);
+    if (attribs == win32.INVALID_FILE_ATTRIBUTES) {
+        err_msg := win32_get_file_error(module.format("Checking if file exists: \"%s\"",
+                                        path.to_utf8_string()));
+        raise IOError{ moveobj(err_msg) };
+    }
+
     return attribs != win32.INVALID_FILE_ATTRIBUTES &&
           (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) == 0;
 #elif OS_GROUP_UNIX
@@ -234,18 +316,36 @@ fn file_exists(path: const char*) -> bool {
 /*
  * Returns true if the file system has a file but
  * is not a directory at the given path.
+ *
+ * @param path a utf-8 path to a file or directory.
  */
-fn file_exists(path: const String^) -> bool {
-    return file_exists(path.buffer);
+fn file_exists(path: const char*) -> bool | raises IOError {
+    exists := try (file_exists(Path{ path }));
+    return exists;
+}
+
+/*
+ * Returns true if the file system has a file but
+ * is not a directory at the given path.
+ *
+ * @param path a utf-8 path to a file or directory.
+ */
+fn file_exists(path: const String^) -> bool | raises IOError {
+    exists := try (file_exists(Path{ path.buffer }));
+    return exists;
 }
 
 /*
  * Returns true if the file system has a directory
  * at the given path.
+ *
+ * @param path a utf-8 path to a file or directory.
  */
-fn directory_exists(path: const char*) -> bool {
+fn directory_exists(path: const Path^) -> bool {
 #if OS_GROUP_WINDOWS
-    attribs: uint32 = win32.GetFileAttributesA(path);
+    temp_buffer := path.to_utf16_string_temporary();
+
+    attribs: uint32 = win32.GetFileAttributesW(temp_buffer.buffer);
     return attribs != win32.INVALID_FILE_ATTRIBUTES &&
           (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) != 0;
 #elif OS_GROUP_UNIX
@@ -260,54 +360,113 @@ fn directory_exists(path: const char*) -> bool {
 /*
  * Returns true if the file system has a directory
  * at the given path.
+ *
+ * @param path a utf-8 path to a file or directory.
  */
-fn directory_exists(path: const String^) -> bool {
-    return directory_exists(path.buffer);
+fn directory_exists(path: const char*) -> bool {
+    return directory_exists(Path{ path });
 }
 
 /*
- * Creates the directory at the given path. Returns
- * true if created.
+ * Returns true if the file system has a directory
+ * at the given path.
+ *
+ * @param path a utf-8 path to a file or directory.
  */
-fn mkdir(path: const char*) -> bool {
-    // TODO: improve the return to indicate why it failed
-    //       besides just a bool for if is succeeded or not.
+fn directory_exists(path: const String^) -> bool {
+    return directory_exists(Path{ path.buffer });
+}
+
+/*
+ * Creates the directory at the given path.
+ *
+ * This function will not raise an error if the directory
+ * already exists.
+ *
+ * @return if it created the directory, false if it already exists.
+ */
+fn mkdir(path: const Path^) -> bool | raises IOError {
     // TODO: We will also want to pass a variable for creating
     //       the parent directories if the user wants.
 
 #if OS_GROUP_WINDOWS
-    return win32.CreateDirectoryA(path, null) != 0;
+    temp_buffer := path.to_utf16_string_temporary();
+
+    if (win32.CreateDirectoryW(temp_buffer.buffer, null) == 0) {
+        ec := win32.GetLastError();
+        if (ec == win32.ERROR_ALREADY_EXISTS) {
+            // Do not raise an error when the directory already exists.
+            return false;
+        }
+
+        err_msg := win32_get_file_error(ec, module.format("Failed to make directory: \"%s\"",
+                                        path.to_utf8_string()));
+        raise IOError{ moveobj(err_msg) };
+    }
+
+    return true;
 #elif OS_GROUP_UNIX
     return unix.mkdir(path, 0775) == 0;
 #endif
 }
 
 /*
- * Creates the directory at the given path. Returns
- * true if created.
+ * Creates the directory at the given path.
+ *
+ * This function will not raise an error if the directory
+ * already exists.
+ *
+ * @param path a utf-8 path to a file or directory.
+ * @return if it created the directory, false if it already exists.
  */
-fn mkdir(path: const String^) -> bool {
-    return mkdir(path.buffer);
+fn mkdir(path: const char*) -> bool | raises IOError {
+    newly_created := try (mkdir(Path{ path }));
+    return newly_created;
+}
+
+/*
+ * Creates the directory at the given path.
+ *
+ * This function will not raise an error if the directory
+ * already exists.
+ *
+ * @param path a utf-8 path to a file or directory.
+ * @return if it created the directory, false if it already exists.
+ */
+fn mkdir(path: const String^) -> bool | raises IOError {
+    newly_created := try (mkdir(Path{ path.buffer }));
+    return newly_created;
 }
 
 /*
  * Deletes the file or directory if it exists.
- * Returns true if it succeeded.
  *
  * If deleting a directory the directory must be
  * empty.
  */
-fn remove_path(path: const char*) -> bool {
+fn remove_path(path: const Path^) | raises IOError {
 
 #if OS_GROUP_WINDOWS
-    attribs: uint32 = win32.GetFileAttributesA(path);
-    if (attribs == win32.INVALID_FILE_ATTRIBUTES) {
-        return false;
+    temp_buffer := path.to_utf16_string_temporary();
+
+    attribs: uint32 = win32.GetFileAttributesW(temp_buffer.buffer);
+
+    sucess := true;
+    if (attribs != win32.INVALID_FILE_ATTRIBUTES) {
+        if ((attribs & win32.FILE_ATTRIBUTE_DIRECTORY) != 0) {
+            // Removing directory.
+            sucess = win32.RemoveDirectoryW(temp_buffer.buffer) != 0;
+        } else {
+            // Removing file.
+            sucess = win32.DeleteFileW(temp_buffer.buffer) != 0;
+        }
+    } else {
+        sucess = false;
     }
-    if ((attribs & win32.FILE_ATTRIBUTE_DIRECTORY) != 0) {
-        return win32.RemoveDirectoryA(path) != 0;
+
+    if (!sucess) {
+        raise IOError{ win32_get_file_error(module.format("Failed to remove path: \"%s\"", path)) };
     }
-    return win32.DeleteFileA(path) != 0;
 #elif OS_GROUP_UNIX
     return unix.remove(path) == 0;
 #endif
@@ -315,21 +474,35 @@ fn remove_path(path: const char*) -> bool {
 
 /*
  * Deletes the file or directory if it exists.
- * Returns true if it succeeded.
  *
  * If deleting a directory the directory must be
  * empty.
+ *
+ * @param path a utf-8 path to a file or directory.
  */
-fn remove_path(path: const String^) -> bool {
-    return remove_path(path.buffer);
+fn remove_path(path: const char*) | raises IOError {
+    try (remove_path(Path{ path }));
 }
 
-fn open_file(path: const char*, flags: FileFlag$) -> FileHandle | raises IOError {
+/*
+ * Deletes the file or directory if it exists.
+ *
+ * If deleting a directory the directory must be
+ * empty.
+ *
+ * @param path a utf-8 path to a file or directory.
+ */
+fn remove_path(path: const String^) | raises IOError {
+    try (remove_path(Path{ path.buffer }));
+}
+
+fn open_file(path: const Path^, flags: FileFlag$) -> FileHandle | raises IOError {
 
 #if OS_GROUP_WINDOWS
     access_flags: uint32 = 0;
     share_flags:  uint32 = 0;
     create_flags: uint32 = 0;
+    attib_flags:  uint32 = 0;
 
     if (flags == 0) {
         access_flags = win32.GENERIC_ALL;
@@ -356,29 +529,44 @@ fn open_file(path: const char*, flags: FileFlag$) -> FileHandle | raises IOError
             // Windows is weird and none of the create options allow us to simply
             // overwrite the old file. We will simply remove the existing file if
             // it exists then create a new one.
-            remove_path(path); // TODO: should this report an error if it fails?
+            try (remove_path(path));
             create_flags |= win32.CREATE_NEW;
         }
     } else {
         create_flags |= win32.OPEN_EXISTING;
     }
 
-    handle: void* = win32.CreateFileA(path,
+    attib_flags = win32.FILE_ATTRIBUTE_NORMAL;
+    if ((flags & FileFlag.CREATE) != 0 && (flags & FileFlag.HIDDEN) != 0) {
+        attib_flags &= ~win32.FILE_ATTRIBUTE_NORMAL;
+        attib_flags |= win32.FILE_ATTRIBUTE_HIDDEN;
+    }
+    if ((flags & FileFlag.CREATE) != 0 && (flags & FileFlag.READONLY) != 0) {
+        attib_flags &= ~win32.FILE_ATTRIBUTE_NORMAL;
+        attib_flags |= win32.FILE_ATTRIBUTE_READONLY;
+    }
+
+    temp_buffer := path.to_utf16_string_temporary();
+
+    handle: void* = win32.CreateFileW(temp_buffer.buffer,
                                       access_flags,
                                       share_flags,
                                       null,
                                       create_flags,
-                                      win32.FILE_ATTRIBUTE_NORMAL,
+                                      attib_flags,
                                       null);
 
     if (handle == win32.INVALID_HANDLE_VALUE) {
-        raise IOError{ module.format("Failed to open file: \"%s\"", path) };
+        err_msg := win32_get_file_error(module.format("Failed to open file: \"%s\"", path.to_utf8_string()));
+        raise IOError{ moveobj(err_msg) };
     }
 
     return FileHandle{ handle };
 #elif OS_GROUP_UNIX
 
     // TODO: O_LARGEFILE -- Allow working for large file sizes.
+    // TODO: Add hidden file support
+    // TODO: Add readonly file support
 
     os_flags: int32 = 0;
     os_mode: uint32 = 0;
@@ -413,7 +601,12 @@ fn open_file(path: const char*, flags: FileFlag$) -> FileHandle | raises IOError
 #endif
 }
 
+fn open_file(path: const char*, flags: FileFlag$) -> FileHandle | raises IOError {
+    handle := try (open_file(Path{ path }, flags));
+    return handle;
+}
+
 fn open_file(path: const String^, flags: FileFlag$) -> FileHandle | raises IOError {
-    handle := try (open_file(path.buffer, flags));
+    handle := try (open_file(Path{ path.buffer }, flags));
     return handle;
 }

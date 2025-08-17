@@ -178,6 +178,11 @@ namespace acorn {
             cast->value = deep_copy(allocator, cast->value);
             return cast;
         }
+        case NodeKind::CONST_CAST: {
+            auto cast = raw_copy(allocator, static_cast<ConstCast*>(node));
+            cast->value = deep_copy(allocator, cast->value);
+            return cast;
+        }
         case NodeKind::ARRAY: {
             auto arr = raw_copy(allocator, static_cast<Array*>(node));
 
@@ -223,6 +228,7 @@ namespace acorn {
             acorn_fatal("cannot copy try statement");
             return nullptr;
         }
+        case NodeKind::NO_DEFAULT_INIT:
         case NodeKind::EXPR_END: {
             acorn_fatal("lol");
             return nullptr;

@@ -190,7 +190,7 @@ namespace acorn {
         llvm::Value* gen_number(Number* number);
         llvm::Value* gen_ident_reference(IdentRef* ref);
         llvm::Value* gen_binary_op(BinOp* bin_op);
-        llvm::Value* gen_assignment_op(Expr* lhs, Expr* rhs);
+        llvm::Value* gen_assignment_like_op(Expr* lhs, Expr* rhs, bool is_assign_op = true);
         llvm::Value* gen_apply_and_assign_op(TokenKind op, SourceLoc loc, Type* rtype, Expr* lhs, Expr* rhs);
         llvm::Value* gen_numeric_binary_op(TokenKind op, Type* rtype,
                                            Expr* lhs, Expr* rhs,
@@ -231,6 +231,7 @@ namespace acorn {
         llvm::Value* gen_null();
         llvm::Value* gen_cast(Cast* cast);
         llvm::Value* gen_bitcast(BitCast* cast);
+        llvm::Value* gen_const_cast(ConstCast* cast);
         llvm::Value* gen_array(Array* arr, llvm::Value* ll_dest_addr);
         llvm::GlobalVariable* gen_store_constant_array_to_global(llvm::Type* ll_arr_type,
                                                                  llvm::Type* ll_elm_type,

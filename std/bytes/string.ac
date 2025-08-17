@@ -23,12 +23,9 @@ struct String {
     }
 
     fn moveobj(o: String*) {
-        this.length   #= o.length;
-        this.buffer   #= o.buffer;
-        this.capacity #= o.capacity;
-        o.length   = 0;
-        o.buffer   = &DEFAULT_CHAR;
-        o.capacity = 0;
+        this.length   #= exchange(o.length, 0);
+        this.buffer   #= exchange(o.buffer, &DEFAULT_CHAR);
+        this.capacity #= exchange(o.capacity, 0);
     }
 
     /*
@@ -36,7 +33,7 @@ struct String {
      * character `buffer`.
      */
     fn new(buffer: const char*) {
-        this.length   #= strlen(buffer);
+        this.length   #= as(int) strlen(buffer);
         this.capacity #= this.length;
         this.buffer   #= as(char*) malloc(length + 1); // +1 for null terminator.
         memcpy(this.buffer, buffer, length + 1);
@@ -153,7 +150,7 @@ struct String {
      * with the new string `replace_str`.
      */
     fn replace(sub_str: const char*, replace_str: const String^) -> String^ {
-        return replace(sub_str           , strlen(sub_str),
+        return replace(sub_str           , as(int) strlen(sub_str),
                        replace_str.buffer, replace_str.length);
     }
 
@@ -163,7 +160,7 @@ struct String {
      */
     fn replace(sub_str: const String^, replace_str: const char*) -> String^ {
         return replace(sub_str.buffer, sub_str.length,
-                       replace_str   , strlen(replace_str));
+                       replace_str   , as(int) strlen(replace_str));
     }
 
     /*
@@ -171,8 +168,8 @@ struct String {
      * with the new string `replace_str`.
      */
     fn replace(sub_str: const char*, replace_str: const char*) -> String^ {
-        return replace(sub_str    , strlen(sub_str),
-                       replace_str, strlen(replace_str));
+        return replace(sub_str    , as(int) strlen(sub_str),
+                       replace_str, as(int) strlen(replace_str));
     }
 
     fn replace(sub_str:     const char*, sub_length:     int,
@@ -306,7 +303,7 @@ struct String {
      * of this string.
      */
     fn append(s: const char*) -> String^ {
-        return append(s, strlen(s));
+        return append(s, as(int) strlen(s));
     }
 
     /*
@@ -355,7 +352,7 @@ struct String {
      * If `sub` is empty returns 0.
      */
     const fn find(sub: const char*) -> int {
-        return \find_substring(this.buffer, this.length, sub, strlen(sub));
+        return \find_substring(this.buffer, this.length, sub, as(int) strlen(sub));
     }
 
     /*
@@ -383,7 +380,7 @@ struct String {
      * If `sub` is empty returns this.length - 1.
      */
     const fn find_last(sub: const char*) -> int {
-        return \find_last_substring(this.buffer, this.length, sub, strlen(sub));
+        return \find_last_substring(this.buffer, this.length, sub, as(int) strlen(sub));
     }
 
     /*
@@ -428,7 +425,7 @@ struct String {
      * Returns true if this String starts with `sub` string.
      */
     const fn starts_with(sub: const char*) -> bool {
-        sub_length := strlen(sub);
+        sub_length := as(int) strlen(sub);
         if (sub_length > length) {
             return false;
         }
@@ -449,7 +446,7 @@ struct String {
      * Returns true if this String ends with `sub` string.
      */
     const fn ends_with(sub: const char*) -> bool {
-        sub_length := strlen(sub);
+        sub_length := as(int) strlen(sub);
         if (sub_length > length) {
             return false;
         }
@@ -546,11 +543,17 @@ struct String {
  * @return  length of the null terminated
  *          c-string.
  */
-fn strlen(s: const char*) -> int {
-    if (!s) return 0;
-    return as(int) _strlen(s);
-}
-private native("strlen") fn _strlen(s: const char*) -> isize;
+native fn strlen(s: const char*) -> usize;
+
+/*
+ * Counts the number of characters until
+ * it finds a null terminator in the wide
+ * c-string.
+ *
+ * @return  length of the null terminated
+ *          c-string.
+ */
+native fn wcslen(s: const char16*) -> usize;
 
 /*
  * Copies the contents of `source` into `dest`. Make sure the `dest` pointer

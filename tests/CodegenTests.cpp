@@ -1363,7 +1363,7 @@ static void destructors_tests() {
 
         expect(result, std::identity()).to_be("called | called");
     });
-    test("Destructor called when reassigning from func cal", [&] {
+    test("Destructor called when reassigning from func call", [&] {
         auto [err_msg, result] = run_codegen_test(src("destructors/destructors_test20.ac"));
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
@@ -1500,6 +1500,12 @@ static void destructors_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("C calledB calledA called");
+    });
+    test("Destructors properly called when temporaries in return and branches to ret block", [&] {
+        auto [err_msg, result] = run_codegen_test(src("destructors/destructors_test43.ac"));
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("A called@");
     });
 }
 

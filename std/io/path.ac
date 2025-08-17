@@ -1,0 +1,202 @@
+#file(namespace=io)
+
+import .. module;
+import .StateError;
+import .win32;
+
+enum PathBufferType {
+    UTF8_CSTR_BUFFER,
+    UTF8_BUFFER,
+    UTF16_CSTR_BUFFER
+}
+
+generics(C)
+public struct PathTempBuffer {
+    buffer:                     C*;
+    private needs_deallocation: bool;
+
+    fn moveobj(o: PathTempBuffer*) {
+        this.buffer             #= module.exchange(o.buffer, null);
+        this.needs_deallocation #= module.exchange(o.needs_deallocation, false);
+    }
+
+    fn delete() {
+        if (needs_deallocation) {
+            module.free(buffer);
+        }
+    }
+}
+
+fn utf16_to_utf8(path: const char16*, utf8_buffer: char**, utf8_length: int32*) {
+#if OS_GROUP_WINDOWS
+    length := as(int32) module.wcslen(path);
+
+    if (length == 0) {
+        *utf8_buffer = as(char*) module.malloc(1);
+        (*utf8_buffer)[0] = '\0';
+        *utf8_length = 0;
+        return; // Documentation tells us it fails when length is zero.
+    }
+
+    // First determining the length of the resulting multibyte string.
+    *utf8_length = win32.WideCharToMultiByte(win32.CP_UTF8,  // UTF-8 conversion
+                                             0,        // Special flags
+                                             path,     // Pointer to string to convert
+                                             length,   // Length of wide string. May be -1 if null terminated
+                                             null,     // Pointer to the resulting utf8 string (Need to determine length first)
+                                             0,        // Size of the utf8 string (Need to determine length first)
+                                             null,     // Pointer to a character if a character cannot be interpreted
+                                             null      // Pointer to a flag to indicate if the function uses a default character
+    );
+    if (*utf8_length <= 0) {
+        raise StateError{ "Failed to convert utf16 to utf8" };
+    }
+
+    // Converting!
+    *utf8_buffer = as(char*) module.malloc(as(usize) (*utf8_length + 1));
+    win32.WideCharToMultiByte(win32.CP_UTF8,
+                              0,
+                              path,
+                              length,
+                              *utf8_buffer,
+                              *utf8_length,
+                              null,
+                              null);
+    (*utf8_buffer)[*utf8_length] = '\0';
+
+#else
+    // TODO (maddie): Support more than just windows!
+    raise StateError{ "utf16_to_utf8 only supported on windows" };
+#endif
+}
+
+fn utf8_to_utf16(path: const char*, utf16_buffer: char16**, utf16_length: int32*) {
+    return utf8_to_utf16(path, as(int32) module.strlen(path), utf16_buffer, utf16_length);
+}
+
+fn utf8_to_utf16(path: const char*, path_length: int32, utf16_buffer: char16**, utf16_length: int32*) {
+#if OS_GROUP_WINDOWS
+
+    byte_length := as(int32) module.strlen(path);
+
+    if (byte_length == 0) {
+        *utf16_buffer = as(char16*) module.malloc(1 * sizeof(char16));
+        (*utf16_buffer)[0] = 0;
+        *utf16_length = 0;
+        return; // Documentation tells us it fails when length is zero.
+    }
+
+    // First determining the length of the resulting wide string.
+    *utf16_length = win32.MultiByteToWideChar(win32.CP_UTF8, // UTF-8 conversion
+                                              0,             // special flags
+                                              path,          // Pointer to string to convert
+                                              byte_length,   // Length of utf8 string (in bytes). May be -1 if null terminated
+                                              null,          // Pointer to the resulting wide string (Need to determine length first)
+                                              0              // Size of the wide string (Need to determine length first)
+    );
+    if (*utf16_length <= 0) {
+        raise StateError{ "Failed to convert utf8 to wide" };
+    }
+
+    // Converting!
+    *utf16_buffer = as(char16*) module.malloc(as(usize) (*utf16_length + 1) * sizeof(char16));
+    win32.MultiByteToWideChar(win32.CP_UTF8,
+                              0,
+                              path,
+                              byte_length,
+                              *utf16_buffer,
+                              *utf16_length);
+    (*utf16_buffer)[*utf16_length] = 0;
+
+#else
+    // TODO (maddie): Support more than just windows!
+    raise StateError{ "utf8_to_utf16 only supported on windows" };
+#endif
+}
+
+public struct Path {
+
+    fn new(path: const char*) {
+        this.utf8_cstr_buffer #= path;
+        this.buffer_type #= PathBufferType.UTF8_CSTR_BUFFER;
+    }
+
+    fn new(path: String) {
+        this.utf8_buffer #= moveobj(path);
+        this.buffer_type #= PathBufferType.UTF8_BUFFER;
+    }
+
+    fn new(path: const char16*) {
+        this.utf16_cstr_buffer = path;
+        this.buffer_type #= PathBufferType.UTF16_CSTR_BUFFER;
+    }
+
+    const fn to_utf8_string_temporary() -> PathTempBuffer(char) {
+        switch (buffer_type) {
+        case UTF8_CSTR_BUFFER:
+            return PathTempBuffer(char){
+                buffer             = const_cast(char*) utf8_cstr_buffer,
+                needs_deallocation = false
+            };
+        case UTF8_BUFFER:
+            return PathTempBuffer(char){
+                buffer             = const_cast(char*) utf8_buffer.buffer,
+                needs_deallocation = false
+            };
+        case UTF16_CSTR_BUFFER:
+            utf8_length: int32;
+            utf8_buffer: char*;
+            utf16_to_utf8(utf16_cstr_buffer, &utf8_buffer, &utf8_length);
+            return PathTempBuffer(char){
+                buffer             = utf8_buffer,
+                needs_deallocation = true
+            };
+        }
+    }
+
+    const fn to_utf16_string_temporary() -> PathTempBuffer(char16) {
+        switch (buffer_type) {
+        case UTF8_CSTR_BUFFER:
+            utf16_length: int32;
+            utf16_buffer: char16*;
+            utf8_to_utf16(utf8_cstr_buffer, &utf16_buffer, &utf16_length);
+            return PathTempBuffer(char16){
+                buffer             = utf16_buffer,
+                needs_deallocation = true
+            };
+        case UTF8_BUFFER:
+            utf16_length: int32;
+            utf16_buffer: char16*;
+            utf8_to_utf16(utf8_buffer.buffer, &utf16_buffer, &utf16_length);
+            return PathTempBuffer(char16){
+                buffer             = utf16_buffer,
+                needs_deallocation = true
+            };
+        case UTF16_CSTR_BUFFER:
+            return PathTempBuffer(char16){
+                buffer             = const_cast(char16*) utf16_cstr_buffer,
+                needs_deallocation = false
+            };
+        }
+    }
+
+    const fn to_utf8_string() -> String {
+        switch (buffer_type) {
+        case UTF8_CSTR_BUFFER:
+            return String{ utf8_cstr_buffer };
+        case UTF8_BUFFER:
+            return utf8_buffer;
+        case UTF16_CSTR_BUFFER:
+            utf8_length: int32;
+            utf8_buffer: char*;
+            utf16_to_utf8(utf16_cstr_buffer, &utf8_buffer, &utf8_length);
+            return String{ utf8_buffer, as(int) utf8_length, copy_buffer=false };
+        }
+    }
+
+    // TODO (maddie): replace with a union
+    private buffer_type: PathBufferType;
+    private utf8_cstr_buffer:  const char*   = ---;
+    private utf8_buffer:       String        = ---;
+    private utf16_cstr_buffer: const char16* = ---;
+}

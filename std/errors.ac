@@ -2,6 +2,7 @@
 
 import .. module;
 import .io;
+import .win32;
 
 interface Error {
 
@@ -97,6 +98,41 @@ fn abort(error: Error*) {
     io.print(error_name);
     io.print(": ");
     io.print(message);
-    io.print(".");
+    io.print(".\n");
     module.exit(1);
 }
+
+#if OS_GROUP_WINDOWS
+fn win32_error_code_to_string(error_code: uint32, pretext: const String^) -> String {
+
+    buffer: char*;
+    length := win32.FormatMessageA(
+        win32.FORMAT_MESSAGE_ALLOCATE_BUFFER |
+        win32.FORMAT_MESSAGE_FROM_SYSTEM     |
+        win32.FORMAT_MESSAGE_IGNORE_INSERTS,
+        null,
+        error_code,
+        win32.MAKELANGID(0x09, 0x01), // English, US English
+        as(char*) &buffer,
+        0,
+        null
+    );
+
+    if (length == 0) {
+        raise StateError{ "Encountered Win32 error but failed to format the error message" };
+    }
+
+    // Windows appends \r\n. to the end of the message so removing that if it exists
+    // in the message.
+    if (length >= 3) {
+        if (memcmp(buffer + length - 3, ".\r\n", 3) == 0) {
+            length -= 3;
+        }
+    }
+
+    error_msg := format("%s. Windows error (%s): ", pretext, error_code);
+    error_msg.append(String{ buffer, as(int) length });
+
+    return error_msg;
+}
+#endif

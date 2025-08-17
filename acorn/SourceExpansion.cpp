@@ -57,6 +57,12 @@ if (e1 > e) { e = e1; }           \
             get(cast->value);
             break;
         }
+        case NodeKind::CONST_CAST: {
+            auto cast = static_cast<ConstCast*>(node);
+            // Include the value being cast on.
+            get(cast->value);
+            break;
+        }
         case NodeKind::NAMED_VALUE: {
             NamedValue* named_value = static_cast<NamedValue*>(node);
             get(named_value->assignment);

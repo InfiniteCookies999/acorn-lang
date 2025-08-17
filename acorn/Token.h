@@ -64,6 +64,7 @@ namespace acorn {
             // Expression keywords
             KW_AS,
             KW_BITCAST,
+            KW_CONST_CAST,
             KW_THIS,
             KW_SIZEOF,
             KW_COPYOBJ,

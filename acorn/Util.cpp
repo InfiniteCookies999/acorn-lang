@@ -277,15 +277,15 @@ bool acorn::is_valid_utf8_codepoint(uint32_t codepoint, size_t num_bytes, bool& 
     }
 
     // Check for overlong encoding.
-    if (codepoint < 0x80 && num_bytes != 1) {
-        is_overlong = true;
-        return false;
-    } else if (codepoint < 0x800 && num_bytes != 2) {
-        is_overlong = true;
-        return false;
-    } else if (codepoint < 0x10000 && num_bytes != 3) {
-        is_overlong = true;
-        return false;
+    if (codepoint < 0x80) {
+        is_overlong = num_bytes != 1;
+        return !is_overlong;
+    } else if (codepoint < 0x800) {
+        is_overlong = num_bytes != 2;
+        return !is_overlong;
+    } else if (codepoint < 0x10000) {
+        is_overlong = num_bytes != 3;
+        return !is_overlong;
     }
 
     return true;
