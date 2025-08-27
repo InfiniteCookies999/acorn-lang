@@ -96,7 +96,7 @@ void acorn::Logger::set_color(Stream stream, Color color) {
     acorn::set_terminal_color(stream, color);
 }
 
-acorn::Logger& acorn::Logger::begin_error(PointSourceLoc location, const std::function<void()>& print_cb) {
+acorn::Logger& acorn::Logger::begin_error(SourceLoc location, const std::function<void()>& print_cb) {
 
     main_location = location;
     primary_print_cb = print_cb;
@@ -231,7 +231,7 @@ void acorn::Logger::print_header(ErrCode error_code, const std::string& line_num
     fmt_print("%s%s", BrightCyan, path);
     facing_length += path.length();
 
-    auto [line_number, column_number] = file.line_table.get_line_and_column_number(main_location.point);
+    auto [line_number, column_number] = file.line_table.get_line_and_column_number(main_location.central_pt);
 
     fmt_print("%s:%s%s", BrightWhite, BrightYellow, line_number);
     facing_length += std::to_string(line_number).length() + 1;
@@ -416,7 +416,7 @@ void acorn::Logger::end_error(ErrCode error_code) {
             mtx.unlock();
             exit(1);
         }
-        auto [start_line_number, _] = file.line_table.get_line_and_column_number(main_location.point);
+        auto [start_line_number, _] = file.line_table.get_line_and_column_number(main_location.central_pt);
         error_code_interceptor(error_code, file.path, static_cast<int>(start_line_number));
         mtx.unlock();
         return;
@@ -492,18 +492,18 @@ acorn::Logger::ErrorInfo acorn::Logger::collect_error_info() {
     // file such as when checking for closing multi-line comments. But
     // the code expects the location to be within the bounds of the
     // buffer so that is corrected for here.
-    if (*main_location.point == '\0') {
-        --main_location.point;
-        while (is_whitespace(*main_location.point)) {
-            --main_location.point;
+    if (*main_location.central_pt == '\0') {
+        --main_location.central_pt;
+        while (is_whitespace(*main_location.central_pt)) {
+            --main_location.central_pt;
         }
 
-        main_location.ptr = main_location.point;
+        main_location.ptr = main_location.central_pt;
         main_location.length = 1;
     }
 
 
-    const char* pivot_point_ptr = main_location.point;
+    auto   pivot_point_ptr   = main_location.central_pt;
     size_t pivot_line_number = file.line_table.get_line_number(pivot_point_ptr);
 
 

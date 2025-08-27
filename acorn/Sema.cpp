@@ -2234,13 +2234,8 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
 
                 if (!types_match) {
                     auto container_loc = expand(loop->container);
-                    auto start_loc = var->loc.ptr;
-                    auto error_loc = PointSourceLoc{
-                        .ptr = start_loc,
-                        .length = static_cast<uint16_t>(container_loc.end() - start_loc),
-                        .point = start_loc,
-                        .point_length = var->loc.length,
-                    };
+                    auto error_loc = SourceLoc::from_ptrs(var->loc.ptr, container_loc.end());
+
                     error(error_loc, "Cannot assign type '%s' to variable '%s' with type '%s'",
                           elm_type, var->name, var_type)
                         .end_error(ErrCode::SemaCannotAssignIteratorElmTypeToVar);
@@ -4003,7 +3998,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
             }
 
             if (var_ref->structn->is_being_checked) {
-                PointSourceLoc error_loc = ref->loc.to_point_source();
+                auto error_loc = ref->loc;
                 if (ref->is(NodeKind::DOT_OPERATOR)) {
                     auto dot = static_cast<DotOperator*>(ref);
                     error_loc = dot->expand_access_only();
@@ -5987,7 +5982,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
     if (structn->is_generic) {
         bound_types.resize(unbound_generic_struct->generics.size());
         if (!bind_default_generic_arguments(bound_types, unbound_generic_struct->generics)) {
-            display_missing_generic_bindings_info(initializer->loc.to_point_source(), "struct type",
+            display_missing_generic_bindings_info(initializer->loc, "struct type",
                                                   bound_types, unbound_generic_struct->generics,
                                                   ErrCode::SemaExpectedGenericArgsForGenericType,
                                                   ErrCode::SemaCouldNotBindAllGenericArgsForType);
@@ -6494,7 +6489,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
                 return found_struct->struct_type;
             }
 
-            display_missing_generic_bindings_info(error_loc.to_point_source(), "struct type",
+            display_missing_generic_bindings_info(error_loc, "struct type",
                                                   bound_types, unbound_generic_struct->generics,
                                                   ErrCode::SemaExpectedGenericArgsForGenericType,
                                                   ErrCode::SemaCouldNotBindAllGenericArgsForType);
@@ -6661,10 +6656,10 @@ bool acorn::Sema::get_bound_types_for_generic_type(Decl* found_composite,
     }
 
     if (!bind_default_generic_arguments(bound_types, generics)) {
-        display_missing_generic_bindings_info(error_loc.to_point_source(), "struct type",
-                                                bound_types, unbound_generic_struct->generics,
-                                                ErrCode::SemaExpectedGenericArgsForGenericType,
-                                                ErrCode::SemaCouldNotBindAllGenericArgsForType);
+        display_missing_generic_bindings_info(error_loc, "struct type",
+                                              bound_types, unbound_generic_struct->generics,
+                                              ErrCode::SemaExpectedGenericArgsForGenericType,
+                                              ErrCode::SemaCouldNotBindAllGenericArgsForType);
         return false;
     }
 
@@ -6933,7 +6928,7 @@ void acorn::Sema::spellcheck_variables_for_ident(const llvm::DenseMap<Identifier
     }
 }
 
-void acorn::Sema::display_call_mismatch_info(PointSourceLoc error_loc,
+void acorn::Sema::display_call_mismatch_info(SourceLoc error_loc,
                                              Node* call_node,
                                              const FuncList& candidates,
                                              const llvm::SmallVector<Expr*>& args,
@@ -7409,7 +7404,7 @@ uint64_t acorn::Sema::get_function_call_score(const Func* candidate,
     return score;
 }
 
-void acorn::Sema::display_call_ambiguous_info(PointSourceLoc error_loc,
+void acorn::Sema::display_call_ambiguous_info(SourceLoc error_loc,
                                               FuncList& candidates,
                                               llvm::SmallVector<Expr*>& args,
                                               bool is_const_object,
@@ -7513,7 +7508,7 @@ void acorn::Sema::display_ambiguous_functions(const llvm::SmallVector<Func*, N>&
     }
 }
 
-void acorn::Sema::display_missing_generic_bindings_info(PointSourceLoc error_loc,
+void acorn::Sema::display_missing_generic_bindings_info(SourceLoc error_loc,
                                                         const char* for_msg,
                                                         const llvm::SmallVector<Type*>& generic_bindings,
                                                         const llvm::SmallVector<Generic*>& generics,

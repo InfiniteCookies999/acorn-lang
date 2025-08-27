@@ -5,16 +5,15 @@
 
 namespace acorn {
 #define get(n) if (n) {           \
-auto [s1, e1] = get_expansion(n); \
-if (s1 < s) { s = s1; }           \
+auto [b1, e1] = get_expansion(n); \
+if (b1 < b) { b = b1; }           \
 if (e1 > e) { e = e1; }           \
 }
 
     static std::pair<const char*, const char*> get_expansion(Node* node) {
 
-        auto s = node->uses_expanded_loc ? node->expanded_loc.ptr : node->loc.ptr;;
-        auto e = node->uses_expanded_loc ? (node->expanded_loc.ptr + node->expanded_loc.length)
-                                         : (node->loc.ptr + node->loc.length);
+        auto b = node->loc.begin();
+        auto e = node->loc.end();
 
         switch (node->kind) {
         case NodeKind::BIN_OP: {
@@ -162,7 +161,7 @@ if (e1 > e) { e = e1; }           \
             acorn_fatal("get_expansion(): missing case");
             break;
         }
-        return {s, e};
+        return {b, e};
     }
 }
 
@@ -200,44 +199,43 @@ void acorn::go_until(const char*& e, char open, char close) {
     //++e;
 }
 
-acorn::PointSourceLoc acorn::expand(Node* node) {
-    auto [s, e] = get_expansion(node);
+acorn::SourceLoc acorn::expand(Node* node) {
+    auto [b, e] = get_expansion(node);
 
     // Balacing parenethsis.
     //
     // Balance forward.
     int paran_count = 0;
     {
-        const char* sp = s;
-        while ((sp < e || paran_count > 0) && *sp != '\0') {
-            if (*sp == '(') {
+        const char* bp = b;
+        while ((bp < e || paran_count > 0) && *bp != '\0') {
+            if (*bp == '(') {
                 ++paran_count;
-            } else if (*sp == ')') {
+            } else if (*bp == ')') {
                 --paran_count;
             }
-            ++sp;
+            ++bp;
         }
-        e = sp;
+        e = bp;
     }
     // Balance backwards.
     if (paran_count < 0) {
-        const char* sp = s;
-        while (paran_count < 0 && *sp != '\0') {
-            if (*sp == '(') {
+        const char* bp = b;
+        while (paran_count < 0 && *bp != '\0') {
+            if (*bp == '(') {
                 ++paran_count;
-            } else if (*sp == ')') {
+            } else if (*bp == ')') {
                 --paran_count;
             }
-            --sp;
+            --bp;
         }
-        ++sp;
-        s = sp;
+        ++bp;
+        b = bp;
     }
 
-    return PointSourceLoc{
-        s,
-        static_cast<uint16_t>(e - s),
-        node->uses_expanded_loc ? node->expanded_loc.point        : node->loc.ptr,
-        node->uses_expanded_loc ? node->expanded_loc.point_length : node->loc.length
+    return SourceLoc{
+        b,
+        node->loc.central_pt,
+        static_cast<uint32_t>(e - b)
     };
 }

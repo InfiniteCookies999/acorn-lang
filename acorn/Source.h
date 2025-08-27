@@ -15,47 +15,46 @@ namespace acorn {
         size_t length;
     };
 
-    // SourceLoc but with a pointer to the most relevant location
-    // of the error. This is needed because if an error is too long
-    // and needs to be cutoff then it can use this point and branch
-    // forwards and backwards from this point.
-    //
-    // NOTE: Not extending the SourceLoc because we do not want any
-    //       possible implicit conversions.
-    //
-    struct PointSourceLoc {
-        const char* ptr;
-        uint32_t    length;
-        const char* point;
-        uint32_t    point_length;
-
-        const char* end() const {
-            return ptr + length;
-        }
-    };
-
     struct SourceLoc {
-        // TODO: consider exchanging this for a 32 bit integer.
-        // This might improve performance since it would allow
-        // tokens to fit into 8 bytes.
         const char* ptr;
+        // When displaying error locations the reporting will try to use this
+        // central point to render the error around as it behaves as the central
+        // location where the error happened.
+        //
+        // For example, given the expression:   `a + b`
+        // If `a` and `b` cannot be added then the entire expression is underlined,
+        // but the central location is at the `+` operator since the error happened
+        // on the `+` operator.
+        //
+        const char* central_pt;
         uint32_t    length;
 
-
-        static SourceLoc from_ptrs(const char* start_ptr, const char* end_ptr) {
+        static SourceLoc from_ptrs(const char* beg_ptr, const char* end_ptr) {
             return SourceLoc{
-                .ptr    = start_ptr,
-                .length = static_cast<uint32_t>(end_ptr - start_ptr)
+                .ptr        = beg_ptr,
+                .central_pt = beg_ptr,
+                .length     = static_cast<uint32_t>(end_ptr - beg_ptr)
             };
         }
 
-        PointSourceLoc to_point_source() const {
-            return PointSourceLoc{
-                .ptr          = ptr,
-                .length       = length,
-                .point        = ptr,
-                .point_length = length
+        static SourceLoc from_ptrs(const char* beg_ptr, const char* end_ptr, const char* central_pt) {
+            return SourceLoc{
+                .ptr        = beg_ptr,
+                .central_pt = central_pt,
+                .length     = static_cast<uint32_t>(end_ptr - beg_ptr)
             };
+        }
+
+        static SourceLoc from_ptr_and_length(const char* beg_ptr, uint32_t length) {
+            return SourceLoc{
+                .ptr        = beg_ptr,
+                .central_pt = beg_ptr,
+                .length     = length
+            };
+        }
+
+        const char* begin() const {
+            return ptr;
         }
 
         const char* end() const {

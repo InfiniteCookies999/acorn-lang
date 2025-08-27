@@ -54,7 +54,7 @@ namespace acorn {
 
         template<typename... TArgs>
         [[nodiscard]] Logger& error(const char* fmt, TArgs&&... args) {
-            return logger.begin_error(SourceLoc{ ptr, 1 }, fmt, std::forward<TArgs>(args)...);
+            return logger.begin_error(SourceLoc::from_ptr_and_length(ptr, 1), fmt, std::forward<TArgs>(args)...);
         }
 
     };

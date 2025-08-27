@@ -124,11 +124,6 @@ namespace acorn {
 
         NodeKind  kind;
         SourceLoc loc;
-        // This is needed because expressions can be folded
-        // during parsing causing them to loose their original
-        // point of origin. This is set to retain that information.
-        PointSourceLoc expanded_loc;
-        bool           uses_expanded_loc = false;
 
         Node(NodeKind kind)
             : kind(kind) {
@@ -308,7 +303,7 @@ namespace acorn {
 
         // Scans forward until it finds the first parameter location with a default
         // parameter value.
-        PointSourceLoc get_function_first_default_param_location() const;
+        SourceLoc get_function_first_default_param_location() const;
 
         std::string get_decl_string() const;
 
@@ -548,7 +543,7 @@ namespace acorn {
         bool is_imported_namespace() const { return imported_kind == NAMESPACE_KIND; }
         bool is_imported_composite() const { return imported_kind == COMPOSITE_KIND; }
 
-        PointSourceLoc get_key_location(bool center_by_last) const;
+        SourceLoc get_key_location(bool center_by_last) const;
 
         void set_imported_namespace(Namespace* nspace) {
             imported_kind = NAMESPACE_KIND;
@@ -858,7 +853,7 @@ namespace acorn {
         bool is_enum_value   = false;
         Expr* site;
 
-        PointSourceLoc expand_access_only() const;
+        SourceLoc expand_access_only() const;
 
     };
 

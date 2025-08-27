@@ -307,7 +307,7 @@ namespace acorn {
                                         bool should_show_invidual_underlines,
                                         Node* call_node,
                                         const llvm::SmallVector<Type*>& pre_bound_types);
-        void display_call_mismatch_info(PointSourceLoc error_loc,
+        void display_call_mismatch_info(SourceLoc error_loc,
                                         Node* call_node,
                                         const FuncList& candidates,
                                         const llvm::SmallVector<Expr*>& args,
@@ -317,7 +317,7 @@ namespace acorn {
                                          bool is_const_object,
                                          const llvm::SmallVector<Type*>& pre_bound_types);
 
-        void display_call_ambiguous_info(PointSourceLoc error_loc,
+        void display_call_ambiguous_info(SourceLoc error_loc,
                                          FuncList& candidates,
                                          llvm::SmallVector<Expr*>& args,
                                          bool is_const_object,
@@ -327,7 +327,7 @@ namespace acorn {
                                                      bool indent);
         template<unsigned N>
         void display_ambiguous_functions(const llvm::SmallVector<Func*, N>& ambiguous_funcs);
-        void display_missing_generic_bindings_info(PointSourceLoc error_loc,
+        void display_missing_generic_bindings_info(SourceLoc error_loc,
                                                    const char* for_msg,
                                                    const llvm::SmallVector<Type*>& generic_bindings,
                                                    const llvm::SmallVector<Generic*>& generics,
@@ -356,11 +356,6 @@ namespace acorn {
                             bool indent,
                             const char* fmt,
                             TArgs&&... args);
-
-        template<typename... TArgs>
-        [[nodiscard]] Logger& error(PointSourceLoc loc, const char* fmt, TArgs... args) {
-            return logger.begin_error(loc, fmt, std::forward<TArgs>(args)...);
-        }
 
         template<typename... TArgs>
         [[nodiscard]] Logger& error(SourceLoc loc, const char* fmt, TArgs... args) {

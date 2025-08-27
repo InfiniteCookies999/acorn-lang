@@ -192,7 +192,11 @@ namespace acorn {
         }
 
         SourceLoc get_location() const {
-            return SourceLoc{ buffer_ptr, lexeme_length };
+            return SourceLoc{
+                .ptr        = buffer_ptr,
+                .central_pt = buffer_ptr,
+                .length     = lexeme_length
+            };
         }
     };
 

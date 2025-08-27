@@ -56,7 +56,13 @@ acorn::SourceLoc acorn::Decl::get_modifier_location(uint32_t modifier) const {
     while (ptr - str_len + 1 >= buf_beg) {
         if (std::memcmp(ptr - str_len + 1, str, str_len) == 0) {
             // Found the source location!
-            return SourceLoc{ ptr - str_len + 1, static_cast<uint16_t>(str_len) };
+
+            auto source_ptr = ptr - str_len + 1;
+            return SourceLoc{
+                .ptr        = source_ptr,
+                .central_pt = source_ptr,
+                .length     = static_cast<uint32_t>(str_len)
+            };
         }
         --ptr;
     }
@@ -82,7 +88,7 @@ acorn::SourceLoc acorn::Func::get_function_const_location() const {
     return SourceLoc::from_ptrs(ptr - 5, ptr);
 }
 
-acorn::PointSourceLoc acorn::Func::get_function_first_default_param_location() const {
+acorn::SourceLoc acorn::Func::get_function_first_default_param_location() const {
     Var* found_param = nullptr;
     for (Var* param : params) {
         if (param->assignment) {
@@ -96,7 +102,7 @@ acorn::PointSourceLoc acorn::Func::get_function_first_default_param_location() c
         return {};
     }
 
-    const char* eq_ptr = found_param->assignment->loc.ptr;
+    auto eq_ptr = found_param->assignment->loc.ptr;
     while (*eq_ptr != '=' && *eq_ptr != ':' && eq_ptr > loc.ptr) {
         --eq_ptr;
     }
@@ -108,15 +114,10 @@ acorn::PointSourceLoc acorn::Func::get_function_first_default_param_location() c
 
     auto expanded_assignment_loc = expand(found_param->assignment);
 
-    const char* end_ptr   = expanded_assignment_loc.end();
-    const char* start_ptr = found_param->loc.ptr;
+    auto beg_ptr = found_param->loc.ptr;
+    auto end_ptr = expanded_assignment_loc.end();
 
-    return PointSourceLoc{
-        .ptr = start_ptr,
-        .length = static_cast<uint16_t>(end_ptr - start_ptr),
-        .point = eq_ptr,
-        .point_length = 1
-    };
+    return SourceLoc::from_ptrs(beg_ptr, end_ptr, eq_ptr);
 }
 
 std::string acorn::Func::get_decl_string() const {
@@ -273,22 +274,21 @@ acorn::GenericStructInstance* acorn::UnboundGenericStruct::get_generic_instance(
     return new_struct_instance;
 }
 
-acorn::PointSourceLoc acorn::ImportStmt::get_key_location(bool center_by_last) const {
+acorn::SourceLoc acorn::ImportStmt::get_key_location(bool center_by_last) const {
     const auto& last_key_part  = key.back();
     const auto& first_key_part =  key.front();
-    const char* start_loc = first_key_part.error_loc.ptr;
-    const char* end_loc   = last_key_part.error_loc.ptr + last_key_part.error_loc.length;
+    const char* beg_ptr = first_key_part.error_loc.begin();
+    const char* end_ptr   = last_key_part.error_loc.end();
 
-    auto loc = SourceLoc::from_ptrs(start_loc, end_loc).to_point_source();
+    auto loc = SourceLoc::from_ptrs(beg_ptr, end_ptr);
     if (center_by_last) {
-        loc.point        = last_key_part.error_loc.ptr;
-        loc.point_length = last_key_part.error_loc.length;
+        loc.central_pt = last_key_part.error_loc.begin();
     }
 
     return loc;
 }
 
-acorn::PointSourceLoc acorn::DotOperator::expand_access_only() const {
+acorn::SourceLoc acorn::DotOperator::expand_access_only() const {
     // There can still be whitespace after the .
     //
     // This is valid:
@@ -299,12 +299,7 @@ acorn::PointSourceLoc acorn::DotOperator::expand_access_only() const {
     }
     end_ptr += ident.to_string().size();
 
-    return PointSourceLoc{
-        .ptr = loc.ptr,
-        .length = static_cast<uint16_t>(end_ptr - loc.ptr),
-        .point = loc.ptr,
-        .point_length = 1
-    };
+    return SourceLoc::from_ptrs(loc.ptr, end_ptr);
 }
 
 acorn::SourceLoc acorn::NamedValue::get_name_location() const {

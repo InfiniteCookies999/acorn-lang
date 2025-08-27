@@ -1968,17 +1968,7 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
 
         // Need to expand the source location because if an error occures
         // later and it needs to display the full error location.
-        auto s = lhs->uses_expanded_loc ? lhs->expanded_loc.ptr : lhs->loc.ptr;;
-        auto e = rhs->uses_expanded_loc ? (rhs->expanded_loc.ptr + rhs->expanded_loc.length)
-                                        : (rhs->loc.ptr + rhs->loc.length);
-
-        lhs->uses_expanded_loc = true;
-        lhs->expanded_loc = PointSourceLoc{
-            s,
-            static_cast<uint32_t>(e - s),
-            op.buffer_ptr,
-            op.lexeme_length
-        };
+        lhs->loc = SourceLoc::from_ptrs(lhs->loc.begin(), rhs->loc.end(), op.buffer_ptr);
 
         lhs->trivially_reassignable = lhs->trivially_reassignable && rhs->trivially_reassignable;
         return lhs;
@@ -2096,21 +2086,10 @@ acorn::Expr* acorn::Parser::fold_float(Token op, Number* lhs, Number* rhs, Type*
             lhs->value_f64 = result;
         }
 
+        lhs->type = to_type;
         // Need to expand the source location because if an error occures
         // later and it needs to display the full error location.
-        lhs->type = to_type;
-
-        auto s = lhs->uses_expanded_loc ? lhs->expanded_loc.ptr : lhs->loc.ptr;;
-        auto e = rhs->uses_expanded_loc ? (rhs->expanded_loc.ptr + rhs->expanded_loc.length)
-                                        : (rhs->loc.ptr + rhs->loc.length);
-
-        lhs->uses_expanded_loc = true;
-        lhs->expanded_loc = PointSourceLoc{
-            s,
-            static_cast<uint32_t>(e - s),
-            op.buffer_ptr,
-            op.lexeme_length
-        };
+        lhs->loc = SourceLoc::from_ptrs(lhs->loc.begin(), rhs->loc.end(), op.buffer_ptr);
         return lhs;
     };
 

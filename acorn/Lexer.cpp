@@ -259,7 +259,7 @@ start:
 
         auto byte = static_cast<unsigned char>(*ptr);
         if (byte >= 33 && byte <= 126) { // Easily displayable.
-            logger.begin_error(SourceLoc{ ptr, 1 }, "Invalid character: '%s'", std::string(1, byte))
+            logger.begin_error(SourceLoc::from_ptr_and_length(ptr, 1), "Invalid character: '%s'", std::string(1, byte))
                   .add_arrow_msg(Logger::CaretPlacement::At, "remove this character")
                   .end_error(ErrCode::LexInvalidChar);
             ++ptr;
@@ -520,7 +520,7 @@ bool acorn::Lexer::skip_unicode_seq_digits(size_t n) {
     ++ptr; // Skip u or U
     for (size_t i = 0; i < n && *ptr != '\0'; ++i, ++ptr) {
         if (!is_hexidecimal(*ptr)) {
-            SourceLoc error_loc = SourceLoc{ beg - 1, static_cast<uint32_t>(i + 2) };
+            SourceLoc error_loc = SourceLoc::from_ptr_and_length(beg - 1, static_cast<uint32_t>(i + 2));
             logger.begin_error(error_loc, "Incomplete UTF-8 sequence. Expected %s digits", n)
                 .end_error(ErrCode::LexInvalidUnicodeSeq);
             return false;

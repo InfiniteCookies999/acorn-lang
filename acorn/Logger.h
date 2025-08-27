@@ -345,23 +345,6 @@ namespace acorn {
         // Must be followed up by end_error() once all information related to
         // the error has been added.
         Logger& begin_error(SourceLoc location, const char* msg) {
-            return begin_error(fix_error_location(location), [msg]() { print(Stream::StdErr, msg); });
-        }
-
-        // Used to tell the the logger that a new error has been encountered.
-        // Must be followed up by end_error() once all information related to
-        // the error has been added.
-        template<typename... TArgs>
-        Logger& begin_error(SourceLoc location, const char* fmt, TArgs&&... args) {
-            return begin_error(fix_error_location(location), [fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
-                fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
-            });
-        }
-
-        // Used to tell the the logger that a new error has been encountered.
-        // Must be followed up by end_error() once all information related to
-        // the error has been added.
-        Logger& begin_error(PointSourceLoc location, const char* msg) {
             return begin_error(location, [msg]() { print(Stream::StdErr, msg); });
         }
 
@@ -369,7 +352,7 @@ namespace acorn {
         // Must be followed up by end_error() once all information related to
         // the error has been added.
         template<typename... TArgs>
-        Logger& begin_error(PointSourceLoc location, const char* fmt, TArgs&&... args) {
+        Logger& begin_error(SourceLoc location, const char* fmt, TArgs&&... args) {
             return begin_error(location, [fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
                 fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
             });
@@ -395,11 +378,6 @@ namespace acorn {
         }
 
         Logger& add_individual_underline(SourceLoc underline_loc) {
-            individual_underlines.push_back(underline_loc.to_point_source());
-            return *this;
-        }
-
-        Logger& add_individual_underline(PointSourceLoc underline_loc) {
             individual_underlines.push_back(underline_loc);
             return *this;
         }
@@ -499,16 +477,7 @@ namespace acorn {
 
         static void set_color(Stream stream, Color color);
 
-        static PointSourceLoc fix_error_location(SourceLoc location) {
-            return PointSourceLoc{
-                location.ptr,
-                location.length,
-                location.ptr,
-                location.length
-            };
-        }
-
-        Logger& begin_error(PointSourceLoc location, const std::function<void()>& print_cb);
+        Logger& begin_error(SourceLoc location, const std::function<void()>& print_cb);
 
         static void debug(const std::function<void()>& print_cb);
 
@@ -526,7 +495,7 @@ namespace acorn {
 
         SourceFile& file;
 
-        PointSourceLoc        main_location;
+        SourceLoc             main_location;
         size_t                facing_length = 0;
         std::function<void()> primary_print_cb;
 
@@ -543,7 +512,7 @@ namespace acorn {
         } caret_msg;
 
         bool main_location_still_has_priority = false;
-        llvm::SmallVector<PointSourceLoc> individual_underlines;
+        llvm::SmallVector<SourceLoc> individual_underlines;
 
         // This is not the total number of accumulated errors. This
         // would be the number of errors currented found within the
