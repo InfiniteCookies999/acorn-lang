@@ -58,6 +58,12 @@ namespace acorn {
             });
         }
 
+        L& add_line(std::string msg) {
+            return add_line([msg](L&) {
+                print(Stream::StdErr, msg);
+            });
+        }
+
         // Adds an additional line to the error.
         template<typename... TArgs>
         L& add_line(const char* fmt, TArgs&&... args) {

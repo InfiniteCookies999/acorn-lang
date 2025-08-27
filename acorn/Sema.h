@@ -148,6 +148,8 @@ namespace acorn {
 
         void check_variable_can_initialize(Var* var, SourceLoc error_loc);
 
+        bool check_generics(const llvm::SmallVector<Generic*>& generics);
+
         // Statements checking
         //--------------------------------------
 
@@ -285,6 +287,8 @@ namespace acorn {
         Type* fixup_generic_type(Type* type);
         Type* fixup_partially_bound_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_types);
 
+        bool bind_default_generic_arguments(llvm::SmallVector<Type*>& generic_bindings,
+                                            const llvm::SmallVector<Generic*>& generics);
 
         // Error reporting
         //--------------------------------------
@@ -323,9 +327,12 @@ namespace acorn {
                                                      bool indent);
         template<unsigned N>
         void display_ambiguous_functions(const llvm::SmallVector<Func*, N>& ambiguous_funcs);
-        void display_call_missing_bindings_info(Expr* call_node,
-                                                Func* called_func,
-                                                const llvm::SmallVector<Type*>& generic_bindings);
+        void display_missing_generic_bindings_info(PointSourceLoc error_loc,
+                                                   const char* for_msg,
+                                                   const llvm::SmallVector<Type*>& generic_bindings,
+                                                   const llvm::SmallVector<Generic*>& generics,
+                                                   ErrCode expected_generic_args_error_code,
+                                                   ErrCode missing_generic_bindings_error_code);
         void display_generic_bind_named_args_fail_info(const llvm::SmallVector<Expr*>& args,
                                                        const llvm::SmallVector<Generic*>& generics);
         void report_binary_op_cannot_apply(BinOp* bin_op, Expr* expr);

@@ -1224,6 +1224,11 @@ bool acorn::Sema::check_function_decl(Func* func) {
 
     if (func->is_generic()) {
 
+        if (!check_generics(func->generics)) {
+            error_cleanup(func);
+            return false;
+        }
+
         if (func->interfacen) {
             error(func, "Generic functions cannot be part of interfaces")
                 .end_error(ErrCode::SemaGenericFunctionCannotBePartOfInterface);
@@ -1345,8 +1350,7 @@ bool acorn::Sema::check_function_decl(Func* func) {
         if (encountered_param_default_value && !param->assignment) {
             error(expand(last_default_param), "Parameters with default values must come last")
                 .end_error(ErrCode::SemaDefaultParamValueMustComeLast);
-            error_cleanup(func);
-            return false;
+            func->has_errors = true;
         }
 
         if (param->assignment) {
@@ -1832,6 +1836,34 @@ void acorn::Sema::check_variable_can_initialize(Var* var, SourceLoc error_loc) {
             }
         }
     }
+}
+
+bool acorn::Sema::check_generics(const llvm::SmallVector<Generic*>& generics) {
+
+    bool has_errors = false;
+    bool encountered_default_arg = false;
+    for (auto genericn : generics) {
+        if (genericn->default_arg) {
+            encountered_default_arg = true;
+
+            check_node(genericn->default_arg);
+            if (!genericn->default_arg) {
+                return false;
+            }
+
+            if (genericn->default_arg->type != context.expr_type) {
+                error(expand(genericn->default_arg), "Expected type for default generic argument")
+                    .end_error(ErrCode::SemaExpectedTypeForDefaultGenericArg);
+                return false;
+            }
+        } else if (encountered_default_arg) {
+            error(genericn, "Generics with default values must come last")
+                .end_error(ErrCode::SemaGenericsWithDefaultValueMustComeLast);
+            has_errors = true;
+        }
+    }
+
+    return !has_errors;
 }
 
 // Statements checking
@@ -4533,11 +4565,15 @@ void acorn::Sema::check_generic_bind_function_call(GenericBindFuncCall* call) {
             call->bound_types.push_back(bind_type);
         }
     }
+
+    call->set_funcs_ref(&temp_ref_functions);
 }
 
 bool acorn::Sema::compare_generic_bind_candidate_with_named_args(const llvm::SmallVector<Expr*>& args,
                                                                  const llvm::SmallVector<Generic*>& generics,
                                                                  llvm::SmallVector<Type*>& bound_types) {
+
+    bound_types.resize(generics.size());
 
     bool named_args_out_of_order = false;
     size_t named_arg_high_idx = 0;
@@ -4576,10 +4612,8 @@ bool acorn::Sema::compare_generic_bind_candidate_with_named_args(const llvm::Sma
         Type* bind_type = get_type_of_type_expr(arg);
 
         if (genericn->index == i) {
-            bound_types.push_back(bind_type);
+            bound_types[i] = bind_type;
         } else {
-            // Ensure there is enough space.
-            bound_types.resize(genericn->index + 1);
             bound_types[genericn->index] = bind_type;
         }
     }
@@ -4788,11 +4822,12 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         //    try_bind_type_to_generic_type(called_func->return_type, assignment_type, generic_bindings);
         //}
 
-        for (Type* bound_type : generic_bindings) {
-            if (!bound_type) {
-                display_call_missing_bindings_info(call_node, called_func, generic_bindings);
-                return nullptr;
-            }
+        if (!bind_default_generic_arguments(generic_bindings, called_func->generics)) {
+            display_missing_generic_bindings_info(expand(call_node), "function call",
+                                                  generic_bindings, called_func->generics,
+                                                  ErrCode::SemaExpectedGenericArgsForGenericFuncCall,
+                                                  ErrCode::SemaCouldNotBindAllGenericArgsForFuncCall);
+            return nullptr;
         }
 
         func_call_generic_bindings = &generic_bindings;
@@ -5872,6 +5907,9 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
             return;
         }
         unbound_generic_struct = static_cast<UnboundGenericStruct*>(structn);
+        if (unbound_generic_struct->has_errors) {
+            return;
+        }
     }
 
     bool args_have_errors = false;
@@ -5947,14 +5985,12 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
     }
 
     if (structn->is_generic) {
-        if (bound_types.empty()) {
-            error(initializer, "Expected generics arguments to bind to the generic struct")
-                .end_error(ErrCode::SemaExpectedGenericsToBindToGenericStruct);
-            return;
-        } else if (bound_types.size() < unbound_generic_struct->generics.size()) {
-            error(initializer, "Too few generics arguments to bind to the generic struct")
-                .end_error(ErrCode::SemaTooFewGenericArgumentsForStruct);
-            return;
+        bound_types.resize(unbound_generic_struct->generics.size());
+        if (!bind_default_generic_arguments(bound_types, unbound_generic_struct->generics)) {
+            display_missing_generic_bindings_info(initializer->loc.to_point_source(), "struct type",
+                                                  bound_types, unbound_generic_struct->generics,
+                                                  ErrCode::SemaExpectedGenericArgsForGenericType,
+                                                  ErrCode::SemaCouldNotBindAllGenericArgsForType);
         }
 
         structn = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
@@ -6415,6 +6451,12 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
         auto found_struct = static_cast<Struct*>(found_composite);
 
         if (found_struct->is_generic) {
+
+            auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(found_struct);
+            if (unbound_generic_struct->has_errors) {
+                return nullptr;
+            }
+
             // Checking if within a member function, and if its a member function
             // of the struct being declared. If so, then the generic struct type
             // can take on the generics of the given struct.
@@ -6424,12 +6466,11 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
                     struct_type = type_table.get_const_type(struct_type);
                 }
                 return struct_type;
-            } else if (cur_func_decl && cur_func_decl->non_generic_struct_instance == found_struct) {
+            } if (cur_func_decl && cur_func_decl->non_generic_struct_instance == found_struct) {
 
                 // When there are no bound types it can be treated as if the type has
                 // generic types but none of them where bound.
 
-                auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(found_struct);
                 auto partially_bound_struct_type = PartiallyBoundStructType::create(context.get_allocator(),
                                                                                     unbound_generic_struct,
                                                                                     {});
@@ -6440,8 +6481,23 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
                 return partially_bound_struct_type;
             }
 
-            error(error_loc, "Expected generic arguments for generic type")
-                .end_error(ErrCode::SemaExpectedGenericArgsForGenericType);
+            // Checking to make sure that the default generic arguments don't fully qualify the
+            // type.
+            llvm::SmallVector<Type*> bound_types(unbound_generic_struct->generics.size());
+            if (bind_default_generic_arguments(bound_types, unbound_generic_struct->generics)) {
+
+                found_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
+
+                if (!ensure_struct_checked(unresolved_composite_type->get_error_location(), found_struct)) {
+                    return nullptr;
+                }
+                return found_struct->struct_type;
+            }
+
+            display_missing_generic_bindings_info(error_loc.to_point_source(), "struct type",
+                                                  bound_types, unbound_generic_struct->generics,
+                                                  ErrCode::SemaExpectedGenericArgsForGenericType,
+                                                  ErrCode::SemaCouldNotBindAllGenericArgsForType);
             return nullptr;
         }
 
@@ -6530,12 +6586,12 @@ acorn::Type* acorn::Sema::fixup_unresolved_generic_composite_type(Decl* found_co
 
     auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(found_composite);
 
-    if (bound_exprs.size() < unbound_generic_struct->generics.size()) {
-        error(error_loc, "Too few generic arguments for struct. Got %s but expected %s",
-              bound_exprs.size(), unbound_generic_struct->generics.size())
-            .end_error(ErrCode::SemaTooFewGenericArgumentsForStruct);
-        return nullptr;
-    }
+    //if (bound_exprs.size() < unbound_generic_struct->generics.size()) {
+    //    error(error_loc, "Too few generic arguments for struct. Got %s but expected %s",
+    //          bound_exprs.size(), unbound_generic_struct->generics.size())
+    //        .end_error(ErrCode::SemaTooFewGenericArgumentsForStruct);
+    //    return nullptr;
+    //}
 
     auto new_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
 
@@ -6552,28 +6608,24 @@ bool acorn::Sema::get_bound_types_for_generic_type(Decl* found_composite,
                                                    llvm::SmallVector<Type*>& bound_types) {
     // TODO (maddie): expand error location so things make more sense in error logging.
 
-    if (bound_exprs.empty()) {
-        error(error_loc, "Expected generic arguments for generic type")
-            .end_error(ErrCode::SemaExpectedGenericArgsForGenericType);
-        return false;
+    bool type_takes_generics = found_composite->kind == NodeKind::STRUCT;
+    Struct* found_struct;
+    if (type_takes_generics) {
+        found_struct = static_cast<Struct*>(found_composite);
+        type_takes_generics |= found_struct->is_generic;
+
     }
 
-    bool uses_named_args_values;
-    if (found_composite->kind != NodeKind::STRUCT) {
-        error(error_loc, "Type does not take generic arguments")
-            .end_error(ErrCode::SemaTypeDoesNotTakeGenerics);
-        return false;
-    }
-
-    auto found_struct = static_cast<Struct*>(found_composite);
-
-    if (!found_struct->is_generic) {
+    if (!type_takes_generics) {
         error(error_loc, "Type does not take generic arguments")
             .end_error(ErrCode::SemaTypeDoesNotTakeGenerics);
         return false;
     }
 
     auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(found_struct);
+    if (unbound_generic_struct->has_errors) {
+        return false;
+    }
 
     auto& generics = unbound_generic_struct->generics;
 
@@ -6584,13 +6636,14 @@ bool acorn::Sema::get_bound_types_for_generic_type(Decl* found_composite,
         return false;
     }
 
+    bool uses_named_args_values;
     if (!check_generic_bind_arguments(bound_exprs, uses_named_args_values)) {
         return false;
     }
 
     if (uses_named_args_values) {
         if (compare_generic_bind_candidate_with_named_args(bound_exprs, generics, bound_types)) {
-            // binds the types during the call.
+            // binds the types during the call to `compare_generic_bind_candidate_with_named_args`.
         } else {
             Logger& logger = error(error_loc, "Failed to bind generic arguments");
             logger.add_empty_line();
@@ -6603,6 +6656,16 @@ bool acorn::Sema::get_bound_types_for_generic_type(Decl* found_composite,
             Type* bind_type = get_type_of_type_expr(arg);
             bound_types.push_back(bind_type);
         }
+
+        bound_types.resize(generics.size());
+    }
+
+    if (!bind_default_generic_arguments(bound_types, generics)) {
+        display_missing_generic_bindings_info(error_loc.to_point_source(), "struct type",
+                                                bound_types, unbound_generic_struct->generics,
+                                                ErrCode::SemaExpectedGenericArgsForGenericType,
+                                                ErrCode::SemaCouldNotBindAllGenericArgsForType);
+        return false;
     }
 
     return true;
@@ -6814,6 +6877,24 @@ acorn::Type* acorn::Sema::fixup_partially_bound_struct_type(Type* type, const ll
     return type;
 }
 
+bool acorn::Sema::bind_default_generic_arguments(llvm::SmallVector<Type*>& generic_bindings,
+                                                 const llvm::SmallVector<Generic*>& generics) {
+
+    bool fully_qualifies = true;
+    for (size_t i = 0; i < generic_bindings.size(); i++) {
+        Type* bound_type = generic_bindings[i];
+        if (!bound_type) {
+            auto genericn = generics[i];
+            if (genericn->default_arg) {
+                auto bind_type = get_type_of_type_expr(genericn->default_arg);
+                generic_bindings[i] = bind_type;
+            } else {
+                fully_qualifies = false;
+            }
+        }
+    }
+    return fully_qualifies;
+}
 
 // Error reporting
 //--------------------------------------
@@ -7432,14 +7513,25 @@ void acorn::Sema::display_ambiguous_functions(const llvm::SmallVector<Func*, N>&
     }
 }
 
-void acorn::Sema::display_call_missing_bindings_info(Expr* call_node,
-                                                     Func* called_func,
-                                                     const llvm::SmallVector<Type*>& generic_bindings) {
+void acorn::Sema::display_missing_generic_bindings_info(PointSourceLoc error_loc,
+                                                        const char* for_msg,
+                                                        const llvm::SmallVector<Type*>& generic_bindings,
+                                                        const llvm::SmallVector<Generic*>& generics,
+                                                        ErrCode expected_generic_args_error_code,
+                                                        ErrCode missing_generic_bindings_error_code) {
+
+    if (generic_bindings.empty()) {
+        error(error_loc, "Expected generic arguments for %s", for_msg)
+            .end_error(expected_generic_args_error_code);
+        return;
+    }
+
+
     llvm::SmallVector<Type*> missing_bound_types;
     for (size_t i = 0; i < generic_bindings.size(); i++) {
-        Type* bound_type2 = generic_bindings[i];
-        Generic* generic = called_func->generics[i];
-        if (!bound_type2) {
+        Type* bound_type = generic_bindings[i];
+        Generic* generic = generics[i];
+        if (!bound_type) {
             missing_bound_types.push_back(generic->type);
         }
     }
@@ -7451,9 +7543,9 @@ void acorn::Sema::display_call_missing_bindings_info(Expr* call_node,
             missing_bound_types_str += ", ";
         }
     }
-    error(expand(call_node), "Call to generic function does not bind all types")
+    error(error_loc, "Could not bind all generic arguments for %s", for_msg)
         .add_line("Missing bindings for: %s", missing_bound_types_str)
-        .end_error(ErrCode::SemaGenericCallHasUnboundTypes);
+        .end_error(missing_generic_bindings_error_code);
 }
 
 void acorn::Sema::display_generic_bind_named_args_fail_info(const llvm::SmallVector<Expr*>& args,
@@ -8251,12 +8343,25 @@ uint64_t acorn::Sema::get_total_number_of_values_in_range(BinOp* range) {
 
 acorn::Decl* acorn::Sema::find_composite(Identifier name) {
 
+    auto check = [this](Decl* composite) {
+        if (composite->is(NodeKind::STRUCT)) {
+            auto structn = static_cast<Struct*>(composite);
+            if (structn->is_generic) {
+                auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(structn);
+                if (!check_generics(unbound_generic_struct->generics)) {
+                    unbound_generic_struct->has_errors = true;
+                }
+            }
+        }
+        return composite;
+    };
+
     if (auto found_composite = file->get_namespace()->find_composite(name)) {
-        return found_composite;
+        return check(found_composite);
     }
 
     if (auto found_composite = file->find_composite(name)) {
-        return found_composite;
+        return check(found_composite);
     }
 
     auto& imports = file->get_imports();
@@ -8264,7 +8369,7 @@ acorn::Decl* acorn::Sema::find_composite(Identifier name) {
     if (itr != imports.end()) {
         auto importn = itr->second;
         if (importn->is_imported_composite()) {
-            return itr->second->imported_composite;
+            return check(itr->second->imported_composite);
         }
     }
 

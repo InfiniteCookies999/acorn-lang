@@ -155,6 +155,7 @@ namespace acorn {
         Identifier   name;
         size_t       index;
         GenericType* type;
+        Expr*        default_arg = nullptr;
     };
 
     struct GenericInstance {
@@ -471,6 +472,8 @@ namespace acorn {
     struct UnboundGenericStruct : Struct {
         UnboundGenericStruct() : Struct() {
         }
+
+        bool has_checked_generics = false;
 
         llvm::SmallVector<Generic*>               generics;
         llvm::SmallVector<GenericStructInstance*> generic_instances;

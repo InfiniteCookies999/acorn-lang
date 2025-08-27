@@ -1147,6 +1147,11 @@ void acorn::Parser::parse_generics(llvm::SmallVector<acorn::Generic*>& generics)
             genericn->type = GenericType::create(allocator, genericn, false);
         }
 
+        if (cur_token.is('=')) {
+            next_token();
+            genericn->default_arg = parse_expr();
+        }
+
         genericn->index = generics.size();
         generics.push_back(genericn);
 

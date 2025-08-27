@@ -2453,12 +2453,17 @@ static void generics_tests() {
 
         expect(result, std::identity()).to_be("++");
     });
-
     test("Call generic function with default parameter value", [&] {
         auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs20.ac"), true);
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("@%@%@*@*");
+    });
+    test("Call generic function with default parameter value", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_funcs21.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@@");
     });
     test("Create generic variable and access fields", [&] {
         auto [err_msg, result] = run_codegen_test(src("generics/generic_structs1.ac"), true);
@@ -2525,6 +2530,24 @@ static void generics_tests() {
         if (!err_msg.empty())  force_fail(err_msg.c_str());
 
         expect(result, std::identity()).to_be("called#&called#$");
+    });
+    test("Generic struct default generic param init with single generic param", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs12.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("@#");
+    });
+    test("Generic struct default generic param init with multiple generic params", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs13.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("?@#$");
+    });
+    test("Generic struct default generic param init with constructors", [&] {
+        auto [err_msg, result] = run_codegen_test(src("generics/generic_structs14.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("?@#$@");
     });
 }
 
