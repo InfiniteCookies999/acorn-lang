@@ -19,8 +19,7 @@ namespace acorn {
     public:
 
         Namespace(Module& modl, ScopeLocation scope_location = ScopeLocation::GLOBAL) :
-            modl(modl), scope_location(scope_location) {
-        }
+            modl(modl), scope_location(scope_location) {}
 
         void add_declaration(Decl* decl, PageAllocator& allocator);
 

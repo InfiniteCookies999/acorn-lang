@@ -15,91 +15,55 @@
 
 #include "Logger.h"
 
-acorn::SystemPath::SystemPath()
-    : storage(Storage::NONE) {
-}
+acorn::Path::Path()
+    : storage(Storage::NONE) {}
 
-acorn::SystemPath::SystemPath(std::string path)
-    : utf8(std::move(path)), storage(Storage::UTF8) {
-    normalize_empty();
-}
+acorn::Path::Path(std::string path)
+    : utf8(std::move(path)), storage(Storage::UTF8) {}
 
-acorn::SystemPath::SystemPath(std::wstring path)
-    : wide(std::move(path)), storage(Storage::WIDE) {
-    normalize_empty();
-}
+acorn::Path::Path(std::wstring path)
+    : utf16(std::move(path)), storage(Storage::UTF16) {}
 
-acorn::SystemPath::SystemPath(const char* path)
-    : utf8(path), storage(Storage::UTF8) {
-    normalize_empty();
-}
+acorn::Path::Path(const char* path)
+    : utf8(path), storage(Storage::UTF8) {}
 
-acorn::SystemPath::SystemPath(const char* path, size_t length)
-    : utf8(path, length), storage(Storage::UTF8) {
-    normalize_empty();
-}
+acorn::Path::Path(const char* path, size_t length)
+    : utf8(path, length), storage(Storage::UTF8) {}
 
-acorn::SystemPath::SystemPath(const wchar_t* path)
-    : wide(path), storage(Storage::WIDE) {
-    normalize_empty();
-}
+acorn::Path::Path(const wchar_t* path)
+    : utf16(path), storage(Storage::UTF16) {}
 
-acorn::SystemPath::SystemPath(const wchar_t* path, size_t length)
-    : wide(path, length), storage(Storage::WIDE) {
-    normalize_empty();
-}
+acorn::Path::Path(const wchar_t* path, size_t length)
+    : utf16(path, length), storage(Storage::UTF16) {}
 
-acorn::SystemPath acorn::SystemPath::parent_directory(std::string& err) const {
+std::string acorn::Path::to_normalized_utf8_string() const {
+    std::string normalized_path = to_utf8_string();
 
-    auto abs_path = get_absolute_path(*this, err);
-    if (!err.empty()) {
-        return SystemPath();
-    }
-
-    SystemPath new_path;
-
-    if (abs_path.storage == Storage::UTF8) {
-#if _WIN32
-        size_t idx = abs_path.utf8.find_last_of("/\\");
-#else
-        size_t idx = abs_path.utf8.find_last_of('/');
-#endif
-        if (idx != std::string::npos) {
-            new_path = SystemPath(abs_path.utf8.substr(0, idx));
-        } else {
-            new_path = abs_path; // The path must be the root path.
-        }
-    } else {
-        // Assume the path is a windows path.
-        size_t idx = abs_path.wide.find_last_of(L"/\\");
-        if (idx != std::wstring::npos) {
-            new_path = SystemPath(abs_path.wide.substr(0, idx));
-        } else {
-            new_path = abs_path; // The path must be the root path.
+    // convert any backslashes to forward slashes.
+    for (auto& ch : normalized_path) {
+        if (ch == '\\') {
+            ch = '/';
         }
     }
 
-    return new_path;
+    return normalized_path;
 }
 
-std::string acorn::SystemPath::to_utf8_string() const {
-    std::string conv = storage == Storage::UTF8 ? utf8
-                                                : acorn::wide_to_utf8(wide.c_str(), wide.length());
-    // Normalize the path for the display.
-#if WIN_OS
-    std::ranges::replace(conv, '\\', '/');
-#endif
-    return conv;
-}
-
-std::wstring acorn::SystemPath::to_wide_string() const {
-    if (storage == Storage::WIDE) {
-        return wide;
+std::string acorn::Path::to_utf8_string() const {
+    if (storage == Storage::UTF8) {
+        return utf8;
     }
-    return acorn::utf8_to_wide(utf8.c_str(), utf8.length());
+    return acorn::utf16_to_utf8(utf16.c_str(), utf16.length());
 }
 
-std::string acorn::SystemPath::utf8_extension() const {
+std::wstring acorn::Path::to_utf16_string() const {
+    if (storage == Storage::UTF16) {
+        return utf16;
+    }
+    return acorn::utf8_to_utf16(utf8.c_str(), utf8.length());
+}
+
+std::string acorn::Path::get_extension() const {
     if (storage == Storage::UTF8) {
         size_t idx = utf8.find_last_of('.');
         if (idx == std::string::npos) {
@@ -107,23 +71,23 @@ std::string acorn::SystemPath::utf8_extension() const {
         }
         return utf8.substr(idx);
     } else {
-        size_t idx = wide.find_last_of('.');
+        size_t idx = utf16.find_last_of('.');
         if (idx == std::wstring::npos) {
             return "";
         }
 
-        auto wide_extension = wide.substr(idx);
-        return acorn::wide_to_utf8(wide_extension.c_str(), wide_extension.length());
+        auto utf16_extension = utf16.substr(idx);
+        return acorn::utf16_to_utf8(utf16_extension.c_str(), utf16_extension.length());
     }
 }
 
-acorn::SystemPath acorn::SystemPath::append_path(const std::string& path) {
+acorn::Path acorn::Path::append_path(const std::string& path) {
 
     if (storage == Storage::UTF8) {
         // Don't append a slash if it already has a slash.
 #if _WIN32
         if (utf8.ends_with('/') || utf8.ends_with('\\')) {
-            return SystemPath(utf8 + path);
+            return Path(utf8 + path);
         }
 #else
         if (utf8.ends_with('/')) {
@@ -131,27 +95,21 @@ acorn::SystemPath acorn::SystemPath::append_path(const std::string& path) {
         }
 #endif
 
-        return SystemPath(utf8 + "/" + path);
+        return Path(utf8 + "/" + path);
     } else {
-        auto wpath = acorn::utf8_to_wide(path.c_str(), path.length());
+        auto wpath = acorn::utf8_to_utf16(path.c_str(), path.length());
 
         // Don't append a slash if it already has a slash.
         // Assume windows path.
-        if (wide.ends_with('/') || wide.ends_with('\\')) {
-            return SystemPath(wide + wpath);
+        if (utf16.ends_with('/') || utf16.ends_with('\\')) {
+            return Path(utf16 + wpath);
         }
 
-        return SystemPath(wide + L"/" + wpath);
+        return Path(utf16 + L"/" + wpath);
     }
 }
 
-void acorn::SystemPath::normalize_empty() {
-    if (storage == Storage::UTF8 && utf8.empty()) {
-        utf8 = "./";
-    } else if (wide.empty()) {
-        wide = L"./";
-    }
-}
+
 
 
 #if WIN_OS
@@ -172,121 +130,9 @@ static void win32_error_code_to_string(DWORD ec, std::string& err) {
         err = "Failed to format Win32 Error";
     }
 
-    err = acorn::wide_to_utf8(buffer, length);
-}
-#endif
-
-acorn::SystemPath acorn::get_current_directory_path(std::string& err) {
-    auto path = get_executable_path(err);
-    if (!err.empty()) {
-        return acorn::SystemPath();
-    }
-
-    // Remove off the executable name.
-    return path.parent_directory(err);
+    err = acorn::utf16_to_utf8(buffer, length);
 }
 
-acorn::SystemPath acorn::get_executable_path(std::string& err) {
-#if WIN_OS
-    // TODO (maddie): because windows there is a thing called "long file name"
-    // which can extend above MAX_PATH length. Apparently this happens when there
-    // is \\?\ prepended to the path.
-    wchar_t buffer[MAX_PATH];
-    DWORD length = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
-    if (length != 0) {
-        return SystemPath(buffer, length);
-    }
-    win32_error_code_to_string(GetLastError(), err);
-    return SystemPath();
-#elif MAC_OS
-    char buffer[PATH_MAX + 1];
-    uint32_t length = PATH_MAX;
-    if (!_NSGetExecutablePath(buf, &length)) {
-        return SystemPath(buffer, length);
-    }
-    acorn_fatal("Not implemented");
-    // TODO (maddie): error handling!
-    return SystemPath();
-#elif UNIX_OS
-    char buffer[PATH_MAX + 1];
-    ssize_t length = readlink("/proc/self/exe", buffer, PATH_MAX);
-    if (length != -1) {
-        return SystemPath(buffer, length);
-    }
-    err = strerror(errno);
-    return SystemPath();
-#endif
-}
-
-acorn::SystemPath acorn::get_absolute_path(const SystemPath& path, std::string& err) {
-#if WIN_OS
-    std::wstring wpath = path.to_wide_string();
-    // TODO (maddie): because windows there is a thing called "long file name"
-    // which can extend above MAX_PATH length. Apparently this happens when there
-    // is \\?\ prepended to the path.
-    wchar_t buffer[MAX_PATH];
-    DWORD length = GetFullPathNameW(wpath.c_str(), MAX_PATH, buffer, nullptr);
-    if (length != 0) {
-        return SystemPath(buffer, length);
-    }
-    win32_error_code_to_string(GetLastError(), err);
-    return SystemPath();
-#else
-    std::string utf8_path = path.to_utf8_string();
-    char buffer[PATH_MAX];
-    if (realpath(utf8_path.c_str(), buffer)) {
-        return SystemPath(buffer);
-    }
-    err = strerror(errno);
-    return SystemPath();
-#endif
-}
-
-void acorn::make_directory(const SystemPath& path, std::string& err, bool error_if_exists) {
-
-    auto check_already_exists = [&path, &err, error_if_exists]() finline {
-        if (error_if_exists) {
-            err = "Already exists";
-            return;
-        }
-
-        if (!is_directory(path, err)) {
-            if (!err.empty()) {
-                return;
-            }
-            err = "Already exists as a but not as directory";
-        }
-    };
-
-#if WIN_OS
-
-    std::wstring wpath = path.to_wide_string();
-
-    if (!CreateDirectoryW(wpath.c_str(), nullptr)) {
-        DWORD ec = GetLastError();
-        if (ec == ERROR_ALREADY_EXISTS) {
-            check_already_exists();
-        } else if (ec == ERROR_PATH_NOT_FOUND) {
-            err = "Path not found";
-        } else {
-            win32_error_code_to_string(ec, err);
-        }
-    }
-#else
-    std::string utf8_path = path.to_utf8_string();
-    if (mkdir(utf8_path.c_str(), 0775) != 0) {
-        if (errno == EEXIST) {
-            check_already_exists();
-        } else if (errno == ENOENT) {
-            err = "Path not found";
-        } else {
-            err = strerror(errno);
-        }
-    }
-#endif
-}
-
-#if WIN_OS
 static void win32_get_file_attribs_error(DWORD ec, std::string& err) {
     if (ec == ERROR_FILE_NOT_FOUND || ec == ERROR_PATH_NOT_FOUND) {
         err = "Path not found";
@@ -308,11 +154,206 @@ static void unix_get_file_stat_error(std::string& err) {
 }
 #endif
 
-void acorn::remove_file(const SystemPath& path, std::string& err) {
+bool acorn::path_exists(const Path& path, std::string& err) {
 #if WIN_OS
-    std::wstring wpath = path.to_wide_string();
+    auto utf16_path = path.to_utf16_string();
 
-    DWORD attribs = GetFileAttributesW(wpath.c_str());
+    DWORD attribs = GetFileAttributesW(utf16_path.c_str());
+    if (attribs == INVALID_FILE_ATTRIBUTES) {
+        DWORD ec = GetLastError();
+        if (ec == ERROR_FILE_NOT_FOUND || ec == ERROR_PATH_NOT_FOUND) {
+            return false;
+        }
+
+        win32_get_file_attribs_error(ec, err);
+        return false;
+    }
+
+    return true;
+#else
+    struct stat path_stat;
+
+    auto utf8_path = path.to_utf8_string();
+    if (stat(utf8_path.c_str(), &path_stat) != 0) {
+        if (errno == ENOENT || errno == ENOTDIR) {
+            return false;
+        }
+        unix_get_file_stat_error(err);
+        return false;
+    }
+
+    return true;
+#endif
+}
+
+bool acorn::is_directory(const Path& path, std::string& err) {
+#if WIN_OS
+    auto utf16_path = path.to_utf16_string();
+
+    DWORD attribs = GetFileAttributesW(utf16_path.c_str());
+    if (attribs == INVALID_FILE_ATTRIBUTES) {
+        DWORD ec = GetLastError();
+        win32_get_file_attribs_error(ec, err);
+        return false;
+    }
+
+    return (attribs & FILE_ATTRIBUTE_DIRECTORY) != 0;
+#else
+    struct stat path_stat;
+
+    auto utf8_path = path.to_utf8_string();
+    if (stat(utf8_path.c_str(), &path_stat) != 0) {
+        unix_get_file_stat_error(err);
+        return false;
+    }
+
+    return S_ISDIR(path_stat.st_mode);
+#endif
+}
+
+acorn::Path acorn::get_absolute_path(const Path& path, std::string& err) {
+#if WIN_OS
+    auto utf16_path = path.to_utf16_string();
+    // TODO (maddie): because windows there is a thing called "long file name"
+    // which can extend above `MAX_PATH` length we need to handle larger sizes.
+    // Apparently this happens when there is \\?\ prepended to the path.
+    wchar_t buffer[MAX_PATH];
+    DWORD length = GetFullPathNameW(utf16_path.c_str(), MAX_PATH, buffer, nullptr);
+    if (length != 0) {
+        return Path(buffer, length);
+    }
+    win32_error_code_to_string(GetLastError(), err);
+    return Path();
+#else
+    auto utf8_path = path.to_utf8_string();
+    char buffer[PATH_MAX];
+    if (realpath(utf8_path.c_str(), buffer)) {
+        return SystemPath(buffer);
+    }
+    err = strerror(errno);
+    return SystemPath();
+#endif
+}
+
+acorn::Path acorn::get_parent_directory(const Path& path, std::string& err) {
+
+    auto parent_directory = get_absolute_path(path, err);
+    if (!err.empty()) {
+        return Path{};
+    }
+
+#if WIN_OS
+    auto utf16_path = parent_directory.to_utf16_string();
+    size_t idx = utf16_path.find_last_of('\\');
+
+    // check to see if it is the system root by checking if it specifies
+    // a drive like "C:\"
+    if (idx == 2 && utf16_path[1] == ':') {
+        return Path(utf16_path.substr(0, 3));
+    }
+
+    return Path(utf16_path.substr(0, idx + 1));
+#else
+    auto utf8_path = parent_directory.to_utf8_string();
+    if (utf8_path == '/') {
+        return SystemPath(utf8_path);
+    }
+
+    size_t idx = utf8_path.find_last_of('/');
+    return SystemPath(utf8_path.substr(0, idx + 1));
+#endif
+}
+
+acorn::Path acorn::get_current_directory_path(std::string& err) {
+    auto path = get_executable_path(err);
+    if (!err.empty()) {
+        return acorn::Path();
+    }
+
+    return get_parent_directory(path, err);
+}
+
+acorn::Path acorn::get_executable_path(std::string& err) {
+#if WIN_OS
+    // TODO (maddie): because windows there is a thing called "long file name"
+    // which can extend above MAX_PATH length. Apparently this happens when there
+    // is \\?\ prepended to the path.
+    wchar_t buffer[MAX_PATH];
+    DWORD length = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+    if (length != 0) {
+        return Path(buffer, length);
+    }
+    win32_error_code_to_string(GetLastError(), err);
+    return Path();
+#elif MAC_OS
+    char buffer[PATH_MAX + 1];
+    uint32_t length = PATH_MAX;
+    if (!_NSGetExecutablePath(buf, &length)) {
+        return SystemPath(buffer, length);
+    }
+    acorn_fatal("Not implemented");
+    // TODO (maddie): error handling!
+    return SystemPath();
+#elif UNIX_OS
+    char buffer[PATH_MAX + 1];
+    ssize_t length = readlink("/proc/self/exe", buffer, PATH_MAX);
+    if (length != -1) {
+        return SystemPath(buffer, length);
+    }
+    err = strerror(errno);
+    return SystemPath();
+#endif
+}
+
+void acorn::make_directory(const Path& path, std::string& err, bool error_if_exists) {
+
+    auto check_already_exists = [&path, &err, error_if_exists]() finline {
+        if (error_if_exists) {
+            err = "Already exists";
+            return;
+        }
+
+        if (!is_directory(path, err)) {
+            if (!err.empty()) {
+                return;
+            }
+            err = "Already exists as a but not as directory";
+        }
+    };
+
+#if WIN_OS
+
+    auto utf16_path = path.to_utf16_string();
+
+    if (!CreateDirectoryW(utf16_path.c_str(), nullptr)) {
+        DWORD ec = GetLastError();
+        if (ec == ERROR_ALREADY_EXISTS) {
+            check_already_exists();
+        } else if (ec == ERROR_PATH_NOT_FOUND) {
+            err = "Path not found";
+        } else {
+            win32_error_code_to_string(ec, err);
+        }
+    }
+#else
+    auto utf8_path = path.to_utf8_string();
+    if (mkdir(utf8_path.c_str(), 0775) != 0) {
+        if (errno == EEXIST) {
+            check_already_exists();
+        } else if (errno == ENOENT) {
+            err = "Path not found";
+        } else {
+            err = strerror(errno);
+        }
+    }
+#endif
+}
+
+void acorn::remove_file(const Path& path, std::string& err) {
+#if WIN_OS
+    auto utf16_path = path.to_utf16_string();
+
+    DWORD attribs = GetFileAttributesW(utf16_path.c_str());
     if (attribs == INVALID_FILE_ATTRIBUTES) {
         DWORD ec = GetLastError();
         win32_get_file_attribs_error(ec, err);
@@ -324,7 +365,7 @@ void acorn::remove_file(const SystemPath& path, std::string& err) {
         return;
     }
 
-    if (DeleteFileW(wpath.c_str()) == 0) {
+    if (DeleteFileW(utf16_path.c_str()) == 0) {
         win32_error_code_to_string(GetLastError(), err);
         return;
     }
@@ -349,66 +390,9 @@ void acorn::remove_file(const SystemPath& path, std::string& err) {
 #endif
 }
 
-bool acorn::path_exists(const SystemPath& path, std::string& err) {
-#if WIN_OS
-    std::wstring wpath = path.to_wide_string();
-
-    DWORD attribs = GetFileAttributesW(wpath.c_str());
-    if (attribs == INVALID_FILE_ATTRIBUTES) {
-        DWORD ec = GetLastError();
-        if (ec == ERROR_FILE_NOT_FOUND || ec == ERROR_PATH_NOT_FOUND) {
-            return false;
-        }
-
-        win32_get_file_attribs_error(ec, err);
-        return false;
-    }
-
-    return true;
-#else
-    struct stat path_stat;
-
-    std::string utf8_path = path.to_utf8_string();
-    if (stat(utf8_path.c_str(), &path_stat) != 0) {
-        if (errno == ENOENT || errno == ENOTDIR) {
-            return false;
-        }
-        unix_get_file_stat_error(err);
-        return false;
-    }
-
-    return true;
-#endif
-}
-
-bool acorn::is_directory(const SystemPath& path, std::string& err) {
-#if WIN_OS
-    std::wstring wpath = path.to_wide_string();
-
-    DWORD attribs = GetFileAttributesW(wpath.c_str());
-    if (attribs == INVALID_FILE_ATTRIBUTES) {
-        DWORD ec = GetLastError();
-        win32_get_file_attribs_error(ec, err);
-        return false;
-    }
-
-    return (attribs & FILE_ATTRIBUTE_DIRECTORY) != 0;
-#else
-    struct stat path_stat;
-
-    std::string utf8_path = path.to_utf8_string();
-    if (stat(utf8_path.c_str(), &path_stat) != 0) {
-        unix_get_file_stat_error(err);
-        return false;
-    }
-
-    return S_ISDIR(path_stat.st_mode);
-#endif
-}
-
-void acorn::recursively_iterate_directory(const SystemPath& dir_path,
+void acorn::recursively_iterate_directory(const Path& dir_path,
                                           std::string& err,
-                                          std::function<void(SystemPath, PathKind)> callback) {
+                                          std::function<void(Path, PathKind)> callback) {
 
     if (!is_directory(dir_path, err)) {
         if (!err.empty()) {
@@ -419,8 +403,8 @@ void acorn::recursively_iterate_directory(const SystemPath& dir_path,
     }
 
 #if WIN_OS
-    std::wstring wpath = dir_path.to_wide_string();
-    std::wstring glob_path = wpath + L"\\*";
+    std::wstring utf16_path = dir_path.to_utf16_string();
+    std::wstring glob_path = utf16_path + L"\\*";
 
     WIN32_FIND_DATAW find_data;
     HANDLE handle = FindFirstFileW(glob_path.c_str(), &find_data);
@@ -445,7 +429,7 @@ void acorn::recursively_iterate_directory(const SystemPath& dir_path,
 
         bool is_directory = find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
 
-        auto entry_path = wpath + L"/" + name;
+        auto entry_path = utf16_path + L"/" + name;
         if (!is_directory) {
             PathKind kind;
             if (find_data.dwFileAttributes & FILE_ATTRIBUTE_NORMAL   ||
@@ -457,9 +441,9 @@ void acorn::recursively_iterate_directory(const SystemPath& dir_path,
                 kind = PathKind::OTHER;
             }
 
-            callback(SystemPath(entry_path), kind);
+            callback(Path(entry_path), kind);
         } else {
-            recursively_iterate_directory(SystemPath(entry_path), err, callback);
+            recursively_iterate_directory(Path(entry_path), err, callback);
             if (!err.empty()) {
                 return;
             }
@@ -531,6 +515,68 @@ void acorn::recursively_iterate_directory(const SystemPath& dir_path,
     }
 
     closedir(dir);
+
+#endif
+}
+
+bool acorn::read_file_to_buffer(const Path&    file_path,
+                                std::string&   err,
+                                char*&         buffer,
+                                size_t&        length,
+                                uint64_t       max_file_size,
+                                PageAllocator& allocator) {
+#if WIN_OS
+
+    auto utf16_path = file_path.to_utf16_string();
+
+    auto handle = CreateFileW(utf16_path.c_str(),
+                              GENERIC_READ,
+                              FILE_SHARE_READ,   // allows for multiple handles to open the file at once.
+                              nullptr,           // security attributes
+                              OPEN_EXISTING,     // must already exist.
+                              FILE_ATTRIBUTE_NORMAL,
+                              nullptr
+    );
+    if (handle == INVALID_HANDLE_VALUE) {
+        win32_get_file_attribs_error(GetLastError(), err);
+        return false;
+    }
+
+    LARGE_INTEGER win32_file_size;
+    if (!GetFileSizeEx(handle, &win32_file_size)) {
+        win32_get_file_attribs_error(GetLastError(), err);
+        CloseHandle(handle);
+        return false;
+    }
+
+    if (static_cast<uint64_t>(win32_file_size.QuadPart) > max_file_size) {
+        err = "file size too large";
+        err += ". maximum file size: " + std::to_string((size_t)(max_file_size / 1e6)) + "MB";
+        CloseHandle(handle);
+        return false;
+    }
+
+    length = static_cast<size_t>(win32_file_size.QuadPart);
+    buffer = (char*)allocator.allocate(length + 1); // +1 for null terminator.
+
+    // keep reading bytes as long as we are not at the maximum bytes.
+    DWORD total_bytes_read = 0;
+    while (total_bytes_read < length) {
+        DWORD bytes_read;
+        if (!ReadFile(handle, buffer, (DWORD)(length) - total_bytes_read, &bytes_read, nullptr)) {
+            win32_get_file_attribs_error(GetLastError(), err);
+            return false;
+        }
+
+        total_bytes_read += bytes_read;
+    }
+
+    // Null terminating.
+    buffer[length] = '\0';
+
+    CloseHandle(handle);
+    return true;
+#else
 
 #endif
 }

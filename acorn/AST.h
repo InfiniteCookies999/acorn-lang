@@ -125,8 +125,7 @@ namespace acorn {
         SourceLoc loc;
 
         Node(NodeKind kind)
-            : kind(kind) {
-        }
+            : kind(kind) {}
 
         // Checks if the node is of the given kind.
         [[nodiscard]] constexpr bool is(NodeKind kind) const noexcept { return this->kind == kind; }
@@ -149,8 +148,7 @@ namespace acorn {
     //--------------------------------------
 
     struct Generic : Node {
-        Generic() : Node(NodeKind::GENERIC) {
-        }
+        Generic() : Node(NodeKind::GENERIC) {}
 
         Identifier   name;
         size_t       index;
@@ -159,16 +157,14 @@ namespace acorn {
     };
 
     struct FuncList : Node, llvm::SmallVector<Func*> {
-        FuncList() : Node(NodeKind::FUNC_LIST) {
-        }
+        FuncList() : Node(NodeKind::FUNC_LIST) {}
     };
 
     struct GenericInstance {
     };
 
     struct Decl : Node {
-        Decl(NodeKind kind) : Node(kind) {
-        }
+        Decl(NodeKind kind) : Node(kind) {}
 
         bool generated = false;
         bool is_being_checked = false;
@@ -221,15 +217,14 @@ namespace acorn {
     };
 
     struct Func : Decl {
-        Func() : Decl(NodeKind::FUNC) {
-        }
+        Func() : Decl(NodeKind::FUNC) {}
 
         // If not null then the function is a member function.
         Struct* structn = nullptr;
         // This is equal to `structn` if the struct is not generic
         // otherwise this is the version of the struct prior to having
         // specific generic types specified.
-        Struct* non_generic_struct_instance = nullptr;
+        Struct* unbound_generic_struct_instance = nullptr;
 
 
         // If not null then the function is a function of an
@@ -331,8 +326,7 @@ namespace acorn {
     };
 
     struct ImplicitFunc : Node {
-        ImplicitFunc() : Node(NodeKind::IMPLICIT_FUNC) {
-        }
+        ImplicitFunc() : Node(NodeKind::IMPLICIT_FUNC) {}
 
         enum class ImplicitKind {
             DEFAULT_CONSTRUCTOR,
@@ -349,8 +343,7 @@ namespace acorn {
         static const uint32_t NotParam = static_cast<uint32_t>(-1);
         static const uint32_t NotField = static_cast<uint32_t>(-1);
 
-        Var() : Decl(NodeKind::VAR) {
-        }
+        Var() : Decl(NodeKind::VAR) {}
 
         llvm::StringRef linkname;
 
@@ -358,7 +351,7 @@ namespace acorn {
         // This is equal to `structn` if the struct is not generic
         // otherwise this is the version of the struct prior to having
         // specific generic types specified.
-        Struct* non_generic_struct_instance = nullptr;
+        Struct* unbound_generic_struct_instance = nullptr;
 
         uint32_t param_idx = NotParam;
         uint32_t field_idx = NotField;
@@ -390,15 +383,13 @@ namespace acorn {
     };
 
     struct VarList : Node {
-        VarList() : Node(NodeKind::VAR_LIST) {
-        }
+        VarList() : Node(NodeKind::VAR_LIST) {}
 
         llvm::SmallVector<Var*, 2> vars;
     };
 
     struct Struct : Decl {
-        Struct() : Decl(NodeKind::STRUCT) {
-        }
+        Struct() : Decl(NodeKind::STRUCT) {}
 
         StructType* struct_type;
 
@@ -475,8 +466,7 @@ namespace acorn {
     };
 
     struct UnboundGenericStruct : Struct {
-        UnboundGenericStruct() : Struct() {
-        }
+        UnboundGenericStruct() : Struct() {}
 
         bool has_checked_generics = false;
 
@@ -489,8 +479,7 @@ namespace acorn {
     };
 
     struct Enum : Decl {
-        Enum() : Decl(NodeKind::ENUM) {
-        }
+        Enum() : Decl(NodeKind::ENUM) {}
 
         EnumType* enum_type;
 
@@ -511,8 +500,7 @@ namespace acorn {
     };
 
     struct Interface : Decl {
-        Interface() : Decl(NodeKind::INTERFACE) {
-        }
+        Interface() : Decl(NodeKind::INTERFACE) {}
 
         bool has_been_checked = false;
         InterfaceType* interface_type;
@@ -521,8 +509,7 @@ namespace acorn {
     };
 
     struct ImportStmt : Node {
-        ImportStmt() : Node(NodeKind::IMPORT_STMT) {
-        }
+        ImportStmt() : Node(NodeKind::IMPORT_STMT) {}
 
         SourceFile* file;
 
@@ -566,17 +553,14 @@ namespace acorn {
     };
 
     struct ReturnStmt : Node {
-        ReturnStmt() : Node(NodeKind::RETURN_STMT) {
-        }
+        ReturnStmt() : Node(NodeKind::RETURN_STMT) {}
 
         Expr* value = nullptr;
     };
 
     struct IfStmt : Node {
-        IfStmt() : Node(NodeKind::IF_STMT) {
-        }
-        IfStmt(NodeKind kind) : Node(kind) {
-        }
+        IfStmt() : Node(NodeKind::IF_STMT) {}
+        IfStmt(NodeKind kind) : Node(kind) {}
 
         Node*      cond;
         Expr*      post_variable_cond = nullptr;
@@ -585,16 +569,14 @@ namespace acorn {
     };
 
     struct PredicateLoopStmt : Node {
-        PredicateLoopStmt() : Node(NodeKind::PREDICATE_LOOP_STMT) {
-        }
+        PredicateLoopStmt() : Node(NodeKind::PREDICATE_LOOP_STMT) {}
 
         Expr*      cond = nullptr;
         ScopeStmt* scope;
     };
 
     struct RangeLoopStmt : Node {
-        RangeLoopStmt() : Node(NodeKind::RANGE_LOOP_STMT) {
-        }
+        RangeLoopStmt() : Node(NodeKind::RANGE_LOOP_STMT) {}
 
         Node*      init_node = nullptr;
         Expr*      cond = nullptr;
@@ -603,8 +585,7 @@ namespace acorn {
     };
 
     struct IteratorLoopStmt : Node {
-        IteratorLoopStmt() : Node(NodeKind::ITERATOR_LOOP_STMT) {
-        }
+        IteratorLoopStmt() : Node(NodeKind::ITERATOR_LOOP_STMT) {}
 
         Node*                   vars;
         bool                    var_auto_ptr = false;
@@ -616,13 +597,11 @@ namespace acorn {
     };
 
     struct LoopControlStmt : Node {
-        LoopControlStmt() : Node(NodeKind::INVALID_EXPR) {
-        }
+        LoopControlStmt() : Node(NodeKind::INVALID_EXPR) {}
     };
 
     struct RecoverStmt : Node {
-        RecoverStmt() : Node(NodeKind::RECOVER_STMT) {
-        }
+        RecoverStmt() : Node(NodeKind::RECOVER_STMT) {}
 
         Expr* value;
     };
@@ -633,8 +612,7 @@ namespace acorn {
     };
 
     struct SwitchStmt : Node {
-        SwitchStmt() : Node(NodeKind::SWITCH_STMT) {
-        }
+        SwitchStmt() : Node(NodeKind::SWITCH_STMT) {}
 
         bool       all_conds_foldable = true;
         Expr*      on = nullptr;
@@ -643,16 +621,14 @@ namespace acorn {
     };
 
     struct RaiseStmt : Node {
-        RaiseStmt() : Node(NodeKind::RAISE_STMT) {
-        }
+        RaiseStmt() : Node(NodeKind::RAISE_STMT) {}
 
         Expr*   expr;
         Struct* raised_error;
     };
 
     struct ScopeStmt : Node, llvm::SmallVector<Node*> {
-        ScopeStmt() : Node(NodeKind::SCOPE_STMT) {
-        }
+        ScopeStmt() : Node(NodeKind::SCOPE_STMT) {}
 
         SourceLoc end_loc;
     };
@@ -675,8 +651,7 @@ namespace acorn {
     //--------------------------------------
 
     struct Expr : Node {
-        Expr(NodeKind kind) : Node(kind) {
-        }
+        Expr(NodeKind kind) : Node(kind) {}
 
         bool  is_foldable = true;
         // The expression is a basic unit that may be interpreted as one of
@@ -715,18 +690,15 @@ namespace acorn {
     };
 
     struct InvalidExpr : Expr {
-        InvalidExpr() : Expr(NodeKind::INVALID_EXPR) {
-        }
+        InvalidExpr() : Expr(NodeKind::INVALID_EXPR) {}
     };
 
     struct NoDefaultInit : Expr {
-        NoDefaultInit() : Expr(NodeKind::NO_DEFAULT_INIT) {
-        }
+        NoDefaultInit() : Expr(NodeKind::NO_DEFAULT_INIT) {}
     };
 
     struct BinOp : Expr {
-        BinOp() : Expr(NodeKind::BIN_OP) {
-        }
+        BinOp() : Expr(NodeKind::BIN_OP) {}
 
         TokenKind op;
 
@@ -735,16 +707,14 @@ namespace acorn {
     };
 
     struct UnaryOp : Expr {
-        UnaryOp() : Expr(NodeKind::UNARY_OP) {
-        }
+        UnaryOp() : Expr(NodeKind::UNARY_OP) {}
 
         TokenKind op;
         Expr*     expr;
     };
 
     struct Number : Expr {
-        Number() : Expr(NodeKind::NUMBER) {
-        }
+        Number() : Expr(NodeKind::NUMBER) {}
 
         union {
             uint64_t value_u64;
@@ -761,18 +731,15 @@ namespace acorn {
     };
 
     struct Bool : Expr {
-        Bool() : Expr(NodeKind::BOOL_EXPR) {
-        }
+        Bool() : Expr(NodeKind::BOOL_EXPR) {}
 
         bool value;
     };
 
     struct IdentRef : Expr {
-        IdentRef() : Expr(NodeKind::IDENT_REF) {
-        }
+        IdentRef() : Expr(NodeKind::IDENT_REF) {}
 
-        IdentRef(NodeKind kind) : Expr(kind) {
-        }
+        IdentRef(NodeKind kind) : Expr(kind) {}
 
         Identifier ident;
         bool explicitly_binds_generics = false;
@@ -853,8 +820,7 @@ namespace acorn {
     };
 
     struct DotOperator : IdentRef {
-        DotOperator() : IdentRef(NodeKind::DOT_OPERATOR) {
-        }
+        DotOperator() : IdentRef(NodeKind::DOT_OPERATOR) {}
 
         bool is_array_length = false;
         bool is_slice_ptr    = false;
@@ -866,8 +832,7 @@ namespace acorn {
     };
 
     struct GenericBindFuncCall : IdentRef {
-        GenericBindFuncCall() : IdentRef(NodeKind::IDENT_REF) {
-        }
+        GenericBindFuncCall() : IdentRef(NodeKind::IDENT_REF) {}
 
         size_t non_named_args_offset = -1;
         llvm::SmallVector<Expr*> args;
@@ -876,27 +841,22 @@ namespace acorn {
     };
 
     struct TypeExpr : Expr {
-        TypeExpr() : Expr(NodeKind::TYPE_EXPR) {
-        }
-
-        TypeExpr(NodeKind kind) : Expr(kind) {
-        }
+        TypeExpr() : Expr(NodeKind::TYPE_EXPR) {}
+        TypeExpr(NodeKind kind) : Expr(kind) {}
 
         Type* parsed_expr_type;
         Type* expr_type;
     };
 
     struct MemoryAccess : TypeExpr {
-        MemoryAccess() : TypeExpr(NodeKind::MEMORY_ACCESS) {
-        }
+        MemoryAccess() : TypeExpr(NodeKind::MEMORY_ACCESS) {}
 
         Expr* site;
         Expr* index;
     };
 
     struct NamedValue : Expr {
-        NamedValue() : Expr(NodeKind::NAMED_VALUE) {
-        }
+        NamedValue() : Expr(NodeKind::NAMED_VALUE) {}
 
         size_t     mapped_idx;
         Identifier name;
@@ -906,10 +866,8 @@ namespace acorn {
     };
 
     struct FuncCall : Expr {
-        FuncCall() : Expr(NodeKind::FUNC_CALL) {
-        }
-        FuncCall(NodeKind kind) : Expr(kind) {
-        }
+        FuncCall() : Expr(NodeKind::FUNC_CALL) {}
+        FuncCall(NodeKind kind) : Expr(kind) {}
 
         Expr*                site;
         Func*                called_func;
@@ -924,8 +882,7 @@ namespace acorn {
     };
 
     struct StructInitializer : Expr {
-        StructInitializer() : Expr(NodeKind::STRUCT_INITIALIZER) {
-        }
+        StructInitializer() : Expr(NodeKind::STRUCT_INITIALIZER) {}
 
         size_t non_named_vals_offset = 0;
         Struct* structn;
@@ -937,56 +894,48 @@ namespace acorn {
     };
 
     struct String : Expr {
-        String() : Expr(NodeKind::STRING) {
-        }
+        String() : Expr(NodeKind::STRING) {}
 
         std::string text;
     };
 
     struct Null : Expr {
-        Null() : Expr(NodeKind::NULL_EXPR) {
-        }
+        Null() : Expr(NodeKind::NULL_EXPR) {}
     };
 
     struct Cast : Expr {
-        Cast() : Expr(NodeKind::CAST) {
-        }
+        Cast() : Expr(NodeKind::CAST) {}
 
         Type* explicit_cast_type;
         Expr* value;
     };
 
     struct BitCast : Expr {
-        BitCast() : Expr(NodeKind::BITCAST) {
-        }
+        BitCast() : Expr(NodeKind::BITCAST) {}
 
         Type* explicit_cast_type;
         Expr* value;
     };
 
     struct ConstCast : Expr {
-        ConstCast() : Expr(NodeKind::CONST_CAST) {
-        }
+        ConstCast() : Expr(NodeKind::CONST_CAST) {}
 
         Type* explicit_cast_type;
         Expr* value;
     };
 
     struct Array : Expr {
-        Array() : Expr(NodeKind::ARRAY) {
-        }
+        Array() : Expr(NodeKind::ARRAY) {}
 
         llvm::SmallVector<Expr*, 8> elms;
     };
 
     struct This : Expr {
-        This() : Expr(NodeKind::THIS_EXPR) {
-        }
+        This() : Expr(NodeKind::THIS_EXPR) {}
     };
 
     struct SizeOf : Expr {
-        SizeOf() : Expr(NodeKind::SIZE_OF) {
-        }
+        SizeOf() : Expr(NodeKind::SIZE_OF) {}
 
         //Type* parsed_type_with_size;
         Expr* value;
@@ -994,8 +943,7 @@ namespace acorn {
     };
 
     struct Ternary : Expr {
-        Ternary() : Expr(NodeKind::TERNARY) {
-        }
+        Ternary() : Expr(NodeKind::TERNARY) {}
 
         Expr* cond;
         Expr* lhs;
@@ -1003,15 +951,13 @@ namespace acorn {
     };
 
     struct MoveObj : Expr {
-        MoveObj() : Expr(NodeKind::MOVEOBJ) {
-        }
+        MoveObj() : Expr(NodeKind::MOVEOBJ) {}
 
         Expr* value;
     };
 
     struct Reflect : Expr {
-        Reflect() : Expr(NodeKind::REFLECT) {
-        }
+        Reflect() : Expr(NodeKind::REFLECT) {}
 
         ReflectKind reflect_kind;
         Expr* expr;
@@ -1019,8 +965,7 @@ namespace acorn {
     };
 
     struct Try : Expr {
-        Try() : Expr(NodeKind::TRY) {
-        }
+        Try() : Expr(NodeKind::TRY) {}
 
         // If true then the current function is specified as raising an error and
         // is calling a function that also is specified to raise the same error such

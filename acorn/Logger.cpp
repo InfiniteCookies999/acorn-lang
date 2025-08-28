@@ -55,7 +55,7 @@ void acorn::AbstractLogger<L>::print_exceeded_errors_msg(Context& context) {
 }
 
 template<typename L>
-void acorn::AbstractLogger<L>::print(Stream stream, const SystemPath& path) {
+void acorn::AbstractLogger<L>::print(Stream stream, const Path& path) {
     print(stream, path.to_utf8_string());
 }
 

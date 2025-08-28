@@ -79,7 +79,7 @@ void acorn::write_obj_file(Context& context, const char* file_path,
     // Have to do extra work when dealing with wide paths because raw_fd_ostream doesn't directly
     // deal with them.
 
-    std::wstring wfile_path = acorn::utf8_to_wide(file_path);
+    std::wstring wfile_path = acorn::utf8_to_utf16(file_path);
 
     HANDLE handle = CreateFileW(wfile_path.c_str(),
                                 GENERIC_WRITE,

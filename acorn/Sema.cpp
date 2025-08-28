@@ -18,13 +18,12 @@
 #define check_and_verify_type(n) check_node(n); yield_if(n)
 
 acorn::Sema::Sema(Context& context, SourceFile* file, Logger& logger)
-    : context(context),
-      modl(file->modl),
-      file(file),
-      nspace(file->get_namespace()),
-      logger(logger),
-      type_table(context.type_table) {
-}
+    : context(context)
+    , modl(file->modl)
+    , file(file)
+    , nspace(file->get_namespace())
+    , logger(logger)
+    , type_table(context.type_table) {}
 
 bool acorn::Sema::is_potential_main_function(Context& context, const Func* candidate) {
     if (candidate->params.empty()) {
@@ -402,7 +401,7 @@ void acorn::Sema::check_function(Func* func) {
     // declaration to determine things such as if it matches an interface function
     // but then its declaration would not have been checked.
     if (func->structn) {
-        if (!ensure_struct_checked(func->loc, func->structn)) {
+        if (!ensure_struct_checked(func->structn)) {
             return;
         }
     }
@@ -927,14 +926,14 @@ void acorn::Sema::check_struct(Struct* structn) {
                         auto param_ptr_type = static_cast<PointerType*>(param_type);
                         auto param_elm_type = param_ptr_type->get_elm_type();
 
-                        if (param_elm_type->get_kind() == TypeKind::PARTIALLY_BOUND_STRUCT) {
-                            auto partially_bound_struct_type = static_cast<PartiallyBoundStructType*>(param_elm_type);
-                            auto unbound_generic_struct = partially_bound_struct_type->get_unbound_generic_struct();
+                        if (param_elm_type->get_kind() == TypeKind::PENDING_GENERIC_STRUCT) {
+                            auto pending_generics_struct_type = static_cast<PendingGenericsStructType*>(param_elm_type);
+                            auto unbound_generic_struct = pending_generics_struct_type->get_unbound_generic_struct();
 
                             if (unbound_generic_struct->nspace == structn->nspace) {
                                 auto generic_struct_instance = static_cast<GenericStructInstance*>(structn);
 
-                                auto fixed_elm_type = fixup_partially_bound_struct_type(param_elm_type,
+                                auto fixed_elm_type = fixup_pending_generic_struct_type(param_elm_type,
                                                                                         &generic_struct_instance->bound_types);
                                 if (!fixed_elm_type) {
                                     return;
@@ -1474,7 +1473,7 @@ bool acorn::Sema::check_raised_error(RaisedError& raised_error) {
         }
 
         auto structn = static_cast<Struct*>(composite);
-        if (!ensure_struct_checked(raised_error.error_loc, structn)) {
+        if (!ensure_struct_checked(structn)) {
             return false;
         }
 
@@ -1525,17 +1524,9 @@ void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) 
     }
 }
 
-bool acorn::Sema::ensure_struct_checked(SourceLoc error_loc, Struct* structn) {
+bool acorn::Sema::ensure_struct_checked(Struct* structn) {
     if (cur_struct) {
         cur_struct->dependency = structn;
-
-        // We do not display circular dependencies here because the fields of a struct need
-        // to be able to reference the struct.
-
-        //display_circular_dep_error(error_loc,
-        //                           cur_struct,
-        //                           "Structs form a circular dependency",
-        //                           ErrCode::SemaGlobalCircularDependency);
     }
 
     if (!structn->has_been_checked) {
@@ -4026,7 +4017,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
         if (ref->composite_ref->is(NodeKind::STRUCT)) {
             Struct* structn = static_cast<Struct*>(ref->composite_ref);
             if (!structn->is_generic) {
-                ensure_struct_checked(ref->loc, static_cast<Struct*>(ref->composite_ref));
+                ensure_struct_checked(static_cast<Struct*>(ref->composite_ref));
             }
         } else if (ref->composite_ref->is(NodeKind::ENUM)) {
             ensure_enum_checked(ref->loc, static_cast<Enum*>(ref->composite_ref));
@@ -4094,7 +4085,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         }
 
         if (dot->is_var_ref() && dot->var_ref->has_modifier(Modifier::Private)) {
-            if (!cur_func || cur_func->non_generic_struct_instance != dot->var_ref->non_generic_struct_instance) {
+            if (!cur_func || cur_func->unbound_generic_struct_instance != dot->var_ref->unbound_generic_struct_instance) {
                 error(expand(dot), "Cannot access field '%s', it is marked private",
                       dot->var_ref->name)
                     .end_error(ErrCode::SemaCannotAccessFieldIsPrivate);
@@ -4193,7 +4184,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             auto func = (*func_list)[0];
 
             if (func->has_modifier(Modifier::Private)) {
-                if (!cur_func || cur_func->non_generic_struct_instance != func->non_generic_struct_instance) {
+                if (!cur_func || cur_func->unbound_generic_struct_instance != func->unbound_generic_struct_instance) {
                     error(expand(dot), "Cannot access function '%s', it is marked private",
                           func->name)
                         .end_error(ErrCode::SemaCannotAccessFuncIsPrivate);
@@ -4316,7 +4307,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     // the the currently bound generic types must be pre bound.
     if (cur_func && cur_func->structn && cur_func->structn->is_generic) {
         bool passes_generics_along = (ref->is_not(NodeKind::DOT_OPERATOR) &&
-                                      cur_func->non_generic_struct_instance == (*ref->funcs_ref)[0]->non_generic_struct_instance);
+                                      cur_func->unbound_generic_struct_instance == (*ref->funcs_ref)[0]->unbound_generic_struct_instance);
         if (!passes_generics_along && ref->is(NodeKind::DOT_OPERATOR)) {
             auto dot = static_cast<DotOperator*>(ref);
             if (dot->site->is(NodeKind::THIS_EXPR)) {
@@ -4925,7 +4916,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                 generic_bindings.begin() + unbound_generic_struct->generics.size());
             generic_parent_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(parent_struct_bound_types));
 
-            if (!ensure_struct_checked(call_node->loc, generic_parent_struct)) {
+            if (!ensure_struct_checked(generic_parent_struct)) {
                 func_call_generic_bindings = nullptr;
                 return nullptr;
             }
@@ -5039,7 +5030,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
     }
 
     if (candidate->has_modifier(Modifier::Private) && candidate->structn) {
-        if (!cur_func || (cur_func->non_generic_struct_instance != candidate->non_generic_struct_instance)) {
+        if (!cur_func || (cur_func->unbound_generic_struct_instance != candidate->unbound_generic_struct_instance)) {
             return CallCompareStatus::CANNOT_ACCESS_PRIVATE;
         }
     }
@@ -5465,40 +5456,42 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
 
         return true;
     }
-    case TypeKind::PARTIALLY_BOUND_STRUCT: {
+    case TypeKind::PENDING_GENERIC_STRUCT: {
         if (!from_type->is_struct()) {
             return false;
         }
 
-        auto partially_bound_struct_type = static_cast<PartiallyBoundStructType*>(to_type);
-        auto from_struct_type            = static_cast<StructType*>(from_type);
+        auto pending_generics_struct_type = static_cast<PendingGenericsStructType*>(to_type);
+        auto from_struct_type             = static_cast<StructType*>(from_type);
 
-        auto to_unbound_generic_struct = partially_bound_struct_type->get_unbound_generic_struct();
+        auto unbound_generic_struct = pending_generics_struct_type->get_unbound_generic_struct();
         auto from_struct = from_struct_type->get_struct();
         // Make sure we are effectively referring to the same struct.
-        if (from_struct->nspace != to_unbound_generic_struct->nspace) {
+        if (from_struct->nspace != unbound_generic_struct->nspace) {
             return false;
         }
 
-        auto& partially_bound_types = partially_bound_struct_type->get_partially_bound_types();
-        if (partially_bound_types.empty()) {
-            // Checking if the bindings happens to be filled up for the entirety of the
-            // struct's generics, and if so, then we can fully qualify the generic struct
-            // and assume assignment.
+        // Checking if the bindings happens to be filled up for the entirety of the
+        // struct's generics, and if so, then we can fully qualify the generic struct
+        // and assume assignment.
 
-            for (size_t i = 0; i < to_unbound_generic_struct->generics.size(); i++) {
-                if (!bindings[i]) {
-                    return false;
-                }
+        llvm::SmallVector<Type*> bound_types;
+        for (size_t i = 0; i < unbound_generic_struct->generics.size(); i++) {
+            if (!bindings[i]) {
+                return false;
             }
-
-            return true;
+            bound_types.push_back(bindings[i]);
         }
 
-        // TODO (maddie): else deal with there being bound types that are generic.
-        acorn_fatal("Not implemented yet");
-        return false;
+        auto to_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(),
+                                                                      std::move(bound_types));
+        if (from_struct != to_struct) {
+            return false;
+        }
+
+        return true;
     }
+
     default:
         if (to_type->does_contain_generics()) {
             acorn_fatal("Failed to implement type case that contains generic types");
@@ -5861,7 +5854,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
         }
 
         if (!structn->is_generic) {
-            if (!ensure_struct_checked(ref->loc, structn)) {
+            if (!ensure_struct_checked(structn)) {
                 return;
             }
         } else {
@@ -5967,7 +5960,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
 
         structn = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
 
-        if (!ensure_struct_checked(initializer->loc, structn)) {
+        if (!ensure_struct_checked(structn)) {
             return;
         }
     }
@@ -6269,8 +6262,8 @@ acorn::Type* acorn::Sema::fixup_type(Type* type, bool is_ptr_elm_type) {
         }
     } else if (type->is_generic()) {
         return fixup_generic_type(type);
-    } else if (type->get_kind() == TypeKind::PARTIALLY_BOUND_STRUCT) {
-        return fixup_partially_bound_struct_type(type, func_call_generic_bindings);
+    } else if (type->get_kind() == TypeKind::PENDING_GENERIC_STRUCT) {
+        return fixup_pending_generic_struct_type(type, func_call_generic_bindings);
     } else {
         return type;
     }
@@ -6432,25 +6425,24 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
             // Checking if within a member function, and if its a member function
             // of the struct being declared. If so, then the generic struct type
             // can take on the generics of the given struct.
-            if (cur_func && cur_func->non_generic_struct_instance == found_struct) {
+            if (cur_func && cur_func->unbound_generic_struct_instance == found_struct) {
                 Type* struct_type = cur_func->structn->struct_type;
                 if (unresolved_composite_type->is_const()) {
                     struct_type = type_table.get_const_type(struct_type);
                 }
                 return struct_type;
-            } if (cur_func_decl && cur_func_decl->non_generic_struct_instance == found_struct) {
+            } if (cur_func_decl && cur_func_decl->unbound_generic_struct_instance == found_struct) {
 
                 // When there are no bound types it can be treated as if the type has
                 // generic types but none of them where bound.
 
-                auto partially_bound_struct_type = PartiallyBoundStructType::create(context.get_allocator(),
-                                                                                    unbound_generic_struct,
-                                                                                    {});
+                auto pending_generics_struct_type = PendingGenericsStructType::create(context.get_allocator(),
+                                                                                      unbound_generic_struct);
 
                 if (unresolved_composite_type->is_const()) {
-                    return type_table.get_const_type(partially_bound_struct_type);
+                    return type_table.get_const_type(pending_generics_struct_type);
                 }
-                return partially_bound_struct_type;
+                return pending_generics_struct_type;
             }
 
             // Checking to make sure that the default generic arguments don't fully qualify the
@@ -6460,7 +6452,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
 
                 found_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
 
-                if (!ensure_struct_checked(unresolved_composite_type->get_error_location(), found_struct)) {
+                if (!ensure_struct_checked(found_struct)) {
                     return nullptr;
                 }
                 return found_struct->struct_type;
@@ -6473,7 +6465,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
             return nullptr;
         }
 
-        if (!ensure_struct_checked(unresolved_composite_type->get_error_location(), found_struct)) {
+        if (!ensure_struct_checked(found_struct)) {
             return nullptr;
         }
 
@@ -6567,7 +6559,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_generic_composite_type(Decl* found_co
 
     auto new_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
 
-    if (!ensure_struct_checked(error_loc, new_struct)) {
+    if (!ensure_struct_checked(new_struct)) {
         return nullptr;
     }
 
@@ -6810,38 +6802,24 @@ acorn::Type* acorn::Sema::fixup_generic_type(Type* type) {
     return type;
 }
 
-acorn::Type* acorn::Sema::fixup_partially_bound_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_types) {
+acorn::Type* acorn::Sema::fixup_pending_generic_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_types) {
     if (bound_types) {
-        auto partially_bound_struct_type = static_cast<PartiallyBoundStructType*>(type);
-        auto& partially_bound_types = partially_bound_struct_type->get_partially_bound_types();
-        auto unbound_generic_struct = partially_bound_struct_type->get_unbound_generic_struct();
+        auto pending_generics_struct_type = static_cast<PendingGenericsStructType*>(type);
+        auto unbound_generic_struct = pending_generics_struct_type->get_unbound_generic_struct();
 
         llvm::SmallVector<Type*> fixed_bound_types;
-        if (partially_bound_types.empty()) {
-            fixed_bound_types.insert(fixed_bound_types.begin(),
-                                     bound_types->begin(),
-                                     bound_types->begin() + unbound_generic_struct->generics.size());
-
-        } else {
-            fixed_bound_types.reserve(unbound_generic_struct->generics.size());
-            for (auto bound_type : partially_bound_types) {
-                auto fixed_bound_type = fixup_type(bound_type);
-                if (!fixed_bound_type) {
-                    return nullptr;
-                }
-
-                fixed_bound_types.push_back(fixed_bound_type);
-            }
-        }
+        fixed_bound_types.insert(fixed_bound_types.begin(),
+                                 bound_types->begin(),
+                                 bound_types->begin() + unbound_generic_struct->generics.size());
 
         auto new_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(),
                                                                        std::move(fixed_bound_types));
 
-        if (!ensure_struct_checked({}, new_struct)) {
+        if (!ensure_struct_checked(new_struct)) {
             return nullptr;
         }
 
-        if (partially_bound_struct_type->is_const()) {
+        if (pending_generics_struct_type->is_const()) {
             return type_table.get_const_type(new_struct->struct_type);
         }
         return new_struct->struct_type;
@@ -7021,7 +6999,7 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
         }
 
         if (candidate->has_modifier(Modifier::Private) && candidate->structn) {
-            if (!cur_func || (cur_func->non_generic_struct_instance != candidate->non_generic_struct_instance)) {
+            if (!cur_func || (cur_func->unbound_generic_struct_instance != candidate->unbound_generic_struct_instance)) {
                 err_line(nullptr, "it is private");
                 return;
             }
@@ -7249,6 +7227,35 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
                                 }
                             }
                         }
+
+                        if (param_type->get_kind() == TypeKind::PENDING_GENERIC_STRUCT) {
+
+                            auto pending_generic_struct = static_cast<PendingGenericsStructType*>(param_type);
+                            auto unbound_generic_struct = pending_generic_struct->get_unbound_generic_struct();
+
+                            llvm::SmallVector<Type*> bound_types;
+                            bool all_bound = true;
+                            for (size_t j = 0; j < unbound_generic_struct->generics.size(); j++) {
+                                if (!generic_bindings[j]) {
+                                    all_bound = false;
+                                }
+                                bound_types.push_back(generic_bindings[j]);
+                            }
+
+                            if (all_bound) {
+                                auto to_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(),
+                                                                                              std::move(bound_types));
+                                param_type = to_struct->struct_type;
+                            } else {
+                                if (arg_value->type->is_struct()) {
+                                     err_line(arg_value,
+                                             "arg %s: the parameter has a generic type with unspecified generic bindings",
+                                             i + 1)
+                                    continue;
+                                }
+                            }
+                        }
+
 
                         // Mismatch info returns with the first character capitalized. Decapitalizing it.
                         std::string mismatch_info = get_type_mismatch_error(param_type, arg_value, param->has_implicit_ptr);
@@ -8090,7 +8097,7 @@ bool acorn::Sema::is_readonly_field_without_access(Expr* expr) const {
     if (expr->is(NodeKind::DOT_OPERATOR)) {
         auto dot = static_cast<DotOperator*>(expr);
         if (dot->is_var_ref() && dot->var_ref->has_modifier(Modifier::Readonly) &&
-            (!cur_func || cur_func->non_generic_struct_instance != dot->var_ref->non_generic_struct_instance)) {
+            (!cur_func || cur_func->unbound_generic_struct_instance != dot->var_ref->unbound_generic_struct_instance)) {
             return true;
         }
     }

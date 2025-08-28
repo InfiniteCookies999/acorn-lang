@@ -3,15 +3,14 @@
 #include "Module.h"
 
 acorn::SourceFile::SourceFile(Context& context, std::string path, std::string full_path, Buffer buffer, Module& modl)
-    : logger(context, *this),
-      path(std::move(path)),
-      full_path(std::move(full_path)),
-      line_table(buffer.content, buffer.length),
-      buffer(buffer),
-      modl(modl),
-      nspace(&modl),
-      Namespace(modl) {
-}
+    : logger(context, *this)
+    , path(std::move(path))
+    , full_path(std::move(full_path))
+    , line_table(buffer.content, buffer.length)
+    , buffer(buffer)
+    , modl(modl)
+    , nspace(&modl)
+    , Namespace(modl) {}
 
 void acorn::SourceFile::add_declaration(Decl* decl, PageAllocator& allocator) {
     if (has_public_access(decl)) {

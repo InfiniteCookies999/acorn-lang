@@ -83,7 +83,7 @@ namespace acorn {
         EXPR, // A type that appears as part of an expression in code.
         GENERIC,
         INDETERMINATE,
-        PARTIALLY_BOUND_STRUCT,
+        PENDING_GENERIC_STRUCT,
         INVALID,
 
     };
@@ -102,7 +102,7 @@ namespace acorn {
         bool is_const()              const { return vconst;            }
         bool does_contain_const()    const { return contains_const;    }
         bool does_contain_generics() const { return contains_generics; }
-        Type* remove_all_const()     const { return non_const_version; };
+        Type* remove_all_const()     const { return non_const_version; }
 
         bool is(const Type* type)     const { return type == this; }
         bool is_not(const Type* type) const { return type != this; }
@@ -180,8 +180,7 @@ namespace acorn {
 
     protected:
         Type(TypeKind kind, bool is_const)
-            : kind(kind), vconst(is_const) {
-        }
+            : kind(kind), vconst(is_const) {}
 
         // We store a version of this type except with all of it's
         // constness removed for efficiency and ease of use.
@@ -213,8 +212,7 @@ namespace acorn {
 
     protected:
         ContainerType(TypeKind kind, bool is_const, Type* elm_type)
-            : Type(kind, is_const), elm_type(elm_type) {
-        }
+            : Type(kind, is_const), elm_type(elm_type) {}
 
         Type* elm_type;
     };
@@ -228,10 +226,11 @@ namespace acorn {
 
     protected:
         PointerType(bool is_const, Type* elm_type)
-            : ContainerType(TypeKind::POINTER, is_const, elm_type) {
-        }
+            : ContainerType(TypeKind::POINTER, is_const, elm_type) {}
     };
 
+    // The type of an array when the length of the array has not been determined yet
+    // because the length expression still needs checked in order to calculate.
     class UnresolvedArrayType : public ContainerType {
     public:
 
@@ -244,10 +243,27 @@ namespace acorn {
 
     private:
         UnresolvedArrayType(bool is_const, Expr* expr, Type* elm_type) :
-            ContainerType(TypeKind::UNRESOLVED_ARRAY, is_const, elm_type), expr(expr) {
-        }
+            ContainerType(TypeKind::UNRESOLVED_ARRAY, is_const, elm_type), expr(expr) {}
 
         Expr* expr;
+    };
+
+    // An array type who's length is determined by the expression being
+    // assigned.
+    //
+    // For example:  `a: int[] = [ 5, 3, 2 ];`
+    class AssignDeterminedArrayType : public ContainerType {
+    public:
+
+        static Type* create(PageAllocator& allocator,
+                            Type* elm_type,
+                            bool is_const = false);
+
+        std::string to_string() const;
+
+    protected:
+        AssignDeterminedArrayType(bool is_const, Type* elm_type)
+            : ContainerType(TypeKind::ASSIGN_DETERMINED_ARRAY, is_const, elm_type) {}
     };
 
     class ArrayType : public ContainerType {
@@ -266,8 +282,7 @@ namespace acorn {
 
     protected:
         ArrayType(bool is_const, Type* elm_type, uint32_t length)
-            : ContainerType(TypeKind::ARRAY, is_const, elm_type), length(length) {
-        }
+            : ContainerType(TypeKind::ARRAY, is_const, elm_type), length(length) {}
 
         uint32_t length;
     };
@@ -291,27 +306,11 @@ namespace acorn {
 
     protected:
         SliceType(bool is_const, Type* elm_type)
-            : ContainerType(TypeKind::SLICE, is_const, elm_type) {
-        }
+            : ContainerType(TypeKind::SLICE, is_const, elm_type) {}
 
         // The struct type containing the pointer to memory and the length.
         llvm::StructType* ll_struct_type = nullptr;
 
-    };
-
-    class AssignDeterminedArrayType : public ContainerType {
-    public:
-
-        static Type* create(PageAllocator& allocator,
-                            Type* elm_type,
-                            bool is_const = false);
-
-        std::string to_string() const;
-
-    protected:
-        AssignDeterminedArrayType(bool is_const, Type* elm_type)
-            : ContainerType(TypeKind::ASSIGN_DETERMINED_ARRAY, is_const, elm_type) {
-        }
     };
 
     class RangeType : public Type {
@@ -327,8 +326,7 @@ namespace acorn {
 
     protected:
         RangeType(bool is_const, Type* value_type)
-            : Type(TypeKind::RANGE, is_const), value_type(value_type) {
-        }
+            : Type(TypeKind::RANGE, is_const), value_type(value_type) {}
 
         Type* value_type;
     };
@@ -343,11 +341,10 @@ namespace acorn {
                         llvm::SmallVector<Type*> param_types,
                         llvm::SmallVector<RaisedError> raised_errors,
                         bool uses_native_varargs)
-            : return_type(return_type),
-              param_types(std::move(param_types)),
-              raised_errors(std::move(raised_errors)),
-              uses_native_varargs(uses_native_varargs) {
-        }
+            : return_type(return_type)
+            , param_types(std::move(param_types))
+            , raised_errors(std::move(raised_errors))
+            , uses_native_varargs(uses_native_varargs) {}
     };
 
     class FunctionType : public Type {
@@ -381,13 +378,15 @@ namespace acorn {
 
     protected:
         FunctionType(bool is_const, FunctionTypeKey* key)
-            : Type(TypeKind::FUNCTION, is_const),
-              key(key) {
-        }
+            : Type(TypeKind::FUNCTION, is_const)
+            , key(key) {}
 
         FunctionTypeKey* key;
     };
 
+    // A composite type such as a struct, enum, interface, ...
+    // prior to the associated composite being found during
+    // semantic analysis.
     class UnresolvedCompositeType : public Type {
     public:
 
@@ -406,21 +405,26 @@ namespace acorn {
 
     protected:
         UnresolvedCompositeType(bool is_const, Identifier name, SourceLoc error_location)
-            : Type(TypeKind::UNRESOLVED_COMPOSITE, is_const),
-              name(name),
-              error_location(error_location) {
-        }
+            : Type(TypeKind::UNRESOLVED_COMPOSITE, is_const)
+            , name(name)
+            , error_location(error_location) {}
 
         UnresolvedCompositeType(TypeKind kind, bool is_const, Identifier name, SourceLoc error_location)
-            : Type(kind, is_const),
-              name(name),
-              error_location(error_location) {
-        }
+            : Type(kind, is_const)
+            , name(name)
+            , error_location(error_location) {}
 
         SourceLoc  error_location;
         Identifier name;
     };
 
+    // The same thing as a `UnresolvedCompositeType` except it also contains
+    // user specified generic arguments for the type.
+    //
+    // However, this does not mean that `UnresolvedGenericCompositeType` will
+    // result in a generic type and `UnresolvedCompositeType` will not since
+    // it is possible the user does not provide generic arguments for the type
+    // and the type uses default generic arguments.
     class UnresolvedGenericCompositeType : public UnresolvedCompositeType {
     public:
 
@@ -445,15 +449,17 @@ namespace acorn {
                                        SourceLoc error_location,
                                        llvm::SmallVector<Expr*> bound_exprs,
                                        size_t non_named_generic_args_offsets)
-            : UnresolvedCompositeType(TypeKind::UNRESOLVED_GENERIC_COMPOSITE, is_const, name, error_location),
-              bound_exprs(std::move(bound_exprs)),
-              non_named_generic_args_offsets(non_named_generic_args_offsets) {
-        }
+            : UnresolvedCompositeType(TypeKind::UNRESOLVED_GENERIC_COMPOSITE, is_const, name, error_location)
+            , bound_exprs(std::move(bound_exprs))
+            , non_named_generic_args_offsets(non_named_generic_args_offsets) {}
 
         llvm::SmallVector<Expr*> bound_exprs;
         size_t non_named_generic_args_offsets;
     };
 
+    // A struct type once resolved during semantic analysis and the associated
+    // struct has been found. Even if the struct is generic the associated type
+    // is still this `StructType`.
     class StructType : public Type {
     public:
 
@@ -477,20 +483,29 @@ namespace acorn {
 
     protected:
         StructType(bool is_const, Struct* structn)
-            : Type(TypeKind::STRUCT, is_const), structn(structn) {
-        }
+            : Type(TypeKind::STRUCT, is_const), structn(structn) {}
 
         llvm::StructType* ll_struct_type = nullptr;
         Struct*           structn;
     };
 
-    struct PartiallyBoundStructType : public Type {
+    // A struct type specified in the function declaration of a generic
+    // struct such that it cannot determine what the bindings are yet because
+    // they are still needing to be determined through the function call.
+    //
+    // For example:
+    //
+    // generics(T)
+    // struct A {
+    //     // The type of `a` is not determined yet until bindings are resolved.
+    //     fn new(a: A*) {}
+    // }
+    struct PendingGenericsStructType : public Type {
     public:
 
-        static PartiallyBoundStructType* create(PageAllocator& allocator,
-                                                UnboundGenericStruct* unbound_generic_struct,
-                                                llvm::SmallVector<Type*> partially_bound_types,
-                                                bool is_const = false);
+        static PendingGenericsStructType* create(PageAllocator& allocator,
+                                                 UnboundGenericStruct* unbound_generic_struct,
+                                                 bool is_const = false);
 
         std::string to_string() const;
 
@@ -498,24 +513,15 @@ namespace acorn {
             return unbound_generic_struct;
         }
 
-        const llvm::SmallVector<Type*>& get_partially_bound_types() const {
-            return partially_bound_types;
-        }
-
     private:
-        PartiallyBoundStructType(bool is_const,
-                                 UnboundGenericStruct* unbound_generic_struct,
-                                 llvm::SmallVector<Type*> partially_bound_types)
-            : Type(TypeKind::PARTIALLY_BOUND_STRUCT, is_const),
-              unbound_generic_struct(unbound_generic_struct),
-              partially_bound_types(std::move(partially_bound_types)) {
-        }
+        PendingGenericsStructType(bool is_const, UnboundGenericStruct* unbound_generic_struct)
+            : Type(TypeKind::PENDING_GENERIC_STRUCT, is_const), unbound_generic_struct(unbound_generic_struct) {}
 
-        UnboundGenericStruct*    unbound_generic_struct;
-        // These may contain generic types.
-        llvm::SmallVector<Type*> partially_bound_types;
+        UnboundGenericStruct* unbound_generic_struct;
     };
 
+    // An enum type once resolved during semantic analysis and the associated
+    // enum has been found.
     class EnumType : public Type {
     public:
 
@@ -555,8 +561,7 @@ namespace acorn {
 
     protected:
         EnumType(bool is_const, Enum* enumn)
-            : Type(TypeKind::ENUM, is_const), enumn(enumn) {
-        }
+            : Type(TypeKind::ENUM, is_const), enumn(enumn) {}
 
         uint64_t default_index;
         Type* index_type;
@@ -582,13 +587,16 @@ namespace acorn {
 
     protected:
         UnresolvedEnumValueType(bool is_const, Identifier enum_name, SourceLoc error_location)
-            : Type(TypeKind::UNRESOLVED_ENUM_VALUE_TYPE, is_const), enum_name(enum_name), error_location(error_location) {
-        }
+            : Type(TypeKind::UNRESOLVED_ENUM_VALUE_TYPE, is_const)
+            , enum_name(enum_name)
+            , error_location(error_location) {}
 
         SourceLoc  error_location;
         Identifier enum_name;
     };
 
+    // An interface type once resolved during semantic analysis and the associated
+    // interface has been found.
     class InterfaceType : public Type {
     public:
 
@@ -604,8 +612,7 @@ namespace acorn {
 
     protected:
         InterfaceType(bool is_const, Interface* interfacen)
-            : Type(TypeKind::INTERFACE, is_const), interfacen(interfacen) {
-        }
+            : Type(TypeKind::INTERFACE, is_const), interfacen(interfacen) {}
 
         Interface* interfacen;
     };
@@ -625,8 +632,7 @@ namespace acorn {
 
     protected:
         GenericType(Generic* generic, bool is_const = false)
-            : Type(TypeKind::GENERIC, is_const), generic(generic) {
-        }
+            : Type(TypeKind::GENERIC, is_const), generic(generic) {}
 
         Generic* generic;
     };

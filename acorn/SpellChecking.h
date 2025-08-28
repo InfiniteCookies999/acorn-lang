@@ -20,8 +20,7 @@ namespace acorn {
     public:
 
         ErrorSpellChecker(bool should_show)
-            : should_show(should_show) {
-        }
+            : should_show(should_show) {}
 
         template<typename T>
         void add_searches(const llvm::DenseMap<Identifier, T>& search_map) {

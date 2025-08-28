@@ -46,8 +46,7 @@ acorn::Parser::Parser(Context& context, Module& modl, SourceFile* file)
     , file(file)
     , logger(file->logger)
     , lexer(context, file->buffer, logger)
-    , type_table(context.type_table) {
-}
+    , type_table(context.type_table) {}
 
 void acorn::Parser::parse() {
 
@@ -164,7 +163,7 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
             var->field_idx = static_cast<uint32_t>(structn->fields.size());
             structn->fields.push_back(var);
             var->structn = structn;
-            var->non_generic_struct_instance = structn;
+            var->unbound_generic_struct_instance = structn;
         }
     };
 
@@ -180,7 +179,7 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
         auto func = static_cast<Func*>(node);
         if (func->name != Identifier::Invalid) {
             func->structn = structn;
-            func->non_generic_struct_instance = structn;
+            func->unbound_generic_struct_instance = structn;
 
             if (func->is_destructor) {
                 if (structn->destructor) {

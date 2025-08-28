@@ -17,75 +17,75 @@ namespace acorn {
 }
 
 acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, PageAllocator& allocator)
-    : allocator(allocator),
-      ll_context(ll_context),
-      ll_module(ll_module),
-      type_table(allocator, *this),
+    : allocator(allocator)
+    , ll_context(ll_context)
+    , ll_module(ll_module)
+    , type_table(allocator, *this)
 
-      invalid_type(Type::create(allocator, TypeKind::INVALID)),
-      void_type(Type::create(allocator, TypeKind::VOID_T)),
-      int_type(Type::create(allocator, TypeKind::INT)),
-      const_int_type(type_table.get_const_type(int_type)),
-      int8_type(Type::create(allocator, TypeKind::INT8)),
-      int16_type(Type::create(allocator, TypeKind::INT16)),
-      int32_type(Type::create(allocator, TypeKind::INT32)),
-      int64_type(Type::create(allocator, TypeKind::INT64)),
-      uint8_type(Type::create(allocator, TypeKind::UINT8)),
-      uint16_type(Type::create(allocator, TypeKind::UINT16)),
-      uint32_type(Type::create(allocator, TypeKind::UINT32)),
-      uint64_type(Type::create(allocator, TypeKind::UINT64)),
-      isize_type(Type::create(allocator, TypeKind::ISIZE)),
-      usize_type(Type::create(allocator, TypeKind::USIZE)),
-      float_type(Type::create(allocator, TypeKind::FLOAT)),
-      double_type(Type::create(allocator, TypeKind::DOUBLE)),
-      bool_type(Type::create(allocator, TypeKind::BOOL_T)),
-      char_type(Type::create(allocator, TypeKind::CHAR)),
-      char16_type(Type::create(allocator, TypeKind::CHAR16)),
-      funcs_ref_type(Type::create(allocator, TypeKind::FUNCS_REF)),
-      namespace_ref_type(Type::create(allocator, TypeKind::NAMESPACE_REF)),
-      const_char_ptr_type(type_table.get_ptr_type(type_table.get_const_type(char_type))),
-      char16_ptr_type(type_table.get_ptr_type(char16_type)),
-      const_char16_ptr_type(type_table.get_ptr_type(type_table.get_const_type(char16_type))),
-      const_char_ptr_ptr_type(type_table.get_ptr_type(const_char_ptr_type)),
-      null_type(Type::create(allocator, TypeKind::NULL_T)),
-      void_ptr_type(type_table.get_ptr_type(void_type)),
-      const_void_type(type_table.get_const_type(void_type)),
-      const_void_ptr_type(type_table.get_ptr_type(const_void_type)),
-      empty_array_type(Type::create(allocator, TypeKind::EMPTY_ARRAY)),
-      auto_type(Type::create(allocator, TypeKind::AUTO)),
-      const_auto_type(type_table.get_const_type(auto_type)),
-      auto_ptr_type(type_table.get_ptr_type(auto_type)),
-      auto_const_ptr_type(type_table.get_const_type(auto_ptr_type)),
-      expr_type(Type::create(allocator, TypeKind::EXPR)),
-      indeterminate_type(Type::create(allocator, TypeKind::INDETERMINATE)),
+    , invalid_type(Type::create(allocator, TypeKind::INVALID))
+    , void_type(Type::create(allocator, TypeKind::VOID_T))
+    , int_type(Type::create(allocator, TypeKind::INT))
+    , const_int_type(type_table.get_const_type(int_type))
+    , int8_type(Type::create(allocator, TypeKind::INT8))
+    , int16_type(Type::create(allocator, TypeKind::INT16))
+    , int32_type(Type::create(allocator, TypeKind::INT32))
+    , int64_type(Type::create(allocator, TypeKind::INT64))
+    , uint8_type(Type::create(allocator, TypeKind::UINT8))
+    , uint16_type(Type::create(allocator, TypeKind::UINT16))
+    , uint32_type(Type::create(allocator, TypeKind::UINT32))
+    , uint64_type(Type::create(allocator, TypeKind::UINT64))
+    , isize_type(Type::create(allocator, TypeKind::ISIZE))
+    , usize_type(Type::create(allocator, TypeKind::USIZE))
+    , float_type(Type::create(allocator, TypeKind::FLOAT))
+    , double_type(Type::create(allocator, TypeKind::DOUBLE))
+    , bool_type(Type::create(allocator, TypeKind::BOOL_T))
+    , char_type(Type::create(allocator, TypeKind::CHAR))
+    , char16_type(Type::create(allocator, TypeKind::CHAR16))
+    , funcs_ref_type(Type::create(allocator, TypeKind::FUNCS_REF))
+    , namespace_ref_type(Type::create(allocator, TypeKind::NAMESPACE_REF))
+    , const_char_ptr_type(type_table.get_ptr_type(type_table.get_const_type(char_type)))
+    , char16_ptr_type(type_table.get_ptr_type(char16_type))
+    , const_char16_ptr_type(type_table.get_ptr_type(type_table.get_const_type(char16_type)))
+    , const_char_ptr_ptr_type(type_table.get_ptr_type(const_char_ptr_type))
+    , null_type(Type::create(allocator, TypeKind::NULL_T))
+    , void_ptr_type(type_table.get_ptr_type(void_type))
+    , const_void_type(type_table.get_const_type(void_type))
+    , const_void_ptr_type(type_table.get_ptr_type(const_void_type))
+    , empty_array_type(Type::create(allocator, TypeKind::EMPTY_ARRAY))
+    , auto_type(Type::create(allocator, TypeKind::AUTO))
+    , const_auto_type(type_table.get_const_type(auto_type))
+    , auto_ptr_type(type_table.get_ptr_type(auto_type))
+    , auto_const_ptr_type(type_table.get_const_type(auto_ptr_type))
+    , expr_type(Type::create(allocator, TypeKind::EXPR))
+    , indeterminate_type(Type::create(allocator, TypeKind::INDETERMINATE))
 
-      main_identifier(Identifier::get("main")),
-      length_identifier(Identifier::get("length")),
-      ptr_identifier(Identifier::get("ptr")),
-      access_identifier(Identifier::get("access")),
-      namespace_identifier(Identifier::get("namespace")),
-      module_identifier(Identifier::get("module")),
-      string_struct_identifier(Identifier::get("String")),
-      reflect_identifier(Identifier::get("reflect")),
-      type_id_enum_identifier(Identifier::get("TypeId")),
-      type_struct_identifier(Identifier::get("Type")),
-      struct_type_info_struct_identifier(Identifier::get("StructTypeInfo")),
-      field_type_info_struct_identifier(Identifier::get("FieldTypeInfo")),
-      any_struct_identifier(Identifier::get("Any")),
-      enum_type_info_struct_identifier(Identifier::get("EnumTypeInfo")),
-      value_identifier(Identifier::get("value")),
-      error_interface_identifier(Identifier::get("Error")),
-      get_name_function_identifier(Identifier::get("get_name")),
-      new_identifier(Identifier::get("new")),
-      moveobj_identifier(Identifier::get("moveobj")),
-      copyobj_identifier(Identifier::get("copyobj")),
-      delete_identifier(Identifier::get("delete")),
+    , main_identifier(Identifier::get("main"))
+    , length_identifier(Identifier::get("length"))
+    , ptr_identifier(Identifier::get("ptr"))
+    , access_identifier(Identifier::get("access"))
+    , namespace_identifier(Identifier::get("namespace"))
+    , module_identifier(Identifier::get("module"))
+    , string_struct_identifier(Identifier::get("String"))
+    , reflect_identifier(Identifier::get("reflect"))
+    , type_id_enum_identifier(Identifier::get("TypeId"))
+    , type_struct_identifier(Identifier::get("Type"))
+    , struct_type_info_struct_identifier(Identifier::get("StructTypeInfo"))
+    , field_type_info_struct_identifier(Identifier::get("FieldTypeInfo"))
+    , any_struct_identifier(Identifier::get("Any"))
+    , enum_type_info_struct_identifier(Identifier::get("EnumTypeInfo"))
+    , value_identifier(Identifier::get("value"))
+    , error_interface_identifier(Identifier::get("Error"))
+    , get_name_function_identifier(Identifier::get("get_name"))
+    , new_identifier(Identifier::get("new"))
+    , moveobj_identifier(Identifier::get("moveobj"))
+    , copyobj_identifier(Identifier::get("copyobj"))
+    , delete_identifier(Identifier::get("delete"))
 
-      reflect_identifiers({
+    , reflect_identifiers({
           { "#type_info", ReflectKind::TypeInfo }
-      }),
+      })
 
-      keyword_mapping({
+    , keyword_mapping({
           { "void"         , Token::KW_VOID        },
           { "int"          , Token::KW_INT         },
           { "int8"         , Token::KW_INT8        },
@@ -152,9 +152,9 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { "#file"        , Token::KW_CT_FILE      },
           { "#type_info"   , Token::KW_CT_TYPEINFO  },
           { "#aborts"      , Token::KW_CT_ABORTS    },
-      }),
+      })
 
-      ll_intrinsics_table({
+      , ll_intrinsics_table({
           { Identifier::get("memcpy") , llvm::Intrinsic::IndependentIntrinsics::memcpy  },
           { Identifier::get("memset") , llvm::Intrinsic::IndependentIntrinsics::memset  },
           { Identifier::get("memmove"), llvm::Intrinsic::IndependentIntrinsics::memmove },
@@ -170,9 +170,9 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { Identifier::get("asin")   , llvm::Intrinsic::IndependentIntrinsics::asin    },
           { Identifier::get("acos")   , llvm::Intrinsic::IndependentIntrinsics::acos    },
           { Identifier::get("atan")   , llvm::Intrinsic::IndependentIntrinsics::atan    },
-      }),
+      })
 
-      ll_valid_intrinsic_defs({
+      , ll_valid_intrinsic_defs({
           { Identifier::get("memcpy"), { void_ptr_type, const_void_ptr_type, usize_type }, void_type     },
           { Identifier::get("memset"), { void_ptr_type, int8_type          , usize_type }, void_type     },
           { Identifier::get("memmove"),{ void_ptr_type, const_void_ptr_type, usize_type }, void_type     },
@@ -200,9 +200,9 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
           { Identifier::get("acos")  , { float_type }                                    , float_type    },
           { Identifier::get("atan")  , { double_type }                                   , double_type   },
           { Identifier::get("atan")  , { float_type }                                    , float_type    },
-      }),
+      })
 
-      precedence({
+      , precedence({
 
           { '*', 10 },
           { '/', 10 },
@@ -373,8 +373,7 @@ void acorn::Context::find_std_lib_declarations() {
 
     if (Interface* interfacen = find_composite_of_kind((Interface*)0, modl, error_interface_identifier)) {
         std_error_interface = interfacen;
-        auto& funcs = interfacen->functions;
-        for (Func* func : funcs) {
+        for (Func* func : interfacen->functions) {
             if (func->name == get_name_function_identifier) {
                 std_error_get_name_func = func;
                 break;

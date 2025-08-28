@@ -21,22 +21,19 @@ static bool is_octal(char c) {
     return c >= '0' && c <= '7';
 }
 
-acorn::Lexer::Lexer(const Context& context, Buffer buffer, Logger& logger) :
-    context(context),
-    logger(logger),
-    ptr(buffer.content),
-    end(buffer.content + buffer.length) {
-}
+acorn::Lexer::Lexer(const Context& context, Buffer buffer, Logger& logger)
+    : context(context)
+    , logger(logger)
+    , ptr(buffer.content)
+    , end(buffer.content + buffer.length) {}
 
 acorn::Lexer::Lexer(const Lexer& lexer, llvm::SmallVector<Token, 8> peeked_tokens, Logger& logger)
-    : context(lexer.context),
-      logger(logger),
-      ptr(lexer.ptr),
-      end(lexer.end),
-      total_lines_lexed(lexer.total_lines_lexed),
-      whitespace_lines_lexed(lexer.whitespace_lines_lexed) {
-
-}
+    : context(lexer.context)
+    , logger(logger)
+    , ptr(lexer.ptr)
+    , end(lexer.end)
+    , total_lines_lexed(lexer.total_lines_lexed)
+    , whitespace_lines_lexed(lexer.whitespace_lines_lexed) {}
 
 acorn::Token acorn::Lexer::next_token() {
 

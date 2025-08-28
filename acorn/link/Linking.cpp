@@ -119,8 +119,8 @@ bool acorn::get_windows_kits_install_paths(Context& context, PageAllocator& allo
         return false;
     }
 
-    auto sdk_path = acorn::wide_to_utf8(buffer);
-    auto lib_path = sdk_path + "Lib\\";
+    std::string sdk_path = acorn::utf16_to_utf8(buffer);
+    std::string lib_path = sdk_path + "Lib\\";
 
     auto best_dir = find_newest_ver_directory(lib_path);
     winkit_lib_um_path = lib_path + best_dir + "\\um";
@@ -195,10 +195,11 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
         // when executing command line tools so we will use that version.
         auto wdefault_ver_file_path = inst_path + L"\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt";
 
+        std::string err;
         char*  buffer;
         size_t length;
-        if (!read_entire_file(SystemPath(wdefault_ver_file_path), buffer, length, allocator)) {
-            auto default_ver_file_path = acorn::wide_to_utf8(wdefault_ver_file_path.c_str());
+        if (!acorn::read_file_to_buffer(Path(wdefault_ver_file_path), err, buffer, length, 10000000000, allocator)) {
+            auto default_ver_file_path = acorn::utf16_to_utf8(wdefault_ver_file_path.c_str());
             Logger::global_error(context, "Your system is missing file '%s'", default_ver_file_path)
                 .end_error(ErrCode::GlobalFailedToFindMsvcPaths);
             return false;
@@ -207,7 +208,7 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
         auto version = std::string(buffer, length);
         version = trim(version);
 
-        auto wversion = acorn::utf8_to_wide(version.c_str());
+        std::wstring wversion = acorn::utf8_to_utf16(version.c_str());
 
         auto base_path = inst_path + L"\\VC\\Tools\\MSVC\\" + wversion;
 
@@ -228,8 +229,8 @@ bool acorn::get_msvc_install_paths(Context& context, PageAllocator& allocator, b
         }
 
 
-        bin_path = acorn::wide_to_utf8(msvc_bin.c_str());
-        lib_path = acorn::wide_to_utf8(msvc_lib.c_str());
+        bin_path = acorn::utf16_to_utf8(msvc_bin.c_str());
+        lib_path = acorn::utf16_to_utf8(msvc_lib.c_str());
         if (is_preferred) {
             return true;
         }

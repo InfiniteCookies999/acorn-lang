@@ -34,7 +34,7 @@ static std::string executable_path;
 static std::tuple<std::string, std::string> run_codegen_test(const char* file, bool use_mock_lib = false) {
 
     Compiler::SourceVector sources;
-    sources.push_back(Source{ acorn::SystemPath(file), "" });
+    sources.push_back(Source{ acorn::Path(file), "" });
 
     if (!std::filesystem::exists(file)) {
         return { std::format("Test path: \"{}\" does not exist.", file), "" };
@@ -55,7 +55,7 @@ static std::tuple<std::string, std::string> run_codegen_test(const char* file, b
     // created because if the user tries running the tests from a different
     // directory than the tests directory it makes sense that the executable
     // still ends up in the tests directory.
-    compiler->set_output_directory(SystemPath(test_executable_directory));
+    compiler->set_output_directory(Path(test_executable_directory));
     //compiler->set_should_show_llvm_ir();
 
     compiler->set_dont_show_wrote_to_msg();

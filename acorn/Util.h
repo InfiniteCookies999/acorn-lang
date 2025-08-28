@@ -20,9 +20,6 @@
 
 namespace acorn {
 
-    class SystemPath;
-    bool read_entire_file(const acorn::SystemPath& path, char*& buffer, size_t& length, PageAllocator& allocator);
-
     uint64_t next_pow2(uint64_t value);
 
     enum class Color {
@@ -102,11 +99,11 @@ namespace acorn {
 
     llvm::SmallVector<std::string> split_by_whitespace(const std::string& s);
 
-    std::string wide_to_utf8(const wchar_t* str);
-    std::string wide_to_utf8(const wchar_t* str, size_t length);
+    std::string utf16_to_utf8(const wchar_t* str);
+    std::string utf16_to_utf8(const wchar_t* str, size_t length);
 
-    std::wstring utf8_to_wide(const char* str);
-    std::wstring utf8_to_wide(const char* str, size_t byte_length);
+    std::wstring utf8_to_utf16(const char* str);
+    std::wstring utf8_to_utf16(const char* str, size_t byte_length);
 
     size_t get_system_page_size();
 

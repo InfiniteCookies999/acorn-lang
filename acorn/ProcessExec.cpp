@@ -52,7 +52,7 @@ bool acorn::exe_hidden_process(char* process, char* process_dir, std::string& st
         acorn_fatal("Failed to create pipe for process");
     }
 
-    std::wstring wprocess = acorn::utf8_to_wide(process);
+    std::wstring wprocess = acorn::utf8_to_utf16(process);
 
     PROCESS_INFORMATION process_info = {0};
 
@@ -230,10 +230,10 @@ bool acorn::exe_process(char* process, char* process_dir, bool seperate_window, 
     STARTUPINFOW startup_info = { 0 };
     startup_info.cb = sizeof(STARTUPINFOW);
 
-    std::wstring wprocess = acorn::utf8_to_wide(process);
+    std::wstring wprocess = acorn::utf8_to_utf16(process);
     std::wstring wprocess_dir;
     if (process_dir) {
-        wprocess_dir = acorn::utf8_to_wide(process_dir);
+        wprocess_dir = acorn::utf8_to_utf16(process_dir);
     }
 
     if (!CreateProcessW(nullptr,

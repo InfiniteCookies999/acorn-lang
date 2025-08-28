@@ -27,7 +27,6 @@ namespace acorn {
         DebugInfoEmitter* di_emitter;
 
         SourceFile(const SourceFile&) = delete;
-
         SourceFile(SourceFile&&) = default;
 
         SourceFile(Context& context, std::string path, std::string full_path, Buffer buffer, Module& modl);

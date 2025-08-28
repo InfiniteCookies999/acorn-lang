@@ -20,8 +20,7 @@ namespace acorn {
         using BadScopeList = llvm::SmallVector<BadScopeNode>;
         using DupDeclList = llvm::SmallVector<std::tuple<ScopeLocation, Decl*, Decl*>>;
 
-        Module() : Namespace(*this) {
-        }
+        Module() : Namespace(*this) {}
 
         Namespace* find_namespace(Identifier name);
 

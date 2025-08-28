@@ -147,11 +147,10 @@ acorn::Type* acorn::TypeTable::create_type_from_type(Type* type, bool is_const) 
         new_type = GenericType::create(allocator, generic_type->get_generic(), is_const);
         break;
     }
-    case TypeKind::PARTIALLY_BOUND_STRUCT: {
-        auto generic_struct_type = static_cast<PartiallyBoundStructType*>(type);
-        new_type = PartiallyBoundStructType::create(allocator,
+    case TypeKind::PENDING_GENERIC_STRUCT: {
+        auto generic_struct_type = static_cast<PendingGenericsStructType*>(type);
+        new_type = PendingGenericsStructType::create(allocator,
                                                     generic_struct_type->get_unbound_generic_struct(),
-                                                    generic_struct_type->get_partially_bound_types(),
                                                     is_const);
         break;
     }

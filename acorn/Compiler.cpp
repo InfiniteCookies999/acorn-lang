@@ -39,10 +39,11 @@ namespace acorn {
 }
 
 acorn::Compiler::Compiler(PageAllocator& allocator)
-    : allocator(allocator),
+    : allocator(allocator)
     // NOTE: cannot use the allocator because it needs it's memory deleted.
-    ll_module(new llvm::Module("AcornModule", ll_context)),
-    context(*new_context(ll_context, *ll_module, allocator)) {
+    , ll_module(new llvm::Module("AcornModule", ll_context))
+    , context(*new_context(ll_context, *ll_module, allocator)) {
+
     set_output_name("program");
     // Start tracking time before run is called to include timing for
     // command line processing.
@@ -58,7 +59,7 @@ int acorn::Compiler::run(SourceVector& sources) {
 
     go(initialize_codegen());
 
-    go(parse_files(sources));
+    go(parse_sources(sources));
 
     go(sema_and_irgen());
 
@@ -73,120 +74,6 @@ int acorn::Compiler::run(SourceVector& sources) {
     return run_program();
 
 #undef go
-}
-
-void acorn::Compiler::set_output_name(std::string output_name) {
-#if WIN_OS
-    exe_name = output_name.ends_with(".exe") ? output_name : output_name + ".exe";
-#elif UNIX_OS
-    exe_name = output_name;
-#endif
-    obj_name = output_name.ends_with(".exe") ? output_name.substr(0, output_name.length() - 4) : output_name;
-    obj_name += ".o";
-    this->output_name = std::move(output_name);
-}
-
-bool acorn::Compiler::initialize_target_machine() {
-    if (!init_llvm_native_target()) {
-        Logger::global_error(context, "Failed to initialize LLVM native target")
-            .end_error(ErrCode::GlobalFailedToInitializeLLVMNativeTarget);
-        return false;
-    }
-
-    if (!ll_target_machine) {
-        ll_target_machine = create_llvm_target_machine(context, release_build);
-    }
-
-    return ll_target_machine != nullptr;
-}
-
-static std::ostream& operator<<(std::ostream& os, acorn::Timer& timer) {
-    return os << std::fixed << std::setprecision(3) << timer.took_ms() / 1e9 << " ms. ";
-}
-
-struct ShowTime {
-    double time;
-
-    ShowTime(const acorn::Timer& timer)
-        : time(timer.took_ms()) {
-    }
-
-    ShowTime(double time)
-        : time(time) {
-    }
-};
-
-static std::ostream& operator<<(std::ostream& os, const ShowTime& show_time) {
-    return os << std::fixed << std::setprecision(3) << show_time.time << " ms. ";
-}
-
-static int count_digits(int number) {
-    int digits = 0;
-    do {
-        digits++;
-        number /= 10;
-    } while (number != 0);
-    return digits;
-}
-
-void acorn::Compiler::show_time_table() {
-    if (!should_show_times || context.has_errors()) return;
-
-    std::cout << "\n\n";
-
-    auto get_ms_pad_width = [](const auto&... timers) -> int {
-        using namespace std::ranges;
-        std::vector<int> v{ static_cast<int>(timers.took_ms())... };
-        return max(v | views::transform(count_digits));
-    };
-    auto get_misc_time = [this](const auto&... timers) -> double {
-         return total_timer.took_ms() - (timers.took_ms() + ...);
-    };
-    auto get_pad1 = [](double time, int pad_width) {
-        return std::string(pad_width - count_digits(static_cast<int>(time)), ' ');
-    };
-    auto get_pad = [get_pad1](const Timer& timer, int pad_width) {
-        return get_pad1(timer.took_ms(), pad_width);
-    };
-
-    int pad_width = get_ms_pad_width(parse_timer, sema_timer, ir_timer, codegen_timer, link_timer, total_timer);
-    double misc_time = get_misc_time(parse_timer, sema_timer, ir_timer, codegen_timer, link_timer);
-
-    std::cout << "Parsed " << (total_lines_parsed - whitespace_lines_parsed) << " lines"
-              << " (" << "Including whitespace: " << total_lines_parsed << ")\n";
-    std::cout << "Parsing Time   " << get_pad(parse_timer, pad_width)
-                                   << ShowTime(parse_timer) << "\n";
-    std::cout << "Sema    Time   " << get_pad(sema_timer, pad_width)
-                                   << ShowTime(sema_timer) << "\n";
-    std::cout << "IRgen   Time   " << get_pad(ir_timer, pad_width)
-                                   << ShowTime(ir_timer) << "\n";
-    std::cout << "Codegen Time   " << get_pad(codegen_timer, pad_width)
-                                   << ShowTime(codegen_timer) << "\n";
-    std::cout << "Link    Time   " << get_pad(link_timer, pad_width)
-                                   << ShowTime(link_timer) << "\n";
-    std::cout << "Misc    Time   " << get_pad1(misc_time, pad_width)
-                                   << ShowTime(misc_time) << "\n";
-    std::cout << std::string(15 + pad_width + 8, '-') << "\n";
-    std::cout << "total   Time   " << get_pad(total_timer, pad_width)
-                                   << ShowTime(total_timer) << "\n";
-
-}
-
-int acorn::Compiler::run_program() {
-    if (!(should_run_program || should_run_seperate_window)) return 0;
-
-    if (!dont_show_wrote_to_msg && !should_run_seperate_window) {
-        std::cout << "\n";
-    }
-
-    int exit_code;
-    auto process_path = absolute_exe_path.to_utf8_string();
-    auto process_dir  = absolute_output_directory.to_utf8_string();
-    exe_process(process_path.data(),
-                process_dir.data(),
-                should_run_seperate_window,
-                exit_code);
-    return exit_code;
 }
 
 void acorn::Compiler::initialize_codegen() {
@@ -228,6 +115,186 @@ void acorn::Compiler::initialize_codegen() {
     set_llvm_module_target(*ll_module, ll_target_machine);
 
     codegen_timer.stop();
+}
+
+bool acorn::Compiler::initialize_target_machine() {
+    if (!init_llvm_native_target()) {
+        Logger::global_error(context, "Failed to initialize LLVM native target")
+            .end_error(ErrCode::GlobalFailedToInitializeLLVMNativeTarget);
+        return false;
+    }
+
+    if (!ll_target_machine) {
+        ll_target_machine = create_llvm_target_machine(context, release_build);
+    }
+
+    return ll_target_machine != nullptr;
+}
+
+void acorn::Compiler::parse_sources(SourceVector& sources) {
+    parse_timer.start();
+
+    acorn::initialize_float_parsing(allocator);
+
+    if (sources.empty()) {
+        Logger::global_error(context, "No sources provided")
+            .end_error(ErrCode::GlobalNoSourcesProvided);
+        return;
+    }
+
+    // Trying to find the standard library and including it in the sources if it exists.
+    if (!context.should_stand_alone()) {
+        auto lib_path = get_std_lib_path();
+        if (!lib_path.empty()) {
+            sources.push_back(
+                Source{
+                    .path     = Path(std::move(lib_path)),
+                    .mod_name = "std"
+                });
+        } else {
+            Logger::global_error(context, "Missing standard library environment variable")
+                .add_line("Make sure you set environment variable '%s'", StdLibEnvironmentVariable)
+                .end_error(ErrCode::GlobalNoStdLibrary);
+            return;
+        }
+    }
+
+    if (!validate_sources(sources)) {
+        return; // Validation failed, so exit early.
+    }
+
+    for (const auto& source : sources) {
+        auto modl = context.get_or_create_modl(source.mod_name);
+
+        auto& path = source.path;
+
+        std::string err;
+        auto proj_path = get_parent_directory(path, err);
+        if (!err.empty()) {
+            Logger::global_error(context,
+                "Failed to get parent directory for source \"%s\""
+                "Make sure not to modify files while compiling. Error: '%s'",
+                path, err)
+                .end_error(ErrCode::GlobalFailedToGetSourceDir);
+            continue;
+        }
+
+        // Checking if it is a directory or regular file then parsing either.
+        if (is_directory(path, err)) {
+            // The user specified a path to a directory (parsing all acorn
+            // files under the directory).
+            parse_directory(*modl, path, proj_path);
+        } else if (!err.empty()) {
+            Logger::global_error(context,
+                    "Failed to check if source \"%s\" is a directory. "
+                    "Make sure not to modify files while compiling. Error: '%s'",
+                    path, err)
+                .end_error(ErrCode::GlobalFailedToCheckSourceIsDir);
+        } else {
+            // The user specified a path to a file.
+            //
+            if (path.get_extension() != ".ac") {
+                Logger::global_error(context, "Expected source file with extension type "
+                                              ".ac for file \"%s\"", path)
+                    .end_error(ErrCode::GlobalWrongExtensionTypeForFile);
+                continue; // Skip this file.
+            }
+
+            parse_file(*modl, path, proj_path);
+        }
+    }
+
+    parse_timer.stop();
+
+}
+
+bool acorn::Compiler::validate_sources(const SourceVector& sources) {
+
+    bool failed_to_find_source = false;
+    for (const auto& source : sources) {
+        std::string err;
+        if (!path_exists(source.path, err)) {
+            if (!err.empty()) {
+                Logger::global_error(context,
+                    "Could not check if source \"%s\" exists. Please check permissions. Error: '%s'",
+                    source.path, err)
+                    .end_error(ErrCode::GlobalCouldNotCheckIfSourceExists);
+            } else {
+                Logger::global_error(context, "Source \"%s\" does not exist", source.path)
+                    .end_error(ErrCode::GlobalSourceDoesNotExists);
+
+            }
+            failed_to_find_source = true;
+        }
+    }
+
+    return !failed_to_find_source;
+}
+
+void acorn::Compiler::parse_directory(Module& modl, const Path& dir_path, const Path& proj_path) {
+
+    std::string err;
+    recursively_iterate_directory(dir_path, err, [this, &modl, &proj_path](Path path, PathKind kind) {
+        if (kind == PathKind::REGULAR && path.get_extension() == ".ac") {
+            parse_file(modl, path, proj_path);
+        }
+    });
+
+    if (!err.empty()) {
+        Logger::global_error(context, "Failed to iterate over directory %s. Error: %s",
+                             dir_path, err)
+            .end_error(ErrCode::GlobalFailedToIterateDirectory);
+        return;
+    }
+}
+
+acorn::Buffer acorn::Compiler::read_file_to_buffer(const Path& path) {
+    // allow for up to 1GB for file sizes.
+    constexpr uint64_t MAX_FILE_SIZE = 1'000'000'000;
+
+    std::string err;
+    Buffer buffer;
+    if (!acorn::read_file_to_buffer(path, err, buffer.content, buffer.length, MAX_FILE_SIZE, allocator)) {
+        Logger::global_error(context, "Failed to read file \"%s\". "
+                                      "Make sure not to modifty files while compiling. Error: '%s'", path, err)
+            .end_error(ErrCode::GlobalFailedToReadSourceFile);
+        return { .length = 0 };
+    }
+
+    return buffer;
+}
+
+void acorn::Compiler::parse_file(Module& modl, const Path& path, const Path& proj_path) {
+    auto buffer = read_file_to_buffer(path);
+
+    std::string err;
+    auto abs_path = get_absolute_path(path, err);
+    if (!err.empty()) {
+        Logger::global_error(context, "Failed to get absolute path of file: \"%s\". Error: %s", path, err)
+            .end_error(ErrCode::GlobalFailedToGetAbsolutePathOfFile);
+        return;
+    }
+
+    auto full_path  = abs_path.to_normalized_utf8_string();
+    auto short_path = full_path.substr(proj_path.to_normalized_utf8_string().size());
+
+    SourceFile* file = allocator.alloc_type<SourceFile>();
+    new (file) SourceFile(context, std::move(short_path), std::move(full_path), buffer, modl);
+    if (error_code_interceptor) {
+        file->logger.set_error_code_interceptor(error_code_interceptor);
+    }
+    modl.add_source_file(file);
+
+    if (!file->buffer.length) {
+        return; // Exit early because the file failed to read or because
+                // the file is empty.
+    }
+
+    Parser parser(context, modl, file);
+    parser.parse();
+    total_lines_parsed += static_cast<uint64_t>(parser.get_total_lines_parsed());
+    whitespace_lines_parsed += static_cast<uint64_t>(parser.get_whitespace_lines_parsed());
+
 }
 
 void acorn::Compiler::sema_and_irgen() {
@@ -569,161 +636,104 @@ void acorn::Compiler::link() {
     link_timer.stop();
 }
 
-bool acorn::Compiler::validate_sources(const SourceVector& sources) {
-
-    bool failed_to_find_source = false;
-    for (const auto& source : sources) {
-        std::string err;
-        if (!path_exists(source.path, err)) {
-            if (!err.empty()) {
-                Logger::global_error(context,
-                    "Could not check if source \"%s\" exists. Please check permissions. Error: '%s'",
-                    source.path, err)
-                    .end_error(ErrCode::GlobalCouldNotCheckIfSourceExists);
-            } else {
-                Logger::global_error(context, "Source \"%s\" does not exist", source.path)
-                    .end_error(ErrCode::GlobalSourceDoesNotExists);
-
-            }
-            failed_to_find_source = true;
-        }
-    }
-
-    return !failed_to_find_source;
+static std::ostream& operator<<(std::ostream& os, acorn::Timer& timer) {
+    return os << std::fixed << std::setprecision(3) << timer.took_ms() / 1e9 << " ms. ";
 }
 
-void acorn::Compiler::parse_files(SourceVector& sources) {
-    parse_timer.start();
+struct ShowTime {
+    double time;
 
-    acorn::initialize_float_parsing(allocator);
-
-    if (sources.empty()) {
-        Logger::global_error(context, "No sources provided")
-            .end_error(ErrCode::GlobalNoSourcesProvided);
-        return;
+    ShowTime(const acorn::Timer& timer)
+        : time(timer.took_ms()) {
     }
 
-    // Trying to find the standard library.
-    if (!context.should_stand_alone()) {
-        auto lib_path = get_std_lib_path();
-        if (!lib_path.empty()) {
-            sources.push_back(Source{
-                                  .path     = SystemPath(std::move(lib_path)),
-                                  .mod_name = "std"
-                              });
-        } else {
-            Logger::global_error(context, "Missing standard library environment variable")
-                .add_line("Make sure you set environment variable '%s'", StdLibEnvironmentVariable)
-                .end_error(ErrCode::GlobalNoStdLibrary);
-            return;
-        }
+    ShowTime(double time)
+        : time(time) {
     }
+};
 
-    if (!validate_sources(sources)) {
-        return; // Validation failed, so exit early.
-    }
+static std::ostream& operator<<(std::ostream& os, const ShowTime& show_time) {
+    return os << std::fixed << std::setprecision(3) << show_time.time << " ms. ";
+}
 
-    for (const auto& source : sources) {
-        auto modl = context.get_or_create_modl(source.mod_name);
+static int count_digits(int number) {
+    int digits = 0;
+    do {
+        digits++;
+        number /= 10;
+    } while (number != 0);
+    return digits;
+}
 
-        auto& path = source.path;
+void acorn::Compiler::show_time_table() {
+    if (!should_show_times || context.has_errors()) return;
 
-        std::string err;
-        if (is_directory(path, err)) {
-            // The user specified a path to a directory (parsing all acorn
-            // files under the directory).
-            parse_directory(*modl, path);
-        } else if (!err.empty()) {
-            Logger::global_error(context,
-                "Failed to check if source \"%s\" is a directory. "
-                "Make sure not to modify files while compiling. Error: '%s'",
-                path, err)
-                .end_error(ErrCode::GlobalFailedToCheckSourceIsDir);
-        } else {
-            if (path.utf8_extension() != ".ac") {
-                Logger::global_error(context, "Expected source file with extension type "
-                                              ".ac for file \"%s\"", path)
-                    .end_error(ErrCode::GlobalWrongExtensionTypeForFile);
-                continue; // Skip this file.
-            }
+    std::cout << "\n\n";
 
-            // The user specified a path to a file.
-            parse_file(*modl, path, path.parent_directory(err));
-        }
-    }
+    auto get_ms_pad_width = [](const auto&... timers) -> int {
+        using namespace std::ranges;
+        std::vector<int> v{ static_cast<int>(timers.took_ms())... };
+        return max(v | views::transform(count_digits));
+    };
+    auto get_misc_time = [this](const auto&... timers) -> double {
+         return total_timer.took_ms() - (timers.took_ms() + ...);
+    };
+    auto get_pad1 = [](double time, int pad_width) {
+        return std::string(pad_width - count_digits(static_cast<int>(time)), ' ');
+    };
+    auto get_pad = [get_pad1](const Timer& timer, int pad_width) {
+        return get_pad1(timer.took_ms(), pad_width);
+    };
 
-    parse_timer.stop();
+    int pad_width = get_ms_pad_width(parse_timer, sema_timer, ir_timer, codegen_timer, link_timer, total_timer);
+    double misc_time = get_misc_time(parse_timer, sema_timer, ir_timer, codegen_timer, link_timer);
+
+    std::cout << "Parsed " << (total_lines_parsed - whitespace_lines_parsed) << " lines"
+              << " (" << "Including whitespace: " << total_lines_parsed << ")\n";
+    std::cout << "Parsing Time   " << get_pad(parse_timer, pad_width)
+                                   << ShowTime(parse_timer) << "\n";
+    std::cout << "Sema    Time   " << get_pad(sema_timer, pad_width)
+                                   << ShowTime(sema_timer) << "\n";
+    std::cout << "IRgen   Time   " << get_pad(ir_timer, pad_width)
+                                   << ShowTime(ir_timer) << "\n";
+    std::cout << "Codegen Time   " << get_pad(codegen_timer, pad_width)
+                                   << ShowTime(codegen_timer) << "\n";
+    std::cout << "Link    Time   " << get_pad(link_timer, pad_width)
+                                   << ShowTime(link_timer) << "\n";
+    std::cout << "Misc    Time   " << get_pad1(misc_time, pad_width)
+                                   << ShowTime(misc_time) << "\n";
+    std::cout << std::string(15 + pad_width + 8, '-') << "\n";
+    std::cout << "total   Time   " << get_pad(total_timer, pad_width)
+                                   << ShowTime(total_timer) << "\n";
 
 }
 
-void acorn::Compiler::parse_directory(Module& modl, const SystemPath& dir_path) {
-    std::string err;
-    auto base_path = dir_path.parent_directory(err);
+int acorn::Compiler::run_program() {
+    if (!(should_run_program || should_run_seperate_window)) return 0;
 
-    recursively_iterate_directory(dir_path, err, [this, &modl, &base_path](SystemPath path, PathKind kind) {
-        if (kind == PathKind::REGULAR && path.utf8_extension() == ".ac") {
-            parse_file(modl, path, base_path);
-        }
-    });
-
-    if (!err.empty()) {
-        Logger::global_error(context, "Failed to iterate over directory %s. Error: %s",
-                             dir_path, err)
-            .end_error(ErrCode::GlobalFailedToIterateDirectory);
-        return;
+    if (!dont_show_wrote_to_msg && !should_run_seperate_window) {
+        std::cout << "\n";
     }
+
+    int exit_code;
+    auto process_path = absolute_exe_path.to_utf8_string();
+    auto process_dir  = absolute_output_directory.to_utf8_string();
+    exe_process(process_path.data(),
+                process_dir.data(),
+                should_run_seperate_window,
+                exit_code);
+    return exit_code;
 }
 
-acorn::Buffer acorn::Compiler::read_file_to_buffer(const SystemPath& path) {
-
-    Buffer buffer;
-    if (!read_entire_file(path, buffer.content, buffer.length, allocator)) {
-        Logger::global_error(context, "Failed to read file \"%s\". "
-                                      "Make sure not to modifty files while compiling", path)
-            .end_error(ErrCode::GlobalFailedToReadSourceFile);
-        return { .length = 0 };
-    }
-
-    return buffer;
-}
-
-void acorn::Compiler::parse_file(Module& modl, const SystemPath& path, const SystemPath& base_path) {
-    auto buffer = read_file_to_buffer(path);
-
-    size_t base_path_length = base_path.to_utf8_string().length();
-    if (base_path_length) {
-        // If it exists we need to add one to get rid of the '/'.
-        ++base_path_length;
-    }
-
-    std::string err;
-    auto abs_path = get_absolute_path(path, err);
-    if (!err.empty()) {
-        Logger::global_error(context, "Failed to get absolute path of file: \"%s\". Error: %s", path, err)
-            .end_error(ErrCode::GlobalFailedToGetAbsolutePathOfFile);
-        return;
-    }
-
-    auto full_path  = abs_path.to_utf8_string();
-    auto short_path = abs_path.to_utf8_string().substr(base_path_length);
-
-    SourceFile* file = allocator.alloc_type<SourceFile>();
-    new (file) SourceFile(context, std::move(short_path), std::move(full_path), buffer, modl);
-    if (error_code_interceptor) {
-        file->logger.set_error_code_interceptor(error_code_interceptor);
-    }
-    modl.add_source_file(file);
-
-    if (!file->buffer.length) {
-        return; // Exit early because the file failed to read or because
-                // the file is empty.
-    }
-
-    Parser parser(context, modl, file);
-    parser.parse();
-    total_lines_parsed += static_cast<uint64_t>(parser.get_total_lines_parsed());
-    whitespace_lines_parsed += static_cast<uint64_t>(parser.get_whitespace_lines_parsed());
-
+void acorn::Compiler::set_output_name(std::string output_name) {
+#if WIN_OS
+    exe_name = output_name.ends_with(".exe") ? output_name : output_name + ".exe";
+#elif UNIX_OS
+    exe_name = output_name;
+#endif
+    obj_name = output_name.ends_with(".exe") ? output_name.substr(0, output_name.length() - 4) : output_name;
+    obj_name += ".o";
+    this->output_name = std::move(output_name);
 }
 
 std::string acorn::Compiler::get_std_lib_path() const {

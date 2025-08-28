@@ -137,7 +137,7 @@ static int run_driver(int argc, char* argv[]) {
     }, true);
     processor.add_flag("output-directory", { "out-directory", "dir", "directory" }, [&compiler](CommandConsumer& consumer) {
         consumer.next_eql_pair([&compiler](std::string dir) {
-            compiler.set_output_directory(acorn::SystemPath(dir));
+            compiler.set_output_directory(acorn::Path(dir));
        }, "Missing directory");
     }, true);
 
@@ -185,7 +185,7 @@ static int run_driver(int argc, char* argv[]) {
             i = processor.process(flag_name, i);
 
         } else {
-            sources.push_back(acorn::Source{ acorn::SystemPath(argv[i]), "" });
+            sources.push_back(acorn::Source{ acorn::Path(argv[i]), "" });
             ++i;
         }
     }
@@ -211,7 +211,7 @@ int wmain(int argc, wchar_t* argv[]) {
     char** argv_utf8 = new char* [argc];
 
     for (int i = 0; i < argc; i++) {
-        auto arg_utf8 = acorn::wide_to_utf8(argv[i]);
+        auto arg_utf8 = acorn::utf16_to_utf8(argv[i]);
         argv_buffer.push_back(std::move(arg_utf8));
     }
     for (int i = 0; i < argc; i++) {

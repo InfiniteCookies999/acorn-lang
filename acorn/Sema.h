@@ -130,7 +130,7 @@ namespace acorn {
         bool check_raised_error(RaisedError& raised_error);
 
         void ensure_global_variable_checked(SourceLoc error_loc, Var* var);
-        bool ensure_struct_checked(SourceLoc error_loc, Struct* structn);
+        bool ensure_struct_checked(Struct* structn);
         void ensure_enum_checked(SourceLoc error_loc, Enum* enumn);
         void ensure_interface_checked(SourceLoc error_loc, Interface* interfacen);
 
@@ -285,7 +285,7 @@ namespace acorn {
         Decl* find_composite_for_composite_type(Identifier name, SourceLoc error_loc);
         Type* fixup_function_type(Type* type);
         Type* fixup_generic_type(Type* type);
-        Type* fixup_partially_bound_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_types);
+        Type* fixup_pending_generic_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_types);
 
         bool bind_default_generic_arguments(llvm::SmallVector<Type*>& generic_bindings,
                                             const llvm::SmallVector<Generic*>& generics);

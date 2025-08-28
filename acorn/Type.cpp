@@ -258,6 +258,8 @@ std::string acorn::Type::to_string() const {
     case TypeKind::STRUCT:        return str(static_cast<const StructType*>(this)->to_string());
     case TypeKind::ENUM:          return str(static_cast<const EnumType*>(this)->to_string());
     case TypeKind::INTERFACE:     return str(static_cast<const InterfaceType*>(this)->to_string());
+    case TypeKind::PENDING_GENERIC_STRUCT:
+                                  return str(static_cast<const PendingGenericsStructType*>(this)->to_string());
     case TypeKind::ASSIGN_DETERMINED_ARRAY:
                                   return str2(static_cast<const AssignDeterminedArrayType*>(this)->to_string());
     case TypeKind::GENERIC:       return str(static_cast<const GenericType*>(this)->to_string());
@@ -564,12 +566,11 @@ std::string acorn::StructType::to_string() const {
     return str;
 }
 
-acorn::PartiallyBoundStructType* acorn::PartiallyBoundStructType::create(PageAllocator& allocator,
-                                                                         UnboundGenericStruct* unbound_generic_struct,
-                                                                         llvm::SmallVector<Type*> partially_bound_types,
-                                                                         bool is_const) {
-    auto struct_type = allocator.alloc_type<PartiallyBoundStructType>();
-    new (struct_type) PartiallyBoundStructType(is_const, unbound_generic_struct, std::move(partially_bound_types));
+acorn::PendingGenericsStructType* acorn::PendingGenericsStructType::create(PageAllocator& allocator,
+                                                                           UnboundGenericStruct* unbound_generic_struct,
+                                                                           bool is_const) {
+    auto struct_type = allocator.alloc_type<PendingGenericsStructType>();
+    new (struct_type) PendingGenericsStructType(is_const, unbound_generic_struct);
     struct_type->contains_const = is_const;
     if (!is_const) {
         struct_type->non_const_version = struct_type;
@@ -578,17 +579,8 @@ acorn::PartiallyBoundStructType* acorn::PartiallyBoundStructType::create(PageAll
     return struct_type;
 }
 
-std::string acorn::PartiallyBoundStructType::to_string() const {
-    std::string str = unbound_generic_struct->name.to_string().str();
-    str += "(";
-    for (size_t i = 0; i < partially_bound_types.size(); i++) {
-        str += partially_bound_types[i]->to_string();
-        if (i + 1 != partially_bound_types.size()) {
-            str += ", ";
-        }
-    }
-    str += ")";
-    return str;
+std::string acorn::PendingGenericsStructType::to_string() const {
+    return unbound_generic_struct->name.to_string().str();
 }
 
 acorn::EnumType* acorn::EnumType::create(PageAllocator& allocator,

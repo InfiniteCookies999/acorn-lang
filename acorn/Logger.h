@@ -34,7 +34,7 @@ namespace acorn {
     class Logger;
     class GlobalLogger;
 
-    class SystemPath;
+    class Path;
 
     class FatalException : std::exception {
     public:
@@ -49,8 +49,7 @@ namespace acorn {
     public:
 
         AbstractLogger(Context& context, Stream stream)
-            : context(context), stream(stream) {
-        }
+            : context(context), stream(stream) {}
 
         L& add_line(const char* msg) {
             return add_line([msg](L&) {
@@ -160,7 +159,7 @@ namespace acorn {
             print(stream, s.data(), s.size());
         }
 
-        static void print(Stream stream, const SystemPath& path);
+        static void print(Stream stream, const Path& path);
 
         static void print(Stream stream, Type* type);
 
@@ -233,8 +232,7 @@ namespace acorn {
     public:
 
         GlobalLogger(Context& context, const std::function<void()>& print_cb)
-            : AbstractLogger(context, Stream::StdErr), print_cb(print_cb) {
-        }
+            : AbstractLogger(context, Stream::StdErr), print_cb(print_cb) {}
 
         void end_error(ErrCode error_code);
 
@@ -282,8 +280,7 @@ namespace acorn {
         };
 
         Logger(Context& context, SourceFile& file)
-            : AbstractLogger(context, Stream::StdErr), file(file) {
-        }
+            : AbstractLogger(context, Stream::StdErr), file(file) {}
 
         Logger(Logger&&) = default;
 
