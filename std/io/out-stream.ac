@@ -1,6 +1,5 @@
 #file(access=public, namespace=io)
 
-import .. module;
 import .IOError;
 import .reflect.Any;
 import .reflect.Type;
@@ -31,7 +30,7 @@ struct OutStream :: Writable {
     }
 
     fn write(s: const char*) | raises IOError {
-        try (write_buffer(s, as(int) module.strlen(s)));
+        try (write_buffer(s, as(int) \strlen(s)));
     }
 
     fn write(s: const String^) | raises IOError {
@@ -52,7 +51,7 @@ struct OutStream :: Writable {
 
         BUFFER_SIZE :: 64;
         buffer: char[BUFFER_SIZE] = ---;
-        ptr := module.uint64_to_chars(value, buffer + BUFFER_SIZE - 1, base);
+        ptr := \uint64_to_chars(value, buffer + BUFFER_SIZE - 1, base);
 
         length := as(int) ((buffer + BUFFER_SIZE) - ptr);
         try (write_buffer(ptr, length));
@@ -104,10 +103,10 @@ struct OutStream :: Writable {
         buffer: char[BUFFER_SIZE] = ---;
 
         buffer_end := buffer + buffer.length - 1;
-        int_ptr_start := module.uint64_to_chars(as(uint64) ptr, buffer_end, base=16);
+        int_ptr_start := \uint64_to_chars(as(uint64) ptr, buffer_end, base=16);
 
         zeros_length := as(int) (int_ptr_start - as(const char*) buffer);
-        module.memset(buffer, '0', zeros_length);
+        \memset(buffer, '0', zeros_length);
         buffer[1] = 'x';
 
         try (write_buffer(buffer, buffer.length));

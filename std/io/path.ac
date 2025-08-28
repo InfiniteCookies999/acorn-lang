@@ -1,6 +1,5 @@
 #file(namespace=io)
 
-import .. module;
 import .StateError;
 import .win32;
 
@@ -16,23 +15,23 @@ public struct PathTempBuffer {
     private needs_deallocation: bool;
 
     fn moveobj(o: PathTempBuffer*) {
-        this.buffer             #= module.exchange(o.buffer, null);
-        this.needs_deallocation #= module.exchange(o.needs_deallocation, false);
+        this.buffer             #= \exchange(o.buffer, null);
+        this.needs_deallocation #= \exchange(o.needs_deallocation, false);
     }
 
     fn delete() {
         if (needs_deallocation) {
-            module.free(buffer);
+            \free(buffer);
         }
     }
 }
 
 fn utf16_to_utf8(path: const char16*, utf8_buffer: char**, utf8_length: int32*) {
 #if OS_GROUP_WINDOWS
-    length := as(int32) module.wcslen(path);
+    length := as(int32) \wcslen(path);
 
     if (length == 0) {
-        *utf8_buffer = as(char*) module.malloc(1);
+        *utf8_buffer = as(char*) \malloc(1);
         (*utf8_buffer)[0] = '\0';
         *utf8_length = 0;
         return; // Documentation tells us it fails when length is zero.
@@ -53,7 +52,7 @@ fn utf16_to_utf8(path: const char16*, utf8_buffer: char**, utf8_length: int32*) 
     }
 
     // Converting!
-    *utf8_buffer = as(char*) module.malloc(as(usize) (*utf8_length + 1));
+    *utf8_buffer = as(char*) \malloc(as(usize) (*utf8_length + 1));
     win32.WideCharToMultiByte(win32.CP_UTF8,
                               0,
                               path,
@@ -71,16 +70,16 @@ fn utf16_to_utf8(path: const char16*, utf8_buffer: char**, utf8_length: int32*) 
 }
 
 fn utf8_to_utf16(path: const char*, utf16_buffer: char16**, utf16_length: int32*) {
-    return utf8_to_utf16(path, as(int32) module.strlen(path), utf16_buffer, utf16_length);
+    return utf8_to_utf16(path, as(int32) \strlen(path), utf16_buffer, utf16_length);
 }
 
 fn utf8_to_utf16(path: const char*, path_length: int32, utf16_buffer: char16**, utf16_length: int32*) {
 #if OS_GROUP_WINDOWS
 
-    byte_length := as(int32) module.strlen(path);
+    byte_length := as(int32) \strlen(path);
 
     if (byte_length == 0) {
-        *utf16_buffer = as(char16*) module.malloc(1 * sizeof(char16));
+        *utf16_buffer = as(char16*) \malloc(1 * sizeof(char16));
         (*utf16_buffer)[0] = 0;
         *utf16_length = 0;
         return; // Documentation tells us it fails when length is zero.
@@ -99,7 +98,7 @@ fn utf8_to_utf16(path: const char*, path_length: int32, utf16_buffer: char16**, 
     }
 
     // Converting!
-    *utf16_buffer = as(char16*) module.malloc(as(usize) (*utf16_length + 1) * sizeof(char16));
+    *utf16_buffer = as(char16*) \malloc(as(usize) (*utf16_length + 1) * sizeof(char16));
     win32.MultiByteToWideChar(win32.CP_UTF8,
                               0,
                               path,

@@ -23,11 +23,12 @@ namespace acorn {
 
         Sema(Context& context, SourceFile* file, Logger& logger);
 
-        static bool is_potential_main_function(Context& context, const Func* canidate);
+        static bool is_potential_main_function(Context& context, const Func* candidate);
         static bool find_main_function(Context& context);
 
         static void check_for_duplicate_functions(Namespace* nspace, Context& context);
-        static void check_for_duplicate_functions(const FuncList& funcs, Context& context);
+        static void check_for_duplicate_functions(const llvm::SmallVector<Func*>& funcs,
+                                                  Context& context);
         static bool check_for_duplicate_match(const Func* func1, const Func* func2);
         static void check_all_other_duplicates(Module& modl, Context& context);
         static void report_redeclaration(const Decl* decl1, const Decl* decl2, const char* node_kind_str, ErrCode error_code);
@@ -60,8 +61,6 @@ namespace acorn {
         Struct*    cur_struct     = nullptr;
         Enum*      cur_enum       = nullptr;
         Interface* cur_interface  = nullptr;
-
-        FuncList temp_ref_functions;
 
         // Limits to calculate comparison scores for which function to call.
         //
@@ -204,12 +203,13 @@ namespace acorn {
         Func* check_function_decl_call(Expr* call_node,
                                        llvm::SmallVector<Expr*>& args,
                                        size_t non_named_args_offset,
-                                       FuncList& candidates,
+                                       llvm::SmallVector<Func*>& candidates,
                                        bool is_const_object,
                                        const llvm::SmallVector<Type*>& pre_bound_types,
                                        Struct* generic_parent_struct,
                                        Struct*& fully_bound_parent_struct);
-        Func* find_best_call_candidate(FuncList& candidates,
+        Func* find_best_call_candidate(Expr* call_node,
+                                       llvm::SmallVector<Func*>& candidates,
                                        llvm::SmallVector<Expr*>& args,
                                        bool& selected_implicitly_converts_ptr_arg,
                                        bool& is_ambiguous,
@@ -293,12 +293,6 @@ namespace acorn {
         // Error reporting
         //--------------------------------------
 
-        void spellcheck_variables_for_ident(const llvm::SmallVector<Var*>& variables,
-                                            ErrorSpellChecker& spell_checker,
-                                            bool is_for_call);
-        void spellcheck_variables_for_ident(const llvm::DenseMap<Identifier, Var*>& variables,
-                                            ErrorSpellChecker& spell_checker,
-                                            bool is_for_call);
         // Displays information for why trying to call a function failed.
         template<typename F>
         void display_call_mismatch_info(const F* candidate,
@@ -309,7 +303,7 @@ namespace acorn {
                                         const llvm::SmallVector<Type*>& pre_bound_types);
         void display_call_mismatch_info(SourceLoc error_loc,
                                         Node* call_node,
-                                        const FuncList& candidates,
+                                        const llvm::SmallVector<Func*>& candidates,
                                         const llvm::SmallVector<Expr*>& args,
                                         const llvm::SmallVector<Type*>& pre_bound_types);
         uint64_t get_function_call_score(const Func* candidate,
@@ -318,7 +312,7 @@ namespace acorn {
                                          const llvm::SmallVector<Type*>& pre_bound_types);
 
         void display_call_ambiguous_info(SourceLoc error_loc,
-                                         FuncList& candidates,
+                                         llvm::SmallVector<Func*>& candidates,
                                          llvm::SmallVector<Expr*>& args,
                                          bool is_const_object,
                                          const llvm::SmallVector<Type*>& pre_bound_types);

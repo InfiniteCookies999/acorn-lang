@@ -22,29 +22,9 @@ namespace acorn {
             modl(modl), scope_location(scope_location) {
         }
 
-        void add_function(Func* func);
-        void add_variable(Var* var);
-        void add_composite(Decl* composite);
+        void add_declaration(Decl* decl, PageAllocator& allocator);
 
-        FuncList* find_functions(Identifier name);
-        Var*      find_variable(Identifier name);
-        Decl*     find_composite(Identifier name);
-
-        const llvm::DenseMap<Identifier, Var*>& get_variables() const {
-            return variables;
-        }
-
-        const llvm::DenseMap<Identifier, FuncList>& get_functions() const {
-            return functions;
-        }
-
-        const FuncList& get_functions(Identifier name) const {
-            return functions.find(name)->second;
-        }
-
-        const llvm::DenseMap<Identifier, Decl*>& get_composites() const {
-            return composites;
-        }
+        Node* find_declaration(Identifier name);
 
         void set_duplicates_checked() {
             duplicates_checked = true;
@@ -58,14 +38,21 @@ namespace acorn {
             return modl;
         }
 
+        const llvm::DenseMap<Identifier, Node*>& get_declarations() const {
+            return declarations;
+        }
+
+        // This function constructs a list of just the composites from the
+        // declarations in the `Namespace` but should not be used except
+        // when error reporting.
+        llvm::SmallVector<Decl*> get_composites() const;
+
     private:
         Module&       modl;
         ScopeLocation scope_location;
         bool          duplicates_checked = false;
 
-        llvm::DenseMap<Identifier, FuncList> functions;
-        llvm::DenseMap<Identifier, Var*>     variables;
-        llvm::DenseMap<Identifier, Decl*>    composites;
+        llvm::DenseMap<Identifier, Node*> declarations;
     };
 }
 

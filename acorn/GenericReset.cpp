@@ -169,6 +169,15 @@ namespace acorn {
                     reset_node(arg);
                 }
             }
+
+            if (ref->explicitly_binds_generics) {
+                auto call = static_cast<GenericBindFuncCall*>(ref);
+                call->candidates.clear();
+                call->bound_types.clear();
+                for (Expr* arg : call->args) {
+                    reset_node(arg);
+                }
+            }
             break;
         }
         case NodeKind::DOT_OPERATOR: {

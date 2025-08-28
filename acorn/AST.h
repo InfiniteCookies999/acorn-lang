@@ -44,11 +44,10 @@ namespace acorn {
 
     const size_t MAX_FUNC_PARAMS = 64;
 
-    using FuncList = llvm::SmallVector<Func*>;
-
     enum class NodeKind {
 
         FUNC,
+        FUNC_LIST,
         IMPLICIT_FUNC,
         VAR,
         VAR_LIST,
@@ -138,6 +137,12 @@ namespace acorn {
         bool is_expression() const {
             return kind > NodeKind::EXPR_START && kind < NodeKind::EXPR_END;
         }
+
+        bool is_composite() const {
+            return kind == NodeKind::STRUCT ||
+                   kind == NodeKind::ENUM   ||
+                   kind == NodeKind::INTERFACE;
+        }
     };
 
     // Statements
@@ -151,6 +156,11 @@ namespace acorn {
         size_t       index;
         GenericType* type;
         Expr*        default_arg = nullptr;
+    };
+
+    struct FuncList : Node, llvm::SmallVector<Func*> {
+        FuncList() : Node(NodeKind::FUNC_LIST) {
+        }
     };
 
     struct GenericInstance {
@@ -516,9 +526,8 @@ namespace acorn {
 
         SourceFile* file;
 
-        bool is_static          = false;
-        bool within_same_modl   = false;
-        bool within_parent_modl = false;
+        bool is_static        = false;
+        bool within_same_modl = false;
 
         struct KeyPart {
             Identifier name;
@@ -767,7 +776,6 @@ namespace acorn {
 
         Identifier ident;
         bool explicitly_binds_generics = false;
-
         enum class RelativeEnforcement {
             FILE,
             MODULE,
@@ -791,13 +799,13 @@ namespace acorn {
         } found_kind = NONE_KIND;
 
         union {
-            Var*         var_ref = nullptr;
-            FuncList*    funcs_ref;
-            Expr*        universal_ref;
-            Namespace*   nspace_ref;
-            Decl*        composite_ref;
-            Enum::Value* enum_value_ref;
-            GenericType* generic_type_ref;
+            Var*                      var_ref = nullptr;
+            llvm::SmallVector<Func*>* funcs_ref;
+            Expr*                     universal_ref;
+            Namespace*                nspace_ref;
+            Decl*                     composite_ref;
+            Enum::Value*              enum_value_ref;
+            GenericType*              generic_type_ref;
         };
 
         bool is_var_ref() const          { return found_kind == VAR_KIND;          }
@@ -813,7 +821,7 @@ namespace acorn {
             found_kind = VAR_KIND;
         }
 
-        void set_funcs_ref(FuncList* funcs) {
+        void set_funcs_ref(llvm::SmallVector<Func*>* funcs) {
             funcs_ref  = funcs;
             found_kind = FUNCS_KIND;
         }
@@ -864,6 +872,7 @@ namespace acorn {
         size_t non_named_args_offset = -1;
         llvm::SmallVector<Expr*> args;
         llvm::SmallVector<Type*> bound_types;
+        llvm::SmallVector<Func*> candidates;
     };
 
     struct TypeExpr : Expr {

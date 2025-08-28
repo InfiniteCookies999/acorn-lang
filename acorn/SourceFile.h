@@ -40,9 +40,7 @@ namespace acorn {
             return nspace;
         }
 
-        void add_function(Func* func);
-        void add_variable(Var* var);
-        void add_composite(Decl* composite);
+        void add_declaration(Decl* decl, PageAllocator& allocator);
 
         void set_default_access(uint32_t default_access) {
             this->default_access = default_access;
@@ -59,9 +57,6 @@ namespace acorn {
         void add_static_import(Namespace* nspace) {
             static_imports.push_back(nspace);
         }
-
-        FuncList* find_static_import_functions(Identifier name);
-        Var* find_static_import_variable(Identifier name);
 
         const llvm::SmallVector<Namespace*>& get_static_imports() const {
             return static_imports;

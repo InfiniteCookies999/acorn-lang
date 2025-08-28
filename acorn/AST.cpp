@@ -244,7 +244,12 @@ void acorn::Func::bind_generic_instance(GenericFuncInstance* generic_instance) {
 }
 
 acorn::Var* acorn::Struct::find_field(Identifier name) const {
-    return nspace->find_variable(name);
+    if (auto decl = nspace->find_declaration(name)) {
+        if (decl->is(NodeKind::VAR)) {
+            return static_cast<Var*>(decl);
+        }
+    }
+    return nullptr;
 }
 
 const acorn::Struct::InterfaceExtension* acorn::Struct::find_interface_extension(Identifier name) const {

@@ -746,20 +746,22 @@ void acorn::Compiler::find_std_lib_declarations() {
             acorn_fatal("unknown composite type");
         }
 
-        if (Decl* composite = nspace->find_composite(decl_name)) {
-            if (composite->is(decl_kind)) {
-                return static_cast<T*>(composite);
-            } else {
-                Logger::global_error(context, "Standard library '%s' struct not a %s",
-                                     decl_name, decl_type_str)
-                    .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
-            }
-        } else {
+        auto decl = nspace->find_declaration(decl_name);
+        if (!decl) {
             Logger::global_error(context, "Failed to find standard library '%s' %s",
                                  decl_name, decl_type_str)
                 .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+            return nullptr;
         }
-        return nullptr;
+
+        if (decl->is(decl_kind)) {
+            return static_cast<T*>(decl);
+        } else {
+            Logger::global_error(context, "Standard library '%s' declaration not a %s",
+                                 decl_name, decl_type_str)
+                .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+            return nullptr;
+        }
     };
 
     auto& type_table = context.type_table;
@@ -785,7 +787,10 @@ void acorn::Compiler::find_std_lib_declarations() {
     }
 
     bool found_abort_func = false;
-    if (FuncList* abort_funcs = modl->find_functions(Identifier::get("abort"))) {
+    auto abort_funcs_decl = modl->find_declaration(Identifier::get("abort"));
+    if (abort_funcs_decl && abort_funcs_decl->is(NodeKind::FUNC_LIST)) {
+        auto abort_funcs = static_cast<FuncList*>(abort_funcs_decl);
+
         auto error_interface_type = context.std_error_interface->interface_type;
 
         for (Func* func : *abort_funcs) {

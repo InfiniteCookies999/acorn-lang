@@ -1,6 +1,5 @@
 #file(access=public)
 
-import .. module;
 import .io;
 import .win32;
 
@@ -99,7 +98,7 @@ fn abort(error: Error*) {
     io.print(": ");
     io.print(message);
     io.print(".\n");
-    module.exit(1);
+    \exit(1);
 }
 
 #if OS_GROUP_WINDOWS
@@ -125,7 +124,7 @@ fn win32_error_code_to_string(error_code: uint32, pretext: const String^) -> Str
     // Windows appends \r\n. to the end of the message so removing that if it exists
     // in the message.
     if (length >= 3) {
-        if (memcmp(buffer + length - 3, ".\r\n", 3) == 0) {
+        if (\memcmp(buffer + length - 3, ".\r\n", 3) == 0) {
             length -= 3;
         }
     }

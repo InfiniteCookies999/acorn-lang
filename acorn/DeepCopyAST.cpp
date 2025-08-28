@@ -229,7 +229,8 @@ namespace acorn {
             return nullptr;
         }
         case NodeKind::NO_DEFAULT_INIT:
-        case NodeKind::EXPR_END: {
+        case NodeKind::EXPR_END:
+        case NodeKind::FUNC_LIST: {
             acorn_fatal("lol");
             return nullptr;
         }

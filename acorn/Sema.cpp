@@ -26,14 +26,14 @@ acorn::Sema::Sema(Context& context, SourceFile* file, Logger& logger)
       type_table(context.type_table) {
 }
 
-bool acorn::Sema::is_potential_main_function(Context& context, const Func* canidate) {
-    if (canidate->params.empty()) {
+bool acorn::Sema::is_potential_main_function(Context& context, const Func* candidate) {
+    if (candidate->params.empty()) {
         return true;
     }
 
-    if (canidate->params.size() == 2) {
-        Type* param_type1 = canidate->params[0]->type;
-        Type* param_type2 = canidate->params[1]->type;
+    if (candidate->params.size() == 2) {
+        Type* param_type1 = candidate->params[0]->type;
+        Type* param_type2 = candidate->params[1]->type;
         bool valid_param1 = param_type1->is(context.int_type) ||
                             param_type1->is(context.const_int_type);
         bool valid_param2 = param_type2->is(context.const_char_ptr_ptr_type);
@@ -46,39 +46,39 @@ bool acorn::Sema::is_potential_main_function(Context& context, const Func* canid
 }
 
 bool acorn::Sema::find_main_function(Context& context) {
-    auto& canidates = context.get_canidate_main_funcs();
-    for (Func* canidate : canidates) {
-        if (!is_potential_main_function(context, canidate)) {
+    auto& candidates = context.get_canidate_main_funcs();
+    for (Func* candidate : candidates) {
+        if (!is_potential_main_function(context, candidate)) {
             continue;
         }
 
-        auto& logger = canidate->get_logger();
+        auto& logger = candidate->get_logger();
 
         if (Func* prev_main = context.get_main_function()) {
-            logger.begin_error(canidate->loc, "Duplicate main (entry point) function")
+            logger.begin_error(candidate->loc, "Duplicate main (entry point) function")
                               .add_line([prev_main](Logger& l) { prev_main->show_prev_declared_msg(l); })
                               .end_error(ErrCode::ParseDuplicateMainFunc);
         } else {
-            context.set_main_function(canidate);
+            context.set_main_function(candidate);
         }
 
-        if (canidate->is_generic()) {
-            logger.begin_error(canidate->loc, "Function 'main' cannot be generic")
+        if (candidate->is_generic()) {
+            logger.begin_error(candidate->loc, "Function 'main' cannot be generic")
                   .end_error(ErrCode::SemaMainFunctionCannotBeGeneric);
         }
 
-        if (canidate->parsed_return_type->is_not(context.int_type) &&
-            canidate->parsed_return_type->is_not(context.void_type)) {
-            logger.begin_error(canidate->loc, "Function 'main' should have return type of 'int' or 'void'")
+        if (candidate->parsed_return_type->is_not(context.int_type) &&
+            candidate->parsed_return_type->is_not(context.void_type)) {
+            logger.begin_error(candidate->loc, "Function 'main' should have return type of 'int' or 'void'")
                   .end_error(ErrCode::SemaMainBadReturnType);
         }
-        if (canidate->modifiers & Modifier::Native) {
-            logger.begin_error(canidate->get_modifier_location(Modifier::Native),
+        if (candidate->modifiers & Modifier::Native) {
+            logger.begin_error(candidate->get_modifier_location(Modifier::Native),
                                "Function 'main' cannot have native modifier")
                 .end_error(ErrCode::SemaMainCannotHaveModifier);
         }
-        if (canidate->modifiers & Modifier::DllImport) {
-            logger.begin_error(canidate->get_modifier_location(Modifier::DllImport),
+        if (candidate->modifiers & Modifier::DllImport) {
+            logger.begin_error(candidate->get_modifier_location(Modifier::DllImport),
                                "Function 'main' cannot have dllimport modifier")
                   .end_error(ErrCode::SemaMainCannotHaveModifier);
         }
@@ -89,13 +89,12 @@ bool acorn::Sema::find_main_function(Context& context) {
 void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& context) {
     nspace->set_duplicates_checked();
 
-    for (const auto& [_, funcs] : nspace->get_functions()) {
-        check_for_duplicate_functions(funcs, context);
-    }
-
-    for (const auto& [_, composite] : nspace->get_composites()) {
-        if (composite->is(NodeKind::STRUCT)) {
-            auto structn = static_cast<Struct*>(composite);
+    for (const auto& [_, decl] : nspace->get_declarations()) {
+        if (decl->is(NodeKind::FUNC_LIST)) {
+            auto func_list = static_cast<FuncList*>(decl);
+            check_for_duplicate_functions(*func_list, context);
+        } else if (decl->is(NodeKind::STRUCT)) {
+            auto structn = static_cast<Struct*>(decl);
 
             check_for_duplicate_functions(structn->nspace, context);
             check_for_duplicate_functions(structn->constructors, context);
@@ -106,8 +105,8 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
                                      duplicate_info.duplicate_function->is_constructor ? "constructor" : "destructor",
                                      ErrCode::SemaDuplicateFunc);
             }
-        } else if (composite->is(NodeKind::INTERFACE)) {
-            auto interfacen = static_cast<Interface*>(composite);
+        } else if (decl->is(NodeKind::INTERFACE)) {
+            auto interfacen = static_cast<Interface*>(decl);
             auto& funcs = interfacen->functions;
             for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
                 for (auto itr2 = itr + 1; itr2 != funcs.end(); ++itr2) {
@@ -123,7 +122,8 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
     }
 }
 
-void acorn::Sema::check_for_duplicate_functions(const FuncList& funcs, Context& context) {
+void acorn::Sema::check_for_duplicate_functions(const llvm::SmallVector<Func*>& funcs,
+                                                Context& context) {
     bool decls_have_errors = false;
     for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
         Func* func = *itr;
@@ -158,30 +158,18 @@ void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
             return "enum";
         } else if (decl->is(NodeKind::INTERFACE)) {
             return "interface";
+        } else if (decl->is(NodeKind::FUNC)) {
+            return "function";
         } else {
             acorn_fatal("unreachable");
             return "";
-        }
-    };
-    auto get_duplcate_err_code = [](Decl* decl) finline {
-        if (decl->is(NodeKind::VAR)) {
-            return ErrCode::SemaDuplicateGlobalVar;
-        } else if (decl->is(NodeKind::STRUCT)) {
-            return ErrCode::SemaDuplicateGlobalStruct;
-        } else if (decl->is(NodeKind::ENUM)) {
-            return ErrCode::SemaDuplicateGlobalEnum;
-        } else if (decl->is(NodeKind::INTERFACE)) {
-            return ErrCode::SemaDuplicateGlobalInterface;
-        } else {
-            acorn_fatal("unreachable");
-            return ErrCode::SemaDuplicateGlobalVar;
         }
     };
     for (auto& [location, decl1, decl2] : modl.get_declaration_duplicates()) {
         report_redeclaration(decl1,
                              decl2,
                              get_duplicate_kind_str(decl1),
-                             get_duplcate_err_code(decl1));
+                             ErrCode::SemaDuplicateGlobal);
     }
 }
 
@@ -305,31 +293,34 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
                            .end_error(ErrCode::SemaParentModuleImportExpectModuleIdent);
     };
 
+    auto try_find_composite = [&logger, add_composite](Namespace*           nspace,
+                                                       ImportStmt::KeyPart& key_part) finline {
+        if (auto decl = nspace->find_declaration(key_part.name)) {
+            if (decl->is_composite()) {
+                add_composite(static_cast<Decl*>(decl));
+            } else {
+                logger.begin_error(key_part.error_loc, "Cannot directly import ")
+                    .end_error(ErrCode::SemaCannotDirectlyImport);
+            }
+            return true;
+        }
+        return false;
+    };
+
     ErrorSpellChecker spell_checker(context.should_show_spell_checking());
 
     if (key.size() == 1 && importn->within_same_modl) {
         auto& modl = importn->file->modl;
-        Identifier ident = key[0].name;
-        if (auto nspace = modl.find_namespace(ident)) {
+        if (auto nspace = modl.find_namespace(key[0].name)) {
             add_namespace(nspace);
-        } else if (auto composite = modl.find_composite(ident)) {
-            add_composite(composite);
-        } else {
+            return;
+        }
+
+        if (!try_find_composite(&modl, key[0])) {
             spell_checker.add_searches(modl.get_namespaces());
             spell_checker.add_searches(modl.get_composites());
             report_could_not_find_general(key[0], spell_checker);
         }
-        return;
-    }
-
-    if (key.size() == 1 && importn->within_parent_modl) {
-        // import the module.
-        auto& modl = importn->file->modl;
-        if (key[0].name != context.module_identifier) {
-            report_expect_module_identifier(key[0]);
-            return;
-        }
-        add_namespace(&modl);
         return;
     }
 
@@ -346,9 +337,7 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
     if (key.size() == 2 && importn->within_same_modl) {
         auto& modl = importn->file->modl;
         if (auto nspace = modl.find_namespace(key[0].name)) {
-            if (auto composite = nspace->find_composite(key[1].name)) {
-                add_composite(composite);
-            } else {
+            if (!try_find_composite(nspace, key[1])) {
                 spell_checker.add_searches(nspace->get_composites());
                 report_could_not_find_composite(key[1], spell_checker);
             }
@@ -359,35 +348,14 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         return;
     }
 
-    if (key.size() == 2 && importn->within_parent_modl) {
-        auto& modl = importn->file->modl;
-
-        if (key[0].name != context.module_identifier) {
-            report_expect_module_identifier(key[0]);
-            return;
-        }
-
-        if (auto composite = modl.find_composite(key[1].name)) {
-            add_composite(composite);
-        } else {
-            spell_checker.add_searches(modl.get_composites());
-            report_could_not_find_composite(key[1], spell_checker);
-        }
-        return;
-    }
-
-    if (importn->within_same_modl || importn->within_parent_modl) {
-        report_invalid_import();
-        return;
-    }
-
     if (key.size() == 2) {
         if (auto modl = context.find_module(key[0].name)) {
             if (auto nspace = modl->find_namespace(key[1].name)) {
                 add_namespace(nspace);
-            } else if (auto composite = modl->find_composite(key[1].name)) {
-                add_composite(composite);
-            } else {
+                return;
+            }
+
+            if (!try_find_composite(modl, key[1])) {
                 spell_checker.add_searches(modl->get_namespaces());
                 spell_checker.add_searches(modl->get_composites());
                 report_could_not_find_general(key[1], spell_checker);
@@ -402,9 +370,7 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
     if (key.size() == 3) {
         if (auto modl = context.find_module(key[0].name)) {
             if (auto nspace = modl->find_namespace(key[1].name)) {
-                if (auto composite = nspace->find_composite(key[2].name)) {
-                    add_composite(composite);
-                } else {
+                if (!try_find_composite(nspace, key[2])) {
                     spell_checker.add_searches(nspace->get_composites());
                     report_could_not_find_composite(key[2], spell_checker);
                 }
@@ -1716,8 +1682,13 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn,
             continue;
         }
 
-        auto funcs = structn->nspace->find_functions(interface_func->name);
-        if (!funcs) {
+        auto funcs_decl = structn->nspace->find_declaration(interface_func->name);
+        FuncList* func_list = nullptr;
+        if (funcs_decl && funcs_decl->is(NodeKind::FUNC_LIST)) {
+            func_list = static_cast<FuncList*>(funcs_decl);
+        }
+
+        if (!func_list) {
             error(structn, "Struct missing interface function '%s'", interface_func->get_decl_string())
                 .end_error(ErrCode::SemaStructMissingInterfaceFunc);
             structn->has_errors = true;
@@ -1725,7 +1696,7 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn,
         }
 
         // Making sure all the functions declarations have been checked.
-        for (auto func : *funcs) {
+        for (auto func : *func_list) {
             if (!func->has_checked_declaration) {
                 if (!check_function_decl(func)) {
                     structn->has_errors = true;
@@ -1738,7 +1709,7 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn,
         }
 
         bool found_match = false;
-        for (auto func : *funcs) {
+        for (auto func : *func_list) {
             found_match = do_interface_functions_matches(interface_func, func);
             if (found_match) {
                 func->mapped_interface_func = interface_func;
@@ -1757,8 +1728,8 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn,
 
         if (!found_match) {
             structn->has_errors = true;
-            if (funcs->size() == 1) {
-                auto func = (*funcs)[0];
+            if (func_list->size() == 1) {
+                auto func = (*func_list)[0];
                 logger.begin_error(func->loc,
                                    "Function does not match interface function: '%s'",
                                    interface_func->get_decl_string());
@@ -1771,7 +1742,7 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn,
                                    interface_func->get_decl_string());
                 logger.still_give_main_location_priority();
                 logger.add_individual_underline(extension.error_loc);
-                for (auto func : *funcs) {
+                for (auto func : *func_list) {
                     logger.add_empty_line();
                     logger.add_line("Could not match: '%s'", func->get_decl_string());
                     display_interface_func_mismatch_info(interface_func, func, true, false);
@@ -3768,18 +3739,14 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
     ErrorSpellChecker spell_checker(context.should_show_spell_checking());
 
     bool search_relative = search_nspace == nspace;
-    bool search_nested = true;
 
     if (ref->relative_enforcement != IdentRef::RelativeEnforcement::NONE) {
-        if (ref->relative_enforcement == IdentRef::RelativeEnforcement::FILE) {
-            // search file first BUT NOT nested scopes then search module.
-            search_nested = false;
+        if (ref->relative_enforcement == IdentRef::RelativeEnforcement::MODULE) {
             search_nspace = &file->get_module();
         } else {
-            // search explicitly in module.
-            search_nspace = &file->get_module();
-            search_relative = false;
+            search_nspace = file;
         }
+        search_relative = false;
     }
 
     if (is_comptime_if_cond) {
@@ -3806,169 +3773,143 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
         return;
     }
 
-    auto find_function = [=, this, &spell_checker]() finline {
-        if (search_relative) {
-            if (cur_struct && search_nested) {
-                if (auto* funcs = cur_struct->nspace->find_functions(ref->ident)) {
-                    ref->set_funcs_ref(funcs);
-                    return;
-                }
-                if constexpr (is_spell_checking) {
-                    if (is_for_call) // Only suggest functions if the user is using call syntax.
-                        spell_checker.add_searches(cur_struct->nspace->get_functions());
-                }
-            }
-
-            if (auto* funcs = file->find_functions(ref->ident)) {
-                ref->set_funcs_ref(funcs);
-                return;
-            }
-
-            if (auto* funcs = file->find_static_import_functions(ref->ident)) {
-                ref->set_funcs_ref(funcs);
-                return;
-            }
-
-            if constexpr (is_spell_checking) {
-                if (is_for_call) { // Only suggest functions if the user is using call syntax.
-                    spell_checker.add_searches(file->get_functions());
-                    for (const Namespace* nspace : file->get_static_imports()) {
-                        spell_checker.add_searches(nspace->get_functions());
-                    }
-                }
-            }
-        }
-
-        if (auto* funcs = search_nspace->find_functions(ref->ident)) {
-            ref->set_funcs_ref(funcs);
-        }
-        if constexpr (is_spell_checking) {
-            if (is_for_call) // Only suggest functions if the user is using call syntax.
-                spell_checker.add_searches(search_nspace->get_functions());
+    auto apply_found_declaration = [=](Node* decl) finline {
+        switch (decl->kind) {
+        case NodeKind::VAR:
+            ref->set_var_ref(static_cast<Var*>(decl));
+            break;
+        case NodeKind::FUNC_LIST:
+            ref->set_funcs_ref(static_cast<FuncList*>(decl));
+            break;
+        case NodeKind::STRUCT:
+        case NodeKind::INTERFACE:
+        case NodeKind::ENUM:
+            ref->set_composite_ref(static_cast<Decl*>(decl));
+            break;
+        default:
+            acorn_fatal("Unhandled declaration case");
         }
     };
 
-    auto find_variable = [=, this, &spell_checker]() finline {
-        if (search_relative && search_nested) {
-            if (cur_scope && search_nested) {
+    auto search_namespace = [=, &spell_checker](Namespace* nspace) {
+        if (auto* decl = nspace->find_declaration(ref->ident)) {
+            apply_found_declaration(decl);
+            return true;
+        }
+        if constexpr (is_spell_checking) {
+            llvm::SmallVector<Decl*> search_decls;
+            for (const auto& [_, decl] : nspace->get_declarations()) {
+                if (is_for_call && decl->is(NodeKind::FUNC_CALL)) {
+                    auto func_list = static_cast<FuncList*>(decl);
+                    for (auto func : *func_list) {
+                        search_decls.push_back(func);
+                    }
+                } else if (decl->is(NodeKind::VAR)) {
+                    auto var = static_cast<Var*>(decl);
+                    search_decls.push_back(var);
+                }
+            }
+            spell_checker.add_searches(search_decls);
+        }
+        return false;
+    };
+
+    auto search = [=, &spell_checker]() finline {
+        if (search_relative) {
+
+            // search for variable in the local scope.
+            if (cur_scope) {
                 if (auto* var = cur_scope->find_variable(ref->ident)) {
                     ref->set_var_ref(var);
                     return;
                 }
                 if constexpr (is_spell_checking) {
-                    auto scope_itr = cur_scope;
-                    while (scope_itr) {
-                        spellcheck_variables_for_ident(scope_itr->variables, spell_checker, is_for_call);
-                        scope_itr = scope_itr->parent;
+                    if (!is_for_call) {
+                        auto scope_itr = cur_scope;
+                        while (scope_itr) {
+                            spell_checker.add_searches(scope_itr->variables);
+                            scope_itr = scope_itr->parent;
+                        }
                     }
                 }
             }
 
-            if (cur_struct && search_nested) {
-                if (auto* var = cur_struct->nspace->find_variable(ref->ident)) {
-                    ref->set_var_ref(var);
+            // search for declaration in the current struct.
+            if (cur_struct) {
+                if (search_namespace(cur_struct->nspace)) {
                     return;
                 }
-                if constexpr (is_spell_checking) {
-                    spellcheck_variables_for_ident(cur_struct->nspace->get_variables(), spell_checker, is_for_call);
+            }
+
+            // search for declaration in the file.
+            if (search_namespace(file)) {
+                return;
+            }
+
+            // search for declaration from static imports.
+            for (auto nspace : file->get_static_imports()) {
+                if (search_namespace(nspace)) {
+                    return;
                 }
             }
 
-            if (auto* var = file->find_variable(ref->ident)) {
-                ref->set_var_ref(var);
-                return;
+            // search for reference to generic type.
+            if (cur_func && cur_func->is_generic()) {
+                if (cur_func && cur_func->is_generic()) {
+                    auto itr = std::ranges::find_if(cur_func->generics, [ref](auto genericn) {
+                        return genericn->name == ref->ident;
+                    });
+                    if (itr != cur_func->generics.end()) {
+                        ref->set_generic_type_ref((*itr)->type);
+                    }
+                }
             }
 
-            if (auto* var = file->find_static_import_variable(ref->ident)) {
-                ref->set_var_ref(var);
+            // Search for reference to import.
+            if (auto importn = file->find_import(ref->ident)) {
+                if (importn->is_imported_namespace()) {
+                    if (importn->is_static) {
+                        error(expand(ref), "Cannot reference a static import")
+                            .end_error(ErrCode::SemaCannotRefStaticImport);
+                    }
+                    ref->set_namespace_ref(importn->imported_nspace);
+                } else if (importn->is_imported_composite()) {
+                    ref->set_composite_ref(importn->imported_composite);
+                } else {
+                    acorn_fatal("Unknown import kind");
+                }
                 return;
             }
-
             if constexpr (is_spell_checking) {
-                spellcheck_variables_for_ident(file->get_variables(), spell_checker, is_for_call);
-                for (const Namespace* nspace : file->get_static_imports()) {
-                    spellcheck_variables_for_ident(nspace->get_variables(), spell_checker, is_for_call);
+                if (!is_for_call) {
+                    // Making sure it the site of the dot operator since that is really
+                    // the only time that this happens.
+                    if (is_dot_op_site && search_relative) {
+                        spell_checker.add_searches(file->get_imports());
+                    }
                 }
+
+                // We do not want to suggest composites because in general users are just typing
+                // expressions and looking for variables/functions not composites. Not to mention
+                // the code that determines the type of a variable/return type, ect... is handled
+                // elsewhere and does its own spell checking.
+                //
+                // spell_checker.add_searches(file->get_composites());
+            }
+
+            // search for universal constants.
+            if (auto* universal = context.get_universal_constant(ref->ident)) {
+                ref->set_universal_ref(universal);
             }
         }
 
-        if (auto* var = search_nspace->find_variable(ref->ident)) {
-            ref->set_var_ref(var);
+        // search for declaration in the module.
+        if (search_namespace(search_nspace)) {
             return;
-        }
-        if (auto* universal = context.get_universal_constant(ref->ident)) {
-            ref->set_universal_ref(universal);
-        }
-
-        if constexpr (is_spell_checking) {
-            spellcheck_variables_for_ident(search_nspace->get_variables(), spell_checker, is_for_call);
-            if (!is_for_call)
-                spell_checker.add_searches(context.get_universal_constants());
         }
     };
 
-    if (is_for_call) {
-        find_function();
-        if (!ref->found_ref()) {
-            find_variable();
-        }
-    } else {
-        find_variable();
-        if (!ref->found_ref()) {
-            find_function();
-        }
-    }
-
-    if (!ref->found_ref()) {
-        if (search_relative && cur_func && cur_func->is_generic()) {
-            if (cur_func && cur_func->is_generic()) {
-                auto itr = std::ranges::find_if(cur_func->generics, [ref](auto genericn) {
-                    return genericn->name == ref->ident;
-                                                });
-                if (itr != cur_func->generics.end()) {
-                    ref->set_generic_type_ref((*itr)->type);
-                }
-            }
-        } // ELSE TODO deal with struct case.
-    }
-
-    // If still not found let us try and search for an imported module.
-    if (!ref->found_ref() && search_relative) {
-        if (auto importn = file->find_import(ref->ident)) {
-            if (importn->is_imported_namespace()) {
-                if (importn->is_static) {
-                    error(expand(ref), "Cannot reference a static import")
-                        .end_error(ErrCode::SemaCannotRefStaticImport);
-                }
-                ref->set_namespace_ref(importn->imported_nspace);
-            } else if (importn->is_imported_composite()) {
-                ref->set_composite_ref(importn->imported_composite);
-            } else {
-                acorn_fatal("Unknown import kind");
-            }
-        } else if (auto composite1 = file->find_composite(ref->ident)) {
-            ref->set_composite_ref(composite1);
-        } else if (auto composite2 = nspace->find_composite(ref->ident)) {
-            ref->set_composite_ref(composite2);
-        }
-
-        if constexpr (is_spell_checking) {
-            if (!is_for_call) {
-                // Making sure it the site of the dot operator since that is really
-                // the only time that this happens.
-                if (is_dot_op_site && search_relative) {
-                    spell_checker.add_searches(file->get_imports());
-                }
-            }
-
-            // We do not want to suggest composites because in general users are just typing
-            // expressions and looking for variables/functions not composites. Not to mention
-            // the code that determines the type of a variable/return type, ect... is handled
-            // elsewhere and does its own spell checking.
-            //
-            // spell_checker.add_searches(file->get_composites());
-        }
-    }
+    search();
 
     if constexpr (is_spell_checking) {
         // Not reporting the error just reporting spell checking information.
@@ -4196,21 +4137,13 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             auto intr_type = static_cast<InterfaceType*>(elm_type);
             auto interfacen = intr_type->get_interface();
 
-            temp_ref_functions.clear();
-
-            for (auto func : interfacen->functions) {
-                if (func->name == dot->ident) {
-                    temp_ref_functions.push_back(func);
-                }
-            }
-
-            if (temp_ref_functions.empty()) {
+            if (interfacen->functions.empty()) {
                 error(expand(dot), "Could not find function '%s'", dot->ident)
                     .end_error(ErrCode::SemaNoFindFuncIdentRef);
                 return;
             }
 
-            dot->set_funcs_ref(&temp_ref_functions);
+            dot->set_funcs_ref(&interfacen->functions);
             dot->type = context.funcs_ref_type;
 
         } else {
@@ -4239,13 +4172,25 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             // Check to see if the user is trying to access the member function of
             // a struct.
             auto structn = static_cast<Struct*>(composite);
-            auto funcs = structn->nspace->find_functions(dot->ident);
-            if (!funcs) {
-                report_error_cannot_access_field();
+            auto funcs_decl = structn->nspace->find_declaration(dot->ident);
+            FuncList* func_list = nullptr;
+            if (funcs_decl && funcs_decl->is(NodeKind::FUNC_LIST)) {
+                func_list = static_cast<FuncList*>(funcs_decl);
+            }
+
+            if (!func_list) {
+                if (!funcs_decl) {
+                    error(expand(dot), "Could not find identifier '%s'", dot->ident)
+                        .end_error(ErrCode::SemaNoFindFuncIdentRef);
+                    return;
+                }
+
+                error(expand(dot), "Cannot access field '%s' unless through an object", dot->ident)
+                    .end_error(ErrCode::SemaCannotAccessFieldUnlessThroughObj);
                 return;
             }
 
-            auto func = (*funcs)[0];
+            auto func = (*func_list)[0];
 
             if (func->has_modifier(Modifier::Private)) {
                 if (!cur_func || cur_func->non_generic_struct_instance != func->non_generic_struct_instance) {
@@ -4266,7 +4211,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
             auto struct_ptr_type = type_table.get_ptr_type(struct_type);
             param_types.insert(param_types.begin(), struct_ptr_type);
 
-            dot->set_funcs_ref(funcs);
+            dot->set_funcs_ref(func_list);
             dot->type = type_table.get_function_type(func->return_type,
                                                      std::move(param_types),
                                                      func->raised_errors,
@@ -4525,13 +4470,12 @@ void acorn::Sema::check_generic_bind_function_call(GenericBindFuncCall* call) {
     }
 
     if (uses_named_values) {
-        temp_ref_functions.clear();
         for (Func* candidate : candidates) {
             if (compare_generic_bind_candidate_with_named_args(call->args, candidate->generics, call->bound_types)) {
-                temp_ref_functions.push_back(candidate);
+                call->candidates.push_back(candidate);
             }
         }
-        if (temp_ref_functions.empty()) {
+        if (call->candidates.empty()) {
             Logger& logger = error(expand(call), "Failed to bind generic arguments");
             for (Func* candidate : candidates) {
                 logger.add_empty_line();
@@ -4543,17 +4487,17 @@ void acorn::Sema::check_generic_bind_function_call(GenericBindFuncCall* call) {
             return;
         }
 
-        if (temp_ref_functions.size() > 1) {
+        if (call->candidates.size() > 1) {
             auto& logger = error(expand(call), "Ambiguous choice between generic functions:")
                 .remove_period()
                 .add_empty_line();
-            display_ambiguous_functions(temp_ref_functions);
+            display_ambiguous_functions(call->candidates);
             logger.end_error(ErrCode::SemaAmbiguousGenericCallBind);
             call->type = nullptr;
             return;
         }
     } else {
-        temp_ref_functions = std::move(candidates);
+        call->candidates = std::move(candidates);
 
         for (Expr* arg : call->args) {
             Type* bind_type = get_type_of_type_expr(arg);
@@ -4561,7 +4505,7 @@ void acorn::Sema::check_generic_bind_function_call(GenericBindFuncCall* call) {
         }
     }
 
-    call->set_funcs_ref(&temp_ref_functions);
+    call->set_funcs_ref(&call->candidates);
 }
 
 bool acorn::Sema::compare_generic_bind_candidate_with_named_args(const llvm::SmallVector<Expr*>& args,
@@ -4716,41 +4660,65 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
 acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                                    llvm::SmallVector<Expr*>& args,
                                                    size_t non_named_args_offset,
-                                                   FuncList& candidates,
+                                                   llvm::SmallVector<Func*>& candidates,
                                                    bool is_const_object,
                                                    const llvm::SmallVector<Type*>& pre_bound_types,
                                                    Struct* generic_parent_struct,
                                                    Struct*& fully_bound_parent_struct) {
 
-    // Make sure the function declarations for the canidates have been checked.
-    for (Func* canidate : candidates) {
-        if (canidate->is_checking_declaration) {
+    // Order of operations that are taken:
+    //
+    // 1. Goes through all the candidates and makes sure they have been type checked.
+    // 2. Checks for duplicate named arguments and exits early if there are duplicates.
+    // 3. Compares each function to the call's arguments to determine if its eligible for
+    //    calling and if there are multiple chosens the one if based on call order.
+    // 4. Checks if no function was found or if multiple were in which case it reports an
+    //    error.
+    // 5. Checks if the called function is generic and fixes indeterminate types now that
+    //    the generic types have been found.
+    // 6. Creates casts for all arguments to the parameter's types while also qualifying
+    //    the types if a generic function.
+    // 7. Checks if the called function is generic and creates a generic instance based
+    //    on the qualified types.
+
+
+    // Make sure the function declarations for the candidates have been checked.
+    for (Func* candidate : candidates) {
+        if (candidate->interfacen) {
+            auto call = static_cast<FuncCall*>(call_node);
+            auto ref = static_cast<IdentRef*>(call->site);
+            if (candidate->name != ref->ident) {
+                continue;
+            }
+        }
+
+        if (candidate->is_checking_declaration) {
             logger.begin_error(call_node->loc,
                                "Circular dependency while checking function declaration '%s'",
-                               canidate->name);
+                               candidate->name);
 
-            const char* func_end_ptr = canidate->loc.ptr;
+            const char* func_end_ptr = candidate->loc.ptr;
             if (call_node->is(NodeKind::FUNC_CALL)) {
                 go_until(func_end_ptr, '(', ')');
             } else {
                 go_until(func_end_ptr, '{', '}');
             }
 
-            bool within_func_params = call_node->loc.ptr >= canidate->loc.ptr && call_node->loc.ptr <= func_end_ptr;
+            bool within_func_params = call_node->loc.ptr >= candidate->loc.ptr && call_node->loc.ptr <= func_end_ptr;
             if (!within_func_params) {
-                logger.add_line([canidate](Logger& logger) {
+                logger.add_line([candidate](Logger& logger) {
                     logger.print("Function declared at: ");
-                    canidate->show_location_msg(logger);
+                    candidate->show_location_msg(logger);
                 });
             }
             logger.end_error(ErrCode::SemaCircularFuncDeclDependency);
             return nullptr;
         }
-        if (!canidate->has_checked_declaration) {
-            if (!check_function_decl(canidate)) {
+        if (!candidate->has_checked_declaration) {
+            if (!check_function_decl(candidate)) {
                 return nullptr;
             }
-        } else if (canidate->has_errors) {
+        } else if (candidate->has_errors) {
             return nullptr;
         }
     }
@@ -4785,13 +4753,14 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         }
     }
 
-    // Proceed to find the best canidate from the provided call canidates.
+    // Proceed to find the best canidate from the provided call candidates.
     bool is_ambiguous = false;
     bool selected_implicitly_converts_ptr_arg = false;
     bool passes_varargs_along = false;
     llvm::SmallVector<Type*> generic_bindings;
     llvm::SmallVector<Type*> qualified_decl_types;
-    auto called_func = find_best_call_candidate(candidates,
+    auto called_func = find_best_call_candidate(call_node,
+                                                candidates,
                                                 args,
                                                 selected_implicitly_converts_ptr_arg,
                                                 is_ambiguous,
@@ -4981,7 +4950,8 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
     return called_func;
 }
 
-acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
+acorn::Func* acorn::Sema::find_best_call_candidate(Expr* call_node,
+                                                   llvm::SmallVector<Func*>& candidates,
                                                    llvm::SmallVector<Expr*>& args,
                                                    bool& selected_implicitly_converts_ptr_arg,
                                                    bool& is_ambiguous,
@@ -4993,6 +4963,13 @@ acorn::Func* acorn::Sema::find_best_call_candidate(FuncList& candidates,
     uint64_t best_score = std::numeric_limits<uint64_t>::max();
 
     for (Func* candidate : candidates) {
+        if (candidate->interfacen) {
+            auto call = static_cast<FuncCall*>(call_node);
+            auto ref = static_cast<IdentRef*>(call->site);
+            if (candidate->name != ref->ident) {
+                continue;
+            }
+        }
 
         uint64_t score = 0;
         bool implicitly_converts_ptr_arg = false;
@@ -6009,7 +5986,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
             auto named_value = static_cast<NamedValue*>(value);
             value = named_value->assignment;
 
-            field = structn->nspace->find_variable(named_value->name);
+            field = structn->find_field(named_value->name);
             if (structn->is_generic) {
                 field = structn->fields[field->field_idx];
             }
@@ -6894,43 +6871,9 @@ bool acorn::Sema::bind_default_generic_arguments(llvm::SmallVector<Type*>& gener
 // Error reporting
 //--------------------------------------
 
-void acorn::Sema::spellcheck_variables_for_ident(const llvm::SmallVector<Var*>& variables,
-                                                 ErrorSpellChecker& spell_checker,
-                                                 bool is_for_call) {
-    if (!is_for_call) {
-        // Not for a call so we might as well try and suggest the variables.
-        spell_checker.add_searches(variables);
-        return;
-    }
-
-    // Otherwise it is for a call so try and suggest
-    // variables that have callable types.
-    for (auto var : variables) {
-        if (var->type && var->type->is_callable()) {
-            spell_checker.add_search(var->name);
-        }
-    }
-}
-
-void acorn::Sema::spellcheck_variables_for_ident(const llvm::DenseMap<Identifier, Var*>& variables,
-                                                 ErrorSpellChecker& spell_checker,
-                                                 bool is_for_call) {
-    if (!is_for_call) {
-        // Not for a call so we might as well try and suggest the variables.
-        spell_checker.add_searches(variables);
-        return;
-    }
-
-    for (auto& [_, var] : variables) {
-        if (var->type && var->type->is_callable()) {
-            spell_checker.add_search(var->name);
-        }
-    }
-}
-
 void acorn::Sema::display_call_mismatch_info(SourceLoc error_loc,
                                              Node* call_node,
-                                             const FuncList& candidates,
+                                             const llvm::SmallVector<Func*>& candidates,
                                              const llvm::SmallVector<Expr*>& args,
                                              const llvm::SmallVector<Type*>& pre_bound_types) {
 
@@ -6938,11 +6881,11 @@ void acorn::Sema::display_call_mismatch_info(SourceLoc error_loc,
 
     if (candidates.size() == 1) {
 
-        Func* canidate = candidates[0];
+        Func* candidate = candidates[0];
 
-        logger.begin_error(error_loc, "Invalid call to %s: '%s'", func_type_str, canidate->get_decl_string());
+        logger.begin_error(error_loc, "Invalid call to %s: '%s'", func_type_str, candidate->get_decl_string());
         logger.add_empty_line();
-        display_call_mismatch_info(canidate, args, false, true, call_node, pre_bound_types);
+        display_call_mismatch_info(candidate, args, false, true, call_node, pre_bound_types);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
 
     } else {
@@ -7405,7 +7348,7 @@ uint64_t acorn::Sema::get_function_call_score(const Func* candidate,
 }
 
 void acorn::Sema::display_call_ambiguous_info(SourceLoc error_loc,
-                                              FuncList& candidates,
+                                              llvm::SmallVector<Func*>& candidates,
                                               llvm::SmallVector<Expr*>& args,
                                               bool is_const_object,
                                               const llvm::SmallVector<Type*>& pre_bound_types) {
@@ -8351,12 +8294,14 @@ acorn::Decl* acorn::Sema::find_composite(Identifier name) {
         return composite;
     };
 
-    if (auto found_composite = file->get_namespace()->find_composite(name)) {
-        return check(found_composite);
+    auto decl = file->get_namespace()->find_declaration(name);
+    if (decl && decl->is_composite()) {
+        return check(static_cast<Decl*>(decl));
     }
 
-    if (auto found_composite = file->find_composite(name)) {
-        return check(found_composite);
+    decl = file->find_declaration(name);
+    if (decl && decl->is_composite()) {
+        return check(static_cast<Decl*>(decl));
     }
 
     auto& imports = file->get_imports();

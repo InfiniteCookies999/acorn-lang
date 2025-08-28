@@ -103,7 +103,8 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
     auto process_variable = [this](Var* var) finline {
         if (var->name != Identifier::Invalid) {
             context.add_unchecked_decl(var);
-            file->add_variable(var);
+            var->is_global = true;
+            file->add_declaration(var, allocator);
         }
     };
 
@@ -120,7 +121,7 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
             if (!func->is_generic()) {
                 context.add_unchecked_decl(func);
             }
-            file->add_function(func);
+            file->add_declaration(func, allocator);
         }
 
         if (func->name == context.main_identifier) {
@@ -133,14 +134,14 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
             if (!structn->is_generic) {
                 context.add_unchecked_decl(structn);
             }
-            file->add_composite(structn);
+            file->add_declaration(structn, allocator);
         }
     } else if (node->is(NodeKind::ENUM) || node->is(NodeKind::INTERFACE)) {
 
         auto composite = static_cast<Decl*>(node);
         if (composite->name != Identifier::Invalid) {
             context.add_unchecked_decl(composite);
-            file->add_composite(composite);
+            file->add_declaration(composite, allocator);
         }
     } else if (node->is(NodeKind::VAR)) {
         process_variable(static_cast<Var*>(node));
@@ -157,9 +158,9 @@ void acorn::Parser::add_node_to_global_scope(Node* node) {
 
 void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
 
-    auto process_var = [structn](Var* var) finline {
+    auto process_var = [this, structn](Var* var) finline {
         if (var->name != Identifier::Invalid) {
-            structn->nspace->add_variable(var);
+            structn->nspace->add_declaration(var, allocator);
             var->field_idx = static_cast<uint32_t>(structn->fields.size());
             structn->fields.push_back(var);
             var->structn = structn;
@@ -211,7 +212,7 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
                 }
                 structn->constructors.push_back(func);
             } else {
-                structn->nspace->add_function(func);
+                structn->nspace->add_declaration(func, allocator);
             }
             if (!func->is_generic()) {
                 context.add_unchecked_decl(func);
@@ -353,9 +354,6 @@ acorn::ImportStmt* acorn::Parser::parse_import() {
     if (cur_token.is('.')) {
         next_token();
         importn->within_same_modl = true;
-    } else if (cur_token.is(Token::DOT_DOT)) {
-        next_token();
-        importn->within_parent_modl = true;
     }
 
     Token start_token = cur_token;
@@ -2058,15 +2056,15 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         }
         return calc(lval >> rval);
     }
-    case '<':         return calc(lval <  rval);
-    case '>':         return calc(lval >  rval);
+    case '<':          return calc(lval <  rval);
+    case '>':          return calc(lval >  rval);
     case Token::LT_EQ: return calc(lval <= rval);
     case Token::GT_EQ: return calc(lval >= rval);
     case Token::EQ_EQ: return calc(lval == rval);
     case Token::EX_EQ: return calc(lval != rval);
-    case '&':         return calc(lval &  rval);
-    case '^':         return calc(lval ^  rval);
-    case '|':         return calc(lval |  rval);
+    case '&':          return calc(lval &  rval);
+    case '^':          return calc(lval ^  rval);
+    case '|':          return calc(lval |  rval);
     default:
         // Handled during sema.
         return new_binary_op(op, lhs, rhs);
@@ -2493,10 +2491,8 @@ acorn::Expr* acorn::Parser::parse_term() {
         return ref;
     }
     case '\\': case Token::BACKSLASH_BACKSLASH: {
-        bool file_local = cur_token.is('\\');
+        bool file_local = cur_token.is(Token::BACKSLASH_BACKSLASH);
         next_token();
-
-        Token ident_token = cur_token;
 
         IdentRef* ref = new_node<IdentRef>(cur_token);
         ref->ident = expect_identifier();

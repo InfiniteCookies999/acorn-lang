@@ -1131,9 +1131,7 @@ void acorn::IRGenerator::gen_implicit_vtable_init_function(Struct* structn) {
         if (interfacen->functions.size() == 1) {
 
             auto interface_func = interfacen->functions[0];
-
-            auto& funcs = structn->nspace->get_functions(interface_func->name);
-            auto func = get_mapped_interface_func(interface_func, funcs);
+            auto func = get_mapped_interface_func(structn->nspace, interface_func);
 
             // No need to point to the VTable we can just store the function address immediately since there is only
             // one function.
@@ -1181,8 +1179,7 @@ llvm::Value* acorn::IRGenerator::gen_global_vtable(Struct* structn, llvm::ArrayT
         }
 
         for (auto interface_func : interfacen->functions) {
-            auto& funcs = structn->nspace->get_functions(interface_func->name);
-            auto func = get_mapped_interface_func(interface_func, funcs);
+            auto func = get_mapped_interface_func(structn->nspace, interface_func);
             ll_func_ptrs.push_back(func->ll_func);
         }
     }
@@ -1221,8 +1218,12 @@ size_t acorn::IRGenerator::get_interface_offset(Struct* structn, Interface* inte
     return interface_offset;
 }
 
-acorn::Func* acorn::IRGenerator::get_mapped_interface_func(Func* interface_func, const FuncList& funcs) {
-    for (Func* func : funcs) {
+acorn::Func* acorn::IRGenerator::get_mapped_interface_func(Namespace* nspace, Func* interface_func) {
+
+    auto funcs_decl = nspace->find_declaration(interface_func->name);
+    auto func_list = static_cast<FuncList*>(funcs_decl);
+
+    for (Func* func : *func_list) {
         if (func->mapped_interface_func == interface_func) {
             gen_function_decl(func, nullptr);
             return func;
@@ -1320,8 +1321,7 @@ void acorn::IRGenerator::gen_call_destructors(Type* type, DestructorObject::Obje
                     continue;
                 }
 
-                auto& matching_name_funcs = caught_error->nspace->get_functions(first_error_interface_func->name);
-                auto mapped_interface_func = get_mapped_interface_func(first_error_interface_func, matching_name_funcs);
+                auto mapped_interface_func = get_mapped_interface_func(caught_error->nspace, first_error_interface_func);
                 auto ll_cond = builder.CreateICmpEQ(mapped_interface_func->ll_func, ll_error_func_ptr);
 
                 auto ll_then_bb = gen_bblock("err.cleanup.case.then", ll_cur_func);

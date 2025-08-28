@@ -1,6 +1,5 @@
 #file(access=public, namespace=io)
 
-import .. module;
 import .win32;
 import .unix;
 import .String;
@@ -110,7 +109,7 @@ struct FileHandle :: Writable, Readable {
 #if OS_GROUP_WINDOWS
         size: int64;
         if (win32.GetFileSizeEx(handle, &size) == 0) {
-            err_msg := module.win32_error_code_to_string(win32.GetLastError(), String{"Failed to get file size"});
+            err_msg := \win32_error_code_to_string(win32.GetLastError(), String{"Failed to get file size"});
             raise StateError{ moveobj(err_msg) };
         }
         return as(uint64) size;
@@ -133,7 +132,7 @@ struct FileHandle :: Writable, Readable {
             if (ec == win32.ERROR_HANDLE_EOF) {
                 return length;
             }
-            err_msg := module.win32_error_code_to_string(ec, pretext=String{"Failed to read from file handle"});
+            err_msg := \win32_error_code_to_string(ec, pretext=String{"Failed to read from file handle"});
             raise IOError{ moveobj(err_msg) };
         }
         return as(int) bytes_read;
@@ -184,13 +183,13 @@ fn win32_get_file_error(ec: uint32, pretext: const String^) -> String {
     switch (ec) {
     case win32.ERROR_FILE_NOT_FOUND:
     case win32.ERROR_PATH_NOT_FOUND:
-        return module.format("%s. Path not found", pretext);
+        return \format("%s. Path not found", pretext);
     case win32.ERROR_ACCESS_DENIED:
-        return module.format("%s. Access denied", pretext);
+        return \format("%s. Access denied", pretext);
     case win32.ERROR_FILE_EXISTS:
-        return module.format("%s. Path already exists", pretext);
+        return \format("%s. Path already exists", pretext);
     case:
-        return module.win32_error_code_to_string(ec, pretext);
+        return \win32_error_code_to_string(ec, pretext);
     }
 }
 
@@ -209,7 +208,7 @@ fn read_file(path: const Path^) -> String | raises IOError {
     // Read the size and make sure we are not dealing with really big files.
     large_size := handle.get_size();
     if (large_size > 2147483647) {
-        err_msg := module.format(
+        err_msg := \format(
             "Could not read file: \"%s\" because the file size exceeded 2^31 bytes", path.to_utf8_string()
         );
         raise StateError{ moveobj(err_msg) };
@@ -217,13 +216,13 @@ fn read_file(path: const Path^) -> String | raises IOError {
 
     size := as(int) large_size;
 
-    buffer := as(char*) module.malloc(size + 1); // +1 for null terminator.
+    buffer := as(char*) \malloc(size + 1); // +1 for null terminator.
     bytes_read := try err: (handle.read_buffer(buffer, size)) {
-        raise IOError{ module.format("Reading file: \"%s\": %s", path.to_utf8_string(), err.get_message()) };
+        raise IOError{ \format("Reading file: \"%s\": %s", path.to_utf8_string(), err.get_message()) };
     };
 
     if (bytes_read != size) {
-        raise IOError{ module.format("Failed to read all bytes of file: \"%s\"", path.to_utf8_string()) };
+        raise IOError{ \format("Failed to read all bytes of file: \"%s\"", path.to_utf8_string()) };
     }
 
     buffer[size] = '\0'; // Adding null terminator.
@@ -297,7 +296,7 @@ fn file_exists(path: const Path^) -> bool | raises IOError {
 
     attribs: uint32 = win32.GetFileAttributesW(temp_buffer.buffer);
     if (attribs == win32.INVALID_FILE_ATTRIBUTES) {
-        err_msg := win32_get_file_error(module.format("Checking if file exists: \"%s\"",
+        err_msg := win32_get_file_error(\format("Checking if file exists: \"%s\"",
                                         path.to_utf8_string()));
         raise IOError{ moveobj(err_msg) };
     }
@@ -399,7 +398,7 @@ fn mkdir(path: const Path^) -> bool | raises IOError {
             return false;
         }
 
-        err_msg := win32_get_file_error(ec, module.format("Failed to make directory: \"%s\"",
+        err_msg := win32_get_file_error(ec, \format("Failed to make directory: \"%s\"",
                                         path.to_utf8_string()));
         raise IOError{ moveobj(err_msg) };
     }
@@ -465,7 +464,7 @@ fn remove_path(path: const Path^) | raises IOError {
     }
 
     if (!sucess) {
-        raise IOError{ win32_get_file_error(module.format("Failed to remove path: \"%s\"", path)) };
+        raise IOError{ win32_get_file_error(\format("Failed to remove path: \"%s\"", path)) };
     }
 #elif OS_GROUP_UNIX
     return unix.remove(path) == 0;
@@ -557,7 +556,7 @@ fn open_file(path: const Path^, flags: FileFlag$) -> FileHandle | raises IOError
                                       null);
 
     if (handle == win32.INVALID_HANDLE_VALUE) {
-        err_msg := win32_get_file_error(module.format("Failed to open file: \"%s\"", path.to_utf8_string()));
+        err_msg := win32_get_file_error(\format("Failed to open file: \"%s\"", path.to_utf8_string()));
         raise IOError{ moveobj(err_msg) };
     }
 
@@ -594,7 +593,7 @@ fn open_file(path: const Path^, flags: FileFlag$) -> FileHandle | raises IOError
 
     handle: int32 = unix.open(path, os_flags, os_mode);
     if (handle == -1) {
-        raise IOError{ module.format("Failed to open file: \"%s\"", path) };
+        raise IOError{ \format("Failed to open file: \"%s\"", path) };
     }
 
     return FileHandle{ handle };

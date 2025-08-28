@@ -135,7 +135,7 @@ namespace acorn {
         llvm::Value* gen_global_vtable(Struct* structn, llvm::ArrayType*& ll_arr_type);
         size_t get_vtable_offset(Struct* structn, Interface* interfacen);
         size_t get_interface_offset(Struct* structn, Interface* interfacen);
-        Func* get_mapped_interface_func(Func* interface_func, const FuncList& funcs);
+        Func* get_mapped_interface_func(Namespace* nspace, Func* interface_func);
 
         void gen_function_decl(Func* func, GenericFuncInstance* generic_instance);
         llvm::Type* gen_function_return_type(Func* func, GenericFuncInstance* generic_instance, bool is_main);
