@@ -323,6 +323,125 @@ acorn::Module* acorn::Context::find_module(Identifier name) {
     return itr == modls.end() ? nullptr : itr->second;
 }
 
+void acorn::Context::find_std_lib_declarations() {
+
+    auto find_composite_of_kind = [&, this]<typename T>
+        (T*, Namespace* nspace, Identifier decl_name) finline -> T* {
+
+        NodeKind decl_kind;
+        const char* decl_type_str;
+        if constexpr (std::is_same_v<Struct, T>) {
+            decl_kind = NodeKind::STRUCT;
+            decl_type_str = "struct";
+        } else if constexpr (std::is_same_v<Enum, T>) {
+            decl_kind = NodeKind::ENUM;
+            decl_type_str = "enum";
+        } else if constexpr (std::is_same_v<Interface, T>) {
+            decl_kind = NodeKind::INTERFACE;
+            decl_type_str = "interface";
+        } else {
+            acorn_fatal("unknown composite type");
+        }
+
+        auto decl = nspace->find_declaration(decl_name);
+        if (!decl) {
+            Logger::global_error(*this, "Failed to find standard library '%s' %s",
+                                 decl_name, decl_type_str)
+                .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+            return nullptr;
+        }
+
+        if (decl->is(decl_kind)) {
+            return static_cast<T*>(decl);
+        } else {
+            Logger::global_error(*this, "Standard library '%s' declaration not a %s",
+                                 decl_name, decl_type_str)
+                .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+            return nullptr;
+        }
+    };
+
+    auto modl = find_module(Identifier::get("std"));
+    if (Struct* structn = find_composite_of_kind((Struct*)0, modl, string_struct_identifier)) {
+        auto& struct_import = std_string_struct_import;
+
+        struct_import = allocator.alloc_type<ImportStmt>();
+        new (struct_import) ImportStmt();
+        struct_import->key.push_back({ string_struct_identifier });
+        struct_import->set_imported_composite(structn);
+    }
+
+    if (Interface* interfacen = find_composite_of_kind((Interface*)0, modl, error_interface_identifier)) {
+        std_error_interface = interfacen;
+        auto& funcs = interfacen->functions;
+        for (Func* func : funcs) {
+            if (func->name == get_name_function_identifier) {
+                std_error_get_name_func = func;
+                break;
+            }
+        }
+    }
+
+    bool found_abort_func = false;
+    auto abort_funcs_decl = modl->find_declaration(Identifier::get("abort"));
+    if (abort_funcs_decl && abort_funcs_decl->is(NodeKind::FUNC_LIST)) {
+        auto abort_funcs = static_cast<FuncList*>(abort_funcs_decl);
+
+        auto error_interface_type = std_error_interface->interface_type;
+
+        for (Func* func : *abort_funcs) {
+            if (func->params.size() != 1) continue;
+            Var* param = func->params[0];
+
+            Type* parsed_type = param->parsed_type;
+            if (!parsed_type->is_pointer()) continue;
+
+            auto ptr_type = static_cast<PointerType*>(parsed_type);
+            Type* elm_type = ptr_type->get_elm_type();
+
+            if (elm_type->get_kind() != TypeKind::UNRESOLVED_COMPOSITE) continue;
+
+            auto composite_type = static_cast<UnresolvedCompositeType*>(elm_type);
+            if (composite_type->get_composite_name() == error_interface_identifier) {
+                found_abort_func = true;
+                std_abort_function = func;
+                break;
+            }
+        }
+    }
+
+    if (!found_abort_func) {
+        Logger::global_error(*this, "Failed to find standard library 'abort' function")
+            .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+    }
+
+    if (Namespace* nspace = modl->find_namespace(reflect_identifier)) {
+        if (Enum* enumn = find_composite_of_kind((Enum*)0, nspace, type_id_enum_identifier)) {
+            std_type_id_enum = enumn;
+        }
+        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, type_struct_identifier)) {
+            std_type_struct = structn;
+            const_std_type_ptr = type_table.get_ptr_type(type_table.get_const_type(structn->struct_type));
+        }
+        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, struct_type_info_struct_identifier)) {
+            std_struct_type_info_struct = structn;
+        }
+        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, field_type_info_struct_identifier)) {
+            std_field_type_info_struct = structn;
+        }
+        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, enum_type_info_struct_identifier)) {
+            std_enum_type_info_struct = structn;
+        }
+        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, any_struct_identifier)) {
+            std_any_struct = structn;
+            std_any_struct_type = structn->struct_type;
+        }
+    } else {
+        Logger::global_error(*this, "Failed to find standard library namespace 'reflect'")
+            .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
+    }
+}
+
 void acorn::Context::queue_gen(Decl* decl, GenericInstance* generic_instance) {
     if (!generic_instance) {
         // TODO (maddie): we search through a list of all declarations ever established.

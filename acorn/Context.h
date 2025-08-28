@@ -148,6 +148,8 @@ namespace acorn {
         llvm::DenseMap<Identifier, Module*>& get_modules() { return modls; }
         Module* find_module(Identifier name);
 
+        void find_std_lib_declarations();
+
         void queue_gen(Decl* decl, GenericInstance* generic_instance);
         void queue_gen_implicit_function(ImplicitFunc* implicit_func);
         void add_unchecked_decl(Decl* decl) {

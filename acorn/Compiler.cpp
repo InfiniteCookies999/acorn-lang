@@ -244,7 +244,7 @@ void acorn::Compiler::sema_and_irgen() {
     }
 
     if (!context.should_stand_alone()) {
-        find_std_lib_declarations();
+        context.find_std_lib_declarations();
 
         if (context.has_errors()) {
             return;
@@ -724,126 +724,6 @@ void acorn::Compiler::parse_file(Module& modl, const SystemPath& path, const Sys
     total_lines_parsed += static_cast<uint64_t>(parser.get_total_lines_parsed());
     whitespace_lines_parsed += static_cast<uint64_t>(parser.get_whitespace_lines_parsed());
 
-}
-
-void acorn::Compiler::find_std_lib_declarations() {
-
-    auto find_composite_of_kind = [&, this]<typename T>
-        (T*, Namespace* nspace, Identifier decl_name) finline -> T* {
-
-        NodeKind decl_kind;
-        const char* decl_type_str;
-        if constexpr (std::is_same_v<Struct, T>) {
-            decl_kind = NodeKind::STRUCT;
-            decl_type_str = "struct";
-        } else if constexpr (std::is_same_v<Enum, T>) {
-            decl_kind = NodeKind::ENUM;
-            decl_type_str = "enum";
-        } else if constexpr (std::is_same_v<Interface, T>) {
-            decl_kind = NodeKind::INTERFACE;
-            decl_type_str = "interface";
-        } else {
-            acorn_fatal("unknown composite type");
-        }
-
-        auto decl = nspace->find_declaration(decl_name);
-        if (!decl) {
-            Logger::global_error(context, "Failed to find standard library '%s' %s",
-                                 decl_name, decl_type_str)
-                .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
-            return nullptr;
-        }
-
-        if (decl->is(decl_kind)) {
-            return static_cast<T*>(decl);
-        } else {
-            Logger::global_error(context, "Standard library '%s' declaration not a %s",
-                                 decl_name, decl_type_str)
-                .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
-            return nullptr;
-        }
-    };
-
-    auto& type_table = context.type_table;
-    auto modl = context.find_module(Identifier::get("std"));
-    if (Struct* structn = find_composite_of_kind((Struct*)0, modl, context.string_struct_identifier)) {
-        auto& struct_import = context.std_string_struct_import;
-
-        struct_import = allocator.alloc_type<ImportStmt>();
-        new (struct_import) ImportStmt();
-        struct_import->key.push_back({ context.string_struct_identifier });
-        struct_import->set_imported_composite(structn);
-    }
-
-    if (Interface* interfacen = find_composite_of_kind((Interface*)0, modl, context.error_interface_identifier)) {
-        context.std_error_interface = interfacen;
-        auto& funcs = interfacen->functions;
-        for (Func* func : funcs) {
-            if (func->name == context.get_name_function_identifier) {
-                context.std_error_get_name_func = func;
-                break;
-            }
-        }
-    }
-
-    bool found_abort_func = false;
-    auto abort_funcs_decl = modl->find_declaration(Identifier::get("abort"));
-    if (abort_funcs_decl && abort_funcs_decl->is(NodeKind::FUNC_LIST)) {
-        auto abort_funcs = static_cast<FuncList*>(abort_funcs_decl);
-
-        auto error_interface_type = context.std_error_interface->interface_type;
-
-        for (Func* func : *abort_funcs) {
-            if (func->params.size() != 1) continue;
-            Var* param = func->params[0];
-
-            Type* parsed_type = param->parsed_type;
-            if (!parsed_type->is_pointer()) continue;
-
-            auto ptr_type = static_cast<PointerType*>(parsed_type);
-            Type* elm_type = ptr_type->get_elm_type();
-
-            if (elm_type->get_kind() != TypeKind::UNRESOLVED_COMPOSITE) continue;
-
-            auto composite_type = static_cast<UnresolvedCompositeType*>(elm_type);
-            if (composite_type->get_composite_name() == context.error_interface_identifier) {
-                found_abort_func = true;
-                context.std_abort_function = func;
-                break;
-            }
-        }
-    }
-
-    if (!found_abort_func) {
-        Logger::global_error(context, "Failed to find standard library 'abort' function")
-            .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
-    }
-
-    if (Namespace* nspace = modl->find_namespace(context.reflect_identifier)) {
-        if (Enum* enumn = find_composite_of_kind((Enum*)0, nspace, context.type_id_enum_identifier)) {
-            context.std_type_id_enum = enumn;
-        }
-        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.type_struct_identifier)) {
-            context.std_type_struct = structn;
-            context.const_std_type_ptr = type_table.get_ptr_type(type_table.get_const_type(structn->struct_type));
-        }
-        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.struct_type_info_struct_identifier)) {
-            context.std_struct_type_info_struct = structn;
-        }
-        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.field_type_info_struct_identifier)) {
-            context.std_field_type_info_struct = structn;
-        }
-        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.enum_type_info_struct_identifier)) {
-            context.std_enum_type_info_struct = structn;
-        }
-        if (Struct* structn = find_composite_of_kind((Struct*)0, nspace, context.any_struct_identifier)) {
-            context.std_any_struct = structn;
-            context.std_any_struct_type = structn->struct_type;
-        }
-    } else {
-        Logger::global_error(context, "Failed to find standard library namespace 'reflect'")
-            .end_error(ErrCode::GlobalFailedToFindStdLibDecl);
-    }
 }
 
 std::string acorn::Compiler::get_std_lib_path() const {

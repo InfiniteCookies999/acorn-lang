@@ -151,8 +151,6 @@ namespace acorn {
 
         std::string get_std_lib_path() const;
 
-        void find_std_lib_declarations();
-
     };
 }
 
