@@ -14,6 +14,7 @@
 
 namespace llvm {
     class StructType;
+    class Module;
 }
 
 namespace acorn {
@@ -165,7 +166,7 @@ namespace acorn {
 
         bool is_sized() const;
 
-        uint32_t get_number_of_bits() const;
+        uint32_t get_number_of_bits(llvm::Module& ll_module) const;
 
         // True if the type needs to have it's destructor called.
         bool needs_destruction() const;

@@ -191,8 +191,6 @@ struct OutStream :: Writable {
 
             field_data: const void* = ptr + field_info.offset_in_bytes;
 
-            try (write('"'));
-
             if (field_info.type.is_string()) try (write('"'));
             try (write_any(field_data, field_info.type));
             if (field_info.type.is_string()) try (write('"'));

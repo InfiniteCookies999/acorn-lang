@@ -11,6 +11,8 @@
 #if !WIN_OS
 #include <sys/stat.h>
 #include <dirent.h>
+#include <unistd.h>
+#include <fcntl.h>
 #endif
 
 #include "Logger.h"
@@ -91,7 +93,7 @@ acorn::Path acorn::Path::append_path(const std::string& path) {
         }
 #else
         if (utf8.ends_with('/')) {
-            return SystemPath(utf8 + path);
+            return Path(utf8 + path);
         }
 #endif
 
@@ -128,9 +130,9 @@ static void win32_error_code_to_string(DWORD ec, std::string& err) {
 
     if (length == 0) {
         err = "Failed to format Win32 Error";
+    } else {
+        err = acorn::utf16_to_utf8(buffer, length);
     }
-
-    err = acorn::utf16_to_utf8(buffer, length);
 }
 
 static void win32_get_file_attribs_error(DWORD ec, std::string& err) {
@@ -143,13 +145,28 @@ static void win32_get_file_attribs_error(DWORD ec, std::string& err) {
     }
 }
 #else
-static void unix_get_file_stat_error(std::string& err) {
+static void unix_get_file_error(std::string& err) {
     if (errno == ENOENT || errno == ENOTDIR) {
         err = "Path not found";
     } else if (errno == EACCES) {
         err = "Access denied";
     } else {
-        err = strerror(errno);
+
+        // Calling `strerror_r` since it is thread safe over `strerror`.
+        constexpr size_t BUFFER_SIZE = 256;
+        char buffer[BUFFER_SIZE];
+        char* ptr = buffer;
+
+#if defined(__GLIBC__) || defined(__GNU_LIBRARY__)
+    // Must reassign to `buffer` since it is possible that it
+    // does not assign to `buffer` but instead returns the value
+    // instead of it references a static string.
+    err = strerror_r(errno, buffer, BUFFER_SIZE);
+#else
+    if (strerror_r(errno, buffer, BUFFER_SIZE) != 0) {
+        err = "Failed to format Unix Error";
+    }
+#endif
     }
 }
 #endif
@@ -178,7 +195,7 @@ bool acorn::path_exists(const Path& path, std::string& err) {
         if (errno == ENOENT || errno == ENOTDIR) {
             return false;
         }
-        unix_get_file_stat_error(err);
+        unix_get_file_error(err);
         return false;
     }
 
@@ -203,7 +220,7 @@ bool acorn::is_directory(const Path& path, std::string& err) {
 
     auto utf8_path = path.to_utf8_string();
     if (stat(utf8_path.c_str(), &path_stat) != 0) {
-        unix_get_file_stat_error(err);
+        unix_get_file_error(err);
         return false;
     }
 
@@ -228,10 +245,10 @@ acorn::Path acorn::get_absolute_path(const Path& path, std::string& err) {
     auto utf8_path = path.to_utf8_string();
     char buffer[PATH_MAX];
     if (realpath(utf8_path.c_str(), buffer)) {
-        return SystemPath(buffer);
+        return Path(buffer);
     }
-    err = strerror(errno);
-    return SystemPath();
+    unix_get_file_error(err);
+    return Path();
 #endif
 }
 
@@ -239,7 +256,7 @@ acorn::Path acorn::get_parent_directory(const Path& path, std::string& err) {
 
     auto parent_directory = get_absolute_path(path, err);
     if (!err.empty()) {
-        return Path{};
+        return Path();
     }
 
 #if WIN_OS
@@ -255,12 +272,12 @@ acorn::Path acorn::get_parent_directory(const Path& path, std::string& err) {
     return Path(utf16_path.substr(0, idx + 1));
 #else
     auto utf8_path = parent_directory.to_utf8_string();
-    if (utf8_path == '/') {
-        return SystemPath(utf8_path);
+    if (utf8_path == "/") {
+        return Path(utf8_path);
     }
 
     size_t idx = utf8_path.find_last_of('/');
-    return SystemPath(utf8_path.substr(0, idx + 1));
+    return Path(utf8_path.substr(0, idx + 1));
 #endif
 }
 
@@ -298,10 +315,10 @@ acorn::Path acorn::get_executable_path(std::string& err) {
     char buffer[PATH_MAX + 1];
     ssize_t length = readlink("/proc/self/exe", buffer, PATH_MAX);
     if (length != -1) {
-        return SystemPath(buffer, length);
+        return Path(buffer, length);
     }
-    err = strerror(errno);
-    return SystemPath();
+    unix_get_file_error(err);
+    return Path();
 #endif
 }
 
@@ -343,7 +360,7 @@ void acorn::make_directory(const Path& path, std::string& err, bool error_if_exi
         } else if (errno == ENOENT) {
             err = "Path not found";
         } else {
-            err = strerror(errno);
+            unix_get_file_error(err);
         }
     }
 #endif
@@ -375,7 +392,7 @@ void acorn::remove_file(const Path& path, std::string& err) {
 
     std::string utf8_path = path.to_utf8_string();
     if (stat(utf8_path.c_str(), &path_stat) != 0) {
-        unix_get_file_stat_error(err);
+        unix_get_file_error(err);
         return;
     }
 
@@ -385,7 +402,7 @@ void acorn::remove_file(const Path& path, std::string& err) {
     }
 
     if (unlink(utf8_path.c_str()) != 0) {
-        err = strerror(errno);
+        unix_get_file_error(err);
     }
 #endif
 }
@@ -491,21 +508,21 @@ void acorn::recursively_iterate_directory(const Path& dir_path,
 
         struct stat entry_stat;
         if (stat(full_path.c_str(), &entry_stat) != 0) {
-            unix_get_file_stat_error(err);
+            unix_get_file_error(err);
             closedir(dir);
             return;
         }
 
         if (S_ISDIR(entry_stat.st_mode)) {
-            recursively_iterate_directory(SystemPath(full_path), err, callback);
+            recursively_iterate_directory(Path(full_path), err, callback);
             if (!err.empty()) {
                 closedir(dir);
                 return;
             }
         } else if (S_ISREG(entry_stat.st_mode)) {
-            callback(SystemPath(full_path), PathKind::REGULAR);
+            callback(Path(full_path), PathKind::REGULAR);
         } else {
-            callback(SystemPath(full_path), PathKind::OTHER);
+            callback(Path(full_path), PathKind::OTHER);
         }
     }
 
@@ -563,7 +580,9 @@ bool acorn::read_file_to_buffer(const Path&    file_path,
     DWORD total_bytes_read = 0;
     while (total_bytes_read < length) {
         DWORD bytes_read;
-        if (!ReadFile(handle, buffer, (DWORD)(length) - total_bytes_read, &bytes_read, nullptr)) {
+        if (!ReadFile(handle, buffer + total_bytes_read,
+                      (DWORD)(length) - total_bytes_read,
+                      &bytes_read, nullptr)) {
             win32_get_file_attribs_error(GetLastError(), err);
             return false;
         }
@@ -578,5 +597,44 @@ bool acorn::read_file_to_buffer(const Path&    file_path,
     return true;
 #else
 
+    auto utf8_path = file_path.to_utf8_string();
+
+    int flags = O_RDWR;
+    int mode = 0;
+
+    int handle = open(utf8_path.c_str(), flags, mode);
+    if (handle == -1) {
+        unix_get_file_error(err);
+        return false;
+    }
+
+    struct stat file_stat;
+    if (stat(utf8_path.c_str(), &file_stat) != 0) {
+        unix_get_file_error(err);
+        close(handle);
+        return false;
+    }
+
+    length = static_cast<size_t>(file_stat.st_size);
+    buffer = (char*)allocator.allocate(length + 1); // +1 for null terminator.
+
+    // keep reading bytes as long as we are not at the maximum bytes.
+    size_t total_bytes_read = 0;
+    while (total_bytes_read < length) {
+        int bytes_read = read(handle, buffer + total_bytes_read, length - total_bytes_read);
+        if (bytes_read == -1) {
+            unix_get_file_error(err);
+            close(handle);
+            return false;
+        }
+
+        total_bytes_read += bytes_read;
+    }
+
+    // Null terminating.
+    buffer[length] = '\0';
+
+    close(handle);
+    return true;
 #endif
 }

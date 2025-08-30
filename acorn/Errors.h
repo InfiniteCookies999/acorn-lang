@@ -6,6 +6,10 @@
 
 #include "Source.h"
 
+namespace llvm {
+    class Module;
+}
+
 namespace acorn {
 
     struct Var;
@@ -31,7 +35,7 @@ namespace acorn {
     }
 
     // This is here because it is used by both sema and parsing.
-    std::string get_error_msg_for_value_not_fit_type(Type* type);
+    std::string get_error_msg_for_value_not_fit_type(Type* type, llvm::Module& ll_module);
 
     void print_source_location(Logger& logger, SourceFile* file, SourceLoc location);
 

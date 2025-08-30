@@ -106,59 +106,86 @@ struct FileHandle :: Writable, Readable {
     }
 
     const fn get_size() -> uint64 {
+        ERROR_MSG :: "Failed to get file size";
+
 #if OS_GROUP_WINDOWS
         size: int64;
         if (win32.GetFileSizeEx(handle, &size) == 0) {
-            err_msg := \win32_error_code_to_string(win32.GetLastError(), String{"Failed to get file size"});
+            err_msg := \win32_error_code_to_string(String{ERROR_MSG});
             raise StateError{ moveobj(err_msg) };
         }
         return as(uint64) size;
 #elif OS_GROUP_UNIX
-        // TODO: error handling!
         stats: Stat;
-        if (unix.fstat(handle, &stats) == 0) {
-            return as(int) stats.st_size;
+        if (unix.fstat(handle, &stats) == -1) {
+            err_msg := \unix_error_code_to_string(String{ERROR_MSG});
+            raise StateError{ moveobj(err_msg) };
         }
-        return 0;
+
+        return as(uint64) stats.st_size;
 #endif
     }
 
     fn read_buffer(buffer: char*, length: int) -> int | raises IOError {
+        ERROR_MSG :: "Failed to read from file handle";
+
 #if OS_GROUP_WINDOWS
         bytes_read: uint32;
         if (win32.ReadFile(handle, buffer, as(uint32) length, &bytes_read, null) == 0) {
             // EOF may return an error so just return the number of bytes read if we hit EOF.
             ec := win32.GetLastError();
             if (ec == win32.ERROR_HANDLE_EOF) {
-                return length;
+                return as(int) bytes_read;
             }
-            err_msg := \win32_error_code_to_string(ec, pretext=String{"Failed to read from file handle"});
+            err_msg := \win32_error_code_to_string(ec, pretext=String{EREOR_MSG});
             raise IOError{ moveobj(err_msg) };
         }
         return as(int) bytes_read;
 #elif OS_GROUP_UNIX
-        // TODO (maddie): This needs to be in a loop.
-        bytes_read: isize = unix.read(handle, buffer, as(usize) length);
-        if (bytes_read == -1) {
-            raise IOError{ "Failed to read from file handle" };
+        total_bytes_read := 0;
+        loop (total_bytes_read < length) {
+            bytes_read := as(int) unix.read(handle,
+                                            buffer + total_bytes_read,
+                                            as(usize)(length - total_bytes_read));
+            // Check for EOF.
+            if (bytes_read == 0) {
+                break;
+            }
+
+            if (bytes_read == -1) {
+                err_msg := \unix_error_code_to_string(pretext=String{ERROR_MSG});
+                raise IOError{ moveobj(err_msg) };
+            }
+            total_bytes_read += bytes_read;
         }
-        return as(int) bytes_read;
+        return total_bytes_read;
 #endif
     }
 
     fn write_buffer(buffer: const char*, length: int) -> int | raises IOError {
+        ERROR_MSG :: "Failed to write to file handle";
+
 #if OS_GROUP_WINDOWS
         bytes_written: uint32;
         if (win32.WriteFile(handle, buffer, as(uint32) length, &bytes_written, null) == 0) {
-            raise IOError{ "Failed to write to file handle" };
+            err_msg := \win32_error_code_to_string(ec, pretext=String{ERROR_MSG});
+            raise IOError{ moveobj(err_msg) };
         }
         return as(int) bytes_written;
 #elif OS_GROUP_UNIX
-        bytes_written: isize = unix.write(handle, buffer, as(usize) length);
-        if (bytes_written == -1) {
-            raise IOError{ "Failed to write to file handle" };
+        total_bytes_written := 0;
+        loop (total_bytes_written < length) {
+            bytes_written := as(int) unix.write(handle,
+                                                buffer + total_bytes_written,
+                                                as(usize) (length - total_bytes_written));
+            if (bytes_written == -1) {
+                err_msg := \unix_error_code_to_string(pretext=String{ERROR_MSG});
+                raise IOError{ moveobj(err_msg) };
+            }
+
+            total_bytes_written += bytes_written;
         }
-        return as(int) bytes_written;
+        return total_bytes_written;
 #endif
     }
 
@@ -166,6 +193,11 @@ struct FileHandle :: Writable, Readable {
         if (auto_close) {
             close();
         }
+#if OS_GROUP_WINDOWS
+        handle = null;
+#elif OS_GROUP_UNIX
+        handle = 0;
+#endif
     }
 
     fn close() {
@@ -177,26 +209,6 @@ struct FileHandle :: Writable, Readable {
 #endif
     }
 }
-
-#if OS_GROUP_WINDOWS
-fn win32_get_file_error(ec: uint32, pretext: const String^) -> String {
-    switch (ec) {
-    case win32.ERROR_FILE_NOT_FOUND:
-    case win32.ERROR_PATH_NOT_FOUND:
-        return \format("%s. Path not found", pretext);
-    case win32.ERROR_ACCESS_DENIED:
-        return \format("%s. Access denied", pretext);
-    case win32.ERROR_FILE_EXISTS:
-        return \format("%s. Path already exists", pretext);
-    case:
-        return \win32_error_code_to_string(ec, pretext);
-    }
-}
-
-fn win32_get_file_error(pretext: const String^) -> String {
-    return win32_get_file_error(win32.GetLastError(), pretext);
-}
-#endif
 
 /*
  * Reads an entire file into a `String`. This function assumes the file size
@@ -251,18 +263,58 @@ fn read_file(path: const String^) -> String | raises IOError {
     return contents;
 }
 
+#if OS_GROUP_WINDOWS
+private fn win32_get_file_attributes(path:      const Path^,
+                                     error_msg: const char*) -> uint32 | raises IOError {
+    temp_buffer := path.to_utf16_string_temporary();
+
+    attribs: uint32 = win32.GetFileAttributesW(temp_buffer.buffer);
+    if (attribs == win32.INVALID_FILE_ATTRIBUTES) {
+        err_msg := \win32_error_code_to_string(\format(error_msg, path.to_utf8_string()));
+        raise IOError{ moveobj(err_msg) };
+    }
+
+    return attribs;
+}
+#elif OS_GROUP_UNIX
+private fn unix_get_file_stats(path:      const Path^,
+                               error_msg: const char*) -> Stat | raises IOError {
+    temp_buffer := path.to_utf8_string_temporary();
+
+    stats: Stat;
+    if (unix.stat(temp_buffer.buffer, &stats) == -1) {
+        err_msg := \unix_error_code_to_string(\format(error_msg, path.to_utf8_string()));
+        raise IOError{ moveobj(err_msg) };
+    }
+
+    return stats;
+}
+#endif
+
 /*
  * Returns true if the file system has a file or
  * directory at the given path.
  */
-fn path_exists(path: const Path^) -> bool {
-#if OS_GROUP_WINDOWS
-    temp_buffer := path.to_utf16_string_temporary();
+fn path_exists(path: const Path^) -> bool | raises IOError {
+    ERROR_MSG :: "Checking if path exists: \"%s\"";
 
-    attribs: uint32 = win32.GetFileAttributesW(temp_buffer.buffer);
+#if OS_GROUP_WINDOWS
+    attribs := try (win32_get_file_attributes(path, ERROR_MSG));
     return attribs != win32.INVALID_FILE_ATTRIBUTES;
 #elif OS_GROUP_UNIX
-    return unix.access(path, unix.F_OK) == 0;
+    temp_buffer := path.to_utf8_string();
+    status := unix.access(temp_buffer.buffer, unix.F_OK);
+    if (status == -1) {
+        errnum := unix.errno();
+        // Check for case in which the path simply doesn't exist.
+        if (errnum == unix.ENOTDIR || errnum == unix.ENOENT) {
+            return false;
+        }
+
+        err_msg := \unix_error_code_to_string(errnum, \format(ERROR_MSG, path.to_utf8_string()));
+        raise IOError{ moveobj(err_msg) };
+    }
+    return true;
 #endif
 }
 
@@ -272,8 +324,9 @@ fn path_exists(path: const Path^) -> bool {
  *
  * @param path a utf-8 path to a file or directory.
  */
-fn path_exists(path: const char*) -> bool {
-    return path_exists(Path{ path });
+fn path_exists(path: const char*) -> bool | raises IOError {
+    exists := try (path_exists(Path{ path }));
+    return exists;
 }
 
 /*
@@ -282,8 +335,9 @@ fn path_exists(path: const char*) -> bool {
  *
  * @param path a utf-8 path to a file or directory.
  */
-fn path_exists(path: const String^) -> bool {
-    return path_exists(Path{ path.buffer });
+fn path_exists(path: const String^) -> bool | raises IOError {
+    exists := try (path_exists(Path{ path.buffer }));
+    return exists;
 }
 
 /*
@@ -291,24 +345,15 @@ fn path_exists(path: const String^) -> bool {
  * is not a directory at the given path.
  */
 fn file_exists(path: const Path^) -> bool | raises IOError {
+    ERROR_MSG :: "Checking if file exists: \"%s\"";
+
 #if OS_GROUP_WINDOWS
-    temp_buffer := path.to_utf16_string_temporary();
-
-    attribs: uint32 = win32.GetFileAttributesW(temp_buffer.buffer);
-    if (attribs == win32.INVALID_FILE_ATTRIBUTES) {
-        err_msg := win32_get_file_error(\format("Checking if file exists: \"%s\"",
-                                        path.to_utf8_string()));
-        raise IOError{ moveobj(err_msg) };
-    }
-
+    attribs: uint32 = try (win32_get_file_attributes(path, ERROR_MSG));
     return attribs != win32.INVALID_FILE_ATTRIBUTES &&
           (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) == 0;
 #elif OS_GROUP_UNIX
-    stats: Stat;
-    if (unix.stat(path, &stats) == 0) {
-        return !unix.__S_ISTYPE(stats.st_mode, unix.__S_IFDIR);
-    }
-    return false;
+    stats := try (unix_get_file_stats(path, ERROR_MSG));
+    return !unix.__S_ISTYPE(stats.st_mode, unix.__S_IFDIR);
 #endif
 }
 
@@ -340,19 +385,16 @@ fn file_exists(path: const String^) -> bool | raises IOError {
  *
  * @param path a utf-8 path to a file or directory.
  */
-fn directory_exists(path: const Path^) -> bool {
-#if OS_GROUP_WINDOWS
-    temp_buffer := path.to_utf16_string_temporary();
+fn directory_exists(path: const Path^) -> bool | raises IOError {
+    ERROR_MSG :: "Checking if directory exists: \"%s\"";
 
-    attribs: uint32 = win32.GetFileAttributesW(temp_buffer.buffer);
+#if OS_GROUP_WINDOWS
+    attribs := try (win32_get_file_attributes(path, ERROR_MSG));
     return attribs != win32.INVALID_FILE_ATTRIBUTES &&
           (attribs &  win32.FILE_ATTRIBUTE_DIRECTORY) != 0;
 #elif OS_GROUP_UNIX
-    stats: Stat;
-    if (unix.stat(path, &stats) == 0) {
-        return unix.__S_ISTYPE(stats.st_mode, unix.__S_IFDIR);
-    }
-    return false;
+    stats := try (unix_get_file_stats(path, ERROR_MSG));
+    return unix.__S_ISTYPE(stats.st_mode, unix.__S_IFDIR);
 #endif
 }
 
@@ -362,8 +404,9 @@ fn directory_exists(path: const Path^) -> bool {
  *
  * @param path a utf-8 path to a file or directory.
  */
-fn directory_exists(path: const char*) -> bool {
-    return directory_exists(Path{ path });
+fn directory_exists(path: const char*) -> bool | raises IOError {
+    exists := try (directory_exists(Path{ path }));
+    return exists;
 }
 
 /*
@@ -372,19 +415,24 @@ fn directory_exists(path: const char*) -> bool {
  *
  * @param path a utf-8 path to a file or directory.
  */
-fn directory_exists(path: const String^) -> bool {
-    return directory_exists(Path{ path.buffer });
+fn directory_exists(path: const String^) -> bool | raises IOError {
+    exists := try (directory_exists(Path{ path.buffer }));
+    return exists;
 }
 
 /*
  * Creates the directory at the given path.
  *
  * This function will not raise an error if the directory
- * already exists.
+ * already exists as a directory. But if it does exists already
+ * but not as a directory then it will still raise.
  *
  * @return if it created the directory, false if it already exists.
  */
 fn mkdir(path: const Path^) -> bool | raises IOError {
+    ERROR_MSG                   :: "Failed to make directory: \"%s\"";
+    EXISTS_AS_NOT_DIR_ERROR_MSG :: " because it already exists but not as a directory";
+
     // TODO: We will also want to pass a variable for creating
     //       the parent directories if the user wants.
 
@@ -392,20 +440,41 @@ fn mkdir(path: const Path^) -> bool | raises IOError {
     temp_buffer := path.to_utf16_string_temporary();
 
     if (win32.CreateDirectoryW(temp_buffer.buffer, null) == 0) {
+        // TODO (maddie): Fix this so that it checks that it already
+        // exists but as a directory, otherwise it should raise an
+        // error about already existing but not as a directory.
         ec := win32.GetLastError();
         if (ec == win32.ERROR_ALREADY_EXISTS) {
-            // Do not raise an error when the directory already exists.
             return false;
         }
 
-        err_msg := win32_get_file_error(ec, \format("Failed to make directory: \"%s\"",
-                                        path.to_utf8_string()));
+        err_msg := \win32_error_code_to_string(ec, \format(ERROR_MSG, path.to_utf8_string()));
         raise IOError{ moveobj(err_msg) };
     }
 
     return true;
 #elif OS_GROUP_UNIX
-    return unix.mkdir(path, 0775) == 0;
+    temp_buffer := path.to_utf8_string_temporary();
+
+    if (unix.mkdir(temp_buffer.buffer, 0775) == -1) {
+        errnum := unix.errno();
+
+        // Checking to see if it already exists as a directory.
+        if (errnum == unix.EEXIST) {
+            exists_as_directory := try (directory_exists(path));
+            if (exists_as_directory) {
+                return false;
+            }
+
+            err_msg := \format(ERROR_MSG, path.to_utf8_string()).append(EXISTS_AS_NOT_DIR_ERROR_MSG);
+            raise IOError{ moveobj(err_msg) };
+        }
+
+        err_msg := \unix_error_code_to_string(errnum, \format(ERROR_MSG, path.to_utf8_string()));
+        raise IOError{ moveobj(err_msg) };
+    }
+
+    return true;
 #endif
 }
 
@@ -413,7 +482,8 @@ fn mkdir(path: const Path^) -> bool | raises IOError {
  * Creates the directory at the given path.
  *
  * This function will not raise an error if the directory
- * already exists.
+ * already exists as a directory. But if it does exists already
+ * but not as a directory then it will still raise.
  *
  * @param path a utf-8 path to a file or directory.
  * @return if it created the directory, false if it already exists.
@@ -427,7 +497,8 @@ fn mkdir(path: const char*) -> bool | raises IOError {
  * Creates the directory at the given path.
  *
  * This function will not raise an error if the directory
- * already exists.
+ * already exists as a directory. But if it does exists already
+ * but not as a directory then it will still raise.
  *
  * @param path a utf-8 path to a file or directory.
  * @return if it created the directory, false if it already exists.
@@ -444,6 +515,7 @@ fn mkdir(path: const String^) -> bool | raises IOError {
  * empty.
  */
 fn remove_path(path: const Path^) | raises IOError {
+    ERROR_MSG :: "Failed to remove path: \"%s\"";
 
 #if OS_GROUP_WINDOWS
     temp_buffer := path.to_utf16_string_temporary();
@@ -464,10 +536,15 @@ fn remove_path(path: const Path^) | raises IOError {
     }
 
     if (!sucess) {
-        raise IOError{ win32_get_file_error(\format("Failed to remove path: \"%s\"", path)) };
+        err_msg := \win32_error_code_to_string(\format(ERROR_MSG, path.to_utf8_string()));
+        raise IOError{ moveobj(err_msg) };
     }
 #elif OS_GROUP_UNIX
-    return unix.remove(path) == 0;
+    temp_buffer := path.to_utf8_string_temporary();
+    if (unix.remove(temp_buffer.buffer) == -1) {
+        err_msg := \unix_error_code_to_string(\format(ERROR_MSG, path.to_utf8_string()));
+        raise IOError{ moveobj(err_msg) };
+    }
 #endif
 }
 
@@ -496,6 +573,7 @@ fn remove_path(path: const String^) | raises IOError {
 }
 
 fn open_file(path: const Path^, flags: FileFlag$) -> FileHandle | raises IOError {
+    ERROR_MSG :: "Failed to open file: \"%s\"";
 
 #if OS_GROUP_WINDOWS
     access_flags: uint32 = 0;
@@ -556,7 +634,7 @@ fn open_file(path: const Path^, flags: FileFlag$) -> FileHandle | raises IOError
                                       null);
 
     if (handle == win32.INVALID_HANDLE_VALUE) {
-        err_msg := win32_get_file_error(\format("Failed to open file: \"%s\"", path.to_utf8_string()));
+        err_msg := \win32_error_code_to_string(\format(ERROR_MSG, path.to_utf8_string()));
         raise IOError{ moveobj(err_msg) };
     }
 
@@ -591,9 +669,12 @@ fn open_file(path: const Path^, flags: FileFlag$) -> FileHandle | raises IOError
                   unix.S_IWGRP | unix.S_IROTH | unix.S_IWOTH;
     }
 
-    handle: int32 = unix.open(path, os_flags, os_mode);
+    temp_buffer := path.to_utf8_string_temporary();
+
+    handle: int32 = unix.open(temp_buffer.buffer, os_flags, os_mode);
     if (handle == -1) {
-        raise IOError{ \format("Failed to open file: \"%s\"", path) };
+        err_msg := \unix_error_code_to_string(\format(ERROR_MSG, path.to_utf8_string()));
+        raise IOError{ moveobj(err_msg) };
     }
 
     return FileHandle{ handle };

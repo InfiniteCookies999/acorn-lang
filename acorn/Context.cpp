@@ -267,6 +267,15 @@ acorn::Context::Context(llvm::LLVMContext& ll_context, llvm::Module& ll_module, 
 #endif
     }));
 
+    universal_constants.insert(new_universal<Bool>(allocator, "GLIBC_ENABLED", [this](Bool* v) {
+        v->type = bool_type;
+#if defined(__GLIBC__) || defined(__GNU_LIBRARY__)
+        v->value = true;
+#else
+        v->value = false;
+#endif
+    }));
+
     universal_constants.insert(new_universal<Bool>(allocator, "__USE_XOPEN2K8", [this](Bool* v) {
         v->type = bool_type;
 #ifdef __USE_XOPEN2K8

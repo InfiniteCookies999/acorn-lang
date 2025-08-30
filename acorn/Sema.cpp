@@ -610,7 +610,12 @@ void acorn::Sema::check_variable(Var* var) {
 
         if (var->parsed_type == context.auto_ptr_type || var->parsed_type == context.auto_const_ptr_type) {
             if (!var->type->is_pointer()) {
-                var->type = type_table.get_ptr_type(var->type);
+                if (var->type->is_array()) {
+                    auto arr_type = static_cast<ArrayType*>(var->type);;
+                    var->type = type_table.get_ptr_type(arr_type->get_elm_type());
+                } else {
+                    var->type = type_table.get_ptr_type(var->type);
+                }
             }
         }
 
@@ -2425,7 +2430,7 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
                     continue;
                 }
 
-                auto ll_int_type = llvm::Type::getIntNTy(context.get_ll_context(), value_type->get_number_of_bits());
+                auto ll_int_type = llvm::Type::getIntNTy(context.get_ll_context(), value_type->get_number_of_bits(context.get_ll_module()));
 
                 auto cmp_lhs = CmpNumber::get(*this, range->lhs);
                 auto cmp_rhs = CmpNumber::get(*this, range->rhs);
@@ -2969,8 +2974,8 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
 
         if (lhs_type->is_float()) {
             if (rhs_type->is_float()) {
-                uint32_t lbits = rhs_type->get_number_of_bits();
-                uint32_t rbits = lhs_type->get_number_of_bits();
+                uint32_t lbits = rhs_type->get_number_of_bits(context.get_ll_module());
+                uint32_t rbits = lhs_type->get_number_of_bits(context.get_ll_module());
                 return lbits > rbits ? lhs_type : rhs_type;
             } else if (rhs_type->is_integer()) {
                 return lhs_type->remove_all_const();
@@ -2978,8 +2983,8 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             return nullptr;
         } else if (rhs_type->is_float()) {
             if (lhs_type->is_float()) {
-                uint32_t lbits = rhs_type->get_number_of_bits();
-                uint32_t rbits = lhs_type->get_number_of_bits();
+                uint32_t lbits = rhs_type->get_number_of_bits(context.get_ll_module());
+                uint32_t rbits = lhs_type->get_number_of_bits(context.get_ll_module());
                 return lbits > rbits ? lhs_type : rhs_type;
             } else if (lhs_type->is_integer()) {
                 return rhs_type->remove_all_const();
@@ -3805,7 +3810,7 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
         return false;
     };
 
-    auto search = [=, &spell_checker]() finline {
+    auto search = [=, this, &spell_checker]() finline {
         if (search_relative) {
 
             // search for variable in the local scope.
@@ -6290,12 +6295,6 @@ acorn::Type* acorn::Sema::fixup_unresolved_array_type(Type* type) {
         return nullptr;
     }
 
-    if (expr->type->get_number_of_bits() > 32) {
-        error(expand(expr), "Array length must be less than or equal to a 32 bit integer")
-            .end_error(ErrCode::SemaArrayLengthTooLargeType);
-        return nullptr;
-    }
-
     if (!expr->is_foldable) {
         error(expand(expr), "Array length must be able to be determined at compile time")
             .end_error(ErrCode::SemaArrayLengthNotComptime);
@@ -6304,13 +6303,7 @@ acorn::Type* acorn::Sema::fixup_unresolved_array_type(Type* type) {
 
     if (auto ll_length = gen_constant(expr)) {
         auto ll_int_length = llvm::cast<llvm::ConstantInt>(ll_length);
-        uint32_t length = static_cast<uint32_t>(ll_int_length->getZExtValue());
-
-        if (length == 0) {
-            error(expand(expr), "Array length cannot be zero")
-                .end_error(ErrCode::SemaArrayLengthZero);
-            return nullptr;
-        }
+        uint64_t length = ll_int_length->getZExtValue();
 
         if (expr->type->is_signed() && static_cast<int32_t>(length) < 0) {
             error(expand(expr), "Array length cannot be negative")
@@ -6318,8 +6311,20 @@ acorn::Type* acorn::Sema::fixup_unresolved_array_type(Type* type) {
             return nullptr;
         }
 
+        if (length > static_cast<uint64_t>(std::numeric_limits<uint32_t>::max())) {
+            error(expand(expr), "Array length must be less than or equal to an unsigned 32 bit integer")
+                        .end_error(ErrCode::SemaArrayLengthTooLargeType);
+            return nullptr;
+        }
+
+        if (length == 0) {
+            error(expand(expr), "Array length cannot be zero")
+                .end_error(ErrCode::SemaArrayLengthZero);
+            return nullptr;
+        }
+
         // Everything is okay we can create a new array out of it!
-        auto fixed_type = type_table.get_arr_type(fixed_elm_type, length);
+        auto fixed_type = type_table.get_arr_type(fixed_elm_type, static_cast<uint32_t>(length));
         if (type->is_const()) {
             return type_table.get_const_type(fixed_type);
         }
@@ -7040,6 +7045,12 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
         Expr* arg_value = args[i];
         Var* param = nullptr;
 
+        if constexpr (is_func_decl) {
+            if (candidate->uses_native_varargs && i > last_index) {
+                continue;
+            }
+        }
+
         if (arg_value->is(NodeKind::NAMED_VALUE)) {
 
             if constexpr (is_func_decl) {
@@ -7653,7 +7664,7 @@ std::string acorn::Sema::get_type_mismatch_error(Type* to_type, Expr* expr, bool
     }
 
     if (to_type->is_integer() && expr->trivially_reassignable && expr->type->is_integer()) {
-        return get_error_msg_for_value_not_fit_type(to_type);
+        return get_error_msg_for_value_not_fit_type(to_type, context.get_ll_module());
     } else if (to_type->is_pointer() && expr->type->is_array()) {
 
         auto from_type = expr->type;

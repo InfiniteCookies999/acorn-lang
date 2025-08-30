@@ -285,15 +285,15 @@ namespace acorn {
         Logger(Logger&&) = default;
 
         template<typename... TArgs>
-        static void fatal_internal(const char* cpp_file, int line, const char* fmt, TArgs&&... args) {
+        [[noreturn]] static void fatal_internal(const char* cpp_file, int line, const char* fmt, TArgs&&... args) {
             fatal_internal(cpp_file, line, [fmt, ...fargs = std::forward<TArgs>(args)]() mutable {
                 fmt_print(Stream::StdErr, fmt, std::forward<TArgs>(fargs)...);
             });
         }
-        static void fatal_internal(const char* cpp_file, int line, const char* msg) {
+        [[noreturn]] static void fatal_internal(const char* cpp_file, int line, const char* msg) {
             fatal_internal(cpp_file, line, [msg]() { print(Stream::StdErr, msg); });
         }
-        static void fatal_internal(const char* cpp_file, int line, const std::function<void()>& print_cb);
+        [[noreturn]] static void fatal_internal(const char* cpp_file, int line, const std::function<void()>& print_cb);
 
         // Displays information related to the different steps of compilation
         // to help identify what is happening.

@@ -2,6 +2,7 @@
 
 import .io;
 import .win32;
+import .unix;
 
 interface Error {
 
@@ -101,8 +102,39 @@ fn abort(error: Error*) {
     \exit(1);
 }
 
+private enum SystemError {
+    PATH_NOT_FOUND,
+    ACCESS_DENIED,
+    PATH_ALREADY_EXISTS,
+}
+
+fn get_system_error_string(error: SystemError, pretext: const String^) -> String {
+    switch (error) {
+    case PATH_NOT_FOUND:
+        return format("%s. Path not found", pretext);
+    case ACCESS_DENIED:
+        return format("%s. Access denied", pretext);
+    case PATH_ALREADY_EXISTS:
+        return format("%s. Path already exists", pretext);
+    }
+}
+
 #if OS_GROUP_WINDOWS
+fn win32_error_code_to_string(pretext: const String^) -> String {
+    return win32_error_code_to_string(win32.GetLastError(), pretext);
+}
+
 fn win32_error_code_to_string(error_code: uint32, pretext: const String^) -> String {
+
+    switch (error_code) {
+    case win32.ERROR_FILE_NOT_FOUND:
+    case win32.ERROR_PATH_NOT_FOUND:
+        return get_system_error_string(SystemError.PATH_NOT_FOUND, pretext);
+    case win32.ERROR_ACCESS_DENIED:
+        return get_system_error_string(SystemError.ACCESS_DENIED, pretext);
+    case win32.ERROR_FILE_EXISTS:
+        return get_system_error_string(SystemError.PATH_ALREADY_EXISTS, pretext);
+    }
 
     buffer: char*;
     length := win32.FormatMessageA(
@@ -118,7 +150,7 @@ fn win32_error_code_to_string(error_code: uint32, pretext: const String^) -> Str
     );
 
     if (length == 0) {
-        raise StateError{ "Encountered Win32 error but failed to format the error message" };
+        return String{ "Encountered Win32 error but failed to format the error message" };
     }
 
     // Windows appends \r\n. to the end of the message so removing that if it exists
@@ -131,6 +163,44 @@ fn win32_error_code_to_string(error_code: uint32, pretext: const String^) -> Str
 
     error_msg := format("%s. Windows error (%s): ", pretext, error_code);
     error_msg.append(String{ buffer, as(int) length });
+
+    return error_msg;
+}
+#elif OS_GROUP_UNIX
+fn unix_error_code_to_string(pretext: const String^) -> String {
+    return unix_error_code_to_string(unix.errno(), pretext);
+}
+
+fn unix_error_code_to_string(errnum: int32, pretext: const String^) -> String {
+
+    switch (errnum) {
+    case unix.ENOENT:
+    case unix.ENOTDIR:
+        return get_system_error_string(SystemError.PATH_NOT_FOUND, pretext);
+    case unix.EACCES:
+        return get_system_error_string(SystemError.ACCESS_DENIED, pretext);
+    case unix.EEXIST:
+        return get_system_error_string(SystemError.PATH_ALREADY_EXISTS, pretext);
+    }
+
+    // Calling `strerror_r` since it is thread safe over `strerror`.
+    BUFFER_SIZE: usize : 256;
+    buffer: char[BUFFER_SIZE];
+    ptr* := buffer;
+
+#if GLIBC_ENABLED
+    // Must reassign to `buffer` since it is possible that it
+    // does not assign to `buffer` but instead returns the value
+    // instead of it references a static string.
+    ptr = unix.strerror_r(errnum, buffer, BUFFER_SIZE);
+#else
+    if (unix.strerror_r(errnum, buffer, BUFFER_SIZE) != 0) {
+        return String{ "Encountered unix error but failed to format the error message" };
+    }
+#endif
+
+    error_msg := format("%s. Unix error (%s): ", pretext, errnum);
+    error_msg.append(String{ ptr });
 
     return error_msg;
 }

@@ -219,7 +219,7 @@ void fuzzer_valid_lexemes(std::ostream& ostream, acorn::Compiler& compiler) {
         case TokId::GT_GT_EQ:    case TokId::ADD_ADD:     case TokId::SUB_SUB:    case TokId::SUB_SUB_SUB:
         case TokId::AND_AND:    case TokId::OR_OR:       case TokId::RANGE_EQ:   case TokId::RANGE_LT:
         //case TokId::DotDot:    case TokId::DotDotDot:  case TokId::ColCol:    case TokId::BackslashBackslash: {
-            lexeme = acorn::token_kind_to_string(*compiler.get_context(), id);
+            //lexeme = acorn::token_kind_to_string(*compiler.get_context(), id);
             break;
         }
         //case TokId::IntLiteral:

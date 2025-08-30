@@ -398,11 +398,11 @@ acorn::Node* acorn::Parser::parse_statement() {
             return parse_function(modifiers, true);
         } else if (cur_token.is(Token::IDENTIFIER)) {
             return parse_variable_list(modifiers);
-        } else if (Token::KW_STRUCT) {
+        } else if (cur_token.is(Token::KW_STRUCT)) {
             return parse_struct(modifiers);
-        } else if (Token::KW_ENUM) {
+        } else if (cur_token.is(Token::KW_ENUM)) {
             return parse_enum(modifiers);
-        } else if (Token::KW_INTERFACE) {
+        } else if (cur_token.is(Token::KW_INTERFACE)) {
             return parse_interface(modifiers);
         } else {
             error(cur_token, "Expected declaration")
@@ -747,6 +747,7 @@ acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers, VarList* 
     }
 
     if (cur_token.is('=') || cur_token.is(':')) {
+        bool apply_const = cur_token.is(':');
         next_token();
 
         NoDefaultInit no_default_init_expr;
@@ -805,6 +806,10 @@ acorn::VarList* acorn::Parser::parse_variable_list(uint32_t modifiers, VarList* 
                 Token auto_ptr_type  = std::get<2>(name_tokens[i]);
                 check_for_auto_ptr_with_type(var, infers_ptr_type, auto_ptr_type);
 
+                if (apply_const && !var->parsed_type->is_const()) {
+                    var->parsed_type = type_table.get_const_type(var->parsed_type);
+                }
+
                 if (infers_ptr_type) {
                     if (var->parsed_type == context.auto_type) {
                         var->parsed_type = context.auto_ptr_type;
@@ -859,6 +864,9 @@ acorn::Var* acorn::Parser::parse_variable(uint32_t modifiers, bool may_parse_imp
     }
 
     if (cur_token.is('=') || cur_token.is(':')) {
+        if (cur_token.is(':') && !var->parsed_type->is_const()) {
+            var->parsed_type = type_table.get_const_type(var->parsed_type);
+        }
         next_token();
 
         if (cur_token.is(Token::SUB_SUB_SUB)) {
@@ -1748,7 +1756,8 @@ acorn::Type* acorn::Parser::construct_array_type(Type* base_type, const llvm::Sm
         Number* number;
         if (resolvable) {
             number = static_cast<Number*>(arr_expr.expr);
-            resolvable &= number->type->is_integer() && number->type->get_number_of_bits() <= 32 &&
+            resolvable &= number->type->is_integer() &&
+                          number->type->get_number_of_bits(context.get_ll_module()) <= 32 &&
                           number->value_s32 > 0;
         }
 
@@ -2042,14 +2051,14 @@ acorn::Expr* acorn::Parser::fold_int(Token op, Number* lhs, Number* rhs, Type* t
         return calc(lval % rval);
     }
     case Token::LT_LT: {
-        if (rval < 0 || rval == 0 || ((rval - 1) > (T)to_type->get_number_of_bits())) {
+        if (rval < 0 || rval == 0 || ((rval - 1) > (T)to_type->get_number_of_bits(context.get_ll_module()))) {
             // These are shift error cases handled during sema.
             return new_binary_op(op, lhs, rhs);
         }
         return calc(lval << rval);
     }
     case Token::GT_GT: {
-        if (rval < 0 || rval == 0 || (rval - 1) > (T)to_type->get_number_of_bits()) {
+        if (rval < 0 || rval == 0 || (rval - 1) > (T)to_type->get_number_of_bits(context.get_ll_module())) {
             // These are shift error cases handled during sema.
             return new_binary_op(op, lhs, rhs);
         }
@@ -2753,7 +2762,7 @@ acorn::Number* acorn::Parser::parse_int_number(const char* start, const char* en
         ++ptr;
 
         auto report_fits_error = [this, number]() finline {
-            auto err_msg = get_error_msg_for_value_not_fit_type(number->type);
+            auto err_msg = get_error_msg_for_value_not_fit_type(number->type, context.get_ll_module());
             logger.begin_error(number->loc, "%s", err_msg)
                 .end_error(ErrCode::ParseIntegerValueNotFitType);
         };

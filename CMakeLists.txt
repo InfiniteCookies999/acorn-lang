@@ -35,7 +35,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clan
         add_compile_options(-Werror=endif-labels)
     endif()
 
-    add_compile_options(-Wshadow=local)         # No shadowing local variables or parameters.
+    # add_compile_options(-Wshadow=local)         # No shadowing local variables or parameters.
     add_compile_options(-Werror=switch)         # Force completion of switch statements with enums.
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     add_compile_options(/permissive-)           # Make MSVC standard compliant.

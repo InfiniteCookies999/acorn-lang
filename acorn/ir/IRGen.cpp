@@ -398,10 +398,12 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
     // as an address to store the returning value into which will
     // at the end of the function be returned within the `ll_ret_block`.
     //
+    bool has_ret_addr = false;
     bool is_main = func == context.get_main_function();
     if (func->num_returns > 1) {
         ll_ret_block = gen_bblock("ret.block");
         if (!func->uses_aggr_param) {
+            has_ret_addr = true;
             if (func->return_type->is_not(context.void_type)) {
                 ll_ret_addr = builder.CreateAlloca(gen_type(func->return_type), nullptr, "ret.addr");
             } else if (is_main) {
@@ -421,6 +423,7 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
     //
     unsigned int param_idx = 0;
     if (func->uses_aggr_param) {
+        has_ret_addr = true;
         ll_ret_addr = ll_cur_func->getArg(param_idx++);
     }
     if (!func->raised_errors.empty()) {
@@ -489,7 +492,7 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
 
     // Allocating memory for variables declared in the function.
     for (Var* var : func->vars_to_alloc) {
-        if (func->uses_aggr_param && var == func->aggr_ret_var) {
+        if (has_ret_addr && var == func->aggr_ret_var) {
             var->ll_address = ll_ret_addr;
         } else {
             gen_variable_address(var, gen_type(var->type));
@@ -2280,7 +2283,7 @@ llvm::Value* acorn::IRGenerator::gen_switch_foldable(SwitchStmt* switchn) {
             auto range_type = static_cast<RangeType*>(scase.cond->type);
             auto value_type = range_type->get_value_type();
 
-            auto ll_int_type = llvm::Type::getIntNTy(context.get_ll_context(), value_type->get_number_of_bits());
+            auto ll_int_type = llvm::Type::getIntNTy(context.get_ll_context(), value_type->get_number_of_bits(ll_module));
             iterate_over_range_values(range, [ll_int_type, ll_case_bb, ll_switch, value_type](uint64_t value) {
                 auto ll_case_value = llvm::ConstantInt::get(ll_int_type, value, value_type->is_signed());
                 ll_switch->addCase(ll_case_value, ll_case_bb);
@@ -2815,7 +2818,7 @@ llvm::Value* acorn::IRGenerator::gen_number(Number* number) {
         return llvm::ConstantFP::get(ll_context, llvm::APFloat(number->value_f32));
     }
 
-    auto int_bit_size = number->type->get_number_of_bits();
+    auto int_bit_size = number->type->get_number_of_bits(ll_module);
     return llvm::ConstantInt::get(ll_context, llvm::APInt(int_bit_size, number->value_u64, true));
 }
 
@@ -4541,7 +4544,7 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
     case TypeKind::FLOAT:
     case TypeKind::DOUBLE: {
         if (from_type->is_float()) {
-            if (to_type->get_number_of_bits() > from_type->get_number_of_bits()) {
+            if (to_type->get_number_of_bits(ll_module) > from_type->get_number_of_bits(ll_module)) {
                 // Upcasting float.
                 return builder.CreateFPExt(ll_value, gen_type(to_type), "cast");
             } else {

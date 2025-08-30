@@ -2,11 +2,12 @@
 
 import .reflect.Any;
 import .win32;
+import .unix;
 
 #if OS_GROUP_WINDOWS
 private std_out_handle := FileHandle{ win32.GetStdHandle(win32.STD_OUTPUT_HANDLE), auto_close=false };
 #elif OS_GROUP_UNIX
-// TODO (maddie): implement for unix.
+private std_out_handle := FileHandle{ unix.STDOUT_FILENO, auto_close=false };
 #endif
 
 std_out := OutStream{ std_out_handle };

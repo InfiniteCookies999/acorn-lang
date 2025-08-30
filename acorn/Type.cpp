@@ -1,5 +1,7 @@
 #include "Type.h"
 
+#include <llvm/IR/Module.h>
+
 #include "PageAllocator.h"
 #include "Logger.h"
 #include "Util.h"
@@ -166,7 +168,7 @@ bool acorn::Type::is_sized() const {
     }
 }
 
-uint32_t acorn::Type::get_number_of_bits() const {
+uint32_t acorn::Type::get_number_of_bits(llvm::Module& ll_module) const {
     switch (kind) {
     case TypeKind::VOID_T:  return 0;
     case TypeKind::INT:     return 32;
@@ -185,11 +187,12 @@ uint32_t acorn::Type::get_number_of_bits() const {
     case TypeKind::DOUBLE:  return 64;
     case TypeKind::ENUM: {
         auto enum_type = static_cast<const EnumType*>(this);
-        return enum_type->get_index_type()->get_number_of_bits();
+        return enum_type->get_index_type()->get_number_of_bits(ll_module);
     }
+    case TypeKind::USIZE: case TypeKind::ISIZE:
+        return ll_module.getDataLayout().getPointerSizeInBits();
     default:
-        acorn_fatal("unimplemented case");
-        return 0;
+        acorn_fatal("Unimplemented case");
     }
 }
 

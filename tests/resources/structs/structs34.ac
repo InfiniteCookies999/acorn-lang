@@ -16,26 +16,39 @@ native fn write(fd: int32, buf: const void*, count: usize) -> isize;
 
 #endif
 
-fn write_val(c: char) {
+fn write_val(val: int8) {
 
 #if OS_GROUP_WINDOWS
     handle: void* = GetStdHandle(-11);
     written: uint32;
+    c: char = as(char) val;
     WriteFile(handle, &c, 1, &written, null);
 #elif OS_GROUP_UNIX
+    c: char = as(char) val;
     write(1, &c, 1);
 #endif
 
 }
 
+struct A {
+    val1: int8;
+}
+
+fn foo(b: bool) -> A {
+    a: A;
+    a.val1 = 64;
+
+    if (b) {
+        return a;
+    }
+    a.val1 = 35;
+    return a;
+}
+
 fn main() {
-    a: const char* = "potato";
+    a1: A = foo(true);
+    write_val(a1.val1);
 
-    write_val(a[0]);
-    write_val(a[1]);
-    write_val(a[2]);
-    write_val(a[3]);
-    write_val(a[4]);
-    write_val(a[5]);
-
+    a2: A = foo(false);
+    write_val(a2.val1);
 }

@@ -2,6 +2,54 @@
 
 #if OS_GROUP_UNIX
 
+STDIN_FILENO  :: 0'i32;
+STDOUT_FILENO :: 1'i32;
+STDERR_FILENO :: 2'i32;
+
+EPERM     ::  1'i32;    /* Operation not permitted */
+ENOENT    ::  2'i32;    /* No such file or directory */
+ESRCH     ::  3'i32;    /* No such process */
+EINTR     ::  4'i32;    /* Interrupted system call */
+EIO		  ::  5'i32;    /* I/O error */
+ENXIO     ::  6'i32;    /* No such device or address */
+E2BIG     ::  7'i32;    /* Argument list too long */
+ENOEXEC   ::  8'i32;    /* Exec format error */
+EBADF     ::  9'i32;    /* Bad file number */
+ECHILD    :: 10'i32;    /* No child processes */
+EAGAIN    :: 11'i32;    /* Try again */
+ENOMEM    :: 12'i32;    /* Out of memory */
+EACCES    :: 13'i32;    /* Permission denied */
+EFAULT    :: 14'i32;    /* Bad address */
+ENOTBLK	  :: 15'i32;    /* Block device required */
+EBUSY     :: 16'i32;    /* Device or resource busy */
+EEXIST    :: 17'i32;    /* File exists */
+EXDEV     :: 18'i32;    /* Cross-device link */
+ENODEV    :: 19'i32;    /* No such device */
+ENOTDIR   :: 20'i32;    /* Not a directory */
+EISDIR    :: 21'i32;    /* Is a directory */
+EINVAL    :: 22'i32;    /* Invalid argument */
+ENFILE    :: 23'i32;    /* File table overflow */
+EMFILE    :: 24'i32;    /* Too many open files */
+ENOTTY    :: 25'i32;    /* Not a typewriter */
+ETXTBSY   :: 26'i32;    /* Text file busy */
+EFBIG     :: 27'i32;    /* File too large */
+ENOSPC    :: 28'i32;    /* No space left on device */
+ESPIPE    :: 29'i32;    /* Illegal seek */
+EROFS     :: 30'i32;    /* Read-only file system */
+EMLINK    :: 31'i32;    /* Too many links */
+EPIPE     :: 32'i32;    /* Broken pipe */
+EDOM      :: 33'i32;    /* Math argument out of domain of func */
+ERANGE    :: 34'i32;    /* Math result not representable */
+
+native fn __errno_location() -> int32*;
+fn errno() -> int32 { return *__errno_location(); }
+
+#if GLIBC_ENABLED
+native fn strerror_r(errnum: int32, buf: char*, buflen: usize) -> char*;
+#else
+native fn strerror_r(errnum: int32, buf: char*, buflen: usize) -> int32;
+#endif
+
 native fn _exit(status: int32);
 
 native fn write(fd: int32, buf: const void*, count: usize) -> isize;
