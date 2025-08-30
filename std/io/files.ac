@@ -137,7 +137,7 @@ struct FileHandle :: Writable, Readable {
             if (ec == win32.ERROR_HANDLE_EOF) {
                 return as(int) bytes_read;
             }
-            err_msg := \win32_error_code_to_string(ec, pretext=String{EREOR_MSG});
+            err_msg := \win32_error_code_to_string(ec, pretext=String{ERROR_MSG});
             raise IOError{ moveobj(err_msg) };
         }
         return as(int) bytes_read;
@@ -168,7 +168,7 @@ struct FileHandle :: Writable, Readable {
 #if OS_GROUP_WINDOWS
         bytes_written: uint32;
         if (win32.WriteFile(handle, buffer, as(uint32) length, &bytes_written, null) == 0) {
-            err_msg := \win32_error_code_to_string(ec, pretext=String{ERROR_MSG});
+            err_msg := \win32_error_code_to_string(pretext=String{ERROR_MSG});
             raise IOError{ moveobj(err_msg) };
         }
         return as(int) bytes_written;
@@ -440,12 +440,17 @@ fn mkdir(path: const Path^) -> bool | raises IOError {
     temp_buffer := path.to_utf16_string_temporary();
 
     if (win32.CreateDirectoryW(temp_buffer.buffer, null) == 0) {
-        // TODO (maddie): Fix this so that it checks that it already
-        // exists but as a directory, otherwise it should raise an
-        // error about already existing but not as a directory.
         ec := win32.GetLastError();
+
+        // Checking to see if it already exists as a directory.
         if (ec == win32.ERROR_ALREADY_EXISTS) {
-            return false;
+            exists_as_directory := try (directory_exists(path));
+            if (exists_as_directory) {
+                return false;
+            }
+
+            err_msg := \format(ERROR_MSG, path.to_utf8_string()).append(EXISTS_AS_NOT_DIR_ERROR_MSG);
+            raise IOError{ moveobj(err_msg) };
         }
 
         err_msg := \win32_error_code_to_string(ec, \format(ERROR_MSG, path.to_utf8_string()));
