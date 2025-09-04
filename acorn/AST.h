@@ -203,7 +203,7 @@ namespace acorn {
     };
 
     struct GenericFuncInstance : GenericInstance {
-        llvm::SmallVector<Type*> bound_types;
+        llvm::SmallVector<Type*> bound_generic_args;
         // Parameters have their types fully qualified so that future
         // calls to the generic function know how to properly call the
         // function.
@@ -280,8 +280,8 @@ namespace acorn {
         bool is_checking_declaration = false;
         bool is_constructor          = false;
         bool is_destructor           = false;
-        bool is_copy_constructor     = false;
-        bool is_move_constructor     = false;
+        bool is_copyobj_func         = false;
+        bool is_moveobj_func         = false;
         bool has_implicit_return_ptr = false;
         bool uses_native_varargs     = false;
         bool uses_varargs            = false;
@@ -317,7 +317,7 @@ namespace acorn {
         bool is_generic() const { return !generics.empty(); }
 
         GenericFuncInstance* get_generic_instance(PageAllocator& allocator,
-                                                  llvm::SmallVector<Type*> bound_types,
+                                                  llvm::SmallVector<Type*> generic_args,
                                                   llvm::SmallVector<Type*> qualified_param_types,
                                                   Struct* parent_struct);
 
@@ -330,8 +330,8 @@ namespace acorn {
 
         enum class ImplicitKind {
             DEFAULT_CONSTRUCTOR,
-            COPY_CONSTRUCTOR,
-            MOVE_CONSTRUCTOR,
+            COPYOBJ,
+            MOVEOBJ,
             DESTRUCTOR,
             VTABLE_INIT
         } implicit_kind;
@@ -396,13 +396,15 @@ namespace acorn {
         Namespace* nspace;
         // Ordered list of the fields.
         llvm::SmallVector<Var*> fields;
+
+        // These functions are specifically for functions such as `copyobj`, `moveobj`
+        // functions which are not placed in the normal functions list due to them not
+        // being able to be called directly by the user.
         struct DuplicateStructFuncInfo {
             Func* duplicate_function;
             Func* prior_function;
         };
-        // These functions are specifically for functions such as copy constructors
-        // which are not placed in the normal functions list.
-        llvm::SmallVector<DuplicateStructFuncInfo> duplicate_struct_func_infos;
+        llvm::SmallVector<DuplicateStructFuncInfo> duplicate_special_funcs_info;
 
         struct UnresolvedExtension {
             Identifier name;
@@ -419,15 +421,15 @@ namespace acorn {
         llvm::SmallVector<InterfaceExtension>  interface_extensions;
 
         Func*                    default_constructor = nullptr;
-        Func*                    copy_constructor    = nullptr;
-        Func*                    move_constructor    = nullptr;
+        Func*                    copyobj_func        = nullptr;
+        Func*                    moveobj_func        = nullptr;
         Func*                    destructor          = nullptr;
         llvm::SmallVector<Func*> constructors;
 
         llvm::Function* ll_default_constructor = nullptr;
         llvm::Function* ll_destructor          = nullptr;
-        llvm::Function* ll_copy_constructor    = nullptr;
-        llvm::Function* ll_move_constructor    = nullptr;
+        llvm::Function* ll_copyobj_func        = nullptr;
+        llvm::Function* ll_moveobj_func        = nullptr;
         llvm::Function* ll_init_vtable_func    = nullptr;
 
         bool has_been_checked        = false;
@@ -455,14 +457,14 @@ namespace acorn {
     struct GenericStructInstance : Struct, GenericInstance {
         GenericStructInstance() : Struct() {}
 
-        llvm::SmallVector<Type*> bound_types;
+        llvm::SmallVector<Type*> bound_generic_args;
 
         // Need these in order to properly set the generic instance information
         // when generating the llvm function declaration in implicit contexts.
         GenericFuncInstance* generic_default_constructor_instance;
         GenericFuncInstance* generic_destructor_instance;
-        GenericFuncInstance* generic_move_constructor_instance;
-        GenericFuncInstance* generic_copy_constructor_instance;
+        GenericFuncInstance* generic_moveobj_func_instance;
+        GenericFuncInstance* generic_copyobj_func_instance;
     };
 
     struct UnboundGenericStruct : Struct {
@@ -474,7 +476,7 @@ namespace acorn {
         llvm::SmallVector<GenericStructInstance*> generic_instances;
 
         GenericStructInstance* get_generic_instance(PageAllocator& allocator,
-                                                    llvm::SmallVector<Type*> bound_types);
+                                                    llvm::SmallVector<Type*> generic_args);
 
     };
 
@@ -836,7 +838,7 @@ namespace acorn {
 
         size_t non_named_args_offset = -1;
         llvm::SmallVector<Expr*> args;
-        llvm::SmallVector<Type*> bound_types;
+        llvm::SmallVector<Type*> bound_generic_args;
         llvm::SmallVector<Func*> candidates;
     };
 
@@ -979,6 +981,7 @@ namespace acorn {
         Expr*                      caught_expr;
         Node*                      catch_recoveree = nullptr;
 
+        llvm::Value* ll_error_union;
         llvm::Value* ll_error;
         llvm::BasicBlock* ll_catch_bb;
         llvm::BasicBlock* ll_end_bb;

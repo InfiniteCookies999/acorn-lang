@@ -1,0 +1,25 @@
+import std;
+import std.Error;
+
+struct TestError :: *Error {
+    const fn get_name() -> const char* {
+        return "TestError";
+    }
+    const fn get_message() -> const char* {
+        return "error raised!";
+    }
+
+    fn delete() {
+        std.print("destructor called!");
+    }
+}
+
+fn foo() | raises TestError {
+    raise TestError{};
+}
+
+fn main() {
+    try (foo()) {
+        std.print("caught error!");
+    };
+}

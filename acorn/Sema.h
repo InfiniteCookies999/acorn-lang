@@ -24,9 +24,11 @@ namespace acorn {
         Sema(Context& context, SourceFile* file, Logger& logger);
 
         static bool is_potential_main_function(Context& context, const Func* candidate);
-        static bool find_main_function(Context& context);
+        // returns true if it found a valid candidate.
+        static bool compare_candidate_main_functions(Context& context);
 
         static void check_for_duplicate_functions(Namespace* nspace, Context& context);
+        template<bool compare_names>
         static void check_for_duplicate_functions(const llvm::SmallVector<Func*>& funcs,
                                                   Context& context);
         static bool check_for_duplicate_match(const Func* func1, const Func* func2);
@@ -92,7 +94,7 @@ namespace acorn {
         // When calling a generic function and qualifying the types this
         // is set to be used during type fixup in order to qualify the
         // generic types.
-        llvm::SmallVector<Type*>* func_call_generic_bindings = nullptr;
+        llvm::SmallVector<Type*>* func_call_bound_generic_args = nullptr;
 
         // A structure to keep track of current scope information
         // to help report errors.
@@ -102,16 +104,32 @@ namespace acorn {
             // If true then on every possible branch
             // path there exists a return statement.
             bool all_paths_return = false;
-            // If true then on every possible branch
-            // path there exists a branch statement
-            // such as 'break', 'return', ect...
+            // True if on every possible branch path
+            // the code branches such that the code
+            // found after the terminal becomes unreachable.
             bool all_paths_branch = false;
-            // True when encountering a statement that
-            // branches.
+            // This is similar to `all_paths_return` except
+            // that it applies to any context in which branching
+            // happens which cause the code to jump in such a
+            // way that code outside the scope being jumped out
+            // of is no longer reachable.
             //
-            // TODO (maddie): is this needed now that there
-            // is `all_paths_branch`?
-            bool found_terminal = false;
+            // For example:
+            //
+            // fn main() {
+            //     a: int = 5;
+            //     loop {
+            //         if (a > 4) {
+            //             return;
+            //         } else {
+            //             return;
+            //         }
+            //     }
+            //     b: int = 6; // The code outside the loop that was jumped out
+            //                 // of is no longer reachable.
+            // }
+            //
+            bool all_paths_long_branch = false;
 
             Try* cur_try = nullptr;
 
@@ -143,8 +161,11 @@ namespace acorn {
         void check_struct_interface_extension(Struct* structn,
                                               Interface* interfacen,
                                               const Struct::UnresolvedExtension& extension);
-        bool do_interface_functions_matches(Func* interface_func, Func* func);
+        bool does_match_interface_func(Func* interface_func, Func* func);
 
+        // Check to make sure that when a variable has a struct type or array
+        // of structs that without an assignment, it must have no constructors or
+        // a default constructor.
         void check_variable_can_initialize(Var* var, SourceLoc error_loc);
 
         bool check_generics(const llvm::SmallVector<Generic*>& generics);
@@ -159,12 +180,12 @@ namespace acorn {
         void check_scope(ScopeStmt* scope, SemScope* sem_scope);
 
         void check_return(ReturnStmt* ret);
-        void check_if(IfStmt* ifs, bool& all_paths_return, bool& all_paths_branch);
+        void check_if(IfStmt* ifs, bool& all_paths_return, bool& all_paths_branch, bool& all_paths_long_branch);
         void check_predicate_loop(PredicateLoopStmt* loop);
         void check_range_loop(RangeLoopStmt* loop);
         void check_iterator_loop(IteratorLoopStmt* loop);
         void check_loop_control(LoopControlStmt* loop_control);
-        void check_loop_scope(ScopeStmt* scope, SemScope* sem_scope);
+        void check_loop_scope(ScopeStmt* scope, SemScope* parent_sem_scope, SemScope* sem_scope);
         void check_switch(SwitchStmt* switchn);
         void check_raise(RaiseStmt* raise);
         void check_try(Try* tryn, bool assigns);
@@ -196,16 +217,14 @@ namespace acorn {
         void check_generic_bind_function_call(GenericBindFuncCall* call);
         bool compare_generic_bind_candidate_with_named_args(const llvm::SmallVector<Expr*>& args,
                                                             const llvm::SmallVector<Generic*>& generics,
-                                                            llvm::SmallVector<Type*>& bound_types);
-        bool check_generic_bind_arguments(const llvm::SmallVector<Expr*>& args,
-                                          bool& uses_named_values);
+                                                            llvm::SmallVector<Type*>& generic_args);
         void check_function_type_call(FuncCall* call, FunctionType* func_type);
         Func* check_function_decl_call(Expr* call_node,
                                        llvm::SmallVector<Expr*>& args,
                                        size_t non_named_args_offset,
                                        llvm::SmallVector<Func*>& candidates,
                                        bool is_const_object,
-                                       const llvm::SmallVector<Type*>& pre_bound_types,
+                                       const llvm::SmallVector<Type*>& pre_bound_generic_args,
                                        Struct* generic_parent_struct,
                                        Struct*& fully_bound_parent_struct);
         Func* find_best_call_candidate(Expr* call_node,
@@ -214,8 +233,8 @@ namespace acorn {
                                        bool& selected_implicitly_converts_ptr_arg,
                                        bool& is_ambiguous,
                                        bool is_const_object,
-                                       llvm::SmallVector<Type*>& generic_bindings,
-                                       const llvm::SmallVector<Type*>& pre_bound_types);
+                                       llvm::SmallVector<Type*>& generic_args,
+                                       const llvm::SmallVector<Type*>& pre_bound_generic_args);
         enum class CallCompareStatus {
             INCORRECT_ARGS,
             INCORRECT_PARAM_BY_NAME_NOT_FOUND,
@@ -239,14 +258,14 @@ namespace acorn {
                                                     const bool is_const_object,
                                                     uint64_t& score,
                                                     bool& implicitly_converts_ptr_arg,
-                                                    llvm::SmallVector<Type*>& generic_bindings);
+                                                    llvm::SmallVector<Type*>& generic_args);
         bool has_correct_number_of_args(const Func* candidate,
                                         const llvm::SmallVector<Expr*>& args) const;
-        bool check_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
-                                             Type* from_type, // Type at current level of comparison
-                                             llvm::SmallVector<Type*>& bindings,
-                                             bool enforce_elm_const = false,
-                                             bool may_use_implicit_param_ptr = false);
+        bool check_can_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
+                                                 Type* from_type, // Type at current level of comparison
+                                                 llvm::SmallVector<Type*>& generic_args,
+                                                 bool enforce_elm_const = false,
+                                                 bool may_use_implicit_param_ptr = false);
         void check_cast(Cast* cast);
         void check_bitcast(BitCast* cast);
         void check_const_cast(ConstCast* cast);
@@ -276,72 +295,79 @@ namespace acorn {
         Type* fixup_unresolved_generic_composite_type(Decl* found_composite,
                                                       SourceLoc error_loc,
                                                       const llvm::SmallVector<Expr*>& bound_exprs);
-        bool get_bound_types_for_generic_type(Decl* found_composite,
-                                              SourceLoc error_loc,
-                                              const llvm::SmallVector<Expr*>& bound_exprs,
-                                              llvm::SmallVector<Type*>& bound_types);
-
         Type* fixup_unresolved_enum_value_type(Type* type, bool is_ptr_elm_type);
         Decl* find_composite_for_composite_type(Identifier name, SourceLoc error_loc);
         Type* fixup_function_type(Type* type);
         Type* fixup_generic_type(Type* type);
-        Type* fixup_pending_generic_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_types);
+        Type* fixup_pending_generic_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_generic_args);
 
-        bool bind_default_generic_arguments(llvm::SmallVector<Type*>& generic_bindings,
+        // Generic binding
+        //--------------------------------------
+
+        bool bind_generic_arguments_for_composite_type(Decl* found_composite,
+                                                       SourceLoc error_loc,
+                                                       const llvm::SmallVector<Expr*>& bound_exprs,
+                                                       llvm::SmallVector<Type*>& generic_args);
+
+        bool bind_default_generic_arguments(llvm::SmallVector<Type*>& generic_args,
                                             const llvm::SmallVector<Generic*>& generics);
+
+        bool check_generic_bind_arguments(const llvm::SmallVector<Expr*>& args,
+                                          bool& uses_named_values);
+
 
         // Error reporting
         //--------------------------------------
 
         // Displays information for why trying to call a function failed.
+        void report_call_mismatch_info(SourceLoc error_loc,
+                                       Node* call_node,
+                                       const llvm::SmallVector<Func*>& candidates,
+                                       const llvm::SmallVector<Expr*>& args,
+                                       const llvm::SmallVector<Type*>& pre_bound_generic_args);
         template<typename F>
-        void display_call_mismatch_info(const F* candidate,
-                                        const llvm::SmallVector<Expr*>& args,
-                                        bool indent,
-                                        bool should_show_invidual_underlines,
-                                        Node* call_node,
-                                        const llvm::SmallVector<Type*>& pre_bound_types);
-        void display_call_mismatch_info(SourceLoc error_loc,
-                                        Node* call_node,
-                                        const llvm::SmallVector<Func*>& candidates,
-                                        const llvm::SmallVector<Expr*>& args,
-                                        const llvm::SmallVector<Type*>& pre_bound_types);
+        void report_call_mismatch_info(const F* candidate,
+                                       const llvm::SmallVector<Expr*>& args,
+                                       bool indent,
+                                       bool should_show_invidual_underlines,
+                                       Node* call_node,
+                                       const llvm::SmallVector<Type*>& pre_bound_generic_args);
         uint64_t get_function_call_score(const Func* candidate,
                                          const llvm::SmallVector<Expr*>& args,
                                          bool is_const_object,
-                                         const llvm::SmallVector<Type*>& pre_bound_types);
+                                         const llvm::SmallVector<Type*>& pre_bound_generic_args);
 
-        void display_call_ambiguous_info(SourceLoc error_loc,
-                                         llvm::SmallVector<Func*>& candidates,
-                                         llvm::SmallVector<Expr*>& args,
-                                         bool is_const_object,
-                                         const llvm::SmallVector<Type*>& pre_bound_types);
+        void report_call_ambiguous_info(SourceLoc error_loc,
+                                        llvm::SmallVector<Func*>& candidates,
+                                        llvm::SmallVector<Expr*>& args,
+                                        bool is_const_object,
+                                        const llvm::SmallVector<Type*>& pre_bound_generic_args);
         std::string get_type_with_generics_where_msg(Type* type_with_generics,
-                                                     const llvm::SmallVector<Type*>& generic_bindings,
+                                                     const llvm::SmallVector<Type*>& generic_args,
                                                      bool indent);
         template<unsigned N>
         void display_ambiguous_functions(const llvm::SmallVector<Func*, N>& ambiguous_funcs);
-        void display_missing_generic_bindings_info(SourceLoc error_loc,
-                                                   const char* for_msg,
-                                                   const llvm::SmallVector<Type*>& generic_bindings,
-                                                   const llvm::SmallVector<Generic*>& generics,
-                                                   ErrCode expected_generic_args_error_code,
-                                                   ErrCode missing_generic_bindings_error_code);
+        void display_missing_generic_argument_binding_info(SourceLoc error_loc,
+                                                           const char* for_msg,
+                                                           const llvm::SmallVector<Type*>& generic_args,
+                                                           const llvm::SmallVector<Generic*>& generics,
+                                                           ErrCode expected_generic_args_error_code,
+                                                           ErrCode missing_generic_args_error_code);
         void display_generic_bind_named_args_fail_info(const llvm::SmallVector<Expr*>& args,
                                                        const llvm::SmallVector<Generic*>& generics);
         void report_binary_op_cannot_apply(BinOp* bin_op, Expr* expr);
         void report_binary_op_mistmatch_types(BinOp* bin_op);
-        void display_interface_func_mismatch_info(Func* interface_func,
-                                                  Func* func,
-                                                  bool indent,
-                                                  bool should_show_invidual_underlines);
+        void report_interface_func_mismatch_info(Func* interface_func,
+                                                 Func* func,
+                                                 bool indent,
+                                                 bool should_show_invidual_underlines);
         std::string get_type_mismatch_error(Type* to_type, Expr* expr, bool has_implicit_pointer = false) const;
         std::string get_type_mismatch_error(Type* to_type, Type* from_type, bool has_implicit_pointer = false) const;
         Type* get_array_type_for_mismatch_error(Array* arr) const;
         Type* get_array_type_for_mismatch_error(Array* arr,
                                                 llvm::SmallVector<size_t>& lengths,
                                                 size_t depth) const;
-        void display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code);
+        void report_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code);
         void report_error_cannot_use_variable_before_assigned(SourceLoc error_loc, Var* var);
 
         template<typename... TArgs>
@@ -383,6 +409,7 @@ namespace acorn {
         uint64_t get_total_number_of_values_in_range(BinOp* range);
         Decl* find_composite(Identifier name);
         llvm::Constant* gen_constant(Expr* expr);
+        Type* get_const_type_at_all_depth(Type* type);
 
     };
 }

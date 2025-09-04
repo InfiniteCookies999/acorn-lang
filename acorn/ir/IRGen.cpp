@@ -49,18 +49,17 @@ void acorn::IRGenerator::gen_implicit_function(ImplicitFunc* implicit_func) {
     case ImplicitFunc::ImplicitKind::DESTRUCTOR:
         gen_implicit_destructor(implicit_func->structn);
         break;
-    case ImplicitFunc::ImplicitKind::COPY_CONSTRUCTOR:
-        gen_implicit_copy_constructor(implicit_func->structn);
+    case ImplicitFunc::ImplicitKind::COPYOBJ:
+        gen_implicit_copyobj_function(implicit_func->structn);
         break;
-    case ImplicitFunc::ImplicitKind::MOVE_CONSTRUCTOR:
-        gen_implicit_move_constructor(implicit_func->structn);
+    case ImplicitFunc::ImplicitKind::MOVEOBJ:
+        gen_implicit_moveobj_function(implicit_func->structn);
         break;
     case ImplicitFunc::ImplicitKind::VTABLE_INIT:
         gen_implicit_vtable_init_function(implicit_func->structn);
         break;
     default:
         acorn_fatal("Unreachable. Uknown implicit function");
-        break;
     }
 }
 
@@ -154,7 +153,6 @@ llvm::Value* acorn::IRGenerator::gen_node(Node* node) {
         return gen_reflect(static_cast<Reflect*>(node));
     default:
         acorn_fatal("gen_value: Missing case");
-        return nullptr;
     }
 }
 
@@ -170,7 +168,7 @@ llvm::Value* acorn::IRGenerator::gen_rvalue(Expr* node) {
         if (ref->is_var_ref() &&
             !ref->is_foldable &&       // If the reference is foldable then no memory address is provided for storage to load.
             !ref->type->is_aggregate() // Aggregates are not loaded because they are suppose to copy their memory through memcpy
-                                       // or copy constructors.
+                                       // or copyobj function.
             ) {
             ll_value = builder.CreateLoad(gen_type(node->type), ll_value);
         }
@@ -347,7 +345,7 @@ void acorn::IRGenerator::gen_function_decl(Func* func, GenericFuncInstance* gene
     if (func->is_constructor && func->params.empty()) {
         func->structn->ll_default_constructor = ll_func;
     }
-    if (func->is_destructor || func->is_copy_constructor || func->is_move_constructor) {
+    if (func->is_destructor || func->is_copyobj_func || func->is_moveobj_func) {
         acorn_fatal("Should be called through appropriate generation function, not called directly");
     }
 }
@@ -534,7 +532,6 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
     //
     push_dbg_loc(func->scope->end_loc);
     if (func->is_destructor) {
-
         // The function is a destructor so need to call the destructors
         // of any of the fields that have destructors.
         auto structn = func->structn;
@@ -548,9 +545,9 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
             }
         }
     }
-    if (func->is_copy_constructor) {
-        // The function is a copy constructor so need to call the copy
-        // constructors of any of the fields that have copy constructors.
+    if (func->is_copyobj_func) {
+        // The function is a copyobj function so need to call the copyobj function
+        // of any of the fields that have copyobj function.
         auto structn = func->structn;
         if (structn->fields_need_copy_call) {
             auto ll_struct_type = gen_struct_type(structn->struct_type);
@@ -558,19 +555,19 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
 
             for (Var* field : structn->fields) {
                 if (!field->uses_field_init_op) {
-                    copy_struct_field_constructor(field,
-                                                  ll_this,
-                                                  ll_from_struct_address,
-                                                  ll_struct_type);
+                    copy_struct_field(field,
+                                      ll_this,
+                                      ll_from_struct_address,
+                                      ll_struct_type);
                 } else {
                     field->uses_field_init_op = false;
                 }
             }
         }
     }
-    if (func->is_move_constructor) {
-        // The function is a move constructor so need to call the move or copy
-        // constructors of any of the fields that have move/copy constructors.
+    if (func->is_moveobj_func) {
+        // The function is a moveobj function so need to call the move or copy
+        // functions of any of the fields that have move/copy functions.
         auto structn = func->structn;
         if (structn->fields_need_move_call) {
             auto ll_struct_type = gen_struct_type(structn->struct_type);
@@ -578,10 +575,10 @@ void acorn::IRGenerator::gen_function_body(Func* func, GenericFuncInstance* gene
 
             for (Var* field : structn->fields) {
                 if (!field->uses_field_init_op) {
-                    try_move_then_copy_struct_field_constructor(field,
-                                                                ll_this,
-                                                                ll_from_struct_address,
-                                                                ll_struct_type);
+                    try_move_then_copy_struct_field(field,
+                                                    ll_this,
+                                                    ll_from_struct_address,
+                                                    ll_struct_type);
                 } else {
                     field->uses_field_init_op = true;
                 }
@@ -1044,10 +1041,10 @@ void acorn::IRGenerator::gen_implicit_destructor(Struct* structn) {
     emit_dbg(di_emitter->emit_function_end(ll_cur_func));
 }
 
-void acorn::IRGenerator::gen_implicit_copy_constructor(Struct* structn) {
+void acorn::IRGenerator::gen_implicit_copyobj_function(Struct* structn) {
 
     cur_struct = structn;
-    ll_cur_func = structn->ll_copy_constructor;
+    ll_cur_func = structn->ll_copyobj_func;
 
     emit_dbg(di_emitter->emit_implicit_function(
         ll_cur_func,
@@ -1065,7 +1062,7 @@ void acorn::IRGenerator::gen_implicit_copy_constructor(Struct* structn) {
     auto ll_from_struct_address = ll_cur_func->getArg(1);
 
     for (Var* field : structn->fields) {
-        copy_struct_field_constructor(field,
+        copy_struct_field(field,
                                       ll_this,
                                       ll_from_struct_address,
                                       ll_struct_type);
@@ -1077,10 +1074,10 @@ void acorn::IRGenerator::gen_implicit_copy_constructor(Struct* structn) {
 
 }
 
-void acorn::IRGenerator::gen_implicit_move_constructor(Struct* structn) {
+void acorn::IRGenerator::gen_implicit_moveobj_function(Struct* structn) {
 
     cur_struct = structn;
-    ll_cur_func = structn->ll_move_constructor;
+    ll_cur_func = structn->ll_moveobj_func;
 
     emit_dbg(di_emitter->emit_implicit_function(
         ll_cur_func,
@@ -1100,7 +1097,7 @@ void acorn::IRGenerator::gen_implicit_move_constructor(Struct* structn) {
     for (Var* field : structn->fields) {
         auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_this, field->ll_field_idx);
         auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->ll_field_idx);
-        try_move_then_copy_struct_field_constructor(field,
+        try_move_then_copy_struct_field(field,
                                                     ll_this,
                                                     ll_from_struct_address,
                                                     ll_struct_type);
@@ -1233,7 +1230,6 @@ acorn::Func* acorn::IRGenerator::get_mapped_interface_func(Namespace* nspace, Fu
         }
     }
     acorn_fatal("unreachable: could not find mapped interface function");
-    return nullptr;
 }
 
 void acorn::IRGenerator::add_object_with_destructor(Type* type, llvm::Value* ll_address, bool is_temporary) {
@@ -1283,11 +1279,11 @@ void acorn::IRGenerator::gen_call_destructors(Type* type, DestructorObject::Obje
             builder.CreateCall(structn->ll_destructor, object_info.ll_address);
         });
     } else if (type->is_pointer()) {
-        acorn_assert(static_cast<PointerType*>(type)->get_elm_type()->is(context.std_error_interface->interface_type),
+        acorn_assert(static_cast<PointerType*>(type)->is(context.std_error_interface_ptr_type),
                      "Expected pointer to Error type");
 
         Try* tryn = object_info.tryn;
-        auto ll_address = tryn->caught_var->ll_address;
+        auto ll_address = tryn->ll_error;
         // Need to load it again because the error is of type `Error*`
         // but the destructor call will want just the object address.
         ll_address = builder.CreateLoad(builder.getPtrTy(), ll_address);
@@ -1604,11 +1600,11 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
                     ll_value = gen_function_call(call, ll_tmp_address);
                 } else {
                     ll_value = gen_node(ret->value);
-                    // Checking if the aggregate needs it's copy constructor called.
+                    // Checking if the aggregate needs it's copyobj function called.
                     // Since it does not use an aggregate return address the ll_value is
                     // essentially an integer so normally it is possible to just load
-                    // the aggregate value as an integer but if it has a copy constructor
-                    // then the copy constructor still needs called.
+                    // the aggregate value as an integer but if it has a copyobj function
+                    // then the copyobj function still needs called.
                     if (!cur_func->aggr_ret_var) {
                         if (cur_func->return_type->is_struct()) {
                             auto struct_type = static_cast<StructType*>(cur_func->return_type);
@@ -1631,7 +1627,7 @@ llvm::Value* acorn::IRGenerator::gen_return(ReturnStmt* ret) {
 
                                 auto ll_tmp_array = gen_unseen_alloca(ll_arr_type, "tmp.arr.ret");
                                 if (structn->needs_copy_call) {
-                                    gen_call_array_copy_constructors(ll_tmp_array,
+                                    gen_call_array_copyobj_functions(ll_tmp_array,
                                                                      ll_value,
                                                                      arr_type,
                                                                      structn);
@@ -2422,7 +2418,7 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn, Try*& prev_try) {
 
     if (!tryn->passes_error_along) {
         auto ll_error_union = gen_unseen_alloca(ll_largest_struct_type, "error.union");
-        tryn->ll_error = ll_error_union;
+        tryn->ll_error_union = ll_error_union;
 
         push_dbg_loc(tryn->loc);
 
@@ -2440,6 +2436,7 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn, Try*& prev_try) {
 
         if (tryn->catch_scope) {
             auto ll_error = gen_unseen_alloca(builder.getPtrTy(), "err");
+            tryn->ll_error = ll_error;
             builder.CreateStore(ll_error_union, ll_error);
 
             if (tryn->caught_var) {
@@ -2462,16 +2459,7 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn, Try*& prev_try) {
             push_scope();
             ir_scope->is_catch_scope = true;
 
-
-            //auto ll_error = gen_unseen_alloca(builder.getPtrTy(), "err");
-            //builder.CreateStore(ll_error_union, ll_error);
-            //
-            //if (tryn->caught_var) {
-            //    tryn->caught_var->ll_address = ll_error;
-            //}
-
             if (tryn->caught_var) {
-                //tryn->caught_var->ll_address = ll_error;
                 emit_dbg(di_emitter->emit_function_variable(cur_try->caught_var, builder));
             }
 
@@ -2494,7 +2482,7 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn, Try*& prev_try) {
 
             if (has_object_with_destructor) {
                 ir_scope->objects_needing_destroyed.push_back({
-                    .type = tryn->caught_var->type,
+                    .type = context.std_error_interface_ptr_type,
                     .object_info = { .tryn = tryn }
                 });
             }
@@ -2505,7 +2493,7 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn, Try*& prev_try) {
         } else {
             push_dbg_loc(tryn->loc);
             gen_function_decl(context.std_abort_function, nullptr);
-            builder.CreateCall(context.std_abort_function->ll_func, tryn->ll_error);
+            builder.CreateCall(context.std_abort_function->ll_func, tryn->ll_error_union);
             pop_dbg_loc();
         }
         gen_branch_if_not_term(tryn->ll_end_bb);
@@ -2513,7 +2501,7 @@ llvm::Value* acorn::IRGenerator::gen_try(Try* tryn, Try*& prev_try) {
         builder.SetInsertPoint(ll_cur_bb);
 
     } else {
-        tryn->ll_error = get_error_argument();
+        tryn->ll_error_union = get_error_argument();
     }
 
     cur_try->generating_expr = true;
@@ -2603,7 +2591,6 @@ llvm::Value* acorn::IRGenerator::gen_recover(RecoverStmt* recover) {
         case Token::GT_GT_EQ:  return gen_apply_and_assign_op(Token::GT_GT, bin_op->loc, bin_op->type, lhs, recover->value);
         default:
             acorn_fatal("unreachable");
-            break;
         }
     }
 
@@ -2863,7 +2850,6 @@ llvm::Value* acorn::IRGenerator::gen_ident_reference(IdentRef* ref) {
     }
 
     acorn_fatal("unreachable: gen_ident_reference()");
-    return nullptr;
 }
 
 llvm::Value* acorn::IRGenerator::gen_function_call(FuncCall* call, llvm::Value* ll_dest_addr, Node* lvalue, bool for_call_arg) {
@@ -3017,7 +3003,7 @@ llvm::Value* acorn::IRGenerator::gen_function_call_arg(Expr* arg) {
 
         auto structn = struct_type->get_struct();
         if (try_move && structn->needs_move_call) {
-            gen_call_move_constructor(ll_tmp_arg, ll_from_addr, structn);
+            gen_call_moveobj_function(ll_tmp_arg, ll_from_addr, structn);
         } else {
             gen_copy_struct(ll_tmp_arg, ll_from_addr, struct_type);
         }
@@ -3140,7 +3126,7 @@ llvm::Value* acorn::IRGenerator::gen_function_decl_call(Func* called_func,
 
     // Pass the address of the error in case it is raised.
     if (passes_raised_error) {
-        ll_args[arg_offset++] = cur_try->ll_error;
+        ll_args[arg_offset++] = cur_try->ll_error_union;
     }
 
     // Pass the address of the struct for the member function.
@@ -3516,7 +3502,7 @@ llvm::Value* acorn::IRGenerator::gen_function_type_call(FuncCall* call, llvm::Va
 
     // Pass the address of the error in case it is raised.
     if (passes_raised_error) {
-        ll_args[arg_offset++] = cur_try->ll_error;
+        ll_args[arg_offset++] = cur_try->ll_error_union;
     }
 
     for (size_t i = 0; i < call->args.size(); ++i) {
@@ -3634,7 +3620,7 @@ void acorn::IRGenerator::gen_call_try_jump(bool passes_raised_error, llvm::Value
     };
 
     if (cur_try->passes_error_along) {
-        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), cur_try->ll_error);
+        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), cur_try->ll_error_union);
 
         auto ll_then_bb = gen_bblock("try.catch", ll_cur_func);
         auto ll_end_bb = gen_bblock("try.then", ll_cur_func);
@@ -3652,7 +3638,7 @@ void acorn::IRGenerator::gen_call_try_jump(bool passes_raised_error, llvm::Value
         builder.SetInsertPoint(ll_end_bb);
 
     } else {
-        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), cur_try->ll_error);
+        auto ll_vtable_ptr = builder.CreateLoad(builder.getPtrTy(), cur_try->ll_error_union);
 
         auto ll_then_bb = cur_try->ll_catch_bb;
 
@@ -3694,7 +3680,6 @@ llvm::Value* acorn::IRGenerator::gen_intrinsic_call(FuncCall* call) {
         }
 
         acorn_fatal("Unreachable. Failed to find named argument mapping");
-        return nullptr;
     };
 
 #define call_args_1(name)                                       \
@@ -3815,7 +3800,6 @@ return builder.CreateCall(ll_func, { ll_arg0, ll_arg1 });
     }
     default:
         acorn_fatal("Unreachabled. not a intrinsic");
-        return nullptr;
     }
 #undef call_args_1
 #undef call_args_2
@@ -4060,7 +4044,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
         //       address being assigned from.
         //
         //       For now the compiler will minic this idiom without the need for an
-        //       assignment operator. It will rely on the copy constructor to do the
+        //       assignment operator. It will rely on the copyobj function to do the
         //       copying and call the destructor if the memory does not match.
 
         if (to_type->needs_destruction()) {
@@ -4207,7 +4191,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
             auto structn = struct_type->get_struct();
 
             if (try_move && structn->needs_move_call) {
-                gen_call_move_constructor(ll_address, ll_from_addr, structn);
+                gen_call_moveobj_function(ll_address, ll_from_addr, structn);
             } else {
                 gen_copy_struct(ll_address, ll_from_addr, struct_type);
             }
@@ -4236,7 +4220,7 @@ void acorn::IRGenerator::gen_assignment(llvm::Value* ll_address,
                 auto struct_type = static_cast<StructType*>(elm_type);
                 auto structn = struct_type->get_struct();
                 if (try_move && structn->needs_move_call) {
-                    gen_call_array_move_constructors(ll_address, ll_from_addr, arr_type, structn);
+                    gen_call_array_moveobj_functions(ll_address, ll_from_addr, arr_type, structn);
                     return;
                 }
             }
@@ -4421,7 +4405,6 @@ llvm::Constant* acorn::IRGenerator::gen_zero(Type* type) {
         return llvm::ConstantAggregateZero::get(gen_type(type));
     default:
         acorn_fatal("gen_zero(): Missing case");
-        return nullptr;
     }
 }
 
@@ -4447,7 +4430,6 @@ llvm::Constant* acorn::IRGenerator::gen_one(Type* type) {
     }
     default:
         acorn_fatal("gen_one(): Missing case");
-        return nullptr;
     }
 }
 
@@ -4608,7 +4590,6 @@ llvm::Value* acorn::IRGenerator::gen_cast(Type* to_type, Expr* value, llvm::Valu
         }
 
         acorn_fatal("gen_cast(): Failed to implement case");
-        break;
     }
 
 
@@ -4631,7 +4612,6 @@ llvm::Value* acorn::IRGenerator::gen_enum_index(uint64_t index, Type* index_type
         return llvm::ConstantInt::get(gen_ptrsize_int_type(), index, false);
     default:
         acorn_fatal("Unknown integer type");
-        return nullptr;
     }
 }
 
@@ -5075,10 +5055,10 @@ acorn::ImplicitFunc* acorn::IRGenerator::create_implicit_function(ImplicitFunc::
     return implicit_func;
 }
 
-void acorn::IRGenerator::copy_struct_field_constructor(Var* field,
-                                                       llvm::Value* ll_to_struct_address,
-                                                       llvm::Value* ll_from_struct_address,
-                                                       llvm::Type* ll_struct_type) {
+void acorn::IRGenerator::copy_struct_field(Var* field,
+                                           llvm::Value* ll_to_struct_address,
+                                           llvm::Value* ll_from_struct_address,
+                                           llvm::Type* ll_struct_type) {
 
     auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_to_struct_address, field->ll_field_idx);
     auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->ll_field_idx);
@@ -5093,10 +5073,10 @@ void acorn::IRGenerator::copy_struct_field_constructor(Var* field,
     }
 }
 
-void acorn::IRGenerator::try_move_then_copy_struct_field_constructor(Var* field,
-                                                                     llvm::Value* ll_to_struct_address,
-                                                                     llvm::Value* ll_from_struct_address,
-                                                                     llvm::Type* ll_struct_type) {
+void acorn::IRGenerator::try_move_then_copy_struct_field(Var* field,
+                                                         llvm::Value* ll_to_struct_address,
+                                                         llvm::Value* ll_from_struct_address,
+                                                         llvm::Type* ll_struct_type) {
 
     auto ll_to_field_addr   = builder.CreateStructGEP(ll_struct_type, ll_to_struct_address, field->ll_field_idx);
     auto ll_from_field_addr = builder.CreateStructGEP(ll_struct_type, ll_from_struct_address, field->ll_field_idx);
@@ -5105,7 +5085,7 @@ void acorn::IRGenerator::try_move_then_copy_struct_field_constructor(Var* field,
         auto field_struct_type = static_cast<StructType*>(field->type);
         auto structn = field_struct_type->get_struct();
         if (structn->needs_move_call) {
-            gen_call_move_constructor(ll_to_field_addr, ll_from_field_addr, structn);
+            gen_call_moveobj_function(ll_to_field_addr, ll_from_field_addr, structn);
         } else {
             gen_copy_struct(ll_to_field_addr, ll_from_field_addr, static_cast<StructType*>(field->type));
         }
@@ -5116,7 +5096,7 @@ void acorn::IRGenerator::try_move_then_copy_struct_field_constructor(Var* field,
             auto field_struct_type = static_cast<StructType*>(base_type);
             auto structn = field_struct_type->get_struct();
             if (structn->needs_move_call) {
-                gen_call_array_move_constructors(ll_to_field_addr,
+                gen_call_array_moveobj_functions(ll_to_field_addr,
                                                  ll_from_field_addr,
                                                  arr_type,
                                                  structn);
@@ -5136,7 +5116,7 @@ void acorn::IRGenerator::gen_copy_struct(llvm::Value* ll_to_address,
 
     auto structn = struct_type->get_struct();
     if (structn->needs_copy_call) {
-        gen_call_copy_constructor(ll_to_address, ll_from_address, structn);
+        gen_call_copyobj_function(ll_to_address, ll_from_address, structn);
     } else {
         auto ll_struct_type = gen_struct_type(struct_type);
 
@@ -5160,7 +5140,7 @@ void acorn::IRGenerator::gen_copy_array(llvm::Value* ll_to_address,
         auto struct_type = static_cast<StructType*>(base_type);
         auto structn = struct_type->get_struct();
         if (structn->needs_copy_call) {
-            gen_call_array_copy_constructors(ll_to_address,
+            gen_call_array_copyobj_functions(ll_to_address,
                                              ll_from_address,
                                              arr_type,
                                              structn);
@@ -5180,43 +5160,43 @@ void acorn::IRGenerator::gen_copy_array(llvm::Value* ll_to_address,
     );
 }
 
-void acorn::IRGenerator::gen_call_copy_constructor(llvm::Value* ll_to_address,
+void acorn::IRGenerator::gen_call_copyobj_function(llvm::Value* ll_to_address,
                                                    llvm::Value* ll_from_address,
                                                    Struct* structn) {
 
-    if (!structn->ll_copy_constructor) {
+    if (!structn->ll_copyobj_func) {
 
         auto ll_param_types = llvm::SmallVector<llvm::Type*>{ builder.getPtrTy(), builder.getPtrTy() };
         auto ll_func_type   = llvm::FunctionType::get(builder.getVoidTy(), ll_param_types, false);
 
-        auto ll_name = llvm::Twine("copy.") + structn->name.to_string();
+        auto ll_name = llvm::Twine("copyobj.") + structn->name.to_string();
         auto ll_func = llvm::Function::Create(
             ll_func_type,
             llvm::GlobalValue::InternalLinkage,
-            ll_name + (structn->copy_constructor ? ".acorn" : ".implicit.acorn"),
+            ll_name + (structn->copyobj_func ? ".acorn" : ".implicit.acorn"),
             ll_module
         );
 
-        structn->ll_copy_constructor = ll_func;
-        if (structn->copy_constructor) {
-            structn->copy_constructor->ll_func = ll_func;
+        structn->ll_copyobj_func = ll_func;
+        if (structn->copyobj_func) {
+            structn->copyobj_func->ll_func = ll_func;
             if (!structn->is_generic) {
-                context.queue_gen(structn->copy_constructor, nullptr);
+                context.queue_gen(structn->copyobj_func, nullptr);
             } else {
                 auto generic_struct_instance = static_cast<GenericStructInstance*>(structn);
-                generic_struct_instance->generic_copy_constructor_instance->ll_func = ll_func;
-                context.queue_gen(structn->copy_constructor, generic_struct_instance->generic_copy_constructor_instance);
+                generic_struct_instance->generic_copyobj_func_instance->ll_func = ll_func;
+                context.queue_gen(structn->copyobj_func, generic_struct_instance->generic_copyobj_func_instance);
             }
         } else {
-            auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::COPY_CONSTRUCTOR, structn);
+            auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::COPYOBJ, structn);
             context.queue_gen_implicit_function(implicit_func);
         }
     }
 
-    builder.CreateCall(structn->ll_copy_constructor, { ll_to_address, ll_from_address });
+    builder.CreateCall(structn->ll_copyobj_func, { ll_to_address, ll_from_address });
 }
 
-void acorn::IRGenerator::gen_call_array_move_constructors(llvm::Value* ll_to_address,
+void acorn::IRGenerator::gen_call_array_moveobj_functions(llvm::Value* ll_to_address,
                                                           llvm::Value* ll_from_address,
                                                           ArrayType* arr_type,
                                                           Struct* structn) {
@@ -5225,46 +5205,46 @@ void acorn::IRGenerator::gen_call_array_move_constructors(llvm::Value* ll_to_add
                                    arr_type,
                                    structn,
                                    [this, structn](auto ll_to_elm, auto ll_from_elm) {
-        gen_call_move_constructor(ll_to_elm, ll_from_elm, structn);
+        gen_call_moveobj_function(ll_to_elm, ll_from_elm, structn);
     });
 }
 
-void acorn::IRGenerator::gen_call_move_constructor(llvm::Value* ll_to_address,
+void acorn::IRGenerator::gen_call_moveobj_function(llvm::Value* ll_to_address,
                                                    llvm::Value* ll_from_address,
                                                    Struct* structn) {
-    if (!structn->ll_move_constructor) {
+    if (!structn->ll_moveobj_func) {
 
         auto ll_param_types = llvm::SmallVector<llvm::Type*>{ builder.getPtrTy(), builder.getPtrTy() };
         auto ll_func_type   = llvm::FunctionType::get(builder.getVoidTy(), ll_param_types, false);
 
-        auto ll_name = llvm::Twine("move.") + structn->name.to_string();
+        auto ll_name = llvm::Twine("moveobj.") + structn->name.to_string();
         auto ll_func = llvm::Function::Create(
             ll_func_type,
             llvm::GlobalValue::InternalLinkage,
-            ll_name + (structn->move_constructor ? ".acorn" : ".implicit.acorn"),
+            ll_name + (structn->moveobj_func ? ".acorn" : ".implicit.acorn"),
             ll_module
         );
 
-        structn->ll_move_constructor = ll_func;
-        if (structn->move_constructor) {
-            structn->move_constructor->ll_func = ll_func;
+        structn->ll_moveobj_func = ll_func;
+        if (structn->moveobj_func) {
+            structn->moveobj_func->ll_func = ll_func;
             if (!structn->is_generic) {
-                context.queue_gen(structn->move_constructor, nullptr);
+                context.queue_gen(structn->moveobj_func, nullptr);
             } else {
                 auto generic_struct_instance = static_cast<GenericStructInstance*>(structn);
-                generic_struct_instance->generic_move_constructor_instance->ll_func = ll_func;
-                context.queue_gen(structn->move_constructor, generic_struct_instance->generic_move_constructor_instance);
+                generic_struct_instance->generic_moveobj_func_instance->ll_func = ll_func;
+                context.queue_gen(structn->moveobj_func, generic_struct_instance->generic_moveobj_func_instance);
             }
         } else {
-            auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::MOVE_CONSTRUCTOR, structn);
+            auto implicit_func = create_implicit_function(ImplicitFunc::ImplicitKind::MOVEOBJ, structn);
             context.queue_gen_implicit_function(implicit_func);
         }
     }
 
-    builder.CreateCall(structn->ll_move_constructor, { ll_to_address, ll_from_address });
+    builder.CreateCall(structn->ll_moveobj_func, { ll_to_address, ll_from_address });
 }
 
-void acorn::IRGenerator::gen_call_array_copy_constructors(llvm::Value* ll_to_address,
+void acorn::IRGenerator::gen_call_array_copyobj_functions(llvm::Value* ll_to_address,
                                                           llvm::Value* ll_from_address,
                                                           ArrayType* arr_type,
                                                           Struct* structn) {
@@ -5273,7 +5253,7 @@ void acorn::IRGenerator::gen_call_array_copy_constructors(llvm::Value* ll_to_add
                                    arr_type,
                                    structn,
                                    [this, structn](auto ll_to_elm, auto ll_from_elm) {
-        gen_call_copy_constructor(ll_to_elm, ll_from_elm, structn);
+        gen_call_copyobj_function(ll_to_elm, ll_from_elm, structn);
     });
 }
 
@@ -5355,7 +5335,6 @@ namespace acorn {
         }
         default:
             acorn_fatal("Unreachable. Unknown range operator");
-            break;
         }
     }
 }

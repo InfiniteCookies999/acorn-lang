@@ -164,7 +164,7 @@ namespace acorn {
             ref->found_kind = IdentRef::NONE_KIND;
             if (ref->explicitly_binds_generics) {
                 auto call = static_cast<GenericBindFuncCall*>(ref);
-                call->bound_types.clear();
+                call->bound_generic_args.clear();
                 for (Expr* arg : call->args) {
                     reset_node(arg);
                 }
@@ -173,7 +173,7 @@ namespace acorn {
             if (ref->explicitly_binds_generics) {
                 auto call = static_cast<GenericBindFuncCall*>(ref);
                 call->candidates.clear();
-                call->bound_types.clear();
+                call->bound_generic_args.clear();
                 for (Expr* arg : call->args) {
                     reset_node(arg);
                 }
@@ -303,7 +303,7 @@ namespace acorn {
             if (tryn->caught_var) {
                 tryn->caught_var->type = nullptr;
             }
-            tryn->ll_error = nullptr;
+            tryn->ll_error_union = nullptr;
             tryn->ll_catch_bb = nullptr;
             tryn->ll_end_bb = nullptr;
             break;

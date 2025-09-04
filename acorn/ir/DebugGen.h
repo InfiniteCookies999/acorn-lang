@@ -27,14 +27,6 @@ namespace acorn {
         void pop_location(llvm::IRBuilder<>& ir_builder);
         void set_location(llvm::Instruction* ll_instruction, SourceLoc loc);
 
-        // Emit based on the last created instruction.
-        //void emit_location(llvm::IRBuilder<>& ir_builder, SourceLoc location);
-        //void emit_location(llvm::Instruction* ll_instruction, SourceLoc location);
-        //void emit_location(llvm::Instruction* ll_instruction,
-        //                   llvm::DIScope* ll_di_scope,
-        //                   size_t line_number,
-        //                   size_t column_number);
-
         void emit_function_variable(Var* var, llvm::IRBuilder<>& ir_builder);
         void emit_global_variable(Var* global);
 

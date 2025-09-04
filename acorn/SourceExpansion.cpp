@@ -159,7 +159,6 @@ if (e1 > e) { e = e1; }           \
             break;
         default:
             acorn_fatal("get_expansion(): missing case");
-            break;
         }
         return {b, e};
     }

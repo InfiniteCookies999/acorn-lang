@@ -129,8 +129,8 @@ namespace acorn {
 
         void gen_implicit_default_constructor(Struct* structn);
         void gen_implicit_destructor(Struct* structn);
-        void gen_implicit_copy_constructor(Struct* structn);
-        void gen_implicit_move_constructor(Struct* structn);
+        void gen_implicit_copyobj_function(Struct* structn);
+        void gen_implicit_moveobj_function(Struct* structn);
         void gen_implicit_vtable_init_function(Struct* structn);
         llvm::Value* gen_global_vtable(Struct* structn, llvm::ArrayType*& ll_arr_type);
         size_t get_vtable_offset(Struct* structn, Interface* interfacen);
@@ -335,14 +335,14 @@ namespace acorn {
 
         ImplicitFunc* create_implicit_function(ImplicitFunc::ImplicitKind implicit_kind, Struct* structn);
 
-        void copy_struct_field_constructor(Var* field,
-                                           llvm::Value* ll_to_struct_address,
-                                           llvm::Value* ll_from_struct_address,
-                                           llvm::Type* ll_struct_type);
-        void try_move_then_copy_struct_field_constructor(Var* field,
-                                                         llvm::Value* ll_to_struct_address,
-                                                         llvm::Value* ll_from_struct_address,
-                                                         llvm::Type* ll_struct_type);
+        void copy_struct_field(Var* field,
+                               llvm::Value* ll_to_struct_address,
+                               llvm::Value* ll_from_struct_address,
+                               llvm::Type* ll_struct_type);
+        void try_move_then_copy_struct_field(Var* field,
+                                             llvm::Value* ll_to_struct_address,
+                                             llvm::Value* ll_from_struct_address,
+                                             llvm::Type* ll_struct_type);
 
         void gen_copy_struct(llvm::Value* ll_to_address,
                              llvm::Value* ll_from_address,
@@ -350,19 +350,19 @@ namespace acorn {
         void gen_copy_array(llvm::Value* ll_to_address,
                             llvm::Value* ll_from_address,
                             ArrayType* arr_type);
-        void gen_call_copy_constructor(llvm::Value* ll_to_address,
+        void gen_call_copyobj_function(llvm::Value* ll_to_address,
                                        llvm::Value* ll_from_address,
                                        Struct* structn);
-        void gen_call_array_copy_constructors(llvm::Value* ll_to_address,
+        void gen_call_array_copyobj_functions(llvm::Value* ll_to_address,
                                               llvm::Value* ll_from_address,
                                               ArrayType* arr_type,
                                               Struct* structn);
 
-        void gen_call_array_move_constructors(llvm::Value* ll_to_address,
+        void gen_call_array_moveobj_functions(llvm::Value* ll_to_address,
                                               llvm::Value* ll_from_address,
                                               ArrayType* arr_type,
                                               Struct* structn);
-        void gen_call_move_constructor(llvm::Value* ll_to_address,
+        void gen_call_moveobj_function(llvm::Value* ll_to_address,
                                        llvm::Value* ll_from_address,
                                        Struct* structn);
 

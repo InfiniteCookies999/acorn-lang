@@ -22,8 +22,9 @@ void acorn::Decl::show_location_msg(Logger& logger) const {
 
 const char* acorn::Decl::get_composite_kind() const {
     switch (kind) {
-    case NodeKind::STRUCT: return "struct";
-    case NodeKind::ENUM:   return "enum";
+    case NodeKind::STRUCT:    return "struct";
+    case NodeKind::ENUM:      return "enum";
+    case NodeKind::INTERFACE: return "interface";
     default:
         acorn_fatal("Unknown composite kind");
         return "";
@@ -204,19 +205,19 @@ acorn::Var* acorn::Func::find_parameter(Identifier name) const {
 }
 
 acorn::GenericFuncInstance* acorn::Func::get_generic_instance(PageAllocator& allocator,
-                                                              llvm::SmallVector<Type*> bound_types,
+                                                              llvm::SmallVector<Type*> generic_args,
                                                               llvm::SmallVector<Type*> qualified_decl_types,
                                                               Struct* parent_struct) {
     // Check to see if the instance already exists.
     for (auto* instance : generic_instances) {
-        if (instance->bound_types == bound_types) {
+        if (instance->bound_generic_args == generic_args) {
             return instance;
         }
     }
 
     auto generic_instance = allocator.alloc_type<GenericFuncInstance>();
     new (generic_instance) GenericFuncInstance();
-    generic_instance->bound_types = std::move(bound_types);
+    generic_instance->bound_generic_args = std::move(generic_args);
     generic_instance->qualified_decl_types  = std::move(qualified_decl_types);
     generic_instance->structn = parent_struct;
 
@@ -260,17 +261,17 @@ const acorn::Struct::InterfaceExtension* acorn::Struct::find_interface_extension
 }
 
 acorn::GenericStructInstance* acorn::UnboundGenericStruct::get_generic_instance(PageAllocator& allocator,
-                                                                                llvm::SmallVector<Type*> bound_types) {
+                                                                                llvm::SmallVector<Type*> generic_args) {
     // Check to see if the instance already exists.
     for (auto* instance : generic_instances) {
-        if (instance->bound_types == bound_types) {
+        if (instance->bound_generic_args == generic_args) {
             return instance;
         }
     }
 
     auto new_struct_instance = deep_copy_struct(allocator, this);
     new_struct_instance->is_struct_instance_copy = true;
-    new_struct_instance->bound_types = std::move(bound_types);
+    new_struct_instance->bound_generic_args = std::move(generic_args);
     generic_instances.push_back(new_struct_instance);
 
     auto new_struct_type = StructType::create(allocator, new_struct_instance, false);

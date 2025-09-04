@@ -268,7 +268,6 @@ std::string acorn::Type::to_string() const {
     case TypeKind::GENERIC:       return str(static_cast<const GenericType*>(this)->to_string());
     default:
         acorn_fatal_fmt("Type::to_string() missing to_string case. Kind=%s", static_cast<int>(kind));
-        return "";
     }
 #undef str
 #undef str2
@@ -459,7 +458,7 @@ acorn::RangeType* acorn::RangeType::create(PageAllocator& allocator,
 }
 
 std::string acorn::RangeType::to_string() const {
-    return "range";
+    return std::string("range(") + value_type->to_string() + ")";
 }
 
 acorn::FunctionType* acorn::FunctionType::create(PageAllocator& allocator,
@@ -558,9 +557,9 @@ std::string acorn::StructType::to_string() const {
     if (structn->is_generic) {
         auto struct_instance = static_cast<GenericStructInstance*>(structn);
         str += "(";
-        for (size_t i = 0; i < struct_instance->bound_types.size(); i++) {
-            str += struct_instance->bound_types[i]->to_string();
-            if (i + 1 != struct_instance->bound_types.size()) {
+        for (size_t i = 0; i < struct_instance->bound_generic_args.size(); i++) {
+            str += struct_instance->bound_generic_args[i]->to_string();
+            if (i + 1 != struct_instance->bound_generic_args.size()) {
                 str += ", ";
             }
         }

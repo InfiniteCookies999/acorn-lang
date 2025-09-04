@@ -382,6 +382,8 @@ void acorn::Context::find_std_lib_declarations() {
 
     if (Interface* interfacen = find_composite_of_kind((Interface*)0, modl, error_interface_identifier)) {
         std_error_interface = interfacen;
+        std_error_interface_ptr_type = type_table.get_ptr_type(std_error_interface->interface_type);
+
         for (Func* func : interfacen->functions) {
             if (func->name == get_name_function_identifier) {
                 std_error_get_name_func = func;

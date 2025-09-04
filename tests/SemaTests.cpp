@@ -227,6 +227,140 @@ void test_sema() {
             )");
             expect_none().to_produce_error(ErrCode::SemaVariableTypeMismatch);
         });
+        test("Unreachable code after return", [&] {
+            mock_sema(R"(
+                fn main() {
+                    v: int = 5;
+                    return;
+                    i: int = 5;
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaUnreachableStmt);
+        });
+        test("Unreachable code because both if and else return", [&] {
+            mock_sema(R"(
+                fn main() {
+                    v := 5;
+                    if (v > 3) {
+                        return;
+                    } else {
+                        return;
+                    }
+                    i: int = 5;
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaUnreachableStmt);
+        });
+        test("Unreachable code because if, elif, and else return", [&] {
+            mock_sema(R"(
+                fn main() {
+                    v: int = 5;
+                    if (v > 3) {
+                        return;
+                    } elif (v > 8) {
+                        return;
+                    } else {
+                        return;
+                    }
+                    i: int = 5;
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaUnreachableStmt);
+        });
+        test("Unreachable because return in loop", [&] {
+            mock_sema(R"(
+                fn main() {
+                    cond: bool = true;
+                    loop (cond) {
+                        return;
+                    }
+                    i: int = 5;
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaUnreachableStmt);
+        });
+        test("Unreachable because code after break in loop", [&] {
+            mock_sema(R"(
+                fn main() {
+                    cond: bool = true;
+                    loop (cond) {
+                        break;
+                        i: int = 5;
+                    }
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaUnreachableStmt);
+        });
+        test("Unreachable because code after break in if/else within loop", [&] {
+            mock_sema(R"(
+                fn main() {
+                    cond: bool = true;
+                    loop (cond) {
+                        v: int = 5;
+                        if (v > 5) {
+                            break;
+                        } else {
+                            break;
+                        }
+                        i: int = 5;
+                    }
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaUnreachableStmt);
+        });
+        test("Unreachable because code after break in if/elif/else within loop", [&] {
+            mock_sema(R"(
+                fn main() {
+                    cond: bool = true;
+                    loop (cond) {
+                        v: int = 5;
+                        if (v > 5) {
+                            break;
+                        } elif (v > 3) {
+                            break;
+                        } else {
+                            break;
+                        }
+                        i: int = 5;
+                    }
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaUnreachableStmt);
+        });
+        test("Unreachable because code after mixing break/return in if/else within loop", [&] {
+            mock_sema(R"(
+                fn main() {
+                    cond: bool = true;
+                    loop (cond) {
+                        v: int = 5;
+                        if (v > 5) {
+                            return;
+                        } else {
+                            break;
+                        }
+                        i: int = 5;
+                    }
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaUnreachableStmt);
+        });
+        test("Unreachable because code after loop where if/else returns in loop", [&] {
+            mock_sema(R"(
+                fn main() {
+                    cond: bool = true;
+                    loop (cond) {
+                        v: int = 5;
+                        if (v > 5) {
+                            return;
+                        } else {
+                            return;
+                        }
+                    }
+                    i: int = 5;
+                }
+            )");
+            expect_none().to_produce_error(ErrCode::SemaUnreachableStmt);
+        });
         test("multi array to pointer, pointer has wrong element type", [&] {
             mock_sema(R"(
                 fn main() {

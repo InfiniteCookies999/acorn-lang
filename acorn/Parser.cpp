@@ -183,27 +183,27 @@ void acorn::Parser::add_node_to_struct(Struct* structn, Node* node) {
 
             if (func->is_destructor) {
                 if (structn->destructor) {
-                    structn->duplicate_struct_func_infos.push_back(
+                    structn->duplicate_special_funcs_info.push_back(
                         Struct::DuplicateStructFuncInfo{ func, structn->destructor });
                 }
 
                 structn->destructor = func;
                 structn->needs_destruction = true;
-            } else if (func->is_copy_constructor) {
-                if (structn->copy_constructor) {
-                    structn->duplicate_struct_func_infos.push_back(
-                        Struct::DuplicateStructFuncInfo{ func, structn->copy_constructor });
+            } else if (func->is_copyobj_func) {
+                if (structn->copyobj_func) {
+                    structn->duplicate_special_funcs_info.push_back(
+                        Struct::DuplicateStructFuncInfo{ func, structn->copyobj_func });
                 }
 
-                structn->copy_constructor = func;
+                structn->copyobj_func = func;
                 structn->needs_copy_call = true;
-            } else if (func->is_move_constructor) {
-                if (structn->move_constructor) {
-                    structn->duplicate_struct_func_infos.push_back(
-                        Struct::DuplicateStructFuncInfo{ func, structn->move_constructor });
+            } else if (func->is_moveobj_func) {
+                if (structn->moveobj_func) {
+                    structn->duplicate_special_funcs_info.push_back(
+                        Struct::DuplicateStructFuncInfo{ func, structn->moveobj_func });
                 }
 
-                structn->move_constructor = func;
+                structn->moveobj_func = func;
                 structn->needs_move_call = true;
             } else if (func->is_constructor) {
                 if (func->params.empty()) {
@@ -579,13 +579,13 @@ acorn::Func* acorn::Parser::parse_function(uint32_t modifiers, bool is_const) {
         break;
     case Token::KW_COPYOBJ:
         func->name = context.copyobj_identifier;
-        func->is_copy_constructor = true;
+        func->is_copyobj_func = true;
         func->is_constructor = true;
         next_token();
         break;
     case Token::KW_MOVEOBJ:
         func->name = context.moveobj_identifier;
-        func->is_move_constructor = true;
+        func->is_moveobj_func = true;
         func->is_constructor = true;
         next_token();
         break;
@@ -2176,7 +2176,6 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
         case TypeKind::INT64:  return fold_int<int64_t>(op, lnum, rnum, to_type);
         default:
             acorn_fatal("Missing numeric fold cast");
-            return nullptr;
         }
     };
 
@@ -2246,7 +2245,6 @@ acorn::Expr* acorn::Parser::fold_number(Token op, Expr* lhs, Expr* rhs) {
         }
     } else {
         acorn_fatal("unreachable");
-        return nullptr;
     }
 }
 

@@ -178,42 +178,6 @@ void acorn::DebugInfoEmitter::set_location(llvm::Instruction* ll_instruction, So
     ll_instruction->setDebugLoc(create_location(loc));
 }
 
-/*
-void acorn::DebugInfoEmitter::emit_location(llvm::IRBuilder<>& ir_builder, SourceLoc location) {
-    auto* ll_last_instruction = &ir_builder.GetInsertBlock()->back();
-    emit_location(ll_last_instruction, location);
-}
-
-void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction, SourceLoc location) {
-    if (store_node) {
-        location = store_node->loc;
-    }
-
-    auto [line_number, column_number] = file->line_table.get_line_and_column_number(location);
-
-    llvm::DIScope* di_scope = di_lexical_scopes.back();
-    emit_location(ll_instruction, di_scope, line_number, column_number);
-
-}
-
-void acorn::DebugInfoEmitter::emit_location(llvm::Instruction* ll_instruction,
-                                            llvm::DIScope* ll_di_scope,
-                                            size_t line_number,
-                                            size_t column_number) {
-    auto di_location = llvm::DILocation::get(
-        context.get_ll_context(),
-        static_cast<unsigned>(line_number),
-        // Emission of column number seems to confuse the debugger and cause it to make multiple steps for an instruction on a single line.
-        // This is probably because it breaks once per unique location and adding the column number makes the location non-unique to the line
-        // its on.
-        0, //column_number,
-        ll_di_scope
-    );
-    ll_instruction->setDebugLoc(di_location);
-
-
-}*/
-
 void acorn::DebugInfoEmitter::emit_function_variable(Var* var, llvm::IRBuilder<>& ir_builder) {
     auto di_scope = di_lexical_scopes.back();
 

@@ -54,7 +54,6 @@ void acorn::PageAllocator::alloc_new_page(size_t new_page_size) {
 
     if (!cur_page) {
         acorn_fatal("Failed to allocate memory. Likely ran out");
-        throw std::bad_alloc();
     }
 
     cur_page_size = new_page_size;

@@ -2336,6 +2336,12 @@ static void error_tests() {
 
         expect(result, std::identity()).to_be("caught error!destructor called 1!...caught error!end!");
     });
+    test("Raise error and catch without a name given to the caught error variable calls error destructor", [&] {
+        auto [err_msg, result] = run_codegen_test(src("errors/errors_destructors14.ac"), true);
+        if (!err_msg.empty())  force_fail(err_msg.c_str());
+
+        expect(result, std::identity()).to_be("caught error!destructor called!");
+    });
 }
 
 static void generics_tests() {

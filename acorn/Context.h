@@ -114,6 +114,7 @@ namespace acorn {
         StructType* std_any_struct_type;
         Type*       const_std_type_ptr;
         Interface*  std_error_interface;
+        Type*       std_error_interface_ptr_type;
         Func*       std_abort_function;
         Func*       std_error_get_name_func;
 
@@ -174,7 +175,7 @@ namespace acorn {
             return !is_stand_alone && type->remove_all_const()->is(std_any_struct_type);
         }
 
-        llvm::SmallVector<Func*>& get_canidate_main_funcs() {
+        llvm::SmallVector<Func*>& get_candidate_main_funcs() {
             return canidate_main_funcs;
         }
 

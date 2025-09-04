@@ -328,7 +328,7 @@ void acorn::Compiler::sema_and_irgen() {
 
     // Ensure that the main entry point function exists.
     //
-    Sema::find_main_function(context);
+    Sema::compare_candidate_main_functions(context);
     if (!context.get_main_function()) {
         Logger::global_error(context, "Could not find 'main' (entry point) function")
             .add_line("Expected declaration of: 'fn main()'")

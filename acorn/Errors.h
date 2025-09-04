@@ -39,11 +39,6 @@ namespace acorn {
 
     void print_source_location(Logger& logger, SourceFile* file, SourceLoc location);
 
-    // Given an already parsed tree s.t. it has valid parse syntax, this function will skip
-    // characters which are whitespace or comments starting at `ptr` and return a ptr to the
-    // location after skipping.
-    //const char* skip_till_next_token(const char* ptr);
-
     // Report functions for more complex errors.
     void report_cannot_specify_auto_ptr_and_type_for_variable(Logger& logger, Var* var);
 

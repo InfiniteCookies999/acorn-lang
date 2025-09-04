@@ -148,14 +148,14 @@ std::string acorn::utf16_to_utf8(const wchar_t* str, size_t length) {
     }
 
     // First determining the length of the resulting multibyte string.
-    int utf8_length = WideCharToMultiByte(CP_UTF8,  // UTF-8 conversion
-                                          0,        // TODO (maddie): special flags?
-                                          str,      // Pointer to string to convert
-                                          length,   // Length of wide string. May be -1 if null terminated
-                                          nullptr,  // Pointer to the resulting utf8 string (Need to determine length first)
-                                          0,        // Size of the utf8 string (Need to determine length first)
-                                          nullptr,  // Pointer to a character if a character cannot be interpreted
-                                          nullptr   // Pointer to a flag to indicate if the function uses a default character
+    int utf8_length = WideCharToMultiByte(CP_UTF8,                  // UTF-8 conversion
+                                          0,                        // TODO (maddie): special flags?
+                                          str,                      // Pointer to string to convert
+                                          static_cast<int>(length), // Length of wide string. May be -1 if null terminated
+                                          nullptr,                  // Pointer to the resulting utf8 string (Need to determine length first)
+                                          0,                        // Size of the utf8 string (Need to determine length first)
+                                          nullptr,                  // Pointer to a character if a character cannot be interpreted
+                                          nullptr                   // Pointer to a flag to indicate if the function uses a default character
     );
     if (utf8_length <= 0) {
         acorn_fatal("Failed to convert utf16 to utf8");
@@ -166,7 +166,7 @@ std::string acorn::utf16_to_utf8(const wchar_t* str, size_t length) {
     WideCharToMultiByte(CP_UTF8,
                         0,
                         str,
-                        length,
+                        static_cast<int>(length),
                         result.data(),
                         utf8_length,
                         nullptr,
@@ -175,7 +175,6 @@ std::string acorn::utf16_to_utf8(const wchar_t* str, size_t length) {
     return result;
 #else
     acorn_fatal("wide_to_utf8: not supported outside windows");
-    return "";
 #endif
 }
 
@@ -191,12 +190,12 @@ std::wstring acorn::utf8_to_utf16(const char* str, size_t byte_length) {
     }
 
     // First determining the length of the resulting wide string.
-    int utf16_length = MultiByteToWideChar(CP_UTF8,      // UTF-8 conversion
-                                           0,            // TODO (maddie): special flags?
-                                           str,          // Pointer to string to convert
-                                           byte_length,  // Length of utf8 string (in bytes). May be -1 if null terminated
-                                           nullptr,      // Pointer to the resulting wide string (Need to determine length first)
-                                           0             // Size of the wide string (Need to determine length first)
+    int utf16_length = MultiByteToWideChar(CP_UTF8,                        // UTF-8 conversion
+                                           0,                              // TODO (maddie): special flags?
+                                           str,                            // Pointer to string to convert
+                                           static_cast<int>(byte_length),  // Length of utf8 string (in bytes). May be -1 if null terminated
+                                           nullptr,                        // Pointer to the resulting wide string (Need to determine length first)
+                                           0                               // Size of the wide string (Need to determine length first)
     );
     if (utf16_length <= 0) {
         acorn_fatal("Failed to convert utf8 to utf16");
@@ -207,7 +206,7 @@ std::wstring acorn::utf8_to_utf16(const char* str, size_t byte_length) {
     MultiByteToWideChar(CP_UTF8,
                         0,
                         str,
-                        byte_length,
+                        static_cast<int>(byte_length),
                         result.data(),
                         utf16_length
 
@@ -215,7 +214,6 @@ std::wstring acorn::utf8_to_utf16(const char* str, size_t byte_length) {
     return result;
 #else
     acorn_fatal("utf8_to_wide: not supported outside windows");
-    return L"";
 #endif
 }
 

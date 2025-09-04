@@ -81,6 +81,13 @@ struct FileHandle :: Writable, Readable {
 
     auto_close: bool;
 
+    /*
+     * Construct a `FileHandle` from an operating system
+     * file handle.
+     *
+     * @param auto_close if set to true the destructor will close
+     *                   the operating system handle.
+     */
 #if OS_GROUP_WINDOWS
     fn new(handle: void*, auto_close := true) {
         this.handle     #= handle;
@@ -105,6 +112,9 @@ struct FileHandle :: Writable, Readable {
         file_handle.auto_close = false;
     }
 
+    /*
+     * Gets the total number of bytes from the file.
+     */
     const fn get_size() -> uint64 {
         ERROR_MSG :: "Failed to get file size";
 
@@ -126,6 +136,12 @@ struct FileHandle :: Writable, Readable {
 #endif
     }
 
+    /*
+     * Reads `length` bytes or less from the file and stores the
+     * results into `buffer`.
+     *
+     * @return the number of bytes actually read from file.
+     */
     fn read_buffer(buffer: char*, length: int) -> int | raises IOError {
         ERROR_MSG :: "Failed to read from file handle";
 
@@ -162,6 +178,11 @@ struct FileHandle :: Writable, Readable {
 #endif
     }
 
+    /*
+     * Writes `length` bytes of the `buffer` or less to the file.
+     *
+     * @return the number of bytes actually written to file.
+     */
     fn write_buffer(buffer: const char*, length: int) -> int | raises IOError {
         ERROR_MSG :: "Failed to write to file handle";
 
@@ -207,6 +228,8 @@ struct FileHandle :: Writable, Readable {
 #elif OS_GROUP_UNIX
         unix.close(handle);
 #endif
+        // Prevent duplicate closing.
+        auto_close = false;
     }
 }
 

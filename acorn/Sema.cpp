@@ -44,8 +44,8 @@ bool acorn::Sema::is_potential_main_function(Context& context, const Func* candi
     return false;
 }
 
-bool acorn::Sema::find_main_function(Context& context) {
-    auto& candidates = context.get_canidate_main_funcs();
+bool acorn::Sema::compare_candidate_main_functions(Context& context) {
+    auto& candidates = context.get_candidate_main_funcs();
     for (Func* candidate : candidates) {
         if (!is_potential_main_function(context, candidate)) {
             continue;
@@ -82,6 +82,7 @@ bool acorn::Sema::find_main_function(Context& context) {
                   .end_error(ErrCode::SemaMainCannotHaveModifier);
         }
     }
+
     return false;
 }
 
@@ -91,14 +92,14 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
     for (const auto& [_, decl] : nspace->get_declarations()) {
         if (decl->is(NodeKind::FUNC_LIST)) {
             auto func_list = static_cast<FuncList*>(decl);
-            check_for_duplicate_functions(*func_list, context);
+            check_for_duplicate_functions<false>(*func_list, context);
         } else if (decl->is(NodeKind::STRUCT)) {
             auto structn = static_cast<Struct*>(decl);
 
             check_for_duplicate_functions(structn->nspace, context);
-            check_for_duplicate_functions(structn->constructors, context);
+            check_for_duplicate_functions<false>(structn->constructors, context);
 
-            for (auto& duplicate_info : structn->duplicate_struct_func_infos) {
+            for (auto& duplicate_info : structn->duplicate_special_funcs_info) {
                 report_redeclaration(duplicate_info.duplicate_function,
                                      duplicate_info.prior_function,
                                      duplicate_info.duplicate_function->is_constructor ? "constructor" : "destructor",
@@ -106,21 +107,12 @@ void acorn::Sema::check_for_duplicate_functions(Namespace* nspace, Context& cont
             }
         } else if (decl->is(NodeKind::INTERFACE)) {
             auto interfacen = static_cast<Interface*>(decl);
-            auto& funcs = interfacen->functions;
-            for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
-                for (auto itr2 = itr + 1; itr2 != funcs.end(); ++itr2) {
-                    if ((*itr)->name != (*itr2)->name) {
-                        continue;
-                    }
-                    if (check_for_duplicate_match(*itr, *itr2)) {
-                        break;
-                    }
-                }
-            }
+            check_for_duplicate_functions<true>(interfacen->functions, context);
         }
     }
 }
 
+template<bool compare_names>
 void acorn::Sema::check_for_duplicate_functions(const llvm::SmallVector<Func*>& funcs,
                                                 Context& context) {
     bool decls_have_errors = false;
@@ -139,6 +131,12 @@ void acorn::Sema::check_for_duplicate_functions(const llvm::SmallVector<Func*>& 
 
     for (auto itr = funcs.begin(); itr != funcs.end(); ++itr) {
         for (auto itr2 = itr+1; itr2 != funcs.end(); ++itr2) {
+            if constexpr (compare_names) {
+                if ((*itr)->name != (*itr2)->name) {
+                    continue;
+                }
+            }
+
             if (check_for_duplicate_match(*itr, *itr2)) {
                 break;
             }
@@ -158,10 +156,10 @@ void acorn::Sema::check_all_other_duplicates(Module& modl, Context& context) {
         } else if (decl->is(NodeKind::INTERFACE)) {
             return "interface";
         } else if (decl->is(NodeKind::FUNC)) {
-            return "function";
+            auto func = static_cast<Func*>(decl);
+            return func->is_constructor ? "constructor" : "function";
         } else {
             acorn_fatal("unreachable");
-            return "";
         }
     };
     for (auto& [location, decl1, decl2] : modl.get_declaration_duplicates()) {
@@ -206,8 +204,7 @@ void acorn::Sema::report_nodes_wrong_scopes(Module& modl) {
         } else {
             acorn_fatal("unreachable");
         }
-        logger.begin_error(loc, "%s does not belong at %s scope",
-                           expr_or_stmt_str, scope_str)
+        logger.begin_error(loc, "%s does not belong at %s scope", expr_or_stmt_str, scope_str)
             .end_error(ErrCode::SemaNodeAtWrongScope);
     };
 
@@ -227,9 +224,9 @@ void acorn::Sema::resolve_imports(Context& context, SourceFile* file) {
     }
 
     // This goes after resolving imports as to not have to waste time checking
-    // if the String struct exists.
+    // if the `String` struct exists.
     if (!context.should_stand_alone()) {
-        // Auto importing the String struct.
+        // Auto importing the `String` struct.
         file->try_add_import(context.std_string_struct_import);
     }
 }
@@ -272,18 +269,12 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         report_could_not_find(key_part, "Could not find struct, enum, or interface '%s'", spell_checker);
     };
     auto report_could_not_find_namespace = [&report_could_not_find](ImportStmt::KeyPart& key_part,
-                                                                    ErrorSpellChecker& spell_checker) finline{
+                                                                    ErrorSpellChecker& spell_checker) finline {
         report_could_not_find(key_part, "Could not find namespace '%s'", spell_checker);
     };
     auto report_could_not_find_module = [&report_could_not_find](ImportStmt::KeyPart& key_part,
-                                                                 ErrorSpellChecker& spell_checker) finline{
+                                                                 ErrorSpellChecker& spell_checker) finline {
         report_could_not_find(key_part, "Could not find module '%s'", spell_checker);
-    };
-
-    auto report_invalid_import = [&logger, importn]() finline {
-        // TODO: better error description.
-        logger.begin_error(importn->loc, "Invalid import")
-            .end_error(ErrCode::SemaInvalidImport);
     };
 
     auto report_expect_module_identifier = [&logger](ImportStmt::KeyPart& key_part) finline {
@@ -298,7 +289,18 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
             if (decl->is_composite()) {
                 add_composite(static_cast<Decl*>(decl));
             } else {
-                logger.begin_error(key_part.error_loc, "Cannot directly import ")
+                const char* kind_str = "";
+                switch (decl->kind) {
+                case NodeKind::FUNC_LIST:
+                    kind_str = "functions";
+                    break;
+                case NodeKind::VAR:
+                    kind_str = "variable";
+                    break;
+                default:
+                    acorn_fatal("Unreachable: Unknown declaration kind");
+                }
+                logger.begin_error(key_part.error_loc, "Cannot directly import %s", kind_str)
                     .end_error(ErrCode::SemaCannotDirectlyImport);
             }
             return true;
@@ -384,7 +386,12 @@ void acorn::Sema::resolve_import(Context& context, ImportStmt* importn) {
         return;
     }
 
-    report_invalid_import();
+    auto& beg_key_part = key[3];
+    auto& end_key_part = key.back();
+    auto error_loc = SourceLoc::from_ptrs(beg_key_part.error_loc.begin(), end_key_part.error_loc.end());
+    logger.begin_error(error_loc, "Too many entries for import key")
+        .end_error(ErrCode::SemaInvalidImport);
+
 }
 
 
@@ -427,6 +434,7 @@ void acorn::Sema::check_function(Func* func) {
 
     check_scope(func->scope, &sem_scope);
     pop_scope();
+
     if (!sem_scope.all_paths_return && func->return_type->is_not(context.void_type)) {
         error(func, "Not all function paths return")
             .end_error(ErrCode::SemaNotAllFuncPathReturn);
@@ -440,6 +448,15 @@ void acorn::Sema::check_function(Func* func) {
         }
     }
 
+    // In increment the number of returns if the compiler will implicitly generate
+    // a return when the function returns void.
+    //
+    // Example:
+    //
+    // fn foo() {
+    //    a := 66;
+    //    // return implicitly added here.
+    // }
     if (uses_implicit_return) {
         ++func->num_returns;
     }
@@ -470,7 +487,7 @@ void acorn::Sema::check_variable(Var* var) {
             .end_error(ErrCode::SemaOnlyFieldsCanHaveReadonlyModifier);
     }
 
-    // This must go up top before returning due to any errors because otherwise
+    // This must go up top before returning due to errors. This is Because otherwise
     // future variables will not be able to find the reference of the variable
     // leading to bad error messages.
     bool needs_added_to_local_scope = !var->is_global && !var->is_param() && !var->is_field();
@@ -579,24 +596,11 @@ void acorn::Sema::check_variable(Var* var) {
             return cleanup();
         }
 
-        switch (var->assignment->type->get_kind()) {
-        case TypeKind::VOID_T:
-        case TypeKind::NAMESPACE_REF:
-        case TypeKind::EMPTY_ARRAY:
-        case TypeKind::NULL_T:
-        case TypeKind::INTERFACE:
-        case TypeKind::EXPR:
+        if (is_incomplete_type(var->assignment->type)) {
             error(expand(var), "Cannot assign incomplete type '%s' to variable with inferred type",
                   var->assignment->type)
                 .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
             return cleanup();
-        case TypeKind::RANGE:
-            error(expand(var), "Cannot assign type 'range' to variable with inferred type",
-                  var->assignment->type)
-                .end_error(ErrCode::SemaCannotAssignIncompleteTypeToAuto);
-            return cleanup();
-        default:
-            break;
         }
 
         var->type = var->assignment->type;
@@ -604,14 +608,17 @@ void acorn::Sema::check_variable(Var* var) {
             // A :: 55;
             // b := A;
             // ^^^^^^
-            // we don't want b to be const here.
+            // we don't want `b` to be const here.
             var->type = type_table.remove_const(var->type);
         }
 
+        // Deal with auto pointer types.
         if (var->parsed_type == context.auto_ptr_type || var->parsed_type == context.auto_const_ptr_type) {
             if (!var->type->is_pointer()) {
                 if (var->type->is_array()) {
-                    auto arr_type = static_cast<ArrayType*>(var->type);;
+                    // In the case of arrays the resolved type becomes a pointer to the element
+                    // type of the array.
+                    auto arr_type = static_cast<ArrayType*>(var->type);
                     var->type = type_table.get_ptr_type(arr_type->get_elm_type());
                 } else {
                     var->type = type_table.get_ptr_type(var->type);
@@ -620,37 +627,13 @@ void acorn::Sema::check_variable(Var* var) {
         }
 
         // Apply const at all depths.
-        if (var->parsed_type == context.const_auto_type) {
-            if (var->assignment->is(NodeKind::ARRAY)) {
-                auto arr_type = static_cast<ArrayType*>(var->type);
-
-                llvm::SmallVector<uint32_t, 8> lengths;
-                Type* elm_type = nullptr;
-                while (true) {
-                    elm_type = arr_type->get_elm_type();
-                    lengths.push_back(arr_type->get_length());
-
-                    if (!elm_type->is_array()) {
-                        break;
-                    }
-                    arr_type = static_cast<ArrayType*>(elm_type);
-                }
-
-                auto base_type = type_table.get_const_type(elm_type);
-                auto new_arr_type = type_table.get_arr_type(base_type, lengths.back());
-                for (auto itr = lengths.rbegin() + 1; itr != lengths.rend(); ++itr) {
-                    new_arr_type = type_table.get_arr_type(new_arr_type, *itr);
-                }
-                var->type = type_table.get_const_type(new_arr_type);
-
-            } else if (!var->type->is_const()) {
-                var->type = type_table.get_const_type(var->type);
-            }
+        if (var->parsed_type == context.const_auto_type || var->parsed_type == context.auto_const_ptr_type) {
+            var->type = get_const_type_at_all_depth(var->type);
         }
     } else if (var->parsed_type->get_kind() == TypeKind::ASSIGN_DETERMINED_ARRAY) {
         // We have to handle this case as if it is speciial because
-        // in no other instance other than variable assignments is the
-        // applicable.
+        // in no other instance other than variable assignments does
+        // this happen.
         var->type = fixup_assign_det_arr_type(var->parsed_type, var);
     } else {
         var->type = fixup_type(var->parsed_type);
@@ -692,7 +675,7 @@ void acorn::Sema::check_variable(Var* var) {
             auto arr_type = static_cast<ArrayType*>(var->type);
             auto base_type = arr_type->get_base_type();
             if (base_type->is_const()) {
-                error(var, "Variables with constant array must be assigned a value")
+                error(var, "Variables with a constant array type must be assigned a value")
                     .end_error(ErrCode::SemaVariableConstNoValue);
                 return cleanup();
             }
@@ -761,6 +744,7 @@ void acorn::Sema::check_struct(Struct* structn) {
     structn->is_being_checked = true;
     structn->has_been_checked = true; // Set early to prevent circular checking.
 
+    // Resolve extensions.
     for (size_t i = 0; i < structn->unresolved_extensions.size(); i++) {
         auto& extension = structn->unresolved_extensions[i];
 
@@ -810,10 +794,10 @@ void acorn::Sema::check_struct(Struct* structn) {
         structn->needs_default_call |= field_struct->needs_default_call;
 
         if (field_struct->is_being_checked) {
-            display_circular_dep_error(field_loc,
-                                       cur_struct,
-                                       "Circular struct dependency results in infinite storage requirement for struct",
-                                       ErrCode::SemaCircularStructDeclDependency);
+            report_circular_dep_error(field_loc,
+                                      cur_struct,
+                                      "Circular struct dependency results in infinite storage requirement for struct",
+                                      ErrCode::SemaCircularStructDeclDependency);
             structn->has_errors = true;
         }
     };
@@ -896,28 +880,26 @@ void acorn::Sema::check_struct(Struct* structn) {
             auto generic_instance = static_cast<GenericStructInstance*>(structn);
             generic_instance->generic_destructor_instance =
                 structn->destructor->get_generic_instance(context.get_allocator(),
-                                                          generic_instance->bound_types,
+                                                          generic_instance->bound_generic_args,
                                                           { context.void_type },
                                                           structn);
         }
     }
-    auto check_move_or_copy_has_correct_param_type = [this, structn](Func* constructor,
+    auto check_move_or_copy_has_correct_param_type = [this, structn](Func* func,
                                                                      Type* elm_type,
                                                                      bool is_copy) finline {
-        if (constructor->has_checked_declaration || check_function_decl(constructor)) {
-            if (constructor->has_errors) {
+        if (func->has_checked_declaration || check_function_decl(func)) {
+            if (func->has_errors) {
                 return;
             }
-            // TODO (maddie): can this not result in circular dependencies? Should this not be checking
-            // if the constructor has errors before continuing?
+
             auto struct_ptr_type = type_table.get_ptr_type(elm_type);
-            if (constructor->params.size() != 1) {
-                error(constructor,
-                        "%s constructor should have one parameter of type '%s'",
-                        is_copy ? "Copy" : "Move", struct_ptr_type)
-                    .end_error(ErrCode::SemaCopyConstructorExpectsOneParam);
+            if (func->params.size() != 1) {
+                error(func, "The '%s' function should have one parameter of type '%s'",
+                      is_copy ? "copyobj" : "moveobj", struct_ptr_type)
+                    .end_error(ErrCode::SemaCopyobjFuncExpectsOneParam);
             } else {
-                auto param1 = constructor->params[0];
+                auto param1 = func->params[0];
                 Type* param_type = param1->type;
                 // Resolve situation like:
                 //
@@ -939,7 +921,7 @@ void acorn::Sema::check_struct(Struct* structn) {
                                 auto generic_struct_instance = static_cast<GenericStructInstance*>(structn);
 
                                 auto fixed_elm_type = fixup_pending_generic_struct_type(param_elm_type,
-                                                                                        &generic_struct_instance->bound_types);
+                                                                                        &generic_struct_instance->bound_generic_args);
                                 if (!fixed_elm_type) {
                                     return;
                                 }
@@ -956,49 +938,49 @@ void acorn::Sema::check_struct(Struct* structn) {
 
                 if (param_type->is_not(struct_ptr_type)) {
                     error(param1,
-                            "%s constructor parameter should be of type '%s'",
-                            is_copy ? "Copy" : "Move", struct_ptr_type)
-                        .end_error(is_copy ? ErrCode::SemaCopyConstructorExpectedStructPtrType
-                                            : ErrCode::SemaMoveConstructorExpectedStructPtrType);
+                            "The '%s' function parameter should be of type '%s'",
+                            is_copy ? "copyobj" : "moveobj", struct_ptr_type)
+                        .end_error(is_copy ? ErrCode::SemaCopyobjFuncExpectedStructPtrType
+                                            : ErrCode::SemaMoveobjFuncExpectedStructPtrType);
                 }
             }
         }
     };
-    if (structn->copy_constructor) {
+    if (structn->copyobj_func) {
         auto const_struct_type = type_table.get_const_type(structn->struct_type);
-        check_move_or_copy_has_correct_param_type(structn->copy_constructor, const_struct_type, true);
+        check_move_or_copy_has_correct_param_type(structn->copyobj_func, const_struct_type, true);
         if (structn->is_generic) {
-            // Making sure to create a generic instance for the move constructor since it is not
+            // Making sure to create a generic instance for the moveobj function since it is not
             // called directly.
             auto generic_instance = static_cast<GenericStructInstance*>(structn);
-            generic_instance->generic_copy_constructor_instance =
-                structn->copy_constructor->get_generic_instance(context.get_allocator(),
-                                                                generic_instance->bound_types,
+            generic_instance->generic_copyobj_func_instance =
+                structn->copyobj_func->get_generic_instance(context.get_allocator(),
+                                                                generic_instance->bound_generic_args,
                                                                 { context.void_type, type_table.get_ptr_type(const_struct_type) },
                                                                 structn);
         }
     }
-    if (structn->move_constructor) {
-        check_move_or_copy_has_correct_param_type(structn->move_constructor, structn->struct_type, false);
+    if (structn->moveobj_func) {
+        check_move_or_copy_has_correct_param_type(structn->moveobj_func, structn->struct_type, false);
         if (structn->is_generic) {
-            // Making sure to create a generic instance for the move constructor since it is not
+            // Making sure to create a generic instance for the moveobj function since it is not
             // called directly.
             auto generic_instance = static_cast<GenericStructInstance*>(structn);
-            generic_instance->generic_move_constructor_instance =
-                structn->move_constructor->get_generic_instance(context.get_allocator(),
-                                                                generic_instance->bound_types,
+            generic_instance->generic_moveobj_func_instance =
+                structn->moveobj_func->get_generic_instance(context.get_allocator(),
+                                                                generic_instance->bound_generic_args,
                                                                 { context.void_type, type_table.get_ptr_type(structn->struct_type) },
                                                                 structn);
         }
     }
     if (structn->default_constructor) {
         if (structn->is_generic) {
-            // Making sure to create a generic instance for the move constructor since it is not
+            // Making sure to create a generic instance for the moveobj function since it is not
             // called directly.
             auto generic_instance = static_cast<GenericStructInstance*>(structn);
             generic_instance->generic_default_constructor_instance =
                 structn->default_constructor->get_generic_instance(context.get_allocator(),
-                                                                   generic_instance->bound_types,
+                                                                   generic_instance->bound_generic_args,
                                                                    { context.void_type },
                                                                    structn);
         }
@@ -1515,7 +1497,7 @@ void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) 
             if (cur_global_var->dependency == cur_global_var) {
                 report_error_cannot_use_variable_before_assigned(error_loc, cur_global_var);
             } else {
-                display_circular_dep_error(error_loc,
+                report_circular_dep_error(error_loc,
                                            cur_global_var,
                                            "Global variables form a circular dependency",
                                            ErrCode::SemaGlobalCircularDependency);
@@ -1531,6 +1513,13 @@ void acorn::Sema::ensure_global_variable_checked(SourceLoc error_loc, Var* var) 
 
 bool acorn::Sema::ensure_struct_checked(Struct* structn) {
     if (cur_struct) {
+        // This is still required to be set in order to report circular dependencies caused by
+        // fields creating infinite storage requirements.
+        //
+        // Example:
+        // struct A { b: B; }
+        // struct B { a: A; }
+        //
         cur_struct->dependency = structn;
     }
 
@@ -1546,7 +1535,7 @@ void acorn::Sema::ensure_enum_checked(SourceLoc error_loc, Enum* enumn) {
         cur_enum->dependency = enumn;
 
         if (cur_enum->is_being_checked) {
-            display_circular_dep_error(error_loc,
+            report_circular_dep_error(error_loc,
                                        cur_enum,
                                        "Enum forms a circular dependency",
                                        ErrCode::SemaGlobalCircularDependency);
@@ -1564,7 +1553,7 @@ void acorn::Sema::ensure_interface_checked(SourceLoc error_loc, Interface* inter
         cur_interface->dependency = interfacen;
 
         if (cur_interface->is_being_checked) {
-            display_circular_dep_error(error_loc,
+            report_circular_dep_error(error_loc,
                                        cur_interface,
                                        "Interface forms a circular dependency",
                                        ErrCode::SemaGlobalCircularDependency);
@@ -1706,7 +1695,7 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn,
 
         bool found_match = false;
         for (auto func : *func_list) {
-            found_match = do_interface_functions_matches(interface_func, func);
+            found_match = does_match_interface_func(interface_func, func);
             if (found_match) {
                 func->mapped_interface_func = interface_func;
                 func->is_dynamic = extension.is_dynamic;
@@ -1730,7 +1719,7 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn,
                                    "Function does not match interface function: '%s'",
                                    interface_func->get_decl_string());
                 logger.add_empty_line();
-                display_interface_func_mismatch_info(interface_func, func, false, true);
+                report_interface_func_mismatch_info(interface_func, func, false, true);
                 logger.end_error(ErrCode::SemaInterfaceFuncNotMatch);
             } else {
                 logger.begin_error(structn->loc,
@@ -1741,7 +1730,7 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn,
                 for (auto func : *func_list) {
                     logger.add_empty_line();
                     logger.add_line("Could not match: '%s'", func->get_decl_string());
-                    display_interface_func_mismatch_info(interface_func, func, true, false);
+                    report_interface_func_mismatch_info(interface_func, func, true, false);
                 }
                 logger.end_error(ErrCode::SemaInterfaceFuncNotMatch);
             }
@@ -1749,7 +1738,7 @@ void acorn::Sema::check_struct_interface_extension(Struct* structn,
     }
 }
 
-bool acorn::Sema::do_interface_functions_matches(Func* interface_func, Func* func) {
+bool acorn::Sema::does_match_interface_func(Func* interface_func, Func* func) {
 
     if (interface_func->return_type->is_not(func->return_type)) {
         return false;
@@ -1777,14 +1766,10 @@ bool acorn::Sema::do_interface_functions_matches(Func* interface_func, Func* fun
 }
 
 void acorn::Sema::check_variable_can_initialize(Var* var, SourceLoc error_loc) {
-    // Check that make sure that when a variable has a struct type or array
-    // of structs that without an assignment, if must have no constructors or
-    // a default constructor.
     auto check_can_default_init = [this, var, error_loc](StructType* struct_type) finline {
         auto structn = struct_type->get_struct();
         if (structn->constructors.empty()) return;
         if (!structn->default_constructor) {
-
             error(error_loc, "%s '%s' has type '%s' which has no default constructor to initialize the variable",
                   !var->is_field() ? "Variable" : "Field", var->name, var->type)
                 .end_error(ErrCode::SemaVariableNoAssignmentOrDefaultConstructor);
@@ -1849,8 +1834,8 @@ void acorn::Sema::check_node(Node* node) {
     case NodeKind::RETURN_STMT:
         return check_return(static_cast<ReturnStmt*>(node));
     case NodeKind::IF_STMT: {
-        bool ignore1, ignore2;
-        return check_if(static_cast<IfStmt*>(node), ignore1, ignore2);
+        bool ignore1, ignore2, ignore3;
+        return check_if(static_cast<IfStmt*>(node), ignore1, ignore2, ignore3);
     }
     case NodeKind::BIN_OP:
         return check_binary_op(static_cast<BinOp*>(node));
@@ -1924,27 +1909,30 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
 
     for (Node* stmt : *scope) {
 
-        if (sem_scope && sem_scope->found_terminal) {
-            error(stmt, "Unreachable code")
+        if (sem_scope && sem_scope->all_paths_branch) {
+            SourceLoc error_loc = stmt->is_expression() ? expand(stmt) : stmt->loc;
+            error(error_loc, "Unreachable code")
                 .end_error(ErrCode::SemaUnreachableStmt);
             break;
         }
 
         if (is_incomplete_statement(stmt)) {
-            if (stmt->is_expression()) {
-                logger.begin_error(expand(stmt), "Incomplete statement");
-            } else {
-                logger.begin_error(stmt->loc, "Incomplete statement");
-            }
-            logger.end_error(ErrCode::SemaIncompleteStmt);
+            SourceLoc error_loc = stmt->is_expression() ? expand(stmt) : stmt->loc;
+            error(error_loc, "Incomplete statement")
+                .end_error(ErrCode::SemaIncompleteStmt);
             continue;
         }
 
         if (stmt->is(NodeKind::FUNC)) {
             error(stmt, "Functions cannot be declared within another function")
                 .end_error(ErrCode::SemaNoLocalFuncs);
-        } else if (stmt->is(NodeKind::STRUCT)) {
-            error(stmt, "Structs cannot be declared within a function")
+        } else if (stmt->is_composite()) {
+            auto decl = static_cast<Decl*>(stmt);
+            auto composite_kind = std::string(decl->get_composite_kind());
+            composite_kind[0] = std::toupper(composite_kind[0]);
+            composite_kind += "s";
+
+            error(stmt, "%s cannot be declared within a function", composite_kind)
                 .end_error(ErrCode::SemaNoLocalStructs);
         } else {
             if (stmt->is_expression()) {
@@ -1963,9 +1951,9 @@ void acorn::Sema::check_scope(ScopeStmt* scope, SemScope* sem_scope) {
 }
 
 void acorn::Sema::check_return(ReturnStmt* ret) {
-    cur_scope->all_paths_return = true;
-    cur_scope->all_paths_branch = true;
-    cur_scope->found_terminal = true;
+    cur_scope->all_paths_return      = true;
+    cur_scope->all_paths_branch      = true;
+    cur_scope->all_paths_long_branch = true;
 
     ++cur_func->num_returns;
 
@@ -1985,22 +1973,14 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
         if (cur_func->return_type->is_aggregate() && ret->value->is(NodeKind::IDENT_REF)) {
             auto ref = static_cast<IdentRef*>(ret->value);
             if (ref->is_var_ref()) {
-                // Have to check if it is global because obviously
-                // global variables are not local to the function
-                // and we do not want to mess up the global variable's
-                // memory.
+                // Checking for cases in which a single local variable is being returned in order
+                // to prepare for better IR generation by allowing the variable to have the same
+                // address as the return address.
                 //
-                // Additionally have to check that it is not a parameter because
-                // the parameter may be passed in as an aggregate parameter and
-                // but the caller thinks a seperate parameter is responsible for
-                // handling the aggregate returning. Additionally for certain memory
-                // handling cases it is important that these two are distinct or it
-                // leads to issues of shared memory.
-                //
-                // TODO: We also include a check for if it is a field but this is probably
-                // not needed if it is a field of a local variable. Although there would
-                // then be extra IRGen complications in referencing the memory. For now it
-                // is not allowed.
+                // The local variable cannot be a parameter because during IR generation sometimes they
+                // need to occupy different memory locations such as when passing an aggregate parameter
+                // it may pass a pointer to the function leading to there being shared memory between the
+                // caller and callee.
                 //
                 if (!ref->var_ref->is_param() && !ref->var_ref->is_global && !ref->var_ref->is_field()) {
                     if (cur_func->aggr_ret_var &&
@@ -2041,7 +2021,7 @@ void acorn::Sema::check_return(ReturnStmt* ret) {
     }
 }
 
-void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return, bool& all_paths_branch) {
+void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return, bool& all_paths_branch, bool& all_paths_long_branch) {
 
     // Must create the scope early so that the scope of
     // the variable is the body of the if statement.
@@ -2077,26 +2057,36 @@ void acorn::Sema::check_if(IfStmt* ifs, bool& all_paths_return, bool& all_paths_
     }
 
     check_scope(ifs->scope, &sem_scope);
-    all_paths_return = sem_scope.all_paths_return;
-    all_paths_branch = sem_scope.all_paths_branch;
+    all_paths_return      = sem_scope.all_paths_return;
+    all_paths_branch      = sem_scope.all_paths_branch;
+    all_paths_long_branch = sem_scope.all_paths_long_branch;
     pop_scope();
 
     if (ifs->elseif && ifs->elseif->is(NodeKind::IF_STMT)) {
-        bool all_paths_return2, all_paths_branch2;
-        check_if(static_cast<IfStmt*>(ifs->elseif), all_paths_return2, all_paths_branch2);
-        all_paths_return &= all_paths_return2;
-        all_paths_branch &= all_paths_branch2;
+        bool all_paths_return2, all_paths_branch2, all_paths_long_branch2;
+        check_if(static_cast<IfStmt*>(ifs->elseif), all_paths_return2, all_paths_branch2, all_paths_long_branch2);
+        all_paths_return      &= all_paths_return2;
+        all_paths_branch      &= all_paths_branch2;
+        all_paths_long_branch &= all_paths_long_branch2;
     } else if (ifs->elseif) {
-        check_scope(static_cast<ScopeStmt*>(ifs->elseif));
+        // Checking else statement.
+        auto else_scope = static_cast<ScopeStmt*>(ifs->elseif);
+        SemScope else_sem_scope = push_scope();
+        check_scope(else_scope, &else_sem_scope);
+        all_paths_return      &= else_sem_scope.all_paths_return;
+        all_paths_branch      &= else_sem_scope.all_paths_branch;
+        all_paths_long_branch &= else_sem_scope.all_paths_long_branch;
+        pop_scope();
     } else {
         // If an else does not exist then not all paths return/branch.
         all_paths_return = false;
         all_paths_branch = false;
+        all_paths_long_branch = false;
     }
 
-    cur_scope->all_paths_return = all_paths_return;
-
-    cur_scope->found_terminal = all_paths_return;
+    cur_scope->all_paths_return      = all_paths_return;
+    cur_scope->all_paths_branch      = all_paths_branch;
+    cur_scope->all_paths_long_branch = all_paths_long_branch;
 }
 
 void acorn::Sema::check_predicate_loop(PredicateLoopStmt* loop) {
@@ -2129,13 +2119,15 @@ void acorn::Sema::check_predicate_loop(PredicateLoopStmt* loop) {
         }
     }
 
+    SemScope* parent_sem_scope = cur_scope;
     SemScope sem_scope = push_scope();
-    check_loop_scope(loop->scope, &sem_scope);
+    check_loop_scope(loop->scope, parent_sem_scope, &sem_scope);
     pop_scope();
 }
 
 void acorn::Sema::check_range_loop(RangeLoopStmt* loop) {
 
+    SemScope* parent_sem_scope = cur_scope;
     SemScope sem_scope = push_scope();
     if (loop->init_node) {
         check_node(loop->init_node);
@@ -2153,7 +2145,7 @@ void acorn::Sema::check_range_loop(RangeLoopStmt* loop) {
         check_node(loop->inc);
     }
 
-    check_loop_scope(loop->scope, &sem_scope);
+    check_loop_scope(loop->scope, parent_sem_scope, &sem_scope);
     pop_scope();
 }
 
@@ -2161,6 +2153,7 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
 
     Var* var = static_cast<Var*>(loop->vars);
 
+    SemScope* parent_sem_scope = cur_scope;
     SemScope sem_scope = push_scope();
     var->type = fixup_type(var->parsed_type);
     auto var_type = var->type;
@@ -2230,12 +2223,11 @@ void acorn::Sema::check_iterator_loop(IteratorLoopStmt* loop) {
         }
     }
 
-    check_loop_scope(loop->scope, &sem_scope);
+    check_loop_scope(loop->scope, parent_sem_scope, &sem_scope);
     pop_scope();
 }
 
 void acorn::Sema::check_loop_control(LoopControlStmt* loop_control) {
-    cur_scope->found_terminal = true;
     cur_scope->all_paths_branch = true;
 
     if (loop_depth == 0) {
@@ -2249,12 +2241,12 @@ void acorn::Sema::check_loop_control(LoopControlStmt* loop_control) {
     }
 }
 
-void acorn::Sema::check_loop_scope(ScopeStmt* scope, SemScope* sem_scope) {
+void acorn::Sema::check_loop_scope(ScopeStmt* scope, SemScope* parent_sem_scope, SemScope* sem_scope) {
     ++loop_depth;
     check_scope(scope, sem_scope);
     --loop_depth;
-    cur_scope->all_paths_return = sem_scope->all_paths_return;
-    cur_scope->found_terminal = sem_scope->found_terminal;
+    parent_sem_scope->all_paths_return = sem_scope->all_paths_return;
+    parent_sem_scope->all_paths_branch = sem_scope->all_paths_long_branch;
 }
 
 void acorn::Sema::check_switch(SwitchStmt* switchn) {
@@ -2271,7 +2263,7 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
             .end_error(ErrCode::SemaSwitchOnExpectedLValue);
     }
 
-    bool all_paths_return = true, all_paths_branch = true;
+    bool all_paths_return = true, all_paths_long_branch = true;
 
     struct CmpNumber {
         union {
@@ -2397,7 +2389,6 @@ void acorn::Sema::check_switch(SwitchStmt* switchn) {
         }
         default:
             acorn_fatal("Unreachable. Unknown range operator");
-            return false;
         }
     };
 
@@ -2548,7 +2539,6 @@ if (prior_value.value_s64 == value.value_s64) {     \
                 }
                 default:
                     acorn_fatal("Unreachable. Unknown range operator");
-                    break;
                 }
 
                 if (found_error) {
@@ -2736,8 +2726,9 @@ if (prior_value.value_s64 == value.value_s64) {     \
         SemScope sem_scope = push_scope();
         check_scope(scase.scope, &sem_scope);
         bool is_last = case_count == switchn->cases.size() - 1;
-        all_paths_return &= sem_scope.all_paths_return | (scase.scope->empty() && !is_last);
-        all_paths_branch &= sem_scope.all_paths_branch | (scase.scope->empty() && !is_last);
+        bool is_conjoined_case = (scase.scope->empty() && !is_last);
+        all_paths_return      &= sem_scope.all_paths_return | is_conjoined_case;
+        all_paths_long_branch &= sem_scope.all_paths_long_branch | is_conjoined_case;
         pop_scope();
 
         ++case_count;
@@ -2798,18 +2789,17 @@ if (prior_value.value_s64 == value.value_s64) {     \
 
     if (!all_cases_matched && !switchn->default_scope) {
         all_paths_return = false;
-        all_paths_branch = false;
+        all_paths_long_branch = false;
     }
 
     cur_scope->all_paths_return = all_paths_return;
-    cur_scope->all_paths_branch = all_paths_branch;
-    cur_scope->found_terminal   = all_paths_return;
+    cur_scope->all_paths_branch = all_paths_long_branch;
 }
 
 void acorn::Sema::check_raise(RaiseStmt* raise) {
-    cur_scope->all_paths_return = true;
-    cur_scope->all_paths_branch = true;
-    cur_scope->found_terminal = true;
+    cur_scope->all_paths_return      = true;
+    cur_scope->all_paths_branch      = true;
+    cur_scope->all_paths_long_branch = true;
 
     ++cur_func->num_returns;
 
@@ -2818,12 +2808,6 @@ void acorn::Sema::check_raise(RaiseStmt* raise) {
             .end_error(ErrCode::SemaCannotRaiseWhenStandAlone);
         return;
     }
-
-    //if (cur_func == context.get_main_function()) {
-    //    error(raise, "Cannot use raise in the main function")
-    //        .end_error(ErrCode::SemaCannotRaiseInMainFunction);
-    //    return;
-    //}
 
     if (raise->expr->is_not(NodeKind::STRUCT_INITIALIZER)) {
         error(raise->expr, "Expected error struct initializer")
@@ -2880,7 +2864,7 @@ void acorn::Sema::check_try(Try* tryn, bool assigns) {
     }
 
     if (tryn->caught_errors.empty()) {
-        error(expand(tryn), "Expression does not raise error")
+        error(expand(tryn), "Expression does not raise an error")
             .end_error(ErrCode::SemaExprDoesNotRaiseErrors);
     }
 
@@ -2923,7 +2907,7 @@ void acorn::Sema::check_try(Try* tryn, bool assigns) {
         }
 
         if (passes_at_least_one_error && !passes_all_errors) {
-            error(expand(tryn), "Must catch error because only some of the errors are caught by this function")
+            error(expand(tryn), "Must catch the error because only some of the errors are caught by this function")
                 .add_line("Note: This would result in ambiguity for if the errors should be aborted or not")
                 .end_error(ErrCode::SemaOnlyPartlyPassesAlongError);
         }
@@ -2955,7 +2939,7 @@ void acorn::Sema::check_recover(RecoverStmt* recover) {
     }
 
     cur_scope->all_paths_branch = true;
-    cur_scope->found_terminal = true;
+    cur_scope->all_paths_long_branch = true;
 }
 
 
@@ -3207,7 +3191,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
             }
 
             if (lhs_type->is_array()) {
-                error(expand(bin_op), "Cannot reassign to arrays")
+                error(expand(bin_op), "Cannot reassign arrays")
                     .end_error(ErrCode::SemaCannotRassignToArrays);
             }
 
@@ -3361,8 +3345,7 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
         auto result_type = get_integer_type_for_binary_op(false, bin_op, lhs_type, rhs_type);
         if (!(result_type ||
              (rhs_type->is_pointer() && lhs_type->get_kind() == TypeKind::NULL_T) ||
-             (lhs_type->is_pointer() && rhs_type->get_kind() == TypeKind::NULL_T)
-              )) {
+             (lhs_type->is_pointer() && rhs_type->get_kind() == TypeKind::NULL_T))) {
             report_binary_op_mistmatch_types(bin_op);
             return;
         } else if (result_type) {
@@ -3412,7 +3395,6 @@ void acorn::Sema::check_binary_op(BinOp* bin_op) {
     }
     default:
         acorn_fatal("check_binary_op(): Failed to implement case");
-        break;
     }
 }
 
@@ -3567,7 +3549,6 @@ void acorn::Sema::check_binary_op_for_enums(BinOp* bin_op, EnumType* lhs_enum_ty
     }
     default:
         acorn_fatal("check_binary_op_for_enums_binary_op(): Failed to implement case");
-        break;
     }
 }
 
@@ -3721,7 +3702,6 @@ void acorn::Sema::check_unary_op(UnaryOp* unary_op) {
     }
     default:
         acorn_fatal("check_unary_op(): unimplemented case");
-        break;
     }
 }
 
@@ -3769,27 +3749,23 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
         return;
     }
 
-    auto apply_found_declaration = [=](Node* decl) finline {
-        switch (decl->kind) {
-        case NodeKind::VAR:
-            ref->set_var_ref(static_cast<Var*>(decl));
-            break;
-        case NodeKind::FUNC_LIST:
-            ref->set_funcs_ref(static_cast<FuncList*>(decl));
-            break;
-        case NodeKind::STRUCT:
-        case NodeKind::INTERFACE:
-        case NodeKind::ENUM:
-            ref->set_composite_ref(static_cast<Decl*>(decl));
-            break;
-        default:
-            acorn_fatal("Unhandled declaration case");
-        }
-    };
-
     auto search_namespace = [=, &spell_checker](Namespace* nspace) {
         if (auto* decl = nspace->find_declaration(ref->ident)) {
-            apply_found_declaration(decl);
+            switch (decl->kind) {
+            case NodeKind::VAR:
+                ref->set_var_ref(static_cast<Var*>(decl));
+                break;
+            case NodeKind::FUNC_LIST:
+                ref->set_funcs_ref(static_cast<FuncList*>(decl));
+                break;
+            case NodeKind::STRUCT:
+            case NodeKind::INTERFACE:
+            case NodeKind::ENUM:
+                ref->set_composite_ref(static_cast<Decl*>(decl));
+                break;
+            default:
+                acorn_fatal("Unhandled declaration case");
+            }
             return true;
         }
         if constexpr (is_spell_checking) {
@@ -4047,7 +4023,6 @@ void acorn::Sema::check_ident_ref(IdentRef* ref,
     }
     case IdentRef::ENUM_VALUE_KIND: {
         acorn_fatal("Cannot reference enum values here");
-        return;
     }
     }
 
@@ -4065,7 +4040,7 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         yield_if(dot->site);
 
         if (ref->type == context.namespace_ref_type) {
-            // Special case in which we search in a given module.
+            // Special case in which we search in the found namespace.
             check_ident_ref(dot, ref->nspace_ref, nullptr, is_for_call);
             return;
         } else if (!ref->type) {
@@ -4103,24 +4078,31 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         }
     };
 
+    // Check for `.length` operator for arrays and slices.
     if (dot->ident == context.length_identifier &&
         (dot->site->type->is_array() || dot->site->type->is_slice())) {
         dot->is_array_length = true;
         dot->type = context.int_type;
         dot->trivially_reassignable = true;
         dot->is_foldable = true;
-    } else if (dot->ident == context.ptr_identifier && dot->site->type->is_slice()) {
+    }
+    // Check for `.ptr` operator for slices.
+    else if (dot->ident == context.ptr_identifier && dot->site->type->is_slice()) {
         auto slice_type = static_cast<SliceType*>(dot->site->type);
         dot->is_slice_ptr = true;
         dot->type = type_table.get_ptr_type(slice_type->get_elm_type());
-    } else if (dot->ident == context.value_identifier && dot->site->type->is_enum()) {
+    }
+    // Check for `.value` operator for enums.
+    else if (dot->ident == context.value_identifier && dot->site->type->is_enum()) {
         auto enum_type = static_cast<EnumType*>(dot->site->type);
 
         dot->is_enum_value = true;
         dot->type = enum_type->get_values_type();
         dot->is_foldable = false;
 
-    } else if (dot->site->type->is_struct()) {
+    }
+    // Check accessing fields and functions of structs.
+    else if (dot->site->type->is_struct()) {
         auto struct_type = static_cast<StructType*>(dot->site->type);
         check_struct_ident_ref(struct_type);
     } else if (dot->site->type->is_pointer()) {
@@ -4145,7 +4127,14 @@ void acorn::Sema::check_dot_operator(DotOperator* dot, bool is_for_call) {
         } else {
             report_error_cannot_access_field();
         }
-    } else if (dot->site->is(NodeKind::IDENT_REF) && dot->site->type->get_kind() == TypeKind::EXPR) {
+    }
+    // Check cases where we are accessing via a type such as.
+    //
+    // struct A {
+    //     fn foo() {}
+    // }
+    // A.foo; // accessing via type.
+    else if (dot->site->is(NodeKind::IDENT_REF) && dot->site->type->get_kind() == TypeKind::EXPR) {
         auto ref = static_cast<IdentRef*>(dot->site);
         auto composite = ref->composite_ref;
         if (composite->is(NodeKind::ENUM)) {
@@ -4238,6 +4227,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         }
     };
 
+    // Check arguments.
     bool args_have_errors = false;
     for (Expr* arg : call->args) {
         if (arg->is(NodeKind::MOVEOBJ)) {
@@ -4249,6 +4239,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
     }
     if (args_have_errors) return;
 
+    // Check call site.
     if (call->site->is(NodeKind::IDENT_REF)) {
         auto ref = static_cast<IdentRef*>(call->site);
         check_ident_ref(ref, nspace, nullptr, true);
@@ -4286,6 +4277,8 @@ void acorn::Sema::check_function_call(FuncCall* call) {
         return;
     }
 
+    // Check if calling a object marked const in order to later verify
+    // const correctness.
     bool is_const_object = false;
     if (call->site->is(NodeKind::DOT_OPERATOR)) {
         auto dot = static_cast<DotOperator*>(call->site);
@@ -4306,10 +4299,10 @@ void acorn::Sema::check_function_call(FuncCall* call) {
 
     Struct* generic_parent_struct = nullptr;
     IdentRef* ref = static_cast<IdentRef*>(call->site);
-    llvm::SmallVector<Type*> pre_bound_types;
+    llvm::SmallVector<Type*> pre_bound_generic_args;
 
     // Check if calling a member function of a generic struct in which case
-    // the the currently bound generic types must be pre bound.
+    // the the currently bound generics must be pre bound.
     if (cur_func && cur_func->structn && cur_func->structn->is_generic) {
         bool passes_generics_along = (ref->is_not(NodeKind::DOT_OPERATOR) &&
                                       cur_func->unbound_generic_struct_instance == (*ref->funcs_ref)[0]->unbound_generic_struct_instance);
@@ -4322,17 +4315,17 @@ void acorn::Sema::check_function_call(FuncCall* call) {
 
         if (passes_generics_along) {
             generic_parent_struct = cur_func->structn;
-            pre_bound_types.insert(pre_bound_types.begin(),
-                                    cur_func->generic_instance->bound_types.begin(),
-                                    cur_func->generic_instance->bound_types.end());
+            pre_bound_generic_args.insert(pre_bound_generic_args.begin(),
+                                          cur_func->generic_instance->bound_generic_args.begin(),
+                                          cur_func->generic_instance->bound_generic_args.end());
         }
     }
 
     if (ref->explicitly_binds_generics) {
         auto generic_bind_call = static_cast<GenericBindFuncCall*>(ref);
-        pre_bound_types = std::move(generic_bind_call->bound_types);
+        pre_bound_generic_args = std::move(generic_bind_call->bound_generic_args);
     } else if (ref->is(NodeKind::DOT_OPERATOR)) {
-        // Bind the types of the generic struct if there is one.
+        // Bind the generic arguments of the generic struct if there is one.
         auto dot_op = static_cast<DotOperator*>(ref);
         if (dot_op->site->type->is_struct()) {
             auto struct_type = static_cast<StructType*>(dot_op->site->type);
@@ -4340,9 +4333,9 @@ void acorn::Sema::check_function_call(FuncCall* call) {
             if (structn->is_generic) {
                 generic_parent_struct = structn;
                 auto generic_struct_instance = static_cast<GenericStructInstance*>(structn);
-                pre_bound_types.insert(pre_bound_types.begin(),
-                                       generic_struct_instance->bound_types.begin(),
-                                       generic_struct_instance->bound_types.end());
+                pre_bound_generic_args.insert(pre_bound_generic_args.begin(),
+                                              generic_struct_instance->bound_generic_args.begin(),
+                                              generic_struct_instance->bound_generic_args.end());
             }
         }
     } else if (ref->is(NodeKind::THIS_EXPR) && cur_func && cur_func->structn && cur_func->structn->is_generic) {
@@ -4356,7 +4349,7 @@ void acorn::Sema::check_function_call(FuncCall* call) {
                                                 call->non_named_args_offset,
                                                 *ref->funcs_ref,
                                                 is_const_object,
-                                                pre_bound_types,
+                                                pre_bound_generic_args,
                                                 generic_parent_struct,
                                                 ignored);
     if (!called_func) {
@@ -4467,7 +4460,7 @@ void acorn::Sema::check_generic_bind_function_call(GenericBindFuncCall* call) {
 
     if (uses_named_values) {
         for (Func* candidate : candidates) {
-            if (compare_generic_bind_candidate_with_named_args(call->args, candidate->generics, call->bound_types)) {
+            if (compare_generic_bind_candidate_with_named_args(call->args, candidate->generics, call->bound_generic_args)) {
                 call->candidates.push_back(candidate);
             }
         }
@@ -4497,7 +4490,7 @@ void acorn::Sema::check_generic_bind_function_call(GenericBindFuncCall* call) {
 
         for (Expr* arg : call->args) {
             Type* bind_type = get_type_of_type_expr(arg);
-            call->bound_types.push_back(bind_type);
+            call->bound_generic_args.push_back(bind_type);
         }
     }
 
@@ -4506,9 +4499,9 @@ void acorn::Sema::check_generic_bind_function_call(GenericBindFuncCall* call) {
 
 bool acorn::Sema::compare_generic_bind_candidate_with_named_args(const llvm::SmallVector<Expr*>& args,
                                                                  const llvm::SmallVector<Generic*>& generics,
-                                                                 llvm::SmallVector<Type*>& bound_types) {
+                                                                 llvm::SmallVector<Type*>& generic_args) {
 
-    bound_types.resize(generics.size());
+    generic_args.resize(generics.size());
 
     bool named_args_out_of_order = false;
     size_t named_arg_high_idx = 0;
@@ -4547,45 +4540,13 @@ bool acorn::Sema::compare_generic_bind_candidate_with_named_args(const llvm::Sma
         Type* bind_type = get_type_of_type_expr(arg);
 
         if (genericn->index == i) {
-            bound_types[i] = bind_type;
+            generic_args[i] = bind_type;
         } else {
-            bound_types[genericn->index] = bind_type;
+            generic_args[genericn->index] = bind_type;
         }
     }
 
     return true;
-}
-
-bool acorn::Sema::check_generic_bind_arguments(const llvm::SmallVector<Expr*>& args,
-                                               bool& uses_named_values) {
-    bool args_have_errors = false;
-    for (Expr* arg : args) {
-
-        check_node(arg);
-        Expr* arg_value = arg;
-        if (arg->is(NodeKind::NAMED_VALUE)) {
-            uses_named_values = true;
-            auto named_value = static_cast<NamedValue*>(arg);
-            arg_value = named_value->assignment;
-        }
-
-        if (!arg->type) args_have_errors = true;
-
-        if (arg_value->type != context.expr_type) {
-            args_have_errors = true;
-            error(expand(arg_value), "Expected argument to be a type expression")
-                .end_error(ErrCode::SemaExpectedArgToBeTypeExprForGenericBind);
-        }
-
-        Type* bind_type = get_type_of_type_expr(arg_value);
-
-        if (is_incomplete_type(bind_type)) {
-            args_have_errors = true;
-            error(expand(arg_value), "Cannot bind incomplete type")
-                .end_error(ErrCode::SemaCannotBindIncompleteType);
-        }
-    }
-    return !args_have_errors;
 }
 
 void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_type) {
@@ -4595,7 +4556,7 @@ void acorn::Sema::check_function_type_call(FuncCall* call, FunctionType* func_ty
     auto display_error = [this, call, func_type]() finline {
         logger.begin_error(expand(call), "Invalid call to function type: %s", func_type);
         logger.add_empty_line();
-        display_call_mismatch_info(func_type, call->args, false, true, call, {});
+        report_call_mismatch_info(func_type, call->args, false, true, call, {});
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
     };
 
@@ -4658,7 +4619,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                                    size_t non_named_args_offset,
                                                    llvm::SmallVector<Func*>& candidates,
                                                    bool is_const_object,
-                                                   const llvm::SmallVector<Type*>& pre_bound_types,
+                                                   const llvm::SmallVector<Type*>& pre_bound_generic_args,
                                                    Struct* generic_parent_struct,
                                                    Struct*& fully_bound_parent_struct) {
 
@@ -4667,7 +4628,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
     // 1. Goes through all the candidates and makes sure they have been type checked.
     // 2. Checks for duplicate named arguments and exits early if there are duplicates.
     // 3. Compares each function to the call's arguments to determine if its eligible for
-    //    calling and if there are multiple chosens the one if based on call order.
+    //    calling and if there are multiple choices it chooses the one based on call order.
     // 4. Checks if no function was found or if multiple were in which case it reports an
     //    error.
     // 5. Checks if the called function is generic and fixes indeterminate types now that
@@ -4753,7 +4714,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
     bool is_ambiguous = false;
     bool selected_implicitly_converts_ptr_arg = false;
     bool passes_varargs_along = false;
-    llvm::SmallVector<Type*> generic_bindings;
+    llvm::SmallVector<Type*> generic_args;
     llvm::SmallVector<Type*> qualified_decl_types;
     auto called_func = find_best_call_candidate(call_node,
                                                 candidates,
@@ -4761,14 +4722,14 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
                                                 selected_implicitly_converts_ptr_arg,
                                                 is_ambiguous,
                                                 is_const_object,
-                                                generic_bindings,
-                                                pre_bound_types);
+                                                generic_args,
+                                                pre_bound_generic_args);
     if (!called_func) {
-        display_call_mismatch_info(expand(call_node), call_node, candidates, args, pre_bound_types);
+        report_call_mismatch_info(expand(call_node), call_node, candidates, args, pre_bound_generic_args);
         return nullptr;
     }
     if (is_ambiguous) {
-        display_call_ambiguous_info(expand(call_node), candidates, args, is_const_object, pre_bound_types);
+        report_call_ambiguous_info(expand(call_node), candidates, args, is_const_object, pre_bound_generic_args);
         return nullptr;
     }
 
@@ -4779,18 +4740,18 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         // Attempt to let the return type bind to any left over unbound generic
         // types.
         //if (assignment_type && called_func->return_type->does_contain_generics()) {
-        //    try_bind_type_to_generic_type(called_func->return_type, assignment_type, generic_bindings);
+        //    try_bind_type_to_generic_type(called_func->return_type, assignment_type, generic_args);
         //}
 
-        if (!bind_default_generic_arguments(generic_bindings, called_func->generics)) {
-            display_missing_generic_bindings_info(expand(call_node), "function call",
-                                                  generic_bindings, called_func->generics,
+        if (!bind_default_generic_arguments(generic_args, called_func->generics)) {
+            display_missing_generic_argument_binding_info(expand(call_node), "function call",
+                                                  generic_args, called_func->generics,
                                                   ErrCode::SemaExpectedGenericArgsForGenericFuncCall,
                                                   ErrCode::SemaCouldNotBindAllGenericArgsForFuncCall);
             return nullptr;
         }
 
-        func_call_generic_bindings = &generic_bindings;
+        func_call_bound_generic_args = &generic_args;
 
         // +1 for return type.
         qualified_decl_types.resize(called_func->params.size() + 1);
@@ -4803,7 +4764,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
             if (param->assignment_contains_generics) {
                 Expr* bound_expr = try_create_bound_expr_for_variable_with_indetermite_type(param);
                 if (!bound_expr) {
-                    func_call_generic_bindings = nullptr;
+                    func_call_bound_generic_args = nullptr;
                     return nullptr;
                 }
 
@@ -4914,15 +4875,15 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         if (call_node->is(NodeKind::STRUCT_INITIALIZER)) {
             auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(generic_parent_struct);
 
-            llvm::SmallVector<Type*> parent_struct_bound_types;
-            parent_struct_bound_types.insert(
-                parent_struct_bound_types.begin(),
-                generic_bindings.begin(),
-                generic_bindings.begin() + unbound_generic_struct->generics.size());
-            generic_parent_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(parent_struct_bound_types));
+            llvm::SmallVector<Type*> parent_struct_bound_generic_args;
+            parent_struct_bound_generic_args.insert(
+                parent_struct_bound_generic_args.begin(),
+                generic_args.begin(),
+                generic_args.begin() + unbound_generic_struct->generics.size());
+            generic_parent_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(parent_struct_bound_generic_args));
 
             if (!ensure_struct_checked(generic_parent_struct)) {
-                func_call_generic_bindings = nullptr;
+                func_call_bound_generic_args = nullptr;
                 return nullptr;
             }
 
@@ -4930,7 +4891,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
         }
 
         auto instance = called_func->get_generic_instance(context.get_allocator(),
-                                                          std::move(generic_bindings),
+                                                          std::move(generic_args),
                                                           std::move(qualified_decl_types),
                                                           generic_parent_struct);
         if (call_node->is(NodeKind::FUNC_CALL)) {
@@ -4940,7 +4901,7 @@ acorn::Func* acorn::Sema::check_function_decl_call(Expr* call_node,
             auto initializer = static_cast<StructInitializer*>(call_node);
             initializer->generic_called_instance = instance;
         }
-        func_call_generic_bindings = nullptr;
+        func_call_bound_generic_args = nullptr;
     }
 
     return called_func;
@@ -4952,8 +4913,8 @@ acorn::Func* acorn::Sema::find_best_call_candidate(Expr* call_node,
                                                    bool& selected_implicitly_converts_ptr_arg,
                                                    bool& is_ambiguous,
                                                    bool is_const_object,
-                                                   llvm::SmallVector<Type*>& generic_bindings,
-                                                   const llvm::SmallVector<Type*>& pre_bound_types) {
+                                                   llvm::SmallVector<Type*>& generic_args,
+                                                   const llvm::SmallVector<Type*>& pre_bound_generic_args) {
 
     Func* selected = nullptr;
     uint64_t best_score = std::numeric_limits<uint64_t>::max();
@@ -4971,30 +4932,30 @@ acorn::Func* acorn::Sema::find_best_call_candidate(Expr* call_node,
         bool implicitly_converts_ptr_arg = false;
 
         // Keep a list of generic types that already have bindings.
-        llvm::SmallVector<Type*> candidate_generic_bindings;
+        llvm::SmallVector<Type*> candidate_generic_args;
         if (!candidate->is_generic()) {
             auto status = compare_as_call_candidate<false, false>(candidate,
                                                                   args,
                                                                   is_const_object,
                                                                   score,
                                                                   implicitly_converts_ptr_arg,
-                                                                  candidate_generic_bindings);
+                                                                  candidate_generic_args);
             if (status != CallCompareStatus::SUCCESS) {
                 continue;
             }
         } else {
-              candidate_generic_bindings.insert(
-                candidate_generic_bindings.begin(),
-                pre_bound_types.begin(),
-                pre_bound_types.end()
+            candidate_generic_args.insert(
+                candidate_generic_args.begin(),
+                pre_bound_generic_args.begin(),
+                pre_bound_generic_args.end()
             );
-            candidate_generic_bindings.resize(candidate->generics.size());
+            candidate_generic_args.resize(candidate->generics.size());
             auto status = compare_as_call_candidate<false, true>(candidate,
                                                                  args,
                                                                  is_const_object,
                                                                  score,
                                                                  implicitly_converts_ptr_arg,
-                                                                 candidate_generic_bindings);
+                                                                 candidate_generic_args);
             if (status != CallCompareStatus::SUCCESS) {
                 continue;
             }
@@ -5005,7 +4966,7 @@ acorn::Func* acorn::Sema::find_best_call_candidate(Expr* call_node,
             best_score = score;
             selected_implicitly_converts_ptr_arg = implicitly_converts_ptr_arg;
             is_ambiguous = false;
-            generic_bindings = std::move(candidate_generic_bindings);
+            generic_args = std::move(candidate_generic_args);
         } else if (best_score == score) {
             is_ambiguous = true;
         }
@@ -5019,7 +4980,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                                                                       const bool is_const_object,
                                                                       uint64_t& score,
                                                                       bool& implicitly_converts_ptr_arg,
-                                                                      llvm::SmallVector<Type*>& generic_bindings) {
+                                                                      llvm::SmallVector<Type*>& generic_args) {
 
     bool encountered_mismatched_types = false;
     bool forwards_varargs = false;
@@ -5159,7 +5120,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
 
             if (param_type->does_contain_generics()) {
                 bool may_use_implicit_param_ptr = param->has_implicit_ptr && arg_value->is_not(NodeKind::MOVEOBJ);
-                if (!check_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings, false, may_use_implicit_param_ptr)) {
+                if (!check_can_bind_type_to_generic_type(param_type, arg_value->type, generic_args, false, may_use_implicit_param_ptr)) {
 
                     if (arg_value->is(NodeKind::FUNC_CALL)) {
                         auto arg_call = static_cast<FuncCall*>(arg_value);
@@ -5168,7 +5129,7 @@ acorn::Sema::CallCompareStatus acorn::Sema::compare_as_call_candidate(const Func
                             auto ptr_type = static_cast<PointerType*>(arg_call->type);
                             auto from_type = ptr_type->get_elm_type();
 
-                            if (check_bind_type_to_generic_type(param_type, from_type, generic_bindings)) {
+                            if (check_can_bind_type_to_generic_type(param_type, from_type, generic_args)) {
                                 implicitly_converts_ptr_arg = true;
                                 // argument success, continue.
                                 continue;
@@ -5262,17 +5223,17 @@ bool acorn::Sema::has_correct_number_of_args(const Func* candidate, const
     return true;
 }
 
-bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
-                                                  Type* from_type, // Type at current level of comparison
-                                                  llvm::SmallVector<Type*>& bindings,
-                                                  bool enforce_elm_const,
-                                                  bool may_use_implicit_param_ptr) {
+bool acorn::Sema::check_can_bind_type_to_generic_type(Type* to_type,   // Type at current level of comparison
+                                                      Type* from_type, // Type at current level of comparison
+                                                      llvm::SmallVector<Type*>& generic_args,
+                                                      bool enforce_elm_const,
+                                                      bool may_use_implicit_param_ptr) {
     if (to_type->is_generic()) {
         // Generic type can have any type bound so we are finished.
         auto generic_type = static_cast<GenericType*>(to_type);
 
         size_t generic_index = generic_type->get_generic_index();
-        if (auto bound_type = bindings[generic_index]) {
+        if (auto bound_type = generic_args[generic_index]) {
 
             if (enforce_elm_const) {
                 if (!bound_type->is_const() && from_type->is_const()) {
@@ -5343,9 +5304,9 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
         if (to_type->is_const() && from_type->is_const()) {
             // Make sure not to make T const since it pattern matched
             // on the existing const.
-            bindings[generic_index] = from_type->remove_all_const();
+            generic_args[generic_index] = from_type->remove_all_const();
         } else {
-            bindings[generic_index] = from_type;
+            generic_args[generic_index] = from_type;
         }
         return true;
     } else if (enforce_elm_const) {
@@ -5364,7 +5325,7 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
         auto elm_to_type = ptr_to_type->get_elm_type();
 
         if (may_use_implicit_param_ptr) {
-            return check_bind_type_to_generic_type(elm_to_type, from_type, bindings, true);
+            return check_can_bind_type_to_generic_type(elm_to_type, from_type, generic_args, true);
         }
 
         if (!from_type->is_pointer()) {
@@ -5378,7 +5339,7 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
         auto ptr_from_type = static_cast<ContainerType*>(from_type);
         auto elm_from_type = ptr_from_type->get_elm_type();
 
-        return check_bind_type_to_generic_type(elm_to_type, elm_from_type, bindings, true);
+        return check_can_bind_type_to_generic_type(elm_to_type, elm_from_type, generic_args, true);
     }
     case TypeKind::SLICE: {
         if (!from_type->is_slice()) {
@@ -5391,7 +5352,7 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
         auto elm_to_type   = ptr_to_type->get_elm_type();
         auto elm_from_type = ptr_from_type->get_elm_type();
 
-        return check_bind_type_to_generic_type(elm_to_type, elm_from_type, bindings, true);
+        return check_can_bind_type_to_generic_type(elm_to_type, elm_from_type, generic_args, true);
     }
     case TypeKind::ARRAY: {
         if (!from_type->is_array()) {
@@ -5408,7 +5369,7 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
             return false;
         }
 
-        return check_bind_type_to_generic_type(elm_to_type, elm_from_type, bindings, true);
+        return check_can_bind_type_to_generic_type(elm_to_type, elm_from_type, generic_args, true);
     }
     case TypeKind::FUNCTION: {
         if (!from_type->is_function()) {
@@ -5428,14 +5389,14 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
         auto to_return_type   = func_to_type->get_return_type();
         auto from_return_type = func_from_type->get_return_type();
 
-        if (!check_bind_type_to_generic_type(to_return_type, from_return_type, bindings)) {
+        if (!check_can_bind_type_to_generic_type(to_return_type, from_return_type, generic_args)) {
             return false;
         }
 
         for (size_t i = 0; i < to_param_types.size(); i++) {
             auto to_param_type   = to_param_types[i];
             auto from_param_type = from_param_types[i];
-            if (!check_bind_type_to_generic_type(to_param_type, from_param_type, bindings)) {
+            if (!check_can_bind_type_to_generic_type(to_param_type, from_param_type, generic_args)) {
                 return false;
             }
         }
@@ -5480,16 +5441,16 @@ bool acorn::Sema::check_bind_type_to_generic_type(Type* to_type,   // Type at cu
         // struct's generics, and if so, then we can fully qualify the generic struct
         // and assume assignment.
 
-        llvm::SmallVector<Type*> bound_types;
+        llvm::SmallVector<Type*> struct_bound_generic_args;
         for (size_t i = 0; i < unbound_generic_struct->generics.size(); i++) {
-            if (!bindings[i]) {
+            if (!generic_args[i]) {
                 return false;
             }
-            bound_types.push_back(bindings[i]);
+            struct_bound_generic_args.push_back(generic_args[i]);
         }
 
         auto to_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(),
-                                                                      std::move(bound_types));
+                                                                      std::move(struct_bound_generic_args));
         if (from_struct != to_struct) {
             return false;
         }
@@ -5690,7 +5651,7 @@ void acorn::Sema::check_array(Array* arr, Type* dest_elm_type) {
     }
 
     if (is_incomplete_type(elm_type)) {
-        error(expand(arr), "Array has incomplete element type '%s'", elm_type)
+        error(expand(arr), "Element type of array is an incomplete type '%s'", elm_type)
             .end_error(ErrCode::SemaArrayIncompleteElmType);
         return;
     }
@@ -5848,7 +5809,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
     };
 
     UnboundGenericStruct* unbound_generic_struct = nullptr;
-    llvm::SmallVector<Type*> bound_types;
+    llvm::SmallVector<Type*> bound_generic_args;
     Struct* structn = nullptr;
     if (initializer->site->is(NodeKind::IDENT_REF)) {
 
@@ -5873,7 +5834,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
             return;
         }
 
-        if (!get_bound_types_for_generic_type(structn, ref->loc, call->args, bound_types)) {
+        if (!bind_generic_arguments_for_composite_type(structn, ref->loc, call->args, bound_generic_args)) {
             return;
         }
         unbound_generic_struct = static_cast<UnboundGenericStruct*>(structn);
@@ -5901,7 +5862,7 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
                                                            initializer->non_named_vals_offset,
                                                            structn->constructors,
                                                            false,
-                                                           std::move(bound_types),
+                                                           std::move(bound_generic_args),
                                                            unbound_generic_struct,
                                                            structn);
         if (!found_constructor) {
@@ -5955,15 +5916,15 @@ void acorn::Sema::check_struct_initializer(StructInitializer* initializer) {
     }
 
     if (structn->is_generic) {
-        bound_types.resize(unbound_generic_struct->generics.size());
-        if (!bind_default_generic_arguments(bound_types, unbound_generic_struct->generics)) {
-            display_missing_generic_bindings_info(initializer->loc, "struct type",
-                                                  bound_types, unbound_generic_struct->generics,
+        bound_generic_args.resize(unbound_generic_struct->generics.size());
+        if (!bind_default_generic_arguments(bound_generic_args, unbound_generic_struct->generics)) {
+            display_missing_generic_argument_binding_info(initializer->loc, "struct type",
+                                                  bound_generic_args, unbound_generic_struct->generics,
                                                   ErrCode::SemaExpectedGenericArgsForGenericType,
                                                   ErrCode::SemaCouldNotBindAllGenericArgsForType);
         }
 
-        structn = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
+        structn = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_generic_args));
 
         if (!ensure_struct_checked(structn)) {
             return;
@@ -6071,8 +6032,8 @@ void acorn::Sema::check_sizeof(SizeOf* sof) {
     }
 
     if (is_incomplete_type(sof->type_with_size)) {
-        error(expand(sof), "Cannot get size of unsized type '%s'", sof->type_with_size)
-            .end_error(ErrCode::SemaCannotGetSizeOfUnsizedType);
+        error(expand(sof), "Cannot get size of incomplete type '%s'", sof->type_with_size)
+            .end_error(ErrCode::SemaCannotGetSizeOfIncompleteType);
         return;
     }
 
@@ -6268,7 +6229,7 @@ acorn::Type* acorn::Sema::fixup_type(Type* type, bool is_ptr_elm_type) {
     } else if (type->is_generic()) {
         return fixup_generic_type(type);
     } else if (type->get_kind() == TypeKind::PENDING_GENERIC_STRUCT) {
-        return fixup_pending_generic_struct_type(type, func_call_generic_bindings);
+        return fixup_pending_generic_struct_type(type, func_call_bound_generic_args);
     } else {
         return type;
     }
@@ -6452,10 +6413,10 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
 
             // Checking to make sure that the default generic arguments don't fully qualify the
             // type.
-            llvm::SmallVector<Type*> bound_types(unbound_generic_struct->generics.size());
-            if (bind_default_generic_arguments(bound_types, unbound_generic_struct->generics)) {
+            llvm::SmallVector<Type*> bound_generic_args(unbound_generic_struct->generics.size());
+            if (bind_default_generic_arguments(bound_generic_args, unbound_generic_struct->generics)) {
 
-                found_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
+                found_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_generic_args));
 
                 if (!ensure_struct_checked(found_struct)) {
                     return nullptr;
@@ -6463,8 +6424,8 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
                 return found_struct->struct_type;
             }
 
-            display_missing_generic_bindings_info(error_loc, "struct type",
-                                                  bound_types, unbound_generic_struct->generics,
+            display_missing_generic_argument_binding_info(error_loc, "struct type",
+                                                  bound_generic_args, unbound_generic_struct->generics,
                                                   ErrCode::SemaExpectedGenericArgsForGenericType,
                                                   ErrCode::SemaCouldNotBindAllGenericArgsForType);
             return nullptr;
@@ -6514,7 +6475,6 @@ acorn::Type* acorn::Sema::fixup_unresolved_composite_type(Type* type, bool is_pt
     }
     default:
         acorn_fatal("Unknown composite kind");
-        return nullptr;
     }
 }
 
@@ -6543,13 +6503,8 @@ acorn::Type* acorn::Sema::fixup_unresolved_generic_composite_type(Decl* found_co
                                                                   SourceLoc error_loc,
                                                                   const llvm::SmallVector<Expr*>& bound_exprs) {
 
-
-
-    // TODO (maddie): with is generic types nonsense and generally having to fixup the type information of the bound
-    // types then setting if this type contains generics.
-
-    llvm::SmallVector<Type*> bound_types;
-    if (!get_bound_types_for_generic_type(found_composite, error_loc, bound_exprs, bound_types)) {
+    llvm::SmallVector<Type*> bound_generic_args;
+    if (!bind_generic_arguments_for_composite_type(found_composite, error_loc, bound_exprs, bound_generic_args)) {
         return nullptr;
     }
 
@@ -6562,82 +6517,13 @@ acorn::Type* acorn::Sema::fixup_unresolved_generic_composite_type(Decl* found_co
     //    return nullptr;
     //}
 
-    auto new_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_types));
+    auto new_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(), std::move(bound_generic_args));
 
     if (!ensure_struct_checked(new_struct)) {
         return nullptr;
     }
 
     return new_struct->struct_type;
-}
-
-bool acorn::Sema::get_bound_types_for_generic_type(Decl* found_composite,
-                                                   SourceLoc error_loc,
-                                                   const llvm::SmallVector<Expr*>& bound_exprs,
-                                                   llvm::SmallVector<Type*>& bound_types) {
-    // TODO (maddie): expand error location so things make more sense in error logging.
-
-    bool type_takes_generics = found_composite->kind == NodeKind::STRUCT;
-    Struct* found_struct;
-    if (type_takes_generics) {
-        found_struct = static_cast<Struct*>(found_composite);
-        type_takes_generics |= found_struct->is_generic;
-
-    }
-
-    if (!type_takes_generics) {
-        error(error_loc, "Type does not take generic arguments")
-            .end_error(ErrCode::SemaTypeDoesNotTakeGenerics);
-        return false;
-    }
-
-    auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(found_struct);
-    if (unbound_generic_struct->has_errors) {
-        return false;
-    }
-
-    auto& generics = unbound_generic_struct->generics;
-
-    if (bound_exprs.size() > unbound_generic_struct->generics.size()) {
-        error(error_loc, "Too many generic arguments for struct. Got %s but expected %s",
-              bound_exprs.size(), unbound_generic_struct->generics.size())
-            .end_error(ErrCode::SemaTooManyGenericArgumentsForStruct);
-        return false;
-    }
-
-    bool uses_named_args_values;
-    if (!check_generic_bind_arguments(bound_exprs, uses_named_args_values)) {
-        return false;
-    }
-
-    if (uses_named_args_values) {
-        if (compare_generic_bind_candidate_with_named_args(bound_exprs, generics, bound_types)) {
-            // binds the types during the call to `compare_generic_bind_candidate_with_named_args`.
-        } else {
-            Logger& logger = error(error_loc, "Failed to bind generic arguments");
-            logger.add_empty_line();
-            display_generic_bind_named_args_fail_info(bound_exprs, generics);
-            logger.end_error(ErrCode::SemaFailedToBindGenerics);
-            return false;
-        }
-    } else {
-        for (Expr* arg : bound_exprs) {
-            Type* bind_type = get_type_of_type_expr(arg);
-            bound_types.push_back(bind_type);
-        }
-
-        bound_types.resize(generics.size());
-    }
-
-    if (!bind_default_generic_arguments(bound_types, generics)) {
-        display_missing_generic_bindings_info(error_loc, "struct type",
-                                              bound_types, unbound_generic_struct->generics,
-                                              ErrCode::SemaExpectedGenericArgsForGenericType,
-                                              ErrCode::SemaCouldNotBindAllGenericArgsForType);
-        return false;
-    }
-
-    return true;
 }
 
 acorn::Type* acorn::Sema::fixup_unresolved_enum_value_type(Type* type, bool is_ptr_elm_type) {
@@ -6792,33 +6678,33 @@ acorn::Type* acorn::Sema::fixup_function_type(Type* type) {
 
 acorn::Type* acorn::Sema::fixup_generic_type(Type* type) {
     auto generic_type = static_cast<GenericType*>(type);
-    if (func_call_generic_bindings) {
+    if (func_call_bound_generic_args) {
         size_t generic_index = generic_type->get_generic_index();
-        return (*func_call_generic_bindings)[generic_index];
+        return (*func_call_bound_generic_args)[generic_index];
     } else if (cur_func && cur_func->is_generic()) {
         // Get the bound type of the current generic state.
         size_t generic_index = generic_type->get_generic_index();
-        return cur_func->generic_instance->bound_types[generic_index];
+        return cur_func->generic_instance->bound_generic_args[generic_index];
     } else if (cur_struct && cur_struct->is_generic) {
         auto generic_instance = static_cast<GenericStructInstance*>(cur_struct);
         size_t generic_index = generic_type->get_generic_index();
-        return generic_instance->bound_types[generic_index];
+        return generic_instance->bound_generic_args[generic_index];
     }
     return type;
 }
 
-acorn::Type* acorn::Sema::fixup_pending_generic_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_types) {
-    if (bound_types) {
+acorn::Type* acorn::Sema::fixup_pending_generic_struct_type(Type* type, const llvm::SmallVector<Type*>* bound_generic_args) {
+    if (bound_generic_args) {
         auto pending_generics_struct_type = static_cast<PendingGenericsStructType*>(type);
         auto unbound_generic_struct = pending_generics_struct_type->get_unbound_generic_struct();
 
-        llvm::SmallVector<Type*> fixed_bound_types;
-        fixed_bound_types.insert(fixed_bound_types.begin(),
-                                 bound_types->begin(),
-                                 bound_types->begin() + unbound_generic_struct->generics.size());
+        llvm::SmallVector<Type*> struct_bound_generic_args;
+        struct_bound_generic_args.insert(struct_bound_generic_args.begin(),
+                                 bound_generic_args->begin(),
+                                 bound_generic_args->begin() + unbound_generic_struct->generics.size());
 
         auto new_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(),
-                                                                       std::move(fixed_bound_types));
+                                                                       std::move(struct_bound_generic_args));
 
         if (!ensure_struct_checked(new_struct)) {
             return nullptr;
@@ -6832,17 +6718,89 @@ acorn::Type* acorn::Sema::fixup_pending_generic_struct_type(Type* type, const ll
     return type;
 }
 
-bool acorn::Sema::bind_default_generic_arguments(llvm::SmallVector<Type*>& generic_bindings,
+// Generic binding
+//--------------------------------------
+
+bool acorn::Sema::bind_generic_arguments_for_composite_type(Decl* found_composite,
+                                                            SourceLoc error_loc,
+                                                            const llvm::SmallVector<Expr*>& bound_exprs,
+                                                            llvm::SmallVector<Type*>& generic_args) {
+    // TODO (maddie): expand error location so things make more sense in error logging.
+
+    bool type_takes_generics = found_composite->kind == NodeKind::STRUCT;
+    Struct* found_struct;
+    if (type_takes_generics) {
+        found_struct = static_cast<Struct*>(found_composite);
+        type_takes_generics |= found_struct->is_generic;
+
+    }
+
+    if (!type_takes_generics) {
+        error(error_loc, "Type does not take generic arguments")
+            .end_error(ErrCode::SemaTypeDoesNotTakeGenerics);
+        return false;
+    }
+
+    auto unbound_generic_struct = static_cast<UnboundGenericStruct*>(found_struct);
+    if (unbound_generic_struct->has_errors) {
+        return false;
+    }
+
+    auto& generics = unbound_generic_struct->generics;
+
+    if (bound_exprs.size() > unbound_generic_struct->generics.size()) {
+        error(error_loc, "Too many generic arguments for struct. Got %s but expected %s",
+              bound_exprs.size(), unbound_generic_struct->generics.size())
+            .end_error(ErrCode::SemaTooManyGenericArgumentsForStruct);
+        return false;
+    }
+
+    bool uses_named_args_values;
+    if (!check_generic_bind_arguments(bound_exprs, uses_named_args_values)) {
+        return false;
+    }
+
+    if (uses_named_args_values) {
+        if (compare_generic_bind_candidate_with_named_args(bound_exprs, generics, generic_args)) {
+            // binds the types during the call to `compare_generic_bind_candidate_with_named_args`.
+        } else {
+            Logger& logger = error(error_loc, "Failed to bind generic arguments");
+            logger.add_empty_line();
+            display_generic_bind_named_args_fail_info(bound_exprs, generics);
+            logger.end_error(ErrCode::SemaFailedToBindGenerics);
+            return false;
+        }
+    } else {
+        for (Expr* arg : bound_exprs) {
+            Type* bound_type = get_type_of_type_expr(arg);
+            generic_args.push_back(bound_type);
+        }
+
+        generic_args.resize(generics.size());
+    }
+
+    if (!bind_default_generic_arguments(generic_args, generics)) {
+        display_missing_generic_argument_binding_info(error_loc, "struct type",
+                                              generic_args, unbound_generic_struct->generics,
+                                              ErrCode::SemaExpectedGenericArgsForGenericType,
+                                              ErrCode::SemaCouldNotBindAllGenericArgsForType);
+        return false;
+    }
+
+    return true;
+}
+
+bool acorn::Sema::bind_default_generic_arguments(llvm::SmallVector<Type*>& generic_args,
                                                  const llvm::SmallVector<Generic*>& generics) {
 
     bool fully_qualifies = true;
-    for (size_t i = 0; i < generic_bindings.size(); i++) {
-        Type* bound_type = generic_bindings[i];
+    for (size_t i = 0; i < generic_args.size(); i++) {
+        Type* bound_type = generic_args[i];
         if (!bound_type) {
             auto genericn = generics[i];
             if (genericn->default_arg) {
-                auto bind_type = get_type_of_type_expr(genericn->default_arg);
-                generic_bindings[i] = bind_type;
+                auto default_bind_type = get_type_of_type_expr(genericn->default_arg);
+                generic_args[i] = default_bind_type;
             } else {
                 fully_qualifies = false;
             }
@@ -6851,14 +6809,46 @@ bool acorn::Sema::bind_default_generic_arguments(llvm::SmallVector<Type*>& gener
     return fully_qualifies;
 }
 
+bool acorn::Sema::check_generic_bind_arguments(const llvm::SmallVector<Expr*>& args,
+                                               bool& uses_named_values) {
+    bool args_have_errors = false;
+    for (Expr* arg : args) {
+
+        check_node(arg);
+        Expr* arg_value = arg;
+        if (arg->is(NodeKind::NAMED_VALUE)) {
+            uses_named_values = true;
+            auto named_value = static_cast<NamedValue*>(arg);
+            arg_value = named_value->assignment;
+        }
+
+        if (!arg->type) args_have_errors = true;
+
+        if (arg_value->type != context.expr_type) {
+            args_have_errors = true;
+            error(expand(arg_value), "Expected argument to be a type expression")
+                .end_error(ErrCode::SemaExpectedArgToBeTypeExprForGenericBind);
+        }
+
+        Type* bind_type = get_type_of_type_expr(arg_value);
+
+        if (is_incomplete_type(bind_type)) {
+            args_have_errors = true;
+            error(expand(arg_value), "Cannot bind incomplete type '%s'", bind_type)
+                .end_error(ErrCode::SemaCannotBindIncompleteType);
+        }
+    }
+    return !args_have_errors;
+}
+
 // Error reporting
 //--------------------------------------
 
-void acorn::Sema::display_call_mismatch_info(SourceLoc error_loc,
-                                             Node* call_node,
-                                             const llvm::SmallVector<Func*>& candidates,
-                                             const llvm::SmallVector<Expr*>& args,
-                                             const llvm::SmallVector<Type*>& pre_bound_types) {
+void acorn::Sema::report_call_mismatch_info(SourceLoc error_loc,
+                                            Node* call_node,
+                                            const llvm::SmallVector<Func*>& candidates,
+                                            const llvm::SmallVector<Expr*>& args,
+                                            const llvm::SmallVector<Type*>& pre_bound_generic_args) {
 
     const char* func_type_str = candidates[0]->is_constructor ? "constructor" : "function";
 
@@ -6868,14 +6858,14 @@ void acorn::Sema::display_call_mismatch_info(SourceLoc error_loc,
 
         logger.begin_error(error_loc, "Invalid call to %s: '%s'", func_type_str, candidate->get_decl_string());
         logger.add_empty_line();
-        display_call_mismatch_info(candidate, args, false, true, call_node, pre_bound_types);
+        report_call_mismatch_info(candidate, args, false, true, call_node, pre_bound_generic_args);
         logger.end_error(ErrCode::SemaInvalidFuncCallSingle);
 
     } else {
 
         llvm::SmallVector<std::pair<uint64_t, const Func*>> candidates_and_scores;
         for (const Func* candidate : candidates) {
-            uint64_t score = get_function_call_score(candidate, args, false, pre_bound_types);
+            uint64_t score = get_function_call_score(candidate, args, false, pre_bound_generic_args);
             candidates_and_scores.push_back(std::make_pair(score, candidate));
         }
         std::ranges::sort(candidates_and_scores, [](const auto& lhs, const auto& rhs) {
@@ -6886,7 +6876,7 @@ void acorn::Sema::display_call_mismatch_info(SourceLoc error_loc,
         for (auto& [_, candidate] : candidates_and_scores | std::views::take(context.get_max_call_err_funcs())) {
             logger.add_empty_line();
             logger.add_line("Could not match: '%s'", candidate->get_decl_string());
-            display_call_mismatch_info(candidate, args, true, false, call_node, pre_bound_types);
+            report_call_mismatch_info(candidate, args, true, false, call_node, pre_bound_generic_args);
         }
         int64_t remaining = static_cast<int64_t>(candidates.size()) - static_cast<int64_t>(context.get_max_call_err_funcs());
         if (remaining > 0) {
@@ -6899,12 +6889,12 @@ void acorn::Sema::display_call_mismatch_info(SourceLoc error_loc,
 }
 
 template<typename F>
-void acorn::Sema::display_call_mismatch_info(const F* candidate,
-                                             const llvm::SmallVector<Expr*>& args,
-                                             bool indent,
-                                             bool should_show_invidual_underlines,
-                                             Node* call_node,
-                                             const llvm::SmallVector<Type*>& pre_bound_types) {
+void acorn::Sema::report_call_mismatch_info(const F* candidate,
+                                            const llvm::SmallVector<Expr*>& args,
+                                            bool indent,
+                                            bool should_show_invidual_underlines,
+                                            Node* call_node,
+                                            const llvm::SmallVector<Type*>& pre_bound_generic_args) {
 
 #define err_line(n, fmt, ...) \
 add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_ARGS__);
@@ -7131,31 +7121,13 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
     forwards_varargs = false;
     named_args_out_of_order = false;
     named_arg_high_idx = 0;
-    llvm::SmallVector<Type*> generic_bindings;
+    llvm::SmallVector<Type*> generic_args;
     if constexpr (is_func_decl) {
-        generic_bindings.insert(generic_bindings.begin(), pre_bound_types.begin(), pre_bound_types.end());
-        generic_bindings.resize(candidate->generics.size());
+        generic_args.insert(generic_args.begin(), pre_bound_generic_args.begin(), pre_bound_generic_args.end());
+        generic_args.resize(candidate->generics.size());
     }
 
-    auto add_err_line_moveobj_to_implicit_ptr = [this, indent, should_show_invidual_underlines]
-        (size_t arg_index, Type* param_type, Expr* arg_value) {
-        err_line(arg_value,
-                 "arg %s: cannot implicitly convert using moveobj to pointer type '%s'",
-                 arg_index + 1, param_type);
-    };
-
-    auto show_generic_types_where_line = [this, indent]
-        (Type* param_type, const llvm::SmallVector<Type*>& generic_bindings) {
-
-        std::string where_msg = get_type_with_generics_where_msg(param_type, generic_bindings, indent);
-        if (!where_msg.empty()) {
-            logger.add_line("%s         %s", indent ? "  " : "", where_msg)
-                .remove_period();
-        }
-    };
-
     for (size_t i = 0; i < args.size(); i++) {
-
         Expr* arg_value = args[i];
         Var* param = nullptr;
 
@@ -7171,8 +7143,8 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
 
             if (is_incomplete_type(arg_value->type)) {
                 err_line(arg_value,
-                            "arg %s: cannot pass incomplete types to native variadic parameters",
-                            i + 1);
+                            "arg %s: cannot pass incomplete type '%s' to native variadic parameters",
+                            i + 1, arg_value->type);
             }
 
             // No reason to check native variadic type information because
@@ -7223,7 +7195,7 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
 
                 if (param_type->does_contain_generics()) {
                     bool may_use_implicit_param_ptr = param->has_implicit_ptr && arg_value->is_not(NodeKind::MOVEOBJ);
-                    if (!check_bind_type_to_generic_type(param_type, arg_value->type, generic_bindings, false, may_use_implicit_param_ptr)) {
+                    if (!check_can_bind_type_to_generic_type(param_type, arg_value->type, generic_args, false, may_use_implicit_param_ptr)) {
 
                         if (arg_value->is(NodeKind::FUNC_CALL)) {
                             auto arg_call = static_cast<FuncCall*>(arg_value);
@@ -7232,30 +7204,32 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
                                 auto ptr_type = static_cast<PointerType*>(arg_call->type);
                                 auto from_type = ptr_type->get_elm_type();
 
-                                if (check_bind_type_to_generic_type(param_type, from_type, generic_bindings)) {
+                                if (check_can_bind_type_to_generic_type(param_type, from_type, generic_args)) {
                                     // argument success, continue.
                                     continue;
                                 }
                             }
                         }
 
+                        // Special to report pending generic structs since its possible the reason the assignment
+                        // failed was because not all the types have been bound to the generic struct.
                         if (param_type->get_kind() == TypeKind::PENDING_GENERIC_STRUCT) {
 
                             auto pending_generic_struct = static_cast<PendingGenericsStructType*>(param_type);
                             auto unbound_generic_struct = pending_generic_struct->get_unbound_generic_struct();
 
-                            llvm::SmallVector<Type*> bound_types;
+                            llvm::SmallVector<Type*> struct_generic_args;
                             bool all_bound = true;
                             for (size_t j = 0; j < unbound_generic_struct->generics.size(); j++) {
-                                if (!generic_bindings[j]) {
+                                if (!generic_args[j]) {
                                     all_bound = false;
                                 }
-                                bound_types.push_back(generic_bindings[j]);
+                                struct_generic_args.push_back(generic_args[j]);
                             }
 
                             if (all_bound) {
                                 auto to_struct = unbound_generic_struct->get_generic_instance(context.get_allocator(),
-                                                                                              std::move(bound_types));
+                                                                                              std::move(struct_generic_args));
                                 param_type = to_struct->struct_type;
                             } else {
                                 if (arg_value->type->is_struct()) {
@@ -7273,7 +7247,11 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
                         mismatch_info[0] = std::tolower(mismatch_info[0]);
                         err_line(arg_value, "arg %s: %s", i + 1, mismatch_info);
 
-                        show_generic_types_where_line(param_type, generic_bindings);
+                        std::string generics_where_msg = get_type_with_generics_where_msg(param_type, generic_args, indent);
+                        if (!generics_where_msg.empty()) {
+                            logger.add_line("%s         %s", indent ? "  " : "", generics_where_msg)
+                                .remove_period();
+                        }
                     }
 
                     // argument success, continue.
@@ -7289,7 +7267,9 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
                 if (may_implicitly_convert_ptr(ptr_type, arg_value)) {
                     is_assignable = true;
                     if (arg_value->is(NodeKind::MOVEOBJ)) {
-                        add_err_line_moveobj_to_implicit_ptr(i, param_type, arg_value);
+                        err_line(arg_value,
+                                 "arg %s: cannot implicitly convert using moveobj to pointer type '%s'",
+                                 i + 1, param_type);
                     }
                 }
             }
@@ -7321,29 +7301,29 @@ add_error_line(n, should_show_invidual_underlines, indent, "%s- " fmt, ##__VA_AR
 uint64_t acorn::Sema::get_function_call_score(const Func* candidate,
                                               const llvm::SmallVector<Expr*>& args,
                                               bool is_const_object,
-                                              const llvm::SmallVector<Type*>& pre_bound_types) {
+                                              const llvm::SmallVector<Type*>& pre_bound_generic_args) {
 
     uint64_t score = 0;
     bool implicitly_converts_ptr_arg = 0;
     CallCompareStatus status;
 
-    llvm::SmallVector<Type*> generic_bindings;
+    llvm::SmallVector<Type*> generic_args;
     if (!candidate->is_generic()) {
         status = compare_as_call_candidate<true, false>(candidate,
                                                         args,
                                                         is_const_object,
                                                         score,
                                                         implicitly_converts_ptr_arg,
-                                                        generic_bindings);
+                                                        generic_args);
     } else {
-        generic_bindings.insert(generic_bindings.begin(), pre_bound_types.begin(), pre_bound_types.end());
-        generic_bindings.resize(candidate->generics.size());
+        generic_args.insert(generic_args.begin(), pre_bound_generic_args.begin(), pre_bound_generic_args.end());
+        generic_args.resize(candidate->generics.size());
         status = compare_as_call_candidate<true, true>(candidate,
                                                        args,
                                                        is_const_object,
                                                        score,
                                                        implicitly_converts_ptr_arg,
-                                                       generic_bindings);
+                                                       generic_args);
     }
 
     switch (status) {
@@ -7365,11 +7345,11 @@ uint64_t acorn::Sema::get_function_call_score(const Func* candidate,
     return score;
 }
 
-void acorn::Sema::display_call_ambiguous_info(SourceLoc error_loc,
-                                              llvm::SmallVector<Func*>& candidates,
-                                              llvm::SmallVector<Expr*>& args,
-                                              bool is_const_object,
-                                              const llvm::SmallVector<Type*>& pre_bound_types) {
+void acorn::Sema::report_call_ambiguous_info(SourceLoc error_loc,
+                                             llvm::SmallVector<Func*>& candidates,
+                                             llvm::SmallVector<Expr*>& args,
+                                             bool is_const_object,
+                                             const llvm::SmallVector<Type*>& pre_bound_generic_args) {
 
     llvm::SmallVector<Func*, 16> ambiguous_funcs;
     Func* selected = nullptr;
@@ -7381,26 +7361,26 @@ void acorn::Sema::display_call_ambiguous_info(SourceLoc error_loc,
         bool implicitly_converts_ptr_arg = false;
         bool passes_varargs_along = false;
 
-        llvm::SmallVector<Type*> generic_bindings;
+        llvm::SmallVector<Type*> generic_args;
         if (!candidate->is_generic()) {
             auto status = compare_as_call_candidate<false, false>(candidate,
                                                                   args,
                                                                   is_const_object,
                                                                   score,
                                                                   implicitly_converts_ptr_arg,
-                                                                  generic_bindings);
+                                                                  generic_args);
             if (status != CallCompareStatus::SUCCESS) {
                 continue;
             }
         } else {
-            generic_bindings.insert(generic_bindings.begin(), pre_bound_types.begin(), pre_bound_types.end());
-            generic_bindings.resize(candidate->generics.size());
+            generic_args.insert(generic_args.begin(), pre_bound_generic_args.begin(), pre_bound_generic_args.end());
+            generic_args.resize(candidate->generics.size());
             auto status = compare_as_call_candidate<false, true>(candidate,
                                                                  args,
                                                                  is_const_object,
                                                                  score,
                                                                  implicitly_converts_ptr_arg,
-                                                                 generic_bindings);
+                                                                 generic_args);
             if (status != CallCompareStatus::SUCCESS) {
                 continue;
             }
@@ -7424,7 +7404,7 @@ void acorn::Sema::display_call_ambiguous_info(SourceLoc error_loc,
 }
 
 std::string acorn::Sema::get_type_with_generics_where_msg(Type* type_with_generics,
-                                                          const llvm::SmallVector<Type*>& generic_bindings,
+                                                          const llvm::SmallVector<Type*>& generic_args,
                                                           bool indent) {
 
     llvm::SmallVector<const GenericType*> generics_used;
@@ -7433,7 +7413,7 @@ std::string acorn::Sema::get_type_with_generics_where_msg(Type* type_with_generi
     llvm::SmallVector<std::pair<const GenericType*, const Type*>> bound_pairings;
     for (auto generic_type : generics_used) {
         size_t generic_index = generic_type->get_generic_index();
-        if (Type* bound_type = generic_bindings[generic_index]) {
+        if (Type* bound_type = generic_args[generic_index]) {
             bound_pairings.push_back({ generic_type, bound_type });
         }
     }
@@ -7469,14 +7449,14 @@ void acorn::Sema::display_ambiguous_functions(const llvm::SmallVector<Func*, N>&
     }
 }
 
-void acorn::Sema::display_missing_generic_bindings_info(SourceLoc error_loc,
-                                                        const char* for_msg,
-                                                        const llvm::SmallVector<Type*>& generic_bindings,
-                                                        const llvm::SmallVector<Generic*>& generics,
-                                                        ErrCode expected_generic_args_error_code,
-                                                        ErrCode missing_generic_bindings_error_code) {
+void acorn::Sema::display_missing_generic_argument_binding_info(SourceLoc error_loc,
+                                                                const char* for_msg,
+                                                                const llvm::SmallVector<Type*>& generic_args,
+                                                                const llvm::SmallVector<Generic*>& generics,
+                                                                ErrCode expected_generic_args_error_code,
+                                                                ErrCode missing_generic_args_error_code) {
 
-    if (generic_bindings.empty()) {
+    if (generic_args.empty()) {
         error(error_loc, "Expected generic arguments for %s", for_msg)
             .end_error(expected_generic_args_error_code);
         return;
@@ -7484,8 +7464,8 @@ void acorn::Sema::display_missing_generic_bindings_info(SourceLoc error_loc,
 
 
     llvm::SmallVector<Type*> missing_bound_types;
-    for (size_t i = 0; i < generic_bindings.size(); i++) {
-        Type* bound_type = generic_bindings[i];
+    for (size_t i = 0; i < generic_args.size(); i++) {
+        Type* bound_type = generic_args[i];
         Generic* generic = generics[i];
         if (!bound_type) {
             missing_bound_types.push_back(generic->type);
@@ -7501,7 +7481,7 @@ void acorn::Sema::display_missing_generic_bindings_info(SourceLoc error_loc,
     }
     error(error_loc, "Could not bind all generic arguments for %s", for_msg)
         .add_line("Missing bindings for: %s", missing_bound_types_str)
-        .end_error(missing_generic_bindings_error_code);
+        .end_error(missing_generic_args_error_code);
 }
 
 void acorn::Sema::display_generic_bind_named_args_fail_info(const llvm::SmallVector<Expr*>& args,
@@ -7560,7 +7540,7 @@ void acorn::Sema::report_binary_op_mistmatch_types(BinOp* bin_op) {
         .end_error(ErrCode::SemaBinOpTypeMismatch);
 }
 
-void acorn::Sema::display_interface_func_mismatch_info(Func* interface_func,
+void acorn::Sema::report_interface_func_mismatch_info(Func* interface_func,
                                                        Func* func,
                                                        bool indent,
                                                        bool should_show_invidual_underlines) {
@@ -7766,10 +7746,13 @@ acorn::Type* acorn::Sema::get_array_type_for_mismatch_error(Array* arr,
     }
 
     size_t length = lengths[depth];
+    if (length == 0) {
+        return context.empty_array_type;
+    }
     return type_table.get_arr_type(elm_type, length);
 }
 
-void acorn::Sema::display_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code) {
+void acorn::Sema::report_circular_dep_error(SourceLoc error_loc, Decl* dep, const char* msg, ErrCode error_code) {
     logger.begin_error(error_loc, msg);
     llvm::SmallVector<Decl*> dep_chain;
     Decl* start_dep = dep;
@@ -7916,7 +7899,6 @@ bool acorn::Sema::is_assignable_to(Type* to_type, Expr* expr) {
 
                 default:
                     acorn_fatal("unreachable signed integer type");
-                    return false;
                 }
             };
 
@@ -8116,6 +8098,7 @@ bool acorn::Sema::is_readonly_field_without_access(Expr* expr) const {
 }
 
 bool acorn::Sema::is_incomplete_type(Type* type) const {
+
     switch (type->get_kind()) {
     case TypeKind::VOID_T:
     case TypeKind::NAMESPACE_REF:
@@ -8248,13 +8231,11 @@ acorn::Type* acorn::Sema::get_type_of_type_expr(Expr* expr) {
                 return interfacen->interface_type;
             } else {
                 acorn_fatal("unknown composite type");
-                return nullptr;
             }
         } else if (ref->is_generic_type_ref()) {
             return fixup_generic_type(ref->generic_type_ref);
         } else {
             acorn_fatal("unreachable");
-            return nullptr;
         }
     } else if (expr->is(NodeKind::FUNC_CALL)) {
         FuncCall* call = static_cast<FuncCall*>(expr);
@@ -8293,7 +8274,6 @@ uint64_t acorn::Sema::get_total_number_of_values_in_range(BinOp* range) {
         }
     default:
         acorn_fatal("Unreachable. Unknown range type");
-        return 0ull;
     }
 }
 
@@ -8344,6 +8324,44 @@ llvm::Constant* acorn::Sema::gen_constant(Expr* expr) {
     }
 
     return llvm::cast<llvm::Constant>(ll_value);
+}
+
+acorn::Type* acorn::Sema::get_const_type_at_all_depth(Type* type) {
+    if (type->is_array()) {
+        auto arr_type = static_cast<ArrayType*>(type);
+
+        llvm::SmallVector<uint32_t, 8> lengths;
+        Type* elm_type = nullptr;
+        while (true) {
+            elm_type = arr_type->get_elm_type();
+            lengths.push_back(arr_type->get_length());
+
+            if (!elm_type->is_array()) {
+                break;
+            }
+            arr_type = static_cast<ArrayType*>(elm_type);
+        }
+
+        auto new_base_type = get_const_type_at_all_depth(elm_type);
+
+        auto new_arr_type = type_table.get_arr_type(new_base_type, lengths.back());
+        for (auto itr = lengths.rbegin() + 1; itr != lengths.rend(); ++itr) {
+            new_arr_type = type_table.get_arr_type(new_arr_type, *itr);
+        }
+        return type_table.get_const_type(new_arr_type);
+    } else if (type->is_pointer()) {
+        auto ptr_type = static_cast<PointerType*>(type);
+        auto new_elm_type = get_const_type_at_all_depth(ptr_type->get_elm_type());
+        auto new_ptr_type = type_table.get_ptr_type(new_elm_type);
+        return type_table.get_const_type(new_ptr_type);
+    } else if (type->is_slice()) {
+        auto slice_type = static_cast<SliceType*>(type);
+        auto new_elm_type = get_const_type_at_all_depth(slice_type->get_elm_type());
+        auto new_slice_type = type_table.get_slice_type(new_elm_type);
+        return type_table.get_const_type(new_slice_type);
+    } else {
+        return type->is_const() ? type : type_table.get_const_type(type);
+    }
 }
 
 acorn::Var* acorn::Sema::SemScope::find_variable(Identifier name) const {
