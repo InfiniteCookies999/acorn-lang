@@ -1,6 +1,7 @@
 #include "Sema.h"
 
 #include <ranges>
+#include <format>
 
 #include "Util.h"
 #include "Context.h"

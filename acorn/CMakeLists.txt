@@ -1,6 +1,6 @@
 
 # Find variables related to LLVM install.
-find_package(LLVM REQUIRED CONFIG)
+find_package(LLVM 20.1 REQUIRED CONFIG)
 
 # Add LLVM includes to acorn.
 include_directories(SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS})

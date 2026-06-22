@@ -37,7 +37,7 @@ void acorn::DebugInfoEmitter::emit_function(Func* func) {
     // Needs to know about the 'this' pointer type.
     if (func->structn) {
         auto this_type = context.type_table.get_ptr_type(func->structn->struct_type);
-        auto di_this_type = builder.createObjectPointerType(emit_type(this_type));
+        auto di_this_type = builder.createObjectPointerType(emit_type(this_type), false);
         di_func_types.push_back(di_this_type);
     }
 
@@ -86,7 +86,7 @@ void acorn::DebugInfoEmitter::emit_implicit_function(llvm::Function* ll_func,
     // Needs to know about the 'this' pointer type.
     if (parent_struct) {
         auto this_type = context.type_table.get_ptr_type(parent_struct->struct_type);
-        auto di_this_type = builder.createObjectPointerType(emit_type(this_type));
+        auto di_this_type = builder.createObjectPointerType(emit_type(this_type), false);
         di_func_types.push_back(di_this_type);
     }
 

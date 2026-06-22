@@ -7,6 +7,10 @@
 
 #include "CommandProcessor.h"
 
+#if UNIX_OS
+#include <unistd.h>
+#endif
+
 const char* HelpMessage =
 R"(
 Usage: acorn <options> <sources>
